@@ -3,10 +3,12 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.1.5-beta] - 2026-09-21
+## [1.1.6-beta] - 2026-09-21
 
 ### Added
 
+- **ConfigServer: Added a self-healing loopback watchdog supervisor (#69).**
+Introduced a dedicated `ConfigServerSupervisor` that probes the local endpoint (`http://127.0.0.1:8080/current-page`) every 30 seconds. If HTTP requests stall or timeout on background threads (a known edge-case on legacy hardware like HA100 / Android 8.1 panels), the supervisor detects 3 consecutive failures and gracefully restarts *only* the `ConfigServer` lifecycle after a 500ms delay. Enforces a 120-second cooldown period and safely shuts down when the server is disabled, settings reload, or the Activity is destroyed. Thanks to [DimpOne](https://github.com/DimpOne) for the contribution! 🙏
 - **Web builder: a "← Accueil" link back to the devices catalog (`/`) at the top of `/builder/`.** Previously the only way back was editing the URL by hand.
 - **Web builder: reorder a `scene_grid`/`button_grid`'s tiles.** `renderGridItemsList()` (`cards.js`) gained ↑/↓ buttons next to each tile (new `moveGridItem()`), swapping it with its neighbor — chosen over HTML5 drag-and-drop for reliability on tablet/touch.
 - **Media Browser: long-press a playable — or Apps/Radios-style "expandable but actually a dead end" — row for "Play" / "Add to queue".** `MediaRow` now uses `combinedClickable`; a long-press on anything with `can_play` **or `can_expand`** opens a small popup ([`R.string.media_browser_play`]/[`R.string.media_browser_add_to_queue`]). "Play" behaves exactly like the existing tap-to-play (closes the browser); "Add to queue" calls the new `HaClient.playMedia(..., enqueue = "add")` overload (mirrors `media_player.play_media`'s own optional `enqueue` field: `"add"`/`"next"`/`"play"`/`"replace"`) and deliberately leaves the browser open so more items can be queued in a row. Extending this to `can_expand` items too (not just `can_play`) is the concrete fix for the LMS/Lyrion "Apps"/"Radios" investigation below — Home Assistant's own frontend debug logs confirmed the integration marks leaf, directly-playable radio stations as `can_expand: true, can_play: false` regardless, so a short tap in Astrion (which, correctly, tries to browse into a `can_expand` item first) dead-ends into an empty folder for exactly these entries; long-press is now the escape hatch, mirroring what Home Assistant's own frontend does by resolving-and-playing them outright instead of insisting on `can_expand`.
