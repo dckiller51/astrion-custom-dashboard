@@ -126,6 +126,8 @@
     <string name="media_load_failed">Impossible de charger les médias</string>
     <string name="media_browse">Parcourir</string>
     <string name="media_power_toggle">Basculer</string>
+    <string name="media_browser_play">Lire</string>
+    <string name="media_browser_add_to_queue">Ajouter à la file</string>
     <string name="plex_error_no_items">Plex n\'a renvoyé aucun élément</string>
     <string name="plex_error_generic">Erreur Plex</string>
     <string name="plex_library">Bibliothèque</string>
@@ -173,4 +175,5 @@
     <string name="media_state_buffering">Chargement</string>
     <string name="media_state_on">Allumé</string>
     <string name="media_state_off">Éteint</string>
+    <string name="volume_muted">Muet</string>
 </resources>

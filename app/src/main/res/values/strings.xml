@@ -126,6 +126,8 @@
     <string name="media_load_failed">Couldn\'t load media</string>
     <string name="media_browse">Browse</string>
     <string name="media_power_toggle">Toggle</string>
+    <string name="media_browser_play">Play</string>
+    <string name="media_browser_add_to_queue">Add to queue</string>
     <string name="plex_error_no_items">No items returned from Plex</string>
     <string name="plex_error_generic">Plex error</string>
     <string name="plex_library">Library</string>
@@ -173,4 +175,5 @@
     <string name="media_state_buffering">Buffering</string>
     <string name="media_state_on">On</string>
     <string name="media_state_off">Off</string>
+    <string name="volume_muted">Muted</string>
 </resources>

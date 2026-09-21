@@ -2,6 +2,7 @@ package com.custom.astrion.cards.impl
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,6 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +38,15 @@ import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.ServiceCall
+import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
+import kotlinx.coroutines.flow.MutableStateFlow
+
+/** Stable fallback for [SceneGridCard.Render] when `ctx.activityRuntime` is
+ * null (e.g. previews) — a real, empty StateFlow rather than a nullable
+ * check scattered through the collect call. */
+private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(emptyMap())
 
 /**
  * Scene, activity, or navigation grid tile.
@@ -98,6 +108,14 @@ class SceneGridCard : CardRenderer {
         val columns = remember(config) { config.int("columns", 2).coerceAtLeast(1) }
         val scenes = remember(config) { (config.options["scenes"] as? List<Map<String, Any?>>) ?: emptyList() }
         val row = remember(config) { config.string("layout") == "row" }
+
+        // Reactive snapshot of which Activity is active per room, purely to
+        // border-highlight whichever tile currently represents it (see
+        // ActivityRuntime.isActiveTile) — collected here, not inside
+        // isActive(), so a change actually triggers recomposition.
+        val activeByRoom by (ctx.activityRuntime?.activeByRoom ?: emptyActiveByRoomFlow).collectAsState()
+
+        fun isActive(scene: Map<String, Any?>): Boolean = ctx.activityRuntime?.isActiveTile(scene, activeByRoom) == true
 
         fun activate(entityId: String) {
             val domain = entityId.substringBefore('.')
@@ -168,10 +186,12 @@ class SceneGridCard : CardRenderer {
                             color = colorOf(scene),
                             iconPath = iconOf(scene),
                             hasIcon = hasIcon,
-                            showLabel = showLabels
+                            showLabel = showLabels,
+                            active = isActive(scene)
                         ),
                         layout = TileLayout(iconFill, tileHeight),
-                        modifier = Modifier.width(104.dp)
+                        modifier = Modifier.width(104.dp),
+                        theme = ctx.theme
                     ) { onTap(scene) }
                 }
             }
@@ -186,10 +206,12 @@ class SceneGridCard : CardRenderer {
                                     color = colorOf(scene),
                                     iconPath = iconOf(scene),
                                     hasIcon = hasIcon,
-                                    showLabel = showLabels
+                                    showLabel = showLabels,
+                                    active = isActive(scene)
                                 ),
                                 layout = TileLayout(iconFill, tileHeight),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                theme = ctx.theme
                             ) { onTap(scene) }
                         }
                         repeat(columns - chunk.size) { Spacer(Modifier.weight(1f)) }
@@ -216,11 +238,23 @@ class SceneGridCard : CardRenderer {
         val color: Color,
         val iconPath: String?,
         val hasIcon: Boolean,
-        val showLabel: Boolean
+        val showLabel: Boolean,
+        /** True when this tile represents the Activity currently active in
+         * its room (see ActivityRuntime.isActiveTile) — drawn as an accent
+         * border so, unlike before, there's some visible indication of
+         * which scene/Activity tile you actually landed on after a tap. */
+        val active: Boolean = false
     )
 
+    /** The border every tile shares when [SceneButtonState.active] is true —
+     * a no-op (zero-width, transparent) modifier otherwise, so callers can
+     * always chain it in without an extra branch at each of the three tile
+     * shapes below. */
+    private fun activeBorderModifier(active: Boolean, theme: ThemeColors): Modifier =
+        if (active) Modifier.border(2.dp, theme.accent, RoundedCornerShape(14.dp)) else Modifier
+
     @Composable
-    private fun SceneButton(state: SceneButtonState, layout: TileLayout, modifier: Modifier, onClick: () -> Unit) {
+    private fun SceneButton(state: SceneButtonState, layout: TileLayout, modifier: Modifier, theme: ThemeColors, onClick: () -> Unit) {
         val textColor = if (luminance(state.color) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)
         // iconFill tiles render the bitmap at the full tile height (ContentScale.
         // FillHeight), otherwise it's a 28dp square — pick the larger of the two
@@ -236,7 +270,7 @@ class SceneGridCard : CardRenderer {
 
         if (state.hasIcon) {
             if (layout.iconFill && bitmap != null && !state.showLabel) {
-                FillIconTile(bitmap, state.name, layout.tileHeight, state.color, modifier, onClick)
+                FillIconTile(bitmap, state, layout, modifier, theme, onClick)
             } else {
                 // Every tile in the grid uses this branch once any one of them has
                 // an icon, even tiles with no icon of their own — a blank 28dp
@@ -247,7 +281,8 @@ class SceneGridCard : CardRenderer {
                         .height(layout.tileHeight.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(state.color)
-                        .tapClickable(onClick = onClick)
+                        .then(activeBorderModifier(state.active, theme))
+                        .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                         .padding(6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
@@ -276,7 +311,8 @@ class SceneGridCard : CardRenderer {
                     .height(58.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(state.color)
-                    .tapClickable(onClick = onClick)
+                    .then(activeBorderModifier(state.active, theme))
+                    .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -296,19 +332,27 @@ class SceneGridCard : CardRenderer {
      * unchanged. Only reached when there's a real [bitmap] and no label
      * (see the caller), so both are non-null/false by the time this runs. */
     @Composable
-    private fun FillIconTile(bitmap: ImageBitmap, name: String, tileHeight: Int, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    private fun FillIconTile(
+        bitmap: ImageBitmap,
+        state: SceneButtonState,
+        layout: TileLayout,
+        modifier: Modifier,
+        theme: ThemeColors,
+        onClick: () -> Unit
+    ) {
         Box(
             modifier = modifier
-                .height(tileHeight.dp)
+                .height(layout.tileHeight.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(color)
-                .tapClickable(onClick = onClick)
+                .background(state.color)
+                .then(activeBorderModifier(state.active, theme))
+                .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                 .padding(6.dp),
             contentAlignment = Alignment.Center
         ) {
             Image(
                 bitmap = bitmap,
-                contentDescription = name,
+                contentDescription = state.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.FillHeight
             )

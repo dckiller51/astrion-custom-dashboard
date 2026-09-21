@@ -58,6 +58,7 @@ import com.custom.astrion.ui.DashboardNavigation
 import com.custom.astrion.ui.DashboardRegistries
 import com.custom.astrion.ui.DashboardUiState
 import com.custom.astrion.ui.ProvideTheme
+import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.web.ConfigServer
 import fi.iki.elonen.NanoHTTPD
@@ -92,6 +93,10 @@ class MainActivity : ComponentActivity() {
         const val KEEP_SCREEN_HOLD_MS = 10000L
         const val AMBIENT_WINDOW_MS = 5000L
         const val WAKE_COOLDOWN_MS = 2000L
+
+        // Keys that pop up a temporary volume readout when their hotkey
+        // fires an HA service call — see runHotkey()'s bottom branch.
+        val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -349,6 +354,11 @@ class MainActivity : ComponentActivity() {
     private var navTarget by mutableStateOf<Int?>(null)
     private var overlayTarget by mutableStateOf<String?>(null)
 
+    /** See DashboardNavigation.volumeHotkeyTrigger — set fresh (never
+     * cleared back to null) every time a VOLUME_UP/VOLUME_DOWN/MUTE hotkey
+     * fires against a real HA entity, in runHotkey() below. */
+    private var volumeHotkeyTrigger by mutableStateOf<VolumeHotkeyTrigger?>(null)
+
     /** Which page is currently visible — used to know which page-scoped
      * hotkeys should currently be layered on top of the global ones. */
     private var currentPageIndex = 0
@@ -525,7 +535,8 @@ class MainActivity : ComponentActivity() {
                         onPageChanged = { pageIndex ->
                             currentPageIndex = pageIndex
                             rebindHotkeysForCurrentPage()
-                        }
+                        },
+                        volumeHotkeyTrigger = volumeHotkeyTrigger
                     ),
                     uiState =
                     DashboardUiState(
@@ -782,7 +793,24 @@ class MainActivity : ComponentActivity() {
         val svc = service.substringAfter('.')
         val data = hk.data.mapValues { JsonPlain.toJson(it.value) }
         client.callService(ServiceCall(domain, svc, hk.entityId, data))
+        maybeTriggerVolumePopup(hk)
         return true
+    }
+
+    /**
+     * Pops up a temporary volume readout for a VOLUME_UP/VOLUME_DOWN/MUTE
+     * hotkey that just fired an HA service call — split out of [runHotkey]
+     * purely to keep that function's cyclomatic complexity under detekt's
+     * threshold, no behavior difference from having it inline. No
+     * queryable numeric level exists for the harmonyCommand/irCommand
+     * branches earlier in [runHotkey] (no HA entity there at all), so this
+     * is only ever called from the HA-service-call path.
+     */
+    private fun maybeTriggerVolumePopup(hk: HotkeyConfig) {
+        val entityId = hk.entityId ?: return
+        if (hk.key.uppercase() in VOLUME_POPUP_KEYS) {
+            volumeHotkeyTrigger = VolumeHotkeyTrigger(entityId, System.nanoTime())
+        }
     }
 
     @SuppressLint("RestrictedApi")

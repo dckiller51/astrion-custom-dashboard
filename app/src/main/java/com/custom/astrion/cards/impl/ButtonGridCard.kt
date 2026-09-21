@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,6 +59,10 @@ class ButtonGridCard : CardRenderer {
     override fun Render(config: CardConfig, ctx: CardContext) {
         val columns = config.int("columns", 3).coerceAtLeast(1)
         val buttons = (config.options["buttons"] as? List<Map<String, Any?>>) ?: emptyList()
+        // Card-wide — every button in the grid shares one layout, same idea as
+        // "columns". Unrecognized/missing values fall back to "top", the
+        // original (and only, before this) behavior.
+        val iconPosition = IconPosition.from(config.string("iconPosition"))
 
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             buttons.chunked(columns).forEach { row ->
@@ -66,10 +71,28 @@ class ButtonGridCard : CardRenderer {
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     row.forEach { b ->
-                        GridButton(b, Modifier.weight(1f), ctx.theme) { fire(ctx, b) }
+                        GridButton(b, Modifier.weight(1f), ctx.theme, iconPosition) { fire(ctx, b) }
                     }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
+            }
+        }
+    }
+
+    /** Where a button's icon sits relative to its label. */
+    private enum class IconPosition {
+        TOP,
+        BOTTOM,
+        LEFT,
+        RIGHT
+        ;
+
+        companion object {
+            fun from(raw: String?): IconPosition = when (raw?.lowercase()) {
+                "bottom" -> BOTTOM
+                "left" -> LEFT
+                "right" -> RIGHT
+                else -> TOP
             }
         }
     }
@@ -87,7 +110,7 @@ class ButtonGridCard : CardRenderer {
     }
 
     @Composable
-    private fun GridButton(b: Map<String, Any?>, modifier: Modifier, theme: ThemeColors, onClick: () -> Unit) {
+    private fun GridButton(b: Map<String, Any?>, modifier: Modifier, theme: ThemeColors, iconPosition: IconPosition, onClick: () -> Unit) {
         val name = b["name"] as? String
         val iconPath = b["icon"] as? String
         val targetPx = with(LocalDensity.current) { 32.dp.toPx() }.toInt()
@@ -96,25 +119,18 @@ class ButtonGridCard : CardRenderer {
                 iconPath?.let { decodeIconSampled(it, targetPx) }
             }
         val hasIcon = bitmap != null
+        val hasName = !name.isNullOrBlank()
+        // left/right lay the icon and label side by side, so the tile doesn't
+        // need the extra vertical room top/bottom do to fit both.
+        val sideBySide = iconPosition == IconPosition.LEFT || iconPosition == IconPosition.RIGHT
 
-        Column(
-            modifier =
-            modifier
-                .height(if (hasIcon) 68.dp else 48.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(theme.controlBackground)
-                .tapClickable(onClick = onClick)
-                .padding(6.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            if (bitmap != null) {
-                Image(bitmap = bitmap, contentDescription = name, modifier = Modifier.size(32.dp))
-                if (!name.isNullOrBlank()) Spacer(Modifier.height(4.dp))
-            }
-            if (!name.isNullOrBlank()) {
+        val icon: @Composable () -> Unit = {
+            if (bitmap != null) Image(bitmap = bitmap, contentDescription = name, modifier = Modifier.size(32.dp))
+        }
+        val label: @Composable () -> Unit = {
+            if (hasName) {
                 Text(
-                    name,
+                    name!!,
                     color = theme.primaryText,
                     fontSize = if (hasIcon) 12.sp else 15.sp,
                     fontWeight = FontWeight.Medium,
@@ -122,6 +138,68 @@ class ButtonGridCard : CardRenderer {
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+
+        val boxModifier =
+            modifier
+                .height(if (hasIcon && !sideBySide) 68.dp else 48.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(theme.controlBackground)
+                .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
+                .padding(6.dp)
+
+        if (sideBySide) {
+            GridButtonRow(boxModifier, iconPosition == IconPosition.LEFT, hasIcon && hasName, icon, label)
+        } else {
+            GridButtonColumn(boxModifier, iconPosition == IconPosition.BOTTOM, hasIcon && hasName, icon, label)
+        }
+    }
+
+    /** left/right layout — icon and label side by side. Split out of
+     * [GridButton] purely to keep that function's cyclomatic complexity
+     * under detekt's threshold; no behavior difference from having it
+     * inline. */
+    @Composable
+    private fun GridButtonRow(
+        modifier: Modifier,
+        iconFirst: Boolean,
+        showSpacer: Boolean,
+        icon: @Composable () -> Unit,
+        label: @Composable () -> Unit
+    ) {
+        Row(modifier = modifier, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (iconFirst) {
+                icon()
+                if (showSpacer) Spacer(Modifier.width(6.dp))
+                label()
+            } else {
+                label()
+                if (showSpacer) Spacer(Modifier.width(6.dp))
+                icon()
+            }
+        }
+    }
+
+    /** top/bottom layout — icon above or below the label. See
+     * [GridButtonRow]'s doc comment. */
+    @Composable
+    private fun GridButtonColumn(
+        modifier: Modifier,
+        iconLast: Boolean,
+        showSpacer: Boolean,
+        icon: @Composable () -> Unit,
+        label: @Composable () -> Unit
+    ) {
+        Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            if (iconLast) {
+                label()
+                if (showSpacer) Spacer(Modifier.height(4.dp))
+                icon()
+            } else {
+                icon()
+                if (showSpacer) Spacer(Modifier.height(4.dp))
+                label()
             }
         }
     }

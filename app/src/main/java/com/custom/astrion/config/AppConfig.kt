@@ -94,6 +94,29 @@ data class PageConfig(
      * [linkedPage] swiping up does nothing (see DashboardContent's
      * PageIndicator wiring). */
     val linkedPage: String? = null,
+    /** How [linkedPage] is reached on swipe-up. `"page"` (default) —
+     * unchanged, an instant `scrollToPage` jump exactly like today.
+     * `"popup"` — the linked page's own cards render inside a floating
+     * overlay on top of the current page instead, sized/placed by
+     * [popupWidthFraction]/[popupHeightFraction]/[popupPosition], and the
+     * current page (and pager position) is left completely untouched —
+     * dismissed by tapping outside it, BACK, or swiping it down. Meant for
+     * a quick secondary control (e.g. "TV" / "Projector" on a Video page)
+     * that doesn't warrant leaving the page you're on. Unrecognized value
+     * falls back to `"page"`. */
+    val linkedPageMode: String = "page",
+    /** Popup width as a fraction of the screen width (0–1). Only consulted
+     * when [linkedPageMode] is `"popup"`. Defaults to a compact 0.7 rather
+     * than full-width — a popup that fills the screen edge to edge reads as
+     * a full page, undermining the point of using popup mode at all. */
+    val popupWidthFraction: Float = 0.7f,
+    /** Popup height as a fraction of the screen height (0–1). See
+     * [popupWidthFraction]. Defaults to 0.5. */
+    val popupHeightFraction: Float = 0.5f,
+    /** Where the popup is anchored on screen: "center" (default), "top",
+     * "bottom", "left", or "right". Only consulted when [linkedPageMode] is
+     * `"popup"`. Unrecognized value falls back to "center". */
+    val popupPosition: String = "center",
     /** Optional Activity id — an [ActivityRuntime.TrackedActivity.id], which
      * covers BOTH a composed [ActivityConfig.id] (same id space as a
      * scene_grid item's `"activity"` field) AND any `"track": true`
@@ -144,7 +167,24 @@ data class PageConfig(
      * tap) and the automatic close-on-state-change above. */
     val openWhenEntity: String? = null,
     val openWhenState: String = "on",
-    val closeWhenState: String? = null
+    val closeWhenState: String? = null,
+    /** How [openWhenEntity] reaching [openWhenState] opens this page.
+     * `"page"` (default) — unchanged, the same `scrollToPage` navigation
+     * described on [openWhenEntity]. `"popup"` — this page's own cards
+     * render inside the same floating overlay [linkedPageMode] uses
+     * instead, sized/placed by the same [popupWidthFraction] /
+     * [popupHeightFraction] / [popupPosition] fields (a page's popup shape
+     * is one property of the page, regardless of which of the two
+     * mechanisms opens it as one) — the pager is left completely
+     * untouched, ideal for something like an intercom/doorbell call you
+     * want to see without losing whatever page you were on. Auto-closes
+     * the same way `"page"` mode does — the entity's state leaving
+     * [openWhenState] (or reaching [closeWhenState] when set) — but by
+     * dismissing the popup instead of navigating back, and only when it
+     * was this same entity that opened it (a popup opened by hand via
+     * [linkedPage] swipe-up is never auto-closed by an unrelated entity's
+     * state). Unrecognized value falls back to `"page"`. */
+    val openMode: String = "page"
 )
 
 /**
