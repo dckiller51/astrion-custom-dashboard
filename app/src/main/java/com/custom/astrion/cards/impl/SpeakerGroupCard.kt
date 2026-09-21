@@ -15,12 +15,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material.icons.filled.VolumeDown
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -156,7 +156,7 @@ class SpeakerGroupCard : CardRenderer {
                         Modifier
                             .size(26.dp)
                             .clip(CircleShape)
-                            .tapClickable { toggleGroup() }
+                            .tapClickable(focusShape = CircleShape) { toggleGroup() }
                     )
                 }
                 Text(
@@ -180,15 +180,15 @@ class SpeakerGroupCard : CardRenderer {
             VolumeBar(entityId, vol, muted, ctx)
             // Controls: mute / vol- / vol+.
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SmallBtn(Icons.Filled.VolumeOff, active = muted, theme = ctx.theme) {
+                SmallBtn(Icons.AutoMirrored.Filled.VolumeOff, active = muted, theme = ctx.theme) {
                     ctx.client.callService(
                         ServiceCall.of("media_player", "volume_mute", entityId, "is_volume_muted" to !muted)
                     )
                 }
-                SmallBtn(Icons.Filled.VolumeDown, theme = ctx.theme) {
+                SmallBtn(Icons.AutoMirrored.Filled.VolumeDown, theme = ctx.theme) {
                     ctx.client.callService(ServiceCall("media_player", "volume_down", entityId))
                 }
-                SmallBtn(Icons.Filled.VolumeUp, theme = ctx.theme) {
+                SmallBtn(Icons.AutoMirrored.Filled.VolumeUp, theme = ctx.theme) {
                     ctx.client.callService(ServiceCall("media_player", "volume_up", entityId))
                 }
             }
@@ -260,7 +260,7 @@ class SpeakerGroupCard : CardRenderer {
                 .size(34.dp)
                 .clip(CircleShape)
                 .background(if (active) theme.danger.copy(alpha = 0.25f) else theme.controlBackground)
-                .tapClickable(onClick = onClick),
+                .tapClickable(focusShape = CircleShape, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(

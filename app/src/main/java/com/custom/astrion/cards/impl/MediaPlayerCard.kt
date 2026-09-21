@@ -495,7 +495,7 @@ class MediaPlayerCard : CardRenderer {
                         .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(ctx.theme.controlBackground.copy(alpha = 0.4f))
-                        .tapClickable { fireService(ctx, b) },
+                        .tapClickable(focusShape = RoundedCornerShape(12.dp)) { fireService(ctx, b) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
