@@ -23,7 +23,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -71,6 +73,20 @@ class HaClient(
         private val PUBLISH_INTERVAL = 120.milliseconds
         private val RECONNECT_DELAY = 3.seconds
         private val RESPONSE_TIMEOUT = 8.seconds
+
+        // media_player/browse_media specifically can legitimately take far
+        // longer than any other request this client makes: some
+        // integrations (confirmed for Home Assistant's own Squeezebox/Lyrion
+        // "Apps"/"Radios" listing, which can run into the hundreds of
+        // entries, each carrying its own icon URL) return a response large
+        // enough — and slow enough for the LMS/Lyrion server itself to
+        // assemble — that it blows straight past the general 8s timeout,
+        // even though a small local-library folder (an album's tracks, say)
+        // loads comfortably within it. Using RESPONSE_TIMEOUT here made
+        // Astrion silently time out and show "Couldn't load media" for
+        // exactly these large folders, while Home Assistant's own frontend
+        // (with no client-side timeout of its own) just waited it out.
+        private val MEDIA_BROWSE_TIMEOUT = 25.seconds
     }
 
     private val json =
@@ -304,7 +320,7 @@ class HaClient(
                 contentType?.let { put("media_content_type", it) }
             }
         send(msg)
-        val reply = withTimeoutOrNull(RESPONSE_TIMEOUT) { deferred.await() }
+        val reply = withTimeoutOrNull(MEDIA_BROWSE_TIMEOUT) { deferred.await() }
         pending.remove(id)
         return reply?.get("result")?.jsonObject
     }
@@ -341,16 +357,21 @@ class HaClient(
     }
 
     /** Play a specific media item on a player. */
-    fun playMedia(entityId: String, contentId: String, contentType: String) {
-        callService(
-            ServiceCall.of(
-                "media_player",
-                "play_media",
-                entityId,
-                "media_content_id" to contentId,
-                "media_content_type" to contentType
-            )
-        )
+    /**
+     * [enqueue] mirrors `media_player.play_media`'s own optional field
+     * ("add", "next", "play", "replace" — see Home Assistant's docs); left
+     * null (the default) for the existing immediate-replace behavior every
+     * other call site already relies on. Only the Media Browser's long-press
+     * "Add to queue" action passes `"add"` today.
+     */
+    fun playMedia(entityId: String, contentId: String, contentType: String, enqueue: String? = null) {
+        val data =
+            buildMap<String, JsonElement> {
+                put("media_content_id", JsonPrimitive(contentId))
+                put("media_content_type", JsonPrimitive(contentType))
+                if (enqueue != null) put("enqueue", JsonPrimitive(enqueue))
+            }
+        callService(ServiceCall("media_player", "play_media", entityId, data))
     }
 
     // ---- internals ----------------------------------------------------------

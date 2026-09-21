@@ -138,7 +138,9 @@ class MediaPlayerCard : CardRenderer {
             useMediaInfo = config.bool("use_media_info", true),
             showVolumeLevel = config.bool("show_volume_level", false),
             mediaControls = mediaControls,
-            volumeControls = volumeControls
+            volumeControls = volumeControls,
+            artworkFit = if (config.string("artwork_fit") == "contain") ContentScale.Fit else ContentScale.Crop,
+            artworkAspectRatio = if (config.string("artwork_ratio") == "portrait") 2f / 3f else 1.2f
         )
     }
 
@@ -174,16 +176,16 @@ class MediaPlayerCard : CardRenderer {
                 Box(modifier = Modifier.matchParentSize().background(ctx.theme.background.copy(alpha = 0.7f)))
             }
             FullContent(
-                ctx,
-                e,
-                entityId,
-                text.title,
-                text.subtitle ?: text.finalState,
-                art,
-                actions::fire,
-                playerConfig.topButtons,
-                playerConfig.mediaControls,
-                playerConfig.volumeControls
+                MediaFullData(
+                    ctx = ctx,
+                    e = e,
+                    entityId = entityId,
+                    title = text.title,
+                    artist = text.subtitle ?: text.finalState,
+                    art = art,
+                    mp = actions::fire,
+                    playerConfig = playerConfig
+                )
             )
         }
     }
@@ -388,7 +390,7 @@ class MediaPlayerCard : CardRenderer {
                 .size(36.dp)
                 .clip(RoundedCornerShape(10.dp))
                 .background(if (accent) theme.accentSecondary else theme.controlBackground)
-                .tapClickable(onClick = onClick),
+                .tapClickable(focusShape = RoundedCornerShape(10.dp), onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = null, tint = theme.primaryText, modifier = Modifier.size(18.dp))
@@ -438,124 +440,169 @@ class MediaPlayerCard : CardRenderer {
 
     // ---- full (media page) --------------------------------------------------
 
+    /** Everything FullContent needs, bundled so the function stays under
+     * detekt's parameter-count limit (same idea as CompactTileGroups below). */
+    private data class MediaFullData(
+        val ctx: CardContext,
+        val e: EntityState?,
+        val entityId: String,
+        val title: String,
+        val artist: String,
+        val art: ImageBitmap?,
+        val mp: (String, Array<out Pair<String, Any?>>) -> Unit,
+        val playerConfig: MediaPlayerConfig
+    )
+
     @Composable
-    private fun FullContent(
-        ctx: CardContext,
-        e: EntityState?,
-        entityId: String,
-        title: String,
-        artist: String,
-        art: ImageBitmap?,
-        mp: (String, Array<out Pair<String, Any?>>) -> Unit,
-        topButtons: List<Map<String, Any?>>,
-        mediaControls: List<String>,
-        volumeControls: List<String>
-    ) {
-        val mediaButtons = remember(e, mediaControls) { computeMediaButtons(e, mediaControls) }
-        val volumeButtons = remember(e, volumeControls) { computeVolumeButtons(e, volumeControls) }
-        val hasVolumeSlider = volumeControls.contains("set") && e?.supports(Feature.VOLUME_SET) == true
+    private fun FullContent(data: MediaFullData) {
+        val ctx = data.ctx
+        val e = data.e
+        val playerConfig = data.playerConfig
+        val mediaButtons =
+            remember(e, playerConfig.mediaControls) { computeMediaButtons(e, playerConfig.mediaControls) }
+        val volumeButtons =
+            remember(e, playerConfig.volumeControls) { computeVolumeButtons(e, playerConfig.volumeControls) }
+        val hasVolumeSlider = playerConfig.volumeControls.contains("set") && e?.supports(Feature.VOLUME_SET) == true
 
         Column(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            if (topButtons.isNotEmpty()) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    topButtons.forEach { b ->
-                        Box(
-                            modifier =
-                            Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(ctx.theme.controlBackground.copy(alpha = 0.4f))
-                                .tapClickable { fireService(ctx, b) },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                b["name"] as? String ?: "",
-                                color = ctx.theme.primaryText,
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
-
-            val artMod = Modifier.fillMaxWidth().aspectRatio(1.2f).clip(RoundedCornerShape(16.dp))
-            if (art != null) {
-                Image(art, null, modifier = artMod, contentScale = ContentScale.Crop)
-            } else {
-                val isOff = e == null || e.state == "off" || e.isUnavailable
-                Box(
-                    artMod.background(if (isOff) ctx.theme.controlBackground else ctx.theme.accentSecondary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        if (isOff) MdiIcons.CastOff else MdiIcons.Cast,
-                        contentDescription = null,
-                        tint = if (isOff) Color.White.copy(alpha = 0.6f) else Color.White,
-                        modifier = Modifier.size(48.dp)
-                    )
-                }
-            }
-
-            Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    title,
-                    color = ctx.theme.primaryText,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    artist,
-                    color = ctx.theme.mutedText,
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
+            FullTopButtons(ctx, playerConfig.topButtons)
+            FullArtwork(ctx, e, data.art, playerConfig)
+            FullTitleArtist(ctx.theme, data.title, data.artist)
             if (e?.attrDouble("media_duration") != null) {
                 MediaProgressBar(e, ctx.theme)
             }
+            FullMediaButtonsRow(ctx.theme, mediaButtons, data.mp)
+            FullVolumeRow(FullVolumeRowData(data.entityId, e, data.mp, volumeButtons, hasVolumeSlider, ctx.theme))
+        }
+    }
 
-            if (mediaButtons.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+    /** The optional row of full-width service-call buttons above the artwork
+     * (e.g. speaker grouping) — split out of [FullContent] purely to keep
+     * that function's complexity/parameter-count under detekt's thresholds. */
+    @Composable
+    private fun FullTopButtons(ctx: CardContext, topButtons: List<Map<String, Any?>>) {
+        if (topButtons.isEmpty()) return
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            topButtons.forEach { b ->
+                Box(
+                    modifier =
+                    Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(ctx.theme.controlBackground.copy(alpha = 0.4f))
+                        .tapClickable { fireService(ctx, b) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    mediaButtons.forEach { b ->
-                        val big = b.action == "media_play" || b.action == "media_pause"
-                        FullCircleControl(b.icon, if (big) 64.dp else 50.dp, ctx.theme, accent = big || b.active) {
-                            mp(b.action, b.data.toTypedArray())
-                        }
-                    }
+                    Text(
+                        b["name"] as? String ?: "",
+                        color = ctx.theme.primaryText,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
+        }
+    }
 
-            if (volumeButtons.isNotEmpty() || hasVolumeSlider) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (hasVolumeSlider) {
-                        VolumeSlider(entityId, e, Modifier.weight(1f).height(44.dp), ctx.theme) { level ->
-                            mp("volume_set", arrayOf("volume_level" to level))
-                        }
-                    }
-                    volumeButtons.forEach { b -> FullCircleControl(b.icon, 44.dp, ctx.theme) { mp(b.action, b.data.toTypedArray()) } }
+    /** The artwork tile itself, or the cast-icon placeholder when there's no
+     * art. See [FullTopButtons]'s doc comment for why this is split out. */
+    @Composable
+    private fun FullArtwork(ctx: CardContext, e: EntityState?, art: ImageBitmap?, playerConfig: MediaPlayerConfig) {
+        val artMod =
+            Modifier.fillMaxWidth().aspectRatio(playerConfig.artworkAspectRatio).clip(RoundedCornerShape(16.dp))
+        if (art != null) {
+            Image(art, null, modifier = artMod, contentScale = playerConfig.artworkFit)
+        } else {
+            val isOff = e == null || e.state == "off" || e.isUnavailable
+            Box(
+                artMod.background(if (isOff) ctx.theme.controlBackground else ctx.theme.accentSecondary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    if (isOff) MdiIcons.CastOff else MdiIcons.Cast,
+                    contentDescription = null,
+                    tint = if (isOff) Color.White.copy(alpha = 0.6f) else Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+        }
+    }
+
+    /** Title + artist/subtitle block. See [FullTopButtons]'s doc comment. */
+    @Composable
+    private fun FullTitleArtist(theme: ThemeColors, title: String, artist: String) {
+        Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                title,
+                color = theme.primaryText,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                artist,
+                color = theme.mutedText,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+
+    /** Play/pause/skip row. See [FullTopButtons]'s doc comment. */
+    @Composable
+    private fun FullMediaButtonsRow(theme: ThemeColors, mediaButtons: List<MpButton>, mp: (String, Array<out Pair<String, Any?>>) -> Unit) {
+        if (mediaButtons.isEmpty()) return
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            mediaButtons.forEach { b ->
+                val big = b.action == "media_play" || b.action == "media_pause"
+                FullCircleControl(b.icon, if (big) 64.dp else 50.dp, theme, accent = big || b.active) {
+                    mp(b.action, b.data.toTypedArray())
                 }
+            }
+        }
+    }
+
+    /** Everything [FullVolumeRow] needs — see [FullTopButtons]'s doc comment. */
+    private data class FullVolumeRowData(
+        val entityId: String,
+        val e: EntityState?,
+        val mp: (String, Array<out Pair<String, Any?>>) -> Unit,
+        val volumeButtons: List<MpButton>,
+        val hasVolumeSlider: Boolean,
+        val theme: ThemeColors
+    )
+
+    /** Volume slider + mute/up/down row. See [FullTopButtons]'s doc comment. */
+    @Composable
+    private fun FullVolumeRow(data: FullVolumeRowData) {
+        if (data.volumeButtons.isEmpty() && !data.hasVolumeSlider) return
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (data.hasVolumeSlider) {
+                VolumeSlider(data.entityId, data.e, Modifier.weight(1f).height(44.dp), data.theme) { level ->
+                    data.mp("volume_set", arrayOf("volume_level" to level))
+                }
+            }
+            data.volumeButtons.forEach { b ->
+                FullCircleControl(b.icon, 44.dp, data.theme) { data.mp(b.action, b.data.toTypedArray()) }
             }
         }
     }
@@ -622,7 +669,7 @@ class MediaPlayerCard : CardRenderer {
                 .size(size)
                 .clip(CircleShape)
                 .background(if (accent) theme.accentSecondary else theme.controlBackground.copy(alpha = 0.33f))
-                .tapClickable(onClick = onClick),
+                .tapClickable(focusShape = CircleShape, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = null, tint = Color.White)
@@ -648,7 +695,17 @@ private data class MediaPlayerConfig(
     val useMediaInfo: Boolean,
     val showVolumeLevel: Boolean,
     val mediaControls: List<String>,
-    val volumeControls: List<String>
+    val volumeControls: List<String>,
+    /** "cover" (default, unchanged) crops to fill the tile — right for a
+     * square album cover, but chops the top/bottom off a portrait movie
+     * poster. "contain" fits the whole image instead, letterboxing rather
+     * than cropping. See `artwork_ratio` for changing the tile's own shape
+     * (e.g. to a portrait poster ratio) instead of just the fit mode. */
+    val artworkFit: ContentScale = ContentScale.Crop,
+    /** Aspect ratio (width / height) of the artwork area in [MediaFullVariant].
+     * Defaults to 1.2 (the original near-square shape). `"portrait"` in the
+     * config switches this to 2/3, a closer fit for movie/TV posters. */
+    val artworkAspectRatio: Float = 1.2f
 )
 
 private data class MediaText(val title: String, val subtitle: String?, val finalState: String)

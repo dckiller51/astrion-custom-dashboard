@@ -150,6 +150,25 @@ function updateCardFormInputs() {
         <textarea id="optMediaTopButtons" rows="3" placeholder='[{"name":"Group","service":"media_player.join","entity_id":"media_player.salon","data":{"group_members":["media_player.cuisine"]}}]'>[]</textarea>
         <div class="hint">Each entry fires an arbitrary service call as a full-width button above the album art — e.g. speaker grouping.</div>
       </div>
+      <div id="mediaArtworkField" style="display:none">
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1">
+            <label>Artwork fit (full variant only)</label>
+            <select id="optMediaArtworkFit">
+              <option value="cover">Cover (crop to fill — default)</option>
+              <option value="contain">Contain (show the whole image)</option>
+            </select>
+          </div>
+          <div style="flex:1">
+            <label>Artwork shape</label>
+            <select id="optMediaArtworkRatio">
+              <option value="square">Square-ish (default)</option>
+              <option value="portrait">Portrait (2:3 — movie posters)</option>
+            </select>
+          </div>
+        </div>
+        <div class="hint">Movie/TV artwork is usually portrait — use "Contain" so nothing's cropped, and/or "Portrait" to reshape the tile itself.</div>
+      </div>
     `;
     document.getElementById('optMediaVariant').addEventListener('change', updateMediaTopButtonsVisibility);
     updateMediaTopButtonsVisibility();
@@ -226,6 +245,13 @@ function updateCardFormInputs() {
     const label = type === 'button_grid' ? 'Button' : 'Scene';
     container.innerHTML = `
       <label>Columns</label><input type="number" id="optColumns" value="2" min="1">
+      ${type === 'button_grid' ? `<label>Icon position</label>
+      <select id="optIconPosition">
+        <option value="top">Top (above label)</option>
+        <option value="bottom">Bottom (below label)</option>
+        <option value="left">Left (beside label)</option>
+        <option value="right">Right (beside label)</option>
+      </select>` : ''}
       ${type === 'scene_grid' ? `<label><input type="checkbox" id="optShowLabels" checked> Show name under icon (when any scene has one — applies to the whole grid)</label><label><input type="checkbox" id="optIconFill"> Fill tile with icon (hide name recommended; icon scales to fill tile height)</label><label>Tile height (dp, optional)</label><input type="number" id="optTileHeight" min="40" max="300" placeholder="120 when fill on, 74 otherwise">` : ''}
       <div id="gridItemsList"></div>
       <div class="section-box" style="margin-top:8px">
@@ -381,8 +407,10 @@ function updateCardFormInputs() {
 function updateMediaTopButtonsVisibility() {
   const variantEl = document.getElementById('optMediaVariant');
   const field = document.getElementById('mediaTopButtonsField');
+  const artworkField = document.getElementById('mediaArtworkField');
   if (!variantEl || !field) return;
   field.style.display = variantEl.value === 'full' ? '' : 'none';
+  if (artworkField) artworkField.style.display = variantEl.value === 'full' ? '' : 'none';
 }
 
 // fan card: percentage step only applies to simple/full layouts — the
@@ -466,10 +494,16 @@ function renderGridItemsList(type) {
   const list = document.getElementById('gridItemsList');
   if (!list) return;
   list.innerHTML = '';
-  (window._pendingGridItems || []).forEach((item, i) => {
+  const items = window._pendingGridItems || [];
+  items.forEach((item, i) => {
     const el = document.createElement('div');
     el.className = 'list-item';
-    el.innerHTML = `<span>${item.name || '(unnamed)'}</span><span><span class="remove" style="color:#00E5FF" onclick="editGridItem('${type}', ${i})">✎</span> <span class="remove" onclick="removeGridItem('${type}', ${i})">✕</span></span>`;
+    const upDisabled = i === 0 ? ' style="opacity:.3;pointer-events:none"' : '';
+    const downDisabled = i === items.length - 1 ? ' style="opacity:.3;pointer-events:none"' : '';
+    el.innerHTML = `<span>${item.name || '(unnamed)'}</span><span>` +
+      `<span class="remove"${upDisabled} onclick="moveGridItem('${type}', ${i}, -1)" title="Move up">↑</span> ` +
+      `<span class="remove"${downDisabled} onclick="moveGridItem('${type}', ${i}, 1)" title="Move down">↓</span> ` +
+      `<span class="remove" style="color:#00E5FF" onclick="editGridItem('${type}', ${i})">✎</span> <span class="remove" onclick="removeGridItem('${type}', ${i})">✕</span></span>`;
     list.appendChild(el);
   });
 }
@@ -665,6 +699,23 @@ function removeGridItem(type, i) {
   renderGridItemsList(type);
 }
 
+/**
+ * Reorders a scene_grid/button_grid tile by swapping it with its neighbor
+ * (dir -1 = move up/left, +1 = move down/right — the grid just wraps by
+ * columns, so "up" and "left" are the same underlying array move). Keeps
+ * `editingGridItem` pointed at the same item if it's mid-edit, so moving a
+ * tile doesn't silently switch the edit form to a different one.
+ */
+function moveGridItem(type, i, dir) {
+  const items = window._pendingGridItems || [];
+  const j = i + dir;
+  if (j < 0 || j >= items.length) return;
+  [items[i], items[j]] = [items[j], items[i]];
+  if (editingGridItem === i) editingGridItem = j;
+  else if (editingGridItem === j) editingGridItem = i;
+  renderGridItemsList(type);
+}
+
 // Fake example entity — used to preview a `climate` card that has no
 // hvac_modes/fan_modes/swing_modes override, so the builder still shows a
 // realistic result instead of an empty shell. Based on a real Daikin unit.
@@ -815,6 +866,8 @@ function fillCardForm(card) {
     document.getElementById('optMediaVolButtons').checked = vCtrls.includes('buttons');
     document.getElementById('optMediaVolSet').checked = vCtrls.includes('set');
     document.getElementById('optMediaTopButtons').value = JSON.stringify(o.top_buttons || [], null, 2);
+    document.getElementById('optMediaArtworkFit').value = o.artwork_fit === 'contain' ? 'contain' : 'cover';
+    document.getElementById('optMediaArtworkRatio').value = o.artwork_ratio === 'portrait' ? 'portrait' : 'square';
     updateMediaTopButtonsVisibility();
   } else if (type === 'camera') {
     document.getElementById('optName').value = o.name || '';
@@ -848,6 +901,9 @@ function fillCardForm(card) {
     document.getElementById('optShowCaptions').checked = o.show_captions !== false;
   } else if (type === 'button_grid' || type === 'scene_grid') {
     document.getElementById('optColumns').value = o.columns || 2;
+    if (type === 'button_grid') {
+      document.getElementById('optIconPosition').value = ['top', 'bottom', 'left', 'right'].includes(o.iconPosition) ? o.iconPosition : 'top';
+    }
     if (type === 'scene_grid') {
       document.getElementById('optShowLabels').checked = o.show_labels !== false;
       document.getElementById('optIconFill').checked = o.icon_fill === true;
@@ -1019,6 +1075,8 @@ function addCardToPage() {
         alert('Top buttons JSON is invalid — fix it or leave as []. Card not added.');
         return;
       }
+      if (document.getElementById('optMediaArtworkFit').value === 'contain') newCard.options.artwork_fit = 'contain';
+      if (document.getElementById('optMediaArtworkRatio').value === 'portrait') newCard.options.artwork_ratio = 'portrait';
     }
   } else if (type === 'camera') {
     const camName = document.getElementById('optName').value.trim();
@@ -1054,6 +1112,8 @@ function addCardToPage() {
     if (!document.getElementById('optShowCaptions').checked) newCard.options.show_captions = false;
   } else if (type === 'button_grid') {
     newCard.options.columns = parseInt(document.getElementById('optColumns').value, 10) || 2;
+    const iconPosition = document.getElementById('optIconPosition').value;
+    if (iconPosition && iconPosition !== 'top') newCard.options.iconPosition = iconPosition;
     newCard.options.buttons = window._pendingGridItems || [];
     window._pendingGridItems = [];
   } else if (type === 'scene_grid') {

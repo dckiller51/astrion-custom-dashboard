@@ -94,6 +94,29 @@ data class PageConfig(
      * [linkedPage] swiping up does nothing (see DashboardContent's
      * PageIndicator wiring). */
     val linkedPage: String? = null,
+    /** How [linkedPage] is reached on swipe-up. `"page"` (default) —
+     * unchanged, an instant `scrollToPage` jump exactly like today.
+     * `"popup"` — the linked page's own cards render inside a floating
+     * overlay on top of the current page instead, sized/placed by
+     * [popupWidthFraction]/[popupHeightFraction]/[popupPosition], and the
+     * current page (and pager position) is left completely untouched —
+     * dismissed by tapping outside it, BACK, or swiping it down. Meant for
+     * a quick secondary control (e.g. "TV" / "Projector" on a Video page)
+     * that doesn't warrant leaving the page you're on. Unrecognized value
+     * falls back to `"page"`. */
+    val linkedPageMode: String = "page",
+    /** Popup width as a fraction of the screen width (0–1). Only consulted
+     * when [linkedPageMode] is `"popup"`. Defaults to a compact 0.7 rather
+     * than full-width — a popup that fills the screen edge to edge reads as
+     * a full page, undermining the point of using popup mode at all. */
+    val popupWidthFraction: Float = 0.7f,
+    /** Popup height as a fraction of the screen height (0–1). See
+     * [popupWidthFraction]. Defaults to 0.5. */
+    val popupHeightFraction: Float = 0.5f,
+    /** Where the popup is anchored on screen: "center" (default), "top",
+     * "bottom", "left", or "right". Only consulted when [linkedPageMode] is
+     * `"popup"`. Unrecognized value falls back to "center". */
+    val popupPosition: String = "center",
     /** Optional Activity id — an [ActivityRuntime.TrackedActivity.id], which
      * covers BOTH a composed [ActivityConfig.id] (same id space as a
      * scene_grid item's `"activity"` field) AND any `"track": true`

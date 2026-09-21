@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -124,8 +125,16 @@ object DashboardLoader {
                     val parent = obj["parent"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     val parentKey = obj["parentKey"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "BACK"
                     val linkedPage = obj["linkedPage"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val linkedPageModeRaw = obj["linkedPageMode"]?.jsonPrimitive?.content
+                    val linkedPageMode = if (linkedPageModeRaw == "popup") "popup" else "page"
+                    val popupWidthFraction = obj["popupWidth"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.7f
+                    val popupHeightFraction = obj["popupHeight"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.5f
+                    val popupPositionRaw = obj["popupPosition"]?.jsonPrimitive?.content
+                    val popupPosition = if (popupPositionRaw in setOf("top", "bottom", "left", "right")) popupPositionRaw!! else "center"
                     val hiddenUnlessActivity = obj["hiddenUnlessActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     val openWhenEntity = obj["openWhenEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val openWhenState = obj["openWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "on"
+                    val closeWhenState = obj["closeWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     PageConfig(
                         name = name,
                         cards = cards,
@@ -134,8 +143,14 @@ object DashboardLoader {
                         parent = parent,
                         parentKey = parentKey,
                         linkedPage = linkedPage,
+                        linkedPageMode = linkedPageMode,
+                        popupWidthFraction = popupWidthFraction,
+                        popupHeightFraction = popupHeightFraction,
+                        popupPosition = popupPosition,
                         hiddenUnlessActivity = hiddenUnlessActivity,
-                        openWhenEntity = openWhenEntity
+                        openWhenEntity = openWhenEntity,
+                        openWhenState = openWhenState,
+                        closeWhenState = closeWhenState
                     )
                 }
             if (pages.isEmpty()) error("\"pages\" is empty")
@@ -356,8 +371,18 @@ object DashboardLoader {
                                 put("parentKey", page.parentKey)
                             }
                             page.linkedPage?.let { put("linkedPage", it) }
+                            if (page.linkedPageMode == "popup") {
+                                put("linkedPageMode", "popup")
+                                put("popupWidth", page.popupWidthFraction)
+                                put("popupHeight", page.popupHeightFraction)
+                                if (page.popupPosition != "center") put("popupPosition", page.popupPosition)
+                            }
                             page.hiddenUnlessActivity?.let { put("hiddenUnlessActivity", it) }
-                            page.openWhenEntity?.let { put("openWhenEntity", it) }
+                            page.openWhenEntity?.let {
+                                put("openWhenEntity", it)
+                                if (page.openWhenState != "on") put("openWhenState", page.openWhenState)
+                                page.closeWhenState?.let { closeState -> put("closeWhenState", closeState) }
+                            }
                             put(
                                 "cards",
                                 buildJsonArray {

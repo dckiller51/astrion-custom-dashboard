@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -39,6 +41,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,7 +72,9 @@ import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.HaLabels
 import com.custom.astrion.harmony.HarmonyHubRegistry
+import com.custom.astrion.ui.icons.MdiIcons
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -120,8 +125,24 @@ data class DashboardNavigation(
     /** Called whenever the visible page changes (swipe, dot, hardware nav, or
      * a card's navigateToPage) — MainActivity uses this to rebind hardware
      * hotkeys to the newly-visible page's own bindings. */
-    val onPageChanged: (Int) -> Unit = {}
+    val onPageChanged: (Int) -> Unit = {},
+    /** Set by MainActivity.runHotkey every time a VOLUME_UP/VOLUME_DOWN/MUTE
+     * hotkey actually fires an HA service call against a real entity — used
+     * to pop up a temporary volume readout (see [VolumePopupHost]). Unlike
+     * [navTarget]/[overlayTarget] this is never "handled"/cleared by
+     * Dashboard: each press is a fresh, distinct value (its own [nonce]),
+     * so simply observing it again on every repeat press is enough to
+     * restart the popup's own auto-dismiss timer — there's nothing for
+     * MainActivity to reset in between. */
+    val volumeHotkeyTrigger: VolumeHotkeyTrigger? = null
 )
+
+/** See [DashboardNavigation.volumeHotkeyTrigger]. [nonce] only exists so two
+ * consecutive presses on the *same* entity still count as distinct values
+ * to Compose — a plain `String` entityId wouldn't restart the popup's own
+ * `LaunchedEffect` (and its auto-dismiss delay) on repeat presses, since
+ * `LaunchedEffect(key)` only relaunches when [key] actually *changes*. */
+data class VolumeHotkeyTrigger(val entityId: String, val nonce: Long)
 
 data class DashboardUiState(
     val configNotice: String? = null,
@@ -516,6 +537,7 @@ fun Dashboard(
     val overlayTarget = navigation.overlayTarget
     val onOverlayHandled = navigation.onOverlayHandled
     val onPageChanged = navigation.onPageChanged
+    val volumeHotkeyTrigger = navigation.volumeHotkeyTrigger
     val onActivityRuntimeReady = activityCallbacks.onActivityRuntimeReady
     val onStartActivityReady = activityCallbacks.onStartActivityReady
     val onStopActivityReady = activityCallbacks.onStopActivityReady
@@ -642,7 +664,8 @@ fun Dashboard(
                     webhookContext = webhookContext,
                     client = client,
                     linkedJump = linkedJump,
-                    onLinkedJumpChange = { linkedJump = it }
+                    onLinkedJumpChange = { linkedJump = it },
+                    volumeHotkeyTrigger = volumeHotkeyTrigger
                 )
             )
         }
@@ -669,7 +692,8 @@ private data class DashboardContentInputs(
      * `linkedJump` declaration for why it's lifted up rather than kept
      * local to this composable. */
     val linkedJump: Pair<String, String>?,
-    val onLinkedJumpChange: (Pair<String, String>?) -> Unit
+    val onLinkedJumpChange: (Pair<String, String>?) -> Unit,
+    val volumeHotkeyTrigger: VolumeHotkeyTrigger?
 )
 
 /** The dynamic "‹ back" target for [PageIndicator]: a page's own static
@@ -791,6 +815,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
     val activeActivityIds = inputs.activeActivityIds
     val linkedJump = inputs.linkedJump
     val onLinkedJumpChange = inputs.onLinkedJumpChange
+    val volumeHotkeyTrigger = inputs.volumeHotkeyTrigger
 
     LaunchedEffect(pagerState.currentPage) {
         onPageChanged(pagerState.currentPage)
@@ -807,6 +832,12 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             )
         }
     }
+
+    // The linked page currently shown as a popup (PageConfig.linkedPageMode
+    // == "popup"), or null when none is open. Deliberately local/ephemeral
+    // (not lifted up alongside `linkedJump`) — unlike a full page jump, a
+    // popup never changes `pagerState`, so nothing else needs to observe it.
+    var linkedPopupPage by remember { mutableStateOf<LinkedPagePopupState?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -856,8 +887,19 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                     val current = config.pages.getOrNull(pagerState.currentPage)
                     if (current != null) {
                         val linkedName = current.linkedPage
-                        if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
-                        jumpToPageByName(config.pages, linkedName, scope, pagerState)
+                        val linkedPageConfig = linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+                        if (current.linkedPageMode == "popup" && linkedPageConfig != null) {
+                            linkedPopupPage =
+                                LinkedPagePopupState(
+                                    targetPage = linkedPageConfig,
+                                    widthFraction = current.popupWidthFraction,
+                                    heightFraction = current.popupHeightFraction,
+                                    position = current.popupPosition
+                                )
+                        } else {
+                            if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
+                            jumpToPageByName(config.pages, linkedName, scope, pagerState)
+                        }
                     }
                 }
             )
@@ -874,6 +916,10 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                 onClose = { overlayState.onShowActivitiesChange(false) }
             )
         }
+        linkedPopupPage?.let { popup ->
+            LinkedPagePopup(state = popup, ctx = ctx, onClose = { linkedPopupPage = null })
+        }
+        VolumePopupHost(trigger = volumeHotkeyTrigger, ctx = ctx)
     }
 }
 
@@ -1081,6 +1127,179 @@ private fun ActivitiesOverlay(
     }
 }
 
+/**
+ * [LinkedPagePopup]'s params, bundled because they come from two different
+ * pages: [targetPage] is the linked page being *shown* (its cards/name are
+ * the popup's content), while [widthFraction]/[heightFraction]/[position]
+ * are the *source* page's own [PageConfig.popupWidthFraction] /
+ * [PageConfig.popupHeightFraction] / [PageConfig.popupPosition] — the page
+ * that actually declared `linkedPageMode: "popup"` in the first place, not
+ * the one it points to. Getting this backwards (reading the geometry off
+ * [targetPage] instead) was a real bug: every popup silently used the
+ * default 0.7/0.5/"center" regardless of what the *source* page configured,
+ * since the target page it was mistakenly read from generally has no popup
+ * settings of its own.
+ */
+private data class LinkedPagePopupState(
+    val targetPage: PageConfig,
+    val widthFraction: Float,
+    val heightFraction: Float,
+    val position: String
+)
+
+/**
+ * Floating popup counterpart of the full-page swipe-up-to-linked-page jump —
+ * used when the current page's [PageConfig.linkedPageMode] is `"popup"`
+ * instead of the default `"page"`. Renders [LinkedPagePopupState.targetPage]'s
+ * own cards via [PageContent] inside a sized/positioned box floating over
+ * whatever page is actually on screen — the pager itself is never touched,
+ * so this is purely cosmetic on top of the existing page, not a real
+ * navigation.
+ *
+ * Dismissed by tapping the dimmed backdrop or the close row; a tap inside
+ * the popup box itself is swallowed so it doesn't fall through to the
+ * backdrop's dismiss handler.
+ */
+@Composable
+private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClose: () -> Unit) {
+    val alignment =
+        when (state.position) {
+            "top" -> Alignment.TopCenter
+            "bottom" -> Alignment.BottomCenter
+            "left" -> Alignment.CenterStart
+            "right" -> Alignment.CenterEnd
+            else -> Alignment.Center
+        }
+
+    Box(
+        modifier =
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.5f))
+            .tapClickable(onClick = onClose),
+        contentAlignment = alignment
+    ) {
+        Box(
+            modifier =
+            Modifier
+                .fillMaxWidth(state.widthFraction)
+                .fillMaxHeight(state.heightFraction)
+                .padding(16.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(LocalTheme.current.cardSurface)
+                // Swallows taps so they don't reach the backdrop behind it.
+                .tapClickable(onClick = {})
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        state.targetPage.name,
+                        color = LocalTheme.current.primaryText,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "✕",
+                        color = LocalTheme.current.mutedText,
+                        fontSize = 15.sp,
+                        modifier =
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .tapClickable { onClose() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                PageContent(state.targetPage, ctx)
+            }
+        }
+    }
+}
+
+/**
+ * Temporary volume readout popped up by a VOLUME_UP/VOLUME_DOWN/MUTE hotkey
+ * (see MainActivity.runHotkey / [DashboardNavigation.volumeHotkeyTrigger]) —
+ * shows the target entity's current level for a couple of seconds, then
+ * disappears on its own. Unlike [LinkedPagePopup] or the other overlays,
+ * this doesn't dim the screen or intercept taps at all — it's meant to be
+ * glanced at while you keep pressing the physical button, not interacted
+ * with.
+ *
+ * Home Assistant's `media_player.volume_level` is always a normalized 0–1
+ * float, never decibels — an AV receiver integration doesn't generally
+ * expose its own dB scale as a separate queryable attribute — so this
+ * shows a 0–100% bar rather than a dB readout; there's no generic HA
+ * attribute this could read a real dB value from.
+ */
+@Composable
+private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, ctx: CardContext) {
+    var visible by remember { mutableStateOf<VolumeHotkeyTrigger?>(null) }
+    LaunchedEffect(trigger) {
+        if (trigger == null) return@LaunchedEffect
+        visible = trigger
+        delay(2200)
+        // Nothing else can have changed `visible` out from under us: a
+        // newer trigger would have cancelled/relaunched this very
+        // coroutine (LaunchedEffect(trigger)) before this delay finished.
+        visible = null
+    }
+    val shown = visible ?: return
+    val e = ctx.entities[shown.entityId] ?: return
+    val level = e.attrDouble("volume_level")?.toFloat()?.coerceIn(0f, 1f)
+    val muted = e.attrBoolean("is_volume_muted") == true
+
+    Box(
+        modifier = Modifier.fillMaxSize().padding(bottom = 60.dp),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Row(
+            modifier =
+            Modifier
+                .clip(RoundedCornerShape(30.dp))
+                .background(ctx.theme.cardSurface.copy(alpha = 0.95f))
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                if (muted) MdiIcons.VolumeOff else MdiIcons.VolumeHigh,
+                contentDescription = null,
+                tint = ctx.theme.accent,
+                modifier = Modifier.size(22.dp)
+            )
+            Spacer(Modifier.width(12.dp))
+            Box(
+                modifier =
+                Modifier
+                    .width(140.dp)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(ctx.theme.controlBackground)
+            ) {
+                if (level != null) {
+                    Box(
+                        modifier =
+                        Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(level.coerceAtLeast(0.02f))
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(if (muted) ctx.theme.mutedText else ctx.theme.accent)
+                    )
+                }
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(
+                if (muted) stringResource(R.string.volume_muted) else level?.let { "${(it * 100).toInt()}%" } ?: "—",
+                color = ctx.theme.primaryText,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
 @Composable
 private fun PageContent(page: PageConfig, ctx: CardContext) {
     val pinned = page.cards.filter { it.options["pin"] == "bottom" }
@@ -1183,6 +1402,16 @@ private fun PageIndicator(
     val density = LocalDensity.current
     val triggerPx = with(density) { 40.dp.toPx() }
     var dragAccumulated by remember { mutableFloatStateOf(0f) }
+    // `.pointerInput(Unit)` below deliberately never re-keys (restarting it on
+    // every recomposition would risk cutting off a drag mid-gesture), so its
+    // suspend block only ever captures the FIRST `onSwipeUpToLinkedPage` it's
+    // ever given — meaning a fresh dashboard.json reload (new linkedPage/
+    // linkedPageMode/popup* on the current page) would otherwise silently do
+    // nothing until the app was fully restarted, since PageIndicator itself
+    // stays mounted (and thus never re-captures anything) across reloads.
+    // rememberUpdatedState keeps the long-lived coroutine but always resolves
+    // through to whatever the latest recomposition actually passed in.
+    val currentOnSwipeUpToLinkedPage = rememberUpdatedState(onSwipeUpToLinkedPage)
 
     val currentPage = pages.getOrNull(current)
     // Broader than "does any page set a static parent": a page with no
@@ -1224,7 +1453,7 @@ private fun PageIndicator(
                         change.consume()
                         dragAccumulated += dragAmount
                         if (dragAccumulated < -triggerPx) {
-                            onSwipeUpToLinkedPage()
+                            currentOnSwipeUpToLinkedPage.value()
                             dragAccumulated = 0f
                         }
                     }
