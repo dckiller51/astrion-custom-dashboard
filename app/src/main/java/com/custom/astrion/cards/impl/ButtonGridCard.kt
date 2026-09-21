@@ -2,6 +2,7 @@ package com.custom.astrion.cards.impl
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -27,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.decodeIconSampled
@@ -38,16 +41,33 @@ import com.custom.astrion.ui.tapClickable
  * a text label, or both. Used for the TV-app row, Group/Ungroup, and the
  * playlist buttons.
  *
+ * A button can also change its background/border based on a Home Assistant
+ * entity's live state — e.g. visually highlighting whichever source is
+ * currently selected on an input_select, similar to how scene_grid
+ * border-highlights the currently active Activity, but driven by an
+ * arbitrary entity/state here instead:
+ * - "state_entity": the entity to watch.
+ * - "state_value": the state (or list of states) that counts as "active".
+ * - "active_color": background color while active (hex, same format as
+ *   scene_grid's "color"). Falls back to the ordinary tile background when
+ *   absent/unparsable.
+ * - "active_border": optional accent border while active — `true` draws
+ *   the theme's accent color, or give your own hex color instead.
+ *
  * Config shape:
  *   { "type": "button_grid", "options": {
  *       "columns": 3,
+ *       "iconPosition": "left",
  *       "buttons": [
  *         { "name": "Group",   "service": "script.group" },
  *         { "name": "Disco",   "icon": "/sdcard/astrion/icons/disco.png",
  *           "service": "script.playlist_disco" },
  *         { "name": "Netflix", "service": "media_player.play_media",
  *           "entity_id": "media_player.the_club_tvv",
- *           "data": { "media_content_type": "app", "media_content_id": "com.netflix.ninja" } }
+ *           "data": { "media_content_type": "app", "media_content_id": "com.netflix.ninja" } },
+ *         { "name": "TV", "service": "script.select_source_tv",
+ *           "state_entity": "input_select.living_room_source", "state_value": "TV",
+ *           "active_color": "#FF2A4954", "active_border": true }
  *       ]
  *   } }
  */
@@ -71,28 +91,10 @@ class ButtonGridCard : CardRenderer {
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     row.forEach { b ->
-                        GridButton(b, Modifier.weight(1f), ctx.theme, iconPosition) { fire(ctx, b) }
+                        GridButton(b, Modifier.weight(1f), ctx.theme, iconPosition, ctx.entities) { fire(ctx, b) }
                     }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
-            }
-        }
-    }
-
-    /** Where a button's icon sits relative to its label. */
-    private enum class IconPosition {
-        TOP,
-        BOTTOM,
-        LEFT,
-        RIGHT
-        ;
-
-        companion object {
-            fun from(raw: String?): IconPosition = when (raw?.lowercase()) {
-                "bottom" -> BOTTOM
-                "left" -> LEFT
-                "right" -> RIGHT
-                else -> TOP
             }
         }
     }
@@ -109,8 +111,53 @@ class ButtonGridCard : CardRenderer {
         )
     }
 
+    /** True when this button's optional `"state_entity"`/`"state_value"`
+     * condition currently matches — see the class doc for the conditional-
+     * styling shape. False (never "active") whenever either field is
+     * missing, so an ordinary button without them renders exactly as
+     * before. `state_value` accepts either a single state string or a list
+     * of them, so one button can highlight for more than one matching
+     * state. */
+    private fun isConditionActive(b: Map<String, Any?>, entities: EntityMap): Boolean {
+        val stateEntity = b["state_entity"] as? String ?: return false
+        val current = entities[stateEntity]?.state ?: return false
+        return when (val target = b["state_value"]) {
+            is String -> current == target
+            is List<*> -> target.any { it == current }
+            else -> false
+        }
+    }
+
+    /** The button's background while active — `"active_color"` when set
+     * and parsable, otherwise the ordinary theme control background (same
+     * as an inactive/non-conditional button). */
+    private fun tileBackground(b: Map<String, Any?>, active: Boolean, theme: ThemeColors): Color =
+        (if (active) parseHexColor(b["active_color"] as? String) else null) ?: theme.controlBackground
+
+    /** The optional accent border while active — `"active_border"` in the
+     * config: `true` draws `theme.accent`, a hex string draws that color
+     * instead, and anything else (including absent/false, or the button
+     * not being active right now) draws no border at all — a no-op
+     * modifier, so callers can always chain it in without an extra branch. */
+    private fun activeBorderModifier(b: Map<String, Any?>, active: Boolean, theme: ThemeColors): Modifier {
+        if (!active) return Modifier
+        val color = when (val raw = b["active_border"]) {
+            is Boolean -> if (raw) theme.accent else null
+            is String -> parseHexColor(raw)
+            else -> null
+        } ?: return Modifier
+        return Modifier.border(2.dp, color, RoundedCornerShape(14.dp))
+    }
+
     @Composable
-    private fun GridButton(b: Map<String, Any?>, modifier: Modifier, theme: ThemeColors, iconPosition: IconPosition, onClick: () -> Unit) {
+    private fun GridButton(
+        b: Map<String, Any?>,
+        modifier: Modifier,
+        theme: ThemeColors,
+        iconPosition: IconPosition,
+        entities: EntityMap,
+        onClick: () -> Unit
+    ) {
         val name = b["name"] as? String
         val iconPath = b["icon"] as? String
         val targetPx = with(LocalDensity.current) { 32.dp.toPx() }.toInt()
@@ -120,9 +167,10 @@ class ButtonGridCard : CardRenderer {
             }
         val hasIcon = bitmap != null
         val hasName = !name.isNullOrBlank()
+        val active = isConditionActive(b, entities)
         // left/right lay the icon and label side by side, so the tile doesn't
         // need the extra vertical room top/bottom do to fit both.
-        val sideBySide = iconPosition == IconPosition.LEFT || iconPosition == IconPosition.RIGHT
+        val sideBySide = iconPosition.sideBySide
 
         val icon: @Composable () -> Unit = {
             if (bitmap != null) Image(bitmap = bitmap, contentDescription = name, modifier = Modifier.size(32.dp))
@@ -145,7 +193,8 @@ class ButtonGridCard : CardRenderer {
             modifier
                 .height(if (hasIcon && !sideBySide) 68.dp else 48.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(theme.controlBackground)
+                .background(tileBackground(b, active, theme))
+                .then(activeBorderModifier(b, active, theme))
                 .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                 .padding(6.dp)
 

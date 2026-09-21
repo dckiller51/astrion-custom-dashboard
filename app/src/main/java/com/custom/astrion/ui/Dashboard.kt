@@ -6,6 +6,7 @@ import android.media.AudioManager
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -1425,13 +1427,40 @@ private fun PageContent(page: PageConfig, ctx: CardContext) {
     }
 }
 
+/**
+ * Wraps a single card's [CardRenderer.Render] in a Box that draws a
+ * theme.accent outline around the *whole card* while the D-pad focus is
+ * anywhere inside it — not just around whichever individual button/tile
+ * has focus (that's [tapClickable]'s own job). With several cards stacked
+ * on one page, this is what answers "which card am I on" while navigating.
+ *
+ * `hasFocus` (as opposed to `isFocused`) is true for this Box both when it
+ * is itself focused and when any descendant is — Compose's focus system
+ * bubbles that up through the layout tree automatically, so this doesn't
+ * need each card's own composable to opt in or report anything.
+ */
 @Composable
 private fun RenderCard(cardConfig: CardConfig, ctx: CardContext) {
     val renderer = CardRegistry.get(cardConfig.type)
-    if (renderer != null) {
-        renderer.Render(cardConfig, ctx)
-    } else {
+    if (renderer == null) {
         UnknownCard(cardConfig.type)
+        return
+    }
+    var hasFocus by remember { mutableStateOf(false) }
+    Box(
+        modifier =
+        Modifier
+            .fillMaxWidth()
+            .onFocusChanged { hasFocus = it.hasFocus }
+            .then(
+                if (hasFocus) {
+                    Modifier.border(2.dp, ctx.theme.accent, RoundedCornerShape(18.dp))
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        renderer.Render(cardConfig, ctx)
     }
 }
 
@@ -1603,7 +1632,7 @@ private fun PageIndicator(
                         .size(if (active) 10.dp else 8.dp)
                         .clip(CircleShape)
                         .background(if (active) LocalTheme.current.accent else LocalTheme.current.controlBackground)
-                        .tapClickable { onDotClick(sibling.index) }
+                        .tapClickable(focusShape = CircleShape) { onDotClick(sibling.index) }
                 )
             }
             if (windowEnd < siblings.lastIndex) EdgeEllipsis()

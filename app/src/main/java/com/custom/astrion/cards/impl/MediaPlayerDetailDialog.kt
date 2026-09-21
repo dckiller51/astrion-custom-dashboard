@@ -211,7 +211,7 @@ fun MediaPlayerDetailDialog(
                         .size(44.dp)
                         .clip(CircleShape)
                         .background(if (on) theme.accentSecondary else theme.controlBackground)
-                        .tapClickable { mp(if (on) "turn_off" else "turn_on") },
+                        .tapClickable(focusShape = CircleShape) { mp(if (on) "turn_off" else "turn_on") },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(MdiIcons.Power, contentDescription = stringResource(R.string.media_power_toggle), tint = Color.White)
@@ -321,7 +321,7 @@ private fun Circle(icon: ImageVector, size: androidx.compose.ui.unit.Dp, theme: 
             .size(size)
             .clip(CircleShape)
             .background(if (accent) theme.accentSecondary else theme.controlBackground)
-            .tapClickable(onClick = onClick),
+            .tapClickable(focusShape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = null, tint = Color.White)

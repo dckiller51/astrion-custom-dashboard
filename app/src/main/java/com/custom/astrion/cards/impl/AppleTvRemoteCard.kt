@@ -96,7 +96,7 @@ class AppleTvRemoteCard : CardRenderer {
                     .size(56.dp)
                     .clip(CircleShape)
                     .background(ctx.theme.controlBackground)
-                    .tapClickable {
+                    .tapClickable(focusShape = CircleShape) {
                         send(if (isPlaying) "Pause" else "Play")
                         isPlaying = !isPlaying
                     },
@@ -126,7 +126,7 @@ class AppleTvRemoteCard : CardRenderer {
                 .size(220.dp)
                 .clip(CircleShape)
                 .background(theme.controlBackground)
-                .tapClickable(onClick = onSelect),
+                .tapClickable(focusShape = CircleShape, onClick = onSelect),
             contentAlignment = Alignment.Center
         ) {
             EdgeIcon(Icons.Filled.KeyboardArrowUp, Alignment.TopCenter, onUp, theme)
@@ -157,7 +157,7 @@ class AppleTvRemoteCard : CardRenderer {
                 Modifier
                     .size(40.dp)
                     .clip(CircleShape)
-                    .tapClickable(onClick = onClick),
+                    .tapClickable(focusShape = CircleShape, onClick = onClick),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(icon, contentDescription = null, tint = theme.mutedText)
@@ -172,7 +172,7 @@ class AppleTvRemoteCard : CardRenderer {
             Modifier
                 .clip(RoundedCornerShape(50))
                 .background(theme.controlBackground)
-                .tapClickable(onClick = onClick)
+                .tapClickable(focusShape = RoundedCornerShape(50), onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)

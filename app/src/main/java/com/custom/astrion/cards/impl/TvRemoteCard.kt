@@ -244,7 +244,7 @@ class TvRemoteCard : CardRenderer {
                     .size(64.dp)
                     .clip(CircleShape)
                     .background(theme.controlBackground)
-                    .tapClickable(onClick = onCenter),
+                    .tapClickable(focusShape = CircleShape, onClick = onCenter),
                 contentAlignment = Alignment.Center
             ) {
                 Text("OK", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -260,7 +260,7 @@ class TvRemoteCard : CardRenderer {
                 .size(52.dp)
                 .clip(CircleShape)
                 .background(theme.controlBackground)
-                .tapClickable(onClick = onClick),
+                .tapClickable(focusShape = CircleShape, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = null, tint = tint)

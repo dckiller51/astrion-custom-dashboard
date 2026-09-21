@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.toColorInt
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
@@ -97,7 +96,12 @@ private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(empty
  *
  * If any scene in the grid has an "icon", every tile in that grid uses the
  * taller icon layout (uniform height) — set "show_labels": false to show
- * icons only, no text underneath.
+ * icons only, no text underneath. When icon and label are both shown, the
+ * grid-wide "iconPosition" option ("top" (default) / "bottom" / "left" /
+ * "right") controls where the icon sits relative to the label — same
+ * option and same four positions as button_grid. It has no effect on an
+ * icon-only tile ("show_labels": false): there's no label to position
+ * against.
  */
 class SceneGridCard : CardRenderer {
     override val type = "scene_grid"
@@ -108,6 +112,11 @@ class SceneGridCard : CardRenderer {
         val columns = remember(config) { config.int("columns", 2).coerceAtLeast(1) }
         val scenes = remember(config) { (config.options["scenes"] as? List<Map<String, Any?>>) ?: emptyList() }
         val row = remember(config) { config.string("layout") == "row" }
+        // Card-wide, same idea as button_grid's own "iconPosition" — every
+        // tile in the grid shares one layout. Only matters for the
+        // icon+label tile shape (see SceneButton); the icon-only ("show_labels":
+        // false) tile has no label to position against.
+        val iconPosition = remember(config) { IconPosition.from(config.string("iconPosition")) }
 
         // Reactive snapshot of which Activity is active per room, purely to
         // border-highlight whichever tile currently represents it (see
@@ -189,7 +198,7 @@ class SceneGridCard : CardRenderer {
                             showLabel = showLabels,
                             active = isActive(scene)
                         ),
-                        layout = TileLayout(iconFill, tileHeight),
+                        layout = TileLayout(iconFill, tileHeight, iconPosition),
                         modifier = Modifier.width(104.dp),
                         theme = ctx.theme
                     ) { onTap(scene) }
@@ -209,7 +218,7 @@ class SceneGridCard : CardRenderer {
                                     showLabel = showLabels,
                                     active = isActive(scene)
                                 ),
-                                layout = TileLayout(iconFill, tileHeight),
+                                layout = TileLayout(iconFill, tileHeight, iconPosition),
                                 modifier = Modifier.weight(1f),
                                 theme = ctx.theme
                             ) { onTap(scene) }
@@ -221,17 +230,14 @@ class SceneGridCard : CardRenderer {
         }
     }
 
-    private fun parseHexColor(s: String): Color? = runCatching {
-        val hex = if (s.startsWith("#")) s else "#$s"
-        Color(hex.toColorInt())
-    }.getOrNull()
-
     private fun luminance(c: Color): Float = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
 
-    /** [SceneButton]'s icon-fill layout knobs, bundled into one parameter so
-     * adding this feature didn't push the function over detekt's parameter-
-     * count threshold. */
-    private data class TileLayout(val iconFill: Boolean, val tileHeight: Int)
+    /** [SceneButton]'s icon layout knobs, bundled into one parameter so
+     * adding these didn't push the function over detekt's parameter-count
+     * threshold. [iconPosition] only affects the icon+label tile shape
+     * (see [SceneButton]) — [iconFill] tiles have no label to position
+     * the icon against. */
+    private data class TileLayout(val iconFill: Boolean, val tileHeight: Int, val iconPosition: IconPosition)
 
     private data class SceneButtonState(
         val name: String,
@@ -275,25 +281,16 @@ class SceneGridCard : CardRenderer {
                 // Every tile in the grid uses this branch once any one of them has
                 // an icon, even tiles with no icon of their own — a blank 28dp
                 // spacer keeps their label lined up with the others instead of
-                // sitting lower.
-                Column(
-                    modifier = modifier
-                        .height(layout.tileHeight.dp)
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(state.color)
-                        .then(activeBorderModifier(state.active, theme))
-                        .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
-                        .padding(6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
+                // sitting lower (in every position, not just top/bottom).
+                val icon: @Composable () -> Unit = {
                     if (bitmap != null) {
                         Image(bitmap = bitmap, contentDescription = state.name, modifier = Modifier.size(28.dp))
                     } else {
                         Spacer(Modifier.size(28.dp))
                     }
+                }
+                val label: @Composable () -> Unit = {
                     if (state.showLabel) {
-                        Spacer(Modifier.height(6.dp))
                         Text(
                             text = state.name,
                             color = textColor,
@@ -303,6 +300,19 @@ class SceneGridCard : CardRenderer {
                             maxLines = 1
                         )
                     }
+                }
+                val tileModifier = modifier
+                    .height(layout.tileHeight.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(state.color)
+                    .then(activeBorderModifier(state.active, theme))
+                    .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
+                    .padding(6.dp)
+
+                if (layout.iconPosition.sideBySide) {
+                    IconLabelRow(tileModifier, layout.iconPosition == IconPosition.LEFT, state.showLabel, icon, label)
+                } else {
+                    IconLabelColumn(tileModifier, layout.iconPosition == IconPosition.BOTTOM, state.showLabel, icon, label)
                 }
             }
         } else {
@@ -323,6 +333,54 @@ class SceneGridCard : CardRenderer {
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center
                 )
+            }
+        }
+    }
+
+    /** left/right layout for the icon+label tile shape — icon and label
+     * side by side. Split out of [SceneButton] purely to keep that
+     * function under detekt's line-count threshold; no behavior difference
+     * from having it inline. Mirrors ButtonGridCard's GridButtonRow. */
+    @Composable
+    private fun IconLabelRow(
+        modifier: Modifier,
+        iconFirst: Boolean,
+        showSpacer: Boolean,
+        icon: @Composable () -> Unit,
+        label: @Composable () -> Unit
+    ) {
+        Row(modifier = modifier, horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            if (iconFirst) {
+                icon()
+                if (showSpacer) Spacer(Modifier.width(6.dp))
+                label()
+            } else {
+                label()
+                if (showSpacer) Spacer(Modifier.width(6.dp))
+                icon()
+            }
+        }
+    }
+
+    /** top/bottom layout for the icon+label tile shape — icon above or
+     * below the label. See [IconLabelRow]'s doc comment. */
+    @Composable
+    private fun IconLabelColumn(
+        modifier: Modifier,
+        iconLast: Boolean,
+        showSpacer: Boolean,
+        icon: @Composable () -> Unit,
+        label: @Composable () -> Unit
+    ) {
+        Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            if (iconLast) {
+                label()
+                if (showSpacer) Spacer(Modifier.height(6.dp))
+                icon()
+            } else {
+                icon()
+                if (showSpacer) Spacer(Modifier.height(6.dp))
+                label()
             }
         }
     }

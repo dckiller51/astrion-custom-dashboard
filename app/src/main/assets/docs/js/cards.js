@@ -245,13 +245,14 @@ function updateCardFormInputs() {
     const label = type === 'button_grid' ? 'Button' : 'Scene';
     container.innerHTML = `
       <label>Columns</label><input type="number" id="optColumns" value="2" min="1">
-      ${type === 'button_grid' ? `<label>Icon position</label>
+      <label>Icon position</label>
       <select id="optIconPosition">
         <option value="top">Top (above label)</option>
         <option value="bottom">Bottom (below label)</option>
         <option value="left">Left (beside label)</option>
         <option value="right">Right (beside label)</option>
-      </select>` : ''}
+      </select>
+      ${type === 'scene_grid' ? `<div class="hint">Only affects tiles that show both an icon and a name — no effect on icon-only tiles ("Show name under icon" off).</div>` : ''}
       ${type === 'scene_grid' ? `<label><input type="checkbox" id="optShowLabels" checked> Show name under icon (when any scene has one — applies to the whole grid)</label><label><input type="checkbox" id="optIconFill"> Fill tile with icon (hide name recommended; icon scales to fill tile height)</label><label>Tile height (dp, optional)</label><input type="number" id="optTileHeight" min="40" max="300" placeholder="120 when fill on, 74 otherwise">` : ''}
       <div id="gridItemsList"></div>
       <div class="section-box" style="margin-top:8px">
@@ -260,6 +261,12 @@ function updateCardFormInputs() {
           <label>Service (domain.service)</label><input type="text" id="giService" placeholder="e.g., media_player.play_media">
           <label>Entity ID (optional)</label><input type="text" id="giEntityId" placeholder="e.g., media_player.tv">
           <label>Extra data (optional, JSON)</label><input type="text" id="giData" placeholder='{"media_content_type":"app"}'>
+          <div class="divider" style="margin:12px 0"></div>
+          <label>State entity (optional — highlights this button based on an HA entity's state)</label><input type="text" id="giStateEntity" placeholder="e.g., input_select.living_room_source">
+          <label>Target state (optional, comma-separated for multiple)</label><input type="text" id="giStateValue" placeholder="e.g., TV">
+          <label>Active color (optional, hex — background while the state above matches)</label>${colorFieldHtml('giActiveColor', '', '#FF2A4954')}
+          <label class="inline-check"><input type="checkbox" id="giActiveBorder"> Accent border while active</label>
+          <div class="hint">Visually highlights this button while "State entity" is in "Target state" — e.g. showing which source/input is currently selected (TV / Projector, an input_select mode...), similar to how scene_grid highlights the active Activity.</div>
         ` : `
           <label>Entity ID (activates a scene/script) — OR —</label><input type="text" id="giEntityId" placeholder="e.g., scene.night">
           <label>Page to open instead — OR —</label><input type="text" id="giPage" placeholder="e.g., Apple TV">
@@ -516,6 +523,10 @@ function fillGridItemForm(type, item) {
     document.getElementById('giService').value = item.service || '';
     document.getElementById('giEntityId').value = item.entity_id || '';
     document.getElementById('giData').value = item.data ? JSON.stringify(item.data) : '';
+    document.getElementById('giStateEntity').value = item.state_entity || '';
+    document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
+    setColorFieldValue('giActiveColor', item.active_color || '');
+    document.getElementById('giActiveBorder').checked = item.active_border === true || typeof item.active_border === 'string';
   } else {
     document.getElementById('giEntityId').value = item.entity_id || '';
     document.getElementById('giPage').value = item.page || '';
@@ -583,11 +594,14 @@ function cancelGridItemEdit() {
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
-  ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giActivityRef'].forEach(id => {
+  ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giActivityRef', 'giStateEntity', 'giStateValue'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
   setColorFieldValue('giColor', '');
+  setColorFieldValue('giActiveColor', '');
+  const activeBorderEl = document.getElementById('giActiveBorder');
+  if (activeBorderEl) activeBorderEl.checked = false;
   const trackEl = document.getElementById('giTrack');
   if (trackEl) { trackEl.checked = false; document.getElementById('giRoom').value = ''; document.getElementById('giDevices').value = ''; onGiTrackChange(); }
   const harmonyModeSel = document.getElementById('giHarmonyMode');
@@ -609,6 +623,18 @@ function addGridItem(type) {
     const rawData = document.getElementById('giData').value.trim();
     if (rawData) {
       try { item.data = JSON.parse(rawData); } catch (e) { alert('Extra data must be valid JSON'); return; }
+    }
+    const stateEntity = document.getElementById('giStateEntity').value.trim();
+    const stateValueRaw = document.getElementById('giStateValue').value.trim();
+    const activeColor = colorFieldValue('giActiveColor');
+    const activeBorder = document.getElementById('giActiveBorder').checked;
+    if (stateEntity && !stateValueRaw) { alert('Give a Target state for the State entity, or clear the State entity field.'); return; }
+    if (stateEntity) {
+      item.state_entity = stateEntity;
+      const values = stateValueRaw.split(',').map(s => s.trim()).filter(Boolean);
+      item.state_value = values.length > 1 ? values : values[0];
+      if (activeColor) item.active_color = activeColor;
+      if (activeBorder) item.active_border = true;
     }
   } else {
     const entityId = document.getElementById('giEntityId').value.trim();
@@ -901,9 +927,7 @@ function fillCardForm(card) {
     document.getElementById('optShowCaptions').checked = o.show_captions !== false;
   } else if (type === 'button_grid' || type === 'scene_grid') {
     document.getElementById('optColumns').value = o.columns || 2;
-    if (type === 'button_grid') {
-      document.getElementById('optIconPosition').value = ['top', 'bottom', 'left', 'right'].includes(o.iconPosition) ? o.iconPosition : 'top';
-    }
+    document.getElementById('optIconPosition').value = ['top', 'bottom', 'left', 'right'].includes(o.iconPosition) ? o.iconPosition : 'top';
     if (type === 'scene_grid') {
       document.getElementById('optShowLabels').checked = o.show_labels !== false;
       document.getElementById('optIconFill').checked = o.icon_fill === true;
@@ -1119,6 +1143,8 @@ function addCardToPage() {
   } else if (type === 'scene_grid') {
     newCard.options.columns = parseInt(document.getElementById('optColumns').value, 10) || 2;
     newCard.options.scenes = window._pendingGridItems || [];
+    const sceneIconPosition = document.getElementById('optIconPosition').value;
+    if (sceneIconPosition && sceneIconPosition !== 'top') newCard.options.iconPosition = sceneIconPosition;
     if (!document.getElementById('optShowLabels').checked) newCard.options.show_labels = false;
     if (document.getElementById('optIconFill').checked) newCard.options.icon_fill = true;
     var _th = parseInt(document.getElementById('optTileHeight').value, 10);
