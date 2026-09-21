@@ -61,7 +61,6 @@ import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.web.ConfigServer
-import fi.iki.elonen.NanoHTTPD
 import kotlin.math.acos
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
@@ -317,6 +316,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var configServer: ConfigServer
+    private lateinit var configServerSupervisor: ConfigServerSupervisor
 
     /**
      * Off by default: this is a battery-powered handheld remote that spends
@@ -431,11 +431,17 @@ class MainActivity : ComponentActivity() {
         chargeDockMonitor.start()
 
         initClientsAndServer()
+        configServerSupervisor =
+            ConfigServerSupervisor(
+                scope = lifecycleScope,
+                serverProvider = { configServer },
+                isEnabled = { configServerEnabled && !isDestroyed }
+            )
         configServerEnabled = prefs.getBoolean("config_server_enabled", true)
         tapFeedbackEnabled = prefs.getBoolean("tap_feedback_enabled", true)
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
-        if (configServerEnabled) startConfigServer()
+        if (configServerEnabled) configServerSupervisor.start()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
 
         currentPageIndex = dashboard.config.startPage
@@ -487,12 +493,12 @@ class MainActivity : ComponentActivity() {
      *  all within the same Activity instance, no recreate() needed. */
     private fun reconnectWithNewSettings() {
         Log.i("MainActivity", "reconnectWithNewSettings")
+        configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
-        runCatching { configServer.stop() }
 
         initClientsAndServer()
-        if (configServerEnabled) startConfigServer()
+        if (configServerEnabled) configServerSupervisor.start()
         client.connect()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
 
@@ -965,21 +971,6 @@ class MainActivity : ComponentActivity() {
         wifiLock = null
     }
 
-    private fun startConfigServer() {
-        runCatching { configServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }
-            .onSuccess { Log.i("ConfigServer", "started on :8080") }
-            .onFailure {
-                Log.e("ConfigServer", "failed to start on :8080", it)
-                keyHandler.postDelayed({
-                    if (!isDestroyed) {
-                        runCatching { configServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }
-                            .onSuccess { Log.i("ConfigServer", "retry: started on :8080") }
-                            .onFailure { e -> Log.e("ConfigServer", "retry failed on :8080", e) }
-                    }
-                }, 500L)
-            }
-    }
-
     /** Called from the settings page switch — persists the choice and
      * starts/stops the :8080 server immediately, no restart needed. Turning
      * it off also closes /builder/, icon uploads, and dashboard.json
@@ -987,11 +978,7 @@ class MainActivity : ComponentActivity() {
     private fun updateConfigServerEnabled(enabled: Boolean) {
         configServerEnabled = enabled
         prefs.edit { putBoolean("config_server_enabled", enabled) }
-        if (enabled) {
-            startConfigServer()
-        } else {
-            runCatching { configServer.stop() }
-        }
+        if (enabled) configServerSupervisor.start() else configServerSupervisor.stop()
     }
 
     /** Called from the settings page switch — persists the choice, no
@@ -1054,9 +1041,9 @@ class MainActivity : ComponentActivity() {
         runCatching { unregisterReceiver(screenStateReceiver) }
         chargeDockMonitor.stop()
         releaseWifiLock()
+        if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
-        runCatching { configServer.stop() }
         super.onDestroy()
     }
 }
