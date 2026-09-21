@@ -630,12 +630,43 @@ fun Dashboard(
             // needs to read AND write it too, and it needs `entities`
             // (only available at this level).
             var linkedJump by remember { mutableStateOf<Pair<String, String>?>(null) }
+            // The linked/auto-opened page currently shown as a popup, or
+            // null when none is open — shared by two different triggers
+            // (linkedPage swipe-up, below in DashboardContent, and
+            // DashboardEntityPageEffect's new openWhenEntity+openMode=
+            // "popup" path right here) since only one popup can sensibly be
+            // on screen at a time. Lifted to this level, same reasoning as
+            // `linkedJump` above: DashboardEntityPageEffect needs to write
+            // it and needs `entities` (only available here).
+            var linkedPopupPage by remember { mutableStateOf<LinkedPagePopupState?>(null) }
+            // Which entity (if any) is responsible for the CURRENTLY open
+            // popup — lets DashboardEntityPageEffect's auto-close only ever
+            // dismiss a popup it opened itself, never one opened by hand
+            // via linkedPage swipe-up (null) or by a *different* entity.
+            var popupOpenedByEntityId by remember { mutableStateOf<String?>(null) }
             DashboardEntityPageEffect(
                 pages = config.pages,
                 entities = entities,
                 pagerState = pagerState,
-                linkedJump = linkedJump,
-                onLinkedJumpChange = { linkedJump = it }
+                params = EntityPageEffectParams(
+                    linkedJump = linkedJump,
+                    onLinkedJumpChange = { linkedJump = it },
+                    popupOpenedByEntityId = popupOpenedByEntityId,
+                    onOpenPopup = { page: PageConfig, entityId: String ->
+                        popupOpenedByEntityId = entityId
+                        linkedPopupPage =
+                            LinkedPagePopupState(
+                                targetPage = page,
+                                widthFraction = page.popupWidthFraction,
+                                heightFraction = page.popupHeightFraction,
+                                position = page.popupPosition
+                            )
+                    },
+                    onClosePopup = {
+                        popupOpenedByEntityId = null
+                        linkedPopupPage = null
+                    }
+                )
             )
 
             val overlayState =
@@ -665,7 +696,12 @@ fun Dashboard(
                     client = client,
                     linkedJump = linkedJump,
                     onLinkedJumpChange = { linkedJump = it },
-                    volumeHotkeyTrigger = volumeHotkeyTrigger
+                    volumeHotkeyTrigger = volumeHotkeyTrigger,
+                    linkedPopupPage = linkedPopupPage,
+                    onLinkedPopupPageChange = { page, entityId ->
+                        linkedPopupPage = page
+                        popupOpenedByEntityId = entityId
+                    }
                 )
             )
         }
@@ -693,7 +729,12 @@ private data class DashboardContentInputs(
      * local to this composable. */
     val linkedJump: Pair<String, String>?,
     val onLinkedJumpChange: (Pair<String, String>?) -> Unit,
-    val volumeHotkeyTrigger: VolumeHotkeyTrigger?
+    val volumeHotkeyTrigger: VolumeHotkeyTrigger?,
+    val linkedPopupPage: LinkedPagePopupState?,
+    /** Sets (or clears, when both args are null) the shared popup slot —
+     * second arg is the entity responsible, null for a manual swipe-up
+     * open/close. See [DashboardEntityPageEffect]'s doc comment. */
+    val onLinkedPopupPageChange: (LinkedPagePopupState?, String?) -> Unit
 )
 
 /** The dynamic "‹ back" target for [PageIndicator]: a page's own static
@@ -754,13 +795,49 @@ private fun entityPageCloses(page: PageConfig, state: String?): Boolean =
  * just left. It's cleared the moment [entityPageCloses] matches, so the
  * next open-transition can fire again.
  */
+/** What [DashboardEntityPageEffect] should do for one page on this tick —
+ * pulled out to a pure function so the composable itself stays a simple
+ * `when` over the result, for the same `CyclomaticComplexity` reason as
+ * everything else extracted out of [DashboardContent]. */
+private enum class EntityPageAction { NONE, OPEN_POPUP, CLOSE_POPUP, OPEN_PAGE, CLOSE_PAGE }
+
+private data class EntityPageEffectParams(
+    val linkedJump: Pair<String, String>?,
+    val onLinkedJumpChange: (Pair<String, String>?) -> Unit,
+    val popupOpenedByEntityId: String?,
+    val onOpenPopup: (PageConfig, String) -> Unit,
+    val onClosePopup: () -> Unit
+)
+
+private fun resolveEntityPageAction(
+    page: PageConfig,
+    opens: Boolean,
+    closes: Boolean,
+    isCurrent: Boolean,
+    alreadyAutoOpened: Boolean,
+    popupOpenedByThisEntity: Boolean
+): EntityPageAction {
+    if (page.openMode == "popup") {
+        return when {
+            opens && !alreadyAutoOpened -> EntityPageAction.OPEN_POPUP
+            closes && popupOpenedByThisEntity -> EntityPageAction.CLOSE_POPUP
+            else -> EntityPageAction.NONE
+        }
+    } else {
+        return when {
+            opens && !isCurrent && !alreadyAutoOpened -> EntityPageAction.OPEN_PAGE
+            closes && isCurrent -> EntityPageAction.CLOSE_PAGE
+            else -> EntityPageAction.NONE
+        }
+    }
+}
+
 @Composable
 private fun DashboardEntityPageEffect(
     pages: List<PageConfig>,
     entities: EntityMap,
     pagerState: PagerState,
-    linkedJump: Pair<String, String>?,
-    onLinkedJumpChange: (Pair<String, String>?) -> Unit
+    params: EntityPageEffectParams
 ) {
     var autoOpenedFor by remember { mutableStateOf<Set<String>>(emptySet()) }
     LaunchedEffect(entities, pagerState.currentPage) {
@@ -773,16 +850,31 @@ private fun DashboardEntityPageEffect(
             val isCurrent = currentName == page.name
             if (closes) autoOpenedFor = autoOpenedFor - entityId
 
-            when {
-                opens && !isCurrent && entityId !in autoOpenedFor -> {
+            when (
+                resolveEntityPageAction(
+                    page = page,
+                    opens = opens,
+                    closes = closes,
+                    isCurrent = isCurrent,
+                    alreadyAutoOpened = entityId in autoOpenedFor,
+                    popupOpenedByThisEntity = params.popupOpenedByEntityId == entityId
+                )
+            ) {
+                EntityPageAction.OPEN_POPUP -> {
                     autoOpenedFor = autoOpenedFor + entityId
-                    onLinkedJumpChange(page.name to (currentName ?: page.name))
+                    params.onOpenPopup(page, entityId)
+                }
+                EntityPageAction.CLOSE_POPUP -> params.onClosePopup()
+                EntityPageAction.OPEN_PAGE -> {
+                    autoOpenedFor = autoOpenedFor + entityId
+                    params.onLinkedJumpChange(page.name to (currentName ?: page.name))
                     pagerState.scrollToPage(index)
                 }
-                closes && isCurrent -> {
-                    val backTarget = resolveBackTargetName(pages, pagerState.currentPage, linkedJump)
+                EntityPageAction.CLOSE_PAGE -> {
+                    val backTarget = resolveBackTargetName(pages, pagerState.currentPage, params.linkedJump)
                     pageIndexNamed(pages, backTarget)?.let { pagerState.scrollToPage(it) }
                 }
+                EntityPageAction.NONE -> {}
             }
         }
     }
@@ -816,6 +908,8 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
     val linkedJump = inputs.linkedJump
     val onLinkedJumpChange = inputs.onLinkedJumpChange
     val volumeHotkeyTrigger = inputs.volumeHotkeyTrigger
+    val linkedPopupPage = inputs.linkedPopupPage
+    val onLinkedPopupPageChange = inputs.onLinkedPopupPageChange
 
     LaunchedEffect(pagerState.currentPage) {
         onPageChanged(pagerState.currentPage)
@@ -833,11 +927,9 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
         }
     }
 
-    // The linked page currently shown as a popup (PageConfig.linkedPageMode
-    // == "popup"), or null when none is open. Deliberately local/ephemeral
-    // (not lifted up alongside `linkedJump`) — unlike a full page jump, a
-    // popup never changes `pagerState`, so nothing else needs to observe it.
-    var linkedPopupPage by remember { mutableStateOf<LinkedPagePopupState?>(null) }
+    // The linked/auto-opened page currently shown as a popup — see
+    // Dashboard()'s own doc comment on this state, lifted up there so
+    // DashboardEntityPageEffect can share the same slot.
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -889,13 +981,15 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                         val linkedName = current.linkedPage
                         val linkedPageConfig = linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
                         if (current.linkedPageMode == "popup" && linkedPageConfig != null) {
-                            linkedPopupPage =
+                            onLinkedPopupPageChange(
                                 LinkedPagePopupState(
                                     targetPage = linkedPageConfig,
                                     widthFraction = current.popupWidthFraction,
                                     heightFraction = current.popupHeightFraction,
                                     position = current.popupPosition
-                                )
+                                ),
+                                null
+                            )
                         } else {
                             if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
                             jumpToPageByName(config.pages, linkedName, scope, pagerState)
@@ -917,7 +1011,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             )
         }
         linkedPopupPage?.let { popup ->
-            LinkedPagePopup(state = popup, ctx = ctx, onClose = { linkedPopupPage = null })
+            LinkedPagePopup(state = popup, ctx = ctx, onClose = { onLinkedPopupPageChange(null, null) })
         }
         VolumePopupHost(trigger = volumeHotkeyTrigger, ctx = ctx)
     }

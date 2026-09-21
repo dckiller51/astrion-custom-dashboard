@@ -167,7 +167,24 @@ data class PageConfig(
      * tap) and the automatic close-on-state-change above. */
     val openWhenEntity: String? = null,
     val openWhenState: String = "on",
-    val closeWhenState: String? = null
+    val closeWhenState: String? = null,
+    /** How [openWhenEntity] reaching [openWhenState] opens this page.
+     * `"page"` (default) — unchanged, the same `scrollToPage` navigation
+     * described on [openWhenEntity]. `"popup"` — this page's own cards
+     * render inside the same floating overlay [linkedPageMode] uses
+     * instead, sized/placed by the same [popupWidthFraction] /
+     * [popupHeightFraction] / [popupPosition] fields (a page's popup shape
+     * is one property of the page, regardless of which of the two
+     * mechanisms opens it as one) — the pager is left completely
+     * untouched, ideal for something like an intercom/doorbell call you
+     * want to see without losing whatever page you were on. Auto-closes
+     * the same way `"page"` mode does — the entity's state leaving
+     * [openWhenState] (or reaching [closeWhenState] when set) — but by
+     * dismissing the popup instead of navigating back, and only when it
+     * was this same entity that opened it (a popup opened by hand via
+     * [linkedPage] swipe-up is never auto-closed by an unrelated entity's
+     * state). Unrecognized value falls back to `"page"`. */
+    val openMode: String = "page"
 )
 
 /**

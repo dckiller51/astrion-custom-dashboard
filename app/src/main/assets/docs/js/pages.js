@@ -206,6 +206,9 @@ function openPageDialog(index) {
   document.getElementById('pageDialogOpenWhenEntity').value = isNew ? '' : (dashboardData.pages[index].openWhenEntity || '');
   document.getElementById('pageDialogOpenWhenState').value = isNew ? '' : (dashboardData.pages[index].openWhenState || '');
   document.getElementById('pageDialogCloseWhenState').value = isNew ? '' : (dashboardData.pages[index].closeWhenState || '');
+  document.getElementById('pageDialogOpenMode').value = isNew ? 'page' : (dashboardData.pages[index].openMode === 'popup' ? 'popup' : 'page');
+  onPageDialogOpenWhenEntityChange();
+  onPageDialogOpenModeChange();
   attachEntityAutocomplete(document.getElementById('pageDialogOpenWhenEntity'), null);
   document.getElementById('pageDialogStart').checked = isNew ? false : (dashboardData.startPage === index);
   document.getElementById('pageDialogDeleteBtn').style.display = isNew ? 'none' : '';
@@ -227,11 +230,29 @@ function onPageDialogLinkedPageChange() {
   document.getElementById('pageDialogLinkedPageModeRow').style.display = hasLinked ? '' : 'none';
 }
 
-// Shows the width/height/position fields only in popup mode — full-page
-// mode has nothing extra to configure (same as it always worked).
+// Shows the "how it opens" picker for auto-open only once an entity is set.
+function onPageDialogOpenWhenEntityChange() {
+  const hasEntity = !!document.getElementById('pageDialogOpenWhenEntity').value.trim();
+  document.getElementById('pageDialogOpenModeRow').style.display = hasEntity ? '' : 'none';
+}
+
+// The shared width/height/position block (and each mode's own one-line
+// hint) shows whenever EITHER trigger is set to popup — it's one setting
+// on the page, not two, however it gets opened.
 function onPageDialogLinkedPageModeChange() {
-  const isPopup = document.getElementById('pageDialogLinkedPageMode').value === 'popup';
-  document.getElementById('pageDialogPopupRow').style.display = isPopup ? '' : 'none';
+  updatePopupRowVisibility();
+}
+
+function onPageDialogOpenModeChange() {
+  updatePopupRowVisibility();
+}
+
+function updatePopupRowVisibility() {
+  const linkedIsPopup = document.getElementById('pageDialogLinkedPageMode').value === 'popup';
+  const openIsPopup = document.getElementById('pageDialogOpenMode').value === 'popup';
+  document.getElementById('pageDialogPopupRow').style.display = (linkedIsPopup || openIsPopup) ? '' : 'none';
+  document.getElementById('pageDialogLinkedPopupHint').style.display = linkedIsPopup ? '' : 'none';
+  document.getElementById('pageDialogOpenPopupHint').style.display = openIsPopup ? '' : 'none';
 }
 
 // Every page that would create a cycle if picked as `excludeIndex`'s
@@ -311,6 +332,7 @@ function savePageDialog() {
   const openWhenEntity = document.getElementById('pageDialogOpenWhenEntity').value.trim() || undefined;
   const openWhenState = document.getElementById('pageDialogOpenWhenState').value.trim() || undefined;
   const closeWhenState = document.getElementById('pageDialogCloseWhenState').value.trim() || undefined;
+  const openMode = document.getElementById('pageDialogOpenMode').value;
   const makeStart = document.getElementById('pageDialogStart').checked;
 
   if (editingPage === null) {
@@ -321,18 +343,19 @@ function savePageDialog() {
     }
     if (linkedPage) {
       page.linkedPage = linkedPage;
-      if (linkedPageMode === 'popup') {
-        page.linkedPageMode = 'popup';
-        page.popupWidth = popupWidth;
-        page.popupHeight = popupHeight;
-        if (popupPosition !== 'center') page.popupPosition = popupPosition;
-      }
+      if (linkedPageMode === 'popup') page.linkedPageMode = 'popup';
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState;
       if (closeWhenState) page.closeWhenState = closeWhenState;
+      if (openMode === 'popup') page.openMode = 'popup';
+    }
+    if (linkedPageMode === 'popup' || openMode === 'popup') {
+      page.popupWidth = popupWidth;
+      page.popupHeight = popupHeight;
+      if (popupPosition !== 'center') page.popupPosition = popupPosition;
     }
     dashboardData.pages.push(page);
     currentActivePage = dashboardData.pages.length - 1;
@@ -350,33 +373,31 @@ function savePageDialog() {
     }
     if (linkedPage) {
       page.linkedPage = linkedPage;
-      if (linkedPageMode === 'popup') {
-        page.linkedPageMode = 'popup';
-        page.popupWidth = popupWidth;
-        page.popupHeight = popupHeight;
-        if (popupPosition !== 'center') page.popupPosition = popupPosition; else delete page.popupPosition;
-      } else {
-        delete page.linkedPageMode;
-        delete page.popupWidth;
-        delete page.popupHeight;
-        delete page.popupPosition;
-      }
+      if (linkedPageMode === 'popup') page.linkedPageMode = 'popup'; else delete page.linkedPageMode;
     } else {
       delete page.linkedPage;
       delete page.linkedPageMode;
-      delete page.popupWidth;
-      delete page.popupHeight;
-      delete page.popupPosition;
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity; else delete page.hiddenUnlessActivity;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState; else delete page.openWhenState;
       if (closeWhenState) page.closeWhenState = closeWhenState; else delete page.closeWhenState;
+      if (openMode === 'popup') page.openMode = 'popup'; else delete page.openMode;
     } else {
       delete page.openWhenEntity;
       delete page.openWhenState;
       delete page.closeWhenState;
+      delete page.openMode;
+    }
+    if (linkedPageMode === 'popup' || openMode === 'popup') {
+      page.popupWidth = popupWidth;
+      page.popupHeight = popupHeight;
+      if (popupPosition !== 'center') page.popupPosition = popupPosition; else delete page.popupPosition;
+    } else {
+      delete page.popupWidth;
+      delete page.popupHeight;
+      delete page.popupPosition;
     }
     if (makeStart) dashboardData.startPage = editingPage;
     else if (dashboardData.startPage === editingPage) dashboardData.startPage = 0;

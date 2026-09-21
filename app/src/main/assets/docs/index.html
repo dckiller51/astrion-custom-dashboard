@@ -330,39 +330,49 @@
                     <option value="page">Full page (swipe there, same as today)</option>
                     <option value="popup">Popup (floats over the current page)</option>
                 </select>
-                <div id="pageDialogPopupRow" style="display:none">
-                    <div style="display:flex; gap:8px; margin-top:10px;">
-                        <div style="flex:1">
-                            <label>Width (% of screen)</label>
-                            <input type="number" id="pageDialogPopupWidth" min="10" max="100" value="70">
-                        </div>
-                        <div style="flex:1">
-                            <label>Height (% of screen)</label>
-                            <input type="number" id="pageDialogPopupHeight" min="10" max="100" value="50">
-                        </div>
-                    </div>
-                    <label style="margin-top:10px">Position</label>
-                    <select id="pageDialogPopupPosition">
-                        <option value="center">Center</option>
-                        <option value="top">Top</option>
-                        <option value="bottom">Bottom</option>
-                        <option value="left">Left</option>
-                        <option value="right">Right</option>
-                    </select>
-                    <div class="hint" style="margin-top:4px">The popup shows the linked page's own cards floating over whatever page you're on — the page itself doesn't change. Closed by tapping outside it or its ✕.</div>
-                </div>
+                <div id="pageDialogLinkedPopupHint" style="display:none" class="hint">The popup shows the linked page's own cards floating over whatever page you're on — the page itself doesn't change. Closed by tapping outside it or its ✕. Width/height/position are set below.</div>
             </div>
             <label style="margin-top:10px">Hide unless this Activity is running (optional)</label>
             <select id="pageDialogHiddenUnlessActivity"></select>
             <div class="hint" style="margin-top:4px">Leaves this page's dot out of the indicator until the chosen Activity is actually running, then shows it automatically — handy for decluttering a page tied to a device that isn't always in use. Lists both composed Activities (the "Activities" tab) and "track": true scene_grid tiles/hotkeys, Harmony ones included — same set ActivityRuntime tracks at runtime. Doesn't affect swiping to the page directly (a scene_grid tile's own "page" field, a hardware button, etc. — see the field's own note in AppConfig.kt for why), just its dot.</div>
             <label style="margin-top:10px">Auto-open when this entity's state is (optional)</label>
             <div style="display:flex; gap:8px;">
-                <input type="text" id="pageDialogOpenWhenEntity" placeholder="e.g., switch.doorbell" style="flex:2">
+                <input type="text" id="pageDialogOpenWhenEntity" placeholder="e.g., switch.doorbell" style="flex:2" oninput="onPageDialogOpenWhenEntityChange()">
                 <input type="text" id="pageDialogOpenWhenState" placeholder="on" style="flex:1">
             </div>
             <label style="margin-top:10px">...and auto-close when its state is (optional)</label>
             <input type="text" id="pageDialogCloseWhenState" placeholder="leave blank for &quot;anything else&quot;">
             <div class="hint" style="margin-top:4px">Automatically jumps to this page the moment the entity's state matches the "open" one above (e.g. a doorbell switch turning on) — remembering wherever you were, so BACK/the chevron return there. Leave "close when" blank for the simple on/off case: closes on any state other than the open one. Set it explicitly for anything with more than two meaningful states — a cover's open/opening/closing/closed, a lock's locked/unlocked — so a transitional state doesn't force the page shut mid-way (e.g. open="open", close="closed" ignores "opening"/"closing" entirely). You can always close it yourself too, the same way as tapping "‹ back". For BACK on the remote itself to also close it, also set a "Parent page" above — the hardware BACK button only knows about that static field, not this dynamic close.</div>
+            <div id="pageDialogOpenModeRow" style="display:none">
+                <label style="margin-top:10px">How it opens</label>
+                <select id="pageDialogOpenMode" onchange="onPageDialogOpenModeChange()">
+                    <option value="page">Full page (jump there, same as today)</option>
+                    <option value="popup">Popup (floats over whatever page you're on)</option>
+                </select>
+                <div id="pageDialogOpenPopupHint" style="display:none" class="hint">Uses the same width/height/position settings as "Linked page" above (a page's popup shape is one setting, however it gets opened). Ideal for something like an intercom/doorbell call: it shows over whatever you're doing without losing your place, and closes itself the same way full-page mode would — the entity leaving the "open" state above.</div>
+            </div>
+            <div id="pageDialogPopupRow" style="display:none">
+                <label style="margin-top:10px">Popup size &amp; position</label>
+                <div style="display:flex; gap:8px;">
+                    <div style="flex:1">
+                        <label>Width (% of screen)</label>
+                        <input type="number" id="pageDialogPopupWidth" min="10" max="100" value="70">
+                    </div>
+                    <div style="flex:1">
+                        <label>Height (% of screen)</label>
+                        <input type="number" id="pageDialogPopupHeight" min="10" max="100" value="50">
+                    </div>
+                </div>
+                <label style="margin-top:10px">Position</label>
+                <select id="pageDialogPopupPosition">
+                    <option value="center">Center</option>
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                    <option value="left">Left</option>
+                    <option value="right">Right</option>
+                </select>
+                <div class="hint" style="margin-top:4px">Shared by "Linked page" and "Auto-open" above when either is set to popup — a page's popup shape is one setting, however it gets opened.</div>
+            </div>
             <div class="btn-row" style="margin-top:12px">
                 <button onclick="savePageDialog()">Save</button>
                 <button class="secondary" onclick="closePageDialog()">Cancel</button>
