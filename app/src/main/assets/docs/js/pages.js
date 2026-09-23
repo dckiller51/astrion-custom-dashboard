@@ -107,9 +107,15 @@ function normalizePageFromJson(p) {
     ...(p.parent && p.parentKey && p.parentKey.toUpperCase() !== 'BACK' ? { parentKey: p.parentKey.toUpperCase() } : {}),
     ...(p.linkedPage ? { linkedPage: p.linkedPage } : {}),
     ...(p.linkedPage && p.linkedPageMode === 'popup' ? { linkedPageMode: 'popup' } : {}),
-    ...(p.linkedPage && p.linkedPageMode === 'popup' && p.popupWidth != null ? { popupWidth: p.popupWidth } : {}),
-    ...(p.linkedPage && p.linkedPageMode === 'popup' && p.popupHeight != null ? { popupHeight: p.popupHeight } : {}),
-    ...(p.linkedPage && p.linkedPageMode === 'popup' && p.popupPosition && p.popupPosition !== 'center' ? { popupPosition: p.popupPosition } : {}),
+    // Kept independent of linkedPage/openWhenEntity below — a tile
+    // elsewhere (a scene_grid item's "pageMode": "popup", or a title's
+    // "..._pageMode": "popup") can be the only thing that opens this page
+    // as a popup, invisible from this page's own JSON, so geometry set
+    // for that reason alone must still survive a round-trip through the
+    // builder rather than being silently dropped.
+    ...(p.popupWidth != null ? { popupWidth: p.popupWidth } : {}),
+    ...(p.popupHeight != null ? { popupHeight: p.popupHeight } : {}),
+    ...(p.popupPosition && p.popupPosition !== 'center' ? { popupPosition: p.popupPosition } : {}),
     ...(p.hiddenUnlessActivity ? { hiddenUnlessActivity: p.hiddenUnlessActivity } : {}),
     ...(p.openWhenEntity ? { openWhenEntity: p.openWhenEntity } : {}),
     ...(p.openWhenEntity && p.openWhenState && p.openWhenState !== 'on' ? { openWhenState: p.openWhenState } : {}),
@@ -199,6 +205,16 @@ function openPageDialog(index) {
   document.getElementById('pageDialogPopupWidth').value = isNew ? 70 : Math.round((dashboardData.pages[index].popupWidth ?? 0.7) * 100);
   document.getElementById('pageDialogPopupHeight').value = isNew ? 50 : Math.round((dashboardData.pages[index].popupHeight ?? 0.5) * 100);
   document.getElementById('pageDialogPopupPosition').value = isNew ? 'center' : (dashboardData.pages[index].popupPosition || 'center');
+  // Not itself a stored field — inferred from there being saved popup
+  // geometry with neither other trigger set to popup, i.e. it can only be
+  // there because some tile elsewhere opens this page as a popup (or the
+  // user hand-edited the JSON that way). Doesn't fire onPageDialogTilePopupChange
+  // itself; the explicit updatePopupRowVisibility() call below does, once
+  // every popup-related field above is in its final loaded state.
+  document.getElementById('pageDialogTilePopup').checked = !isNew &&
+    (dashboardData.pages[index].linkedPageMode !== 'popup') &&
+    (dashboardData.pages[index].openMode !== 'popup') &&
+    (dashboardData.pages[index].popupWidth != null || dashboardData.pages[index].popupHeight != null || !!dashboardData.pages[index].popupPosition);
   onPageDialogLinkedPageChange();
   onPageDialogLinkedPageModeChange();
   populatePageHiddenUnlessActivitySelect();
@@ -247,10 +263,19 @@ function onPageDialogOpenModeChange() {
   updatePopupRowVisibility();
 }
 
+// The standalone "opened as a popup from a tile elsewhere" checkbox —
+// unlike linkedPage/openWhenEntity, the page dialog has no way to detect
+// this on its own (the tile that opens THIS page as a popup lives on some
+// OTHER page's card, invisible from here), so it's a manual toggle instead.
+function onPageDialogTilePopupChange() {
+  updatePopupRowVisibility();
+}
+
 function updatePopupRowVisibility() {
   const linkedIsPopup = document.getElementById('pageDialogLinkedPageMode').value === 'popup';
   const openIsPopup = document.getElementById('pageDialogOpenMode').value === 'popup';
-  document.getElementById('pageDialogPopupRow').style.display = (linkedIsPopup || openIsPopup) ? '' : 'none';
+  const tilePopup = document.getElementById('pageDialogTilePopup').checked;
+  document.getElementById('pageDialogPopupRow').style.display = (linkedIsPopup || openIsPopup || tilePopup) ? '' : 'none';
   document.getElementById('pageDialogLinkedPopupHint').style.display = linkedIsPopup ? '' : 'none';
   document.getElementById('pageDialogOpenPopupHint').style.display = openIsPopup ? '' : 'none';
 }
@@ -328,6 +353,7 @@ function savePageDialog() {
   const popupWidth = (document.getElementById('pageDialogPopupWidth').value || 70) / 100;
   const popupHeight = (document.getElementById('pageDialogPopupHeight').value || 50) / 100;
   const popupPosition = document.getElementById('pageDialogPopupPosition').value;
+  const tilePopup = document.getElementById('pageDialogTilePopup').checked;
   const hiddenUnlessActivity = document.getElementById('pageDialogHiddenUnlessActivity').value || undefined;
   const openWhenEntity = document.getElementById('pageDialogOpenWhenEntity').value.trim() || undefined;
   const openWhenState = document.getElementById('pageDialogOpenWhenState').value.trim() || undefined;
@@ -352,7 +378,7 @@ function savePageDialog() {
       if (closeWhenState) page.closeWhenState = closeWhenState;
       if (openMode === 'popup') page.openMode = 'popup';
     }
-    if (linkedPageMode === 'popup' || openMode === 'popup') {
+    if (linkedPageMode === 'popup' || openMode === 'popup' || tilePopup) {
       page.popupWidth = popupWidth;
       page.popupHeight = popupHeight;
       if (popupPosition !== 'center') page.popupPosition = popupPosition;
@@ -390,7 +416,7 @@ function savePageDialog() {
       delete page.closeWhenState;
       delete page.openMode;
     }
-    if (linkedPageMode === 'popup' || openMode === 'popup') {
+    if (linkedPageMode === 'popup' || openMode === 'popup' || tilePopup) {
       page.popupWidth = popupWidth;
       page.popupHeight = popupHeight;
       if (popupPosition !== 'center') page.popupPosition = popupPosition; else delete page.popupPosition;
