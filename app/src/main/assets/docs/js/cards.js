@@ -258,9 +258,27 @@ function updateCardFormInputs() {
       <div class="section-box" style="margin-top:8px">
         <label>${label} name</label><input type="text" id="giName" placeholder="e.g., ${type === 'button_grid' ? 'Netflix' : 'Movie Night'}">
         ${type === 'button_grid' ? `
-          <label>Service (domain.service)</label><input type="text" id="giService" placeholder="e.g., media_player.play_media">
+          <label>Service (domain.service, optional — OR combine with Harmony/IR below)</label><input type="text" id="giService" placeholder="e.g., media_player.play_media">
           <label>Entity ID (optional)</label><input type="text" id="giEntityId" placeholder="e.g., media_player.tv">
           <label>Extra data (optional, JSON)</label><input type="text" id="giData" placeholder='{"media_content_type":"app"}'>
+          <div class="divider" style="margin:12px 0"></div>
+          <label>Harmony action (optional — OR/AND combine with Service above)</label>
+          <select id="giHarmonyMode" onchange="onGiHarmonyModeChange()">
+            <option value="">— none —</option>
+            <option value="activity">Activity</option>
+            <option value="command">Device command</option>
+          </select>
+          <div id="giHarmonyPicker"></div>
+          <label>IR device + command (sends locally, no hub needed)</label>
+          <select id="giIrDevice" onchange="onGiIrDeviceChange()">
+            <option value="">— none —</option>
+            ${(dashboardData.irDevices || []).map(d => `<option value="${d.id}">${d.name}</option>`).join('')}
+          </select>
+          <input type="text" id="giIrCommand" list="giIrCommandHints" placeholder="command id, e.g. power, hdmi1, volume_up">
+          <datalist id="giIrCommandHints"></datalist>
+          ${(dashboardData.irDevices || []).length === 0 ? '<div class="hint">No IR devices yet — add one from this device\'s home page, then come back here.</div>' : ''}
+          <label class="inline-check"><input type="checkbox" id="giClosePopup"> Close the open popup after this button's action</label>
+          <div class="hint">For a button placed *inside* a popup page (e.g. a TV/Projector source picker) — fires this button's action above, then dismisses the popup it's shown in.</div>
           <div class="divider" style="margin:12px 0"></div>
           <label>State entity (optional — highlights this button based on an HA entity's state)</label><input type="text" id="giStateEntity" placeholder="e.g., input_select.living_room_source">
           <label>Target state (optional, comma-separated for multiple)</label><input type="text" id="giStateValue" placeholder="e.g., TV">
@@ -270,6 +288,13 @@ function updateCardFormInputs() {
         ` : `
           <label>Entity ID (activates a scene/script) — OR —</label><input type="text" id="giEntityId" placeholder="e.g., scene.night">
           <label>Page to open instead — OR —</label><input type="text" id="giPage" placeholder="e.g., Apple TV">
+          <select id="giPageMode">
+            <option value="page">...as a full page (default)</option>
+            <option value="popup">...as a popup, over the current page</option>
+          </select>
+          <div class="hint">Popup size/position come from that page's own dialog (same "Open as popup" fields used by a linked page's swipe-up or an entity-triggered auto-open) — this just triggers it by tapping this tile directly instead.</div>
+          <label class="inline-check"><input type="checkbox" id="giClosePopup"> Close the open popup after this tile's action</label>
+          <div class="hint">For a tile placed *inside* a popup page (e.g. a TV/Projector source picker) — fires this tile's action above, then dismisses the popup it's shown in. Works whether or not this same tile also sets "Page to open" above.</div>
           <label>Harmony action (optional) — OR —</label>
           <select id="giHarmonyMode" onchange="onGiHarmonyModeChange()">
             <option value="">— none —</option>
@@ -523,6 +548,9 @@ function fillGridItemForm(type, item) {
     document.getElementById('giService').value = item.service || '';
     document.getElementById('giEntityId').value = item.entity_id || '';
     document.getElementById('giData').value = item.data ? JSON.stringify(item.data) : '';
+    document.getElementById('giIrDevice').value = item.irDevice || '';
+    document.getElementById('giIrCommand').value = item.irCommand || '';
+    document.getElementById('giClosePopup').checked = item.closePopup === true;
     document.getElementById('giStateEntity').value = item.state_entity || '';
     document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
     setColorFieldValue('giActiveColor', item.active_color || '');
@@ -530,6 +558,8 @@ function fillGridItemForm(type, item) {
   } else {
     document.getElementById('giEntityId').value = item.entity_id || '';
     document.getElementById('giPage').value = item.page || '';
+    document.getElementById('giPageMode').value = item.pageMode === 'popup' ? 'popup' : 'page';
+    document.getElementById('giClosePopup').checked = item.closePopup === true;
     if (item.irDevice) {
       document.getElementById('giIrDevice').value = item.irDevice;
       onGiIrDeviceChange();
@@ -555,7 +585,7 @@ function fillGridItemForm(type, item) {
  */
 async function fillGiHarmonySection(item) {
   const modeSel = document.getElementById('giHarmonyMode');
-  if (!modeSel) return; // button_grid form has no Harmony section
+  if (!modeSel) return; // defensive — the select always exists for scene_grid/button_grid forms
   const mode = item.activityId ? 'activity' : (item.harmonyDevice && item.harmonyCommand) ? 'command' : '';
   modeSel.value = mode;
   onGiHarmonyModeChange();
@@ -584,7 +614,7 @@ async function editGridItem(type, i) {
   editingGridItem = i;
   const item = window._pendingGridItems[i];
   fillGridItemForm(type, item);
-  if (type !== 'button_grid') await fillGiHarmonySection(item);
+  await fillGiHarmonySection(item);
   document.getElementById('giSubmitBtn').textContent = `Save ${type === 'button_grid' ? 'button' : 'scene'}`;
   document.getElementById('giCancelBtn').style.display = '';
 }
@@ -598,6 +628,10 @@ function cancelGridItemEdit() {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
+  const pageModeEl = document.getElementById('giPageMode');
+  if (pageModeEl) pageModeEl.value = 'page';
+  const closePopupEl = document.getElementById('giClosePopup');
+  if (closePopupEl) closePopupEl.checked = false;
   setColorFieldValue('giColor', '');
   setColorFieldValue('giActiveColor', '');
   const activeBorderEl = document.getElementById('giActiveBorder');
@@ -617,13 +651,51 @@ function addGridItem(type) {
   let item = { name };
   if (icon) item.icon = icon;
   if (type === 'button_grid') {
-    item.service = document.getElementById('giService').value.trim();
+    const service = document.getElementById('giService').value.trim();
+    if (service) item.service = service;
     const entityId = document.getElementById('giEntityId').value.trim();
     if (entityId) item.entity_id = entityId;
     const rawData = document.getElementById('giData').value.trim();
     if (rawData) {
       try { item.data = JSON.parse(rawData); } catch (e) { alert('Extra data must be valid JSON'); return; }
     }
+    const irDevice = document.getElementById('giIrDevice').value;
+    const irCommand = document.getElementById('giIrCommand').value.trim();
+    if (irDevice && irCommand) { item.irDevice = irDevice; item.irCommand = irCommand; }
+    else if (irDevice && !irCommand) { alert('Pick an IR command, or clear the IR device field.'); return; }
+    if (document.getElementById('giClosePopup')?.checked) item.closePopup = true;
+
+    const harmonyMode = document.getElementById('giHarmonyMode')?.value || '';
+    if (harmonyMode === 'activity') {
+      if (harmonyAvailable) {
+        const hub = document.getElementById('giHub').value.trim();
+        const activityId = document.getElementById('giActivitySelect').value.trim();
+        if (!hub || !activityId) { alert('Pick a hub and an activity.'); return; }
+        item.hub = hub;
+        item.activityId = activityId;
+      } else {
+        const activityId = document.getElementById('giActivityId').value.trim();
+        if (activityId) item.activityId = activityId;
+      }
+    } else if (harmonyMode === 'command') {
+      if (harmonyAvailable) {
+        const hub = document.getElementById('giHub').value.trim();
+        const device = document.getElementById('giDeviceSelect').value.trim();
+        const command = document.getElementById('giCommandSelect').value.trim();
+        if (!hub || !device || !command) { alert('Pick a hub, a device, and a command.'); return; }
+        item.hub = hub;
+        item.harmonyDevice = device;
+        item.harmonyCommand = command;
+      } else {
+        item.harmonyDevice = document.getElementById('giHarmonyDevice').value.trim();
+        item.harmonyCommand = document.getElementById('giHarmonyCommand').value.trim();
+      }
+    }
+    if (!item.service && !irDevice && !item.harmonyDevice && !item.activityId) {
+      alert('Give this button a Service, an IR device + command, or a Harmony action.');
+      return;
+    }
+
     const stateEntity = document.getElementById('giStateEntity').value.trim();
     const stateValueRaw = document.getElementById('giStateValue').value.trim();
     const activeColor = colorFieldValue('giActiveColor');
@@ -639,12 +711,18 @@ function addGridItem(type) {
   } else {
     const entityId = document.getElementById('giEntityId').value.trim();
     const page = document.getElementById('giPage').value.trim();
+    const pageMode = document.getElementById('giPageMode')?.value || 'page';
+    const closePopup = document.getElementById('giClosePopup')?.checked || false;
     const irDevice = document.getElementById('giIrDevice')?.value || '';
     const irCommand = document.getElementById('giIrCommand')?.value || '';
     const activityRef = document.getElementById('giActivityRef')?.value || '';
     const color = colorFieldValue('giColor');
     if (entityId) item.entity_id = entityId;
     if (page) item.page = page;
+    // Only written when the page opens as a popup — an absent pageMode
+    // means "full page", same default as before this option existed.
+    if (page && pageMode === 'popup') item.pageMode = 'popup';
+    if (closePopup) item.closePopup = true;
     if (irDevice && irCommand) { item.irDevice = irDevice; item.irCommand = irCommand; }
     else if (irDevice && !irCommand) { alert('Pick an IR command, or clear the IR device field.'); return; }
     if (activityRef) {

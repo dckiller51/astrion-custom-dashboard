@@ -80,7 +80,8 @@ import com.custom.astrion.ui.tapClickable
  *     // "subtitle_" prefix instead, for the subtitle. Exactly the same
  *     // action set as scene_grid, see SceneGridCard's doc comment:
  *     "title_entity_id": "scene.movie_night",
- *     "title_page": "Lights",
+ *     "title_page": "Lights", "title_pageMode": "popup", // "popup" opens title_page as a popup instead of navigating
+ *     "title_closePopup": true, // dismisses whichever popup is open, after every action above
  *     "title_activityId": "39568252", "title_hub": "salon_hub",
  *     "title_harmonyDevice": "...", "title_harmonyCommand": "...",
  *     "title_irDevice": "...", "title_irCommand": "...",
@@ -146,7 +147,18 @@ class TitleCard : CardRenderer {
                 ctx.sendIrCommand(irDevice, irCommand)
             }
             (o["${prefix}_activity"] as? String)?.let(ctx.startActivity)
-            (o["${prefix}_page"] as? String)?.let(ctx.navigateToPage)
+            (o["${prefix}_page"] as? String)?.let { page ->
+                // "${prefix}_pageMode": "popup" opens `page` as a floating
+                // popup instead of navigating the pager — same as
+                // scene_grid's own "pageMode" option, see SceneGridCard's
+                // class doc for the full explanation.
+                if (o["${prefix}_pageMode"] == "popup") ctx.openPagePopup(page) else ctx.navigateToPage(page)
+            }
+            // "${prefix}_closePopup": true dismisses whichever popup is
+            // currently open, after every other action above — see
+            // SceneGridCard's own "closePopup" doc for the full
+            // explanation (same option, same behavior, just prefixed here).
+            if (o["${prefix}_closePopup"] == true) ctx.closePopup()
         }
 
         fun hasAction(prefix: String): Boolean {
@@ -155,6 +167,7 @@ class TitleCard : CardRenderer {
                 o["${prefix}_page"] != null ||
                 o["${prefix}_activityId"] != null ||
                 o["${prefix}_activity"] != null ||
+                o["${prefix}_closePopup"] == true ||
                 (o["${prefix}_harmonyDevice"] != null && o["${prefix}_harmonyCommand"] != null) ||
                 (o["${prefix}_irDevice"] != null && o["${prefix}_irCommand"] != null)
         }

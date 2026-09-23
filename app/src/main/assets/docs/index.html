@@ -351,6 +351,8 @@
                 </select>
                 <div id="pageDialogOpenPopupHint" style="display:none" class="hint">Uses the same width/height/position settings as "Linked page" above (a page's popup shape is one setting, however it gets opened). Ideal for something like an intercom/doorbell call: it shows over whatever you're doing without losing your place, and closes itself the same way full-page mode would — the entity leaving the "open" state above.</div>
             </div>
+            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogTilePopup" onchange="onPageDialogTilePopupChange()"> Opened as a popup from a tile elsewhere on the dashboard</label>
+            <div class="hint" style="margin-top:4px">Check this if some tile's own "Page to open" (a scene_grid item's "pageMode": "popup", or a title's "..._pageMode": "popup") points at THIS page — the page dialog otherwise has no way to know a tile somewhere else opens it, so it wouldn't show or save the size below. Not needed when "Linked page"/"Auto-open" above are already set to popup — this page's popup shape is one setting shared by all three, however it gets opened.</div>
             <div id="pageDialogPopupRow" style="display:none">
                 <label style="margin-top:10px">Popup size &amp; position</label>
                 <div style="display:flex; gap:8px;">
@@ -371,7 +373,7 @@
                     <option value="left">Left</option>
                     <option value="right">Right</option>
                 </select>
-                <div class="hint" style="margin-top:4px">Shared by "Linked page" and "Auto-open" above when either is set to popup — a page's popup shape is one setting, however it gets opened.</div>
+                <div class="hint" style="margin-top:4px">Shared by "Linked page", "Auto-open", and "Opened as a popup from a tile elsewhere" above, whichever of the three is set to popup/checked — a page's popup shape is one setting, however it gets opened.</div>
             </div>
             <div class="btn-row" style="margin-top:12px">
                 <button onclick="savePageDialog()">Save</button>

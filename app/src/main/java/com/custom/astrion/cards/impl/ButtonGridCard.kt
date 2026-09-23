@@ -36,10 +36,17 @@ import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
 
 /**
- * Generic grid of action buttons, each firing a HA service call. Buttons can
- * carry a PNG icon loaded from a file path (e.g. /sdcard/astrion/icons/mos.png),
- * a text label, or both. Used for the TV-app row, Group/Ungroup, and the
- * playlist buttons.
+ * Generic grid of action buttons. Each button independently fires any
+ * combination of: an HA service call ("service", optionally "entity_id" +
+ * "data"), a direct Harmony device command ("harmonyDevice"+"harmonyCommand",
+ * optionally "hub" — bypasses HA), a direct Harmony Activity start
+ * ("activityId", optionally "hub"), and/or a local IR command
+ * ("irDevice"+"irCommand", sent straight through the device's own blaster,
+ * no hub/HA needed) — same Harmony/IR fields and behavior as scene_grid's,
+ * just without scene_grid's page/composed-Activity/tracking options, which
+ * don't apply to a plain action button. Buttons can carry a PNG icon loaded
+ * from a file path (e.g. /sdcard/astrion/icons/mos.png), a text label, or
+ * both. Used for the TV-app row, Group/Ungroup, and the playlist buttons.
  *
  * A button can also change its background/border based on a Home Assistant
  * entity's live state — e.g. visually highlighting whichever source is
@@ -54,6 +61,12 @@ import com.custom.astrion.ui.tapClickable
  * - "active_border": optional accent border while active — `true` draws
  *   the theme's accent color, or give your own hex color instead.
  *
+ * "closePopup": true dismisses whichever popup is currently open, fired
+ * after every other action on that button — e.g. a small TV/Projector
+ * popup (opened via a scene_grid/title tile's own "pageMode": "popup")
+ * where each source button here sends its IR/Harmony command and closes
+ * the popup in the same tap.
+ *
  * Config shape:
  *   { "type": "button_grid", "options": {
  *       "columns": 3,
@@ -65,6 +78,9 @@ import com.custom.astrion.ui.tapClickable
  *         { "name": "Netflix", "service": "media_player.play_media",
  *           "entity_id": "media_player.the_club_tvv",
  *           "data": { "media_content_type": "app", "media_content_id": "com.netflix.ninja" } },
+ *         { "name": "HDMI 1", "irDevice": "samsung_hw_m550", "irCommand": "hdmi1", "closePopup": true },
+ *         { "name": "Volume Up", "harmonyDevice": "62845789", "harmonyCommand": "VolumeUp", "hub": "salon_hub" },
+ *         { "name": "Watch TV", "activityId": "39568252", "hub": "salon_hub" },
  *         { "name": "TV", "service": "script.select_source_tv",
  *           "state_entity": "input_select.living_room_source", "state_value": "TV",
  *           "active_color": "#FF2A4954", "active_border": true }
@@ -99,16 +115,45 @@ class ButtonGridCard : CardRenderer {
         }
     }
 
+    /** Fires every action this button carries, independently — "service"
+     * (a plain HA service call), a direct Harmony device command
+     * ("harmonyDevice"+"harmonyCommand", optionally "hub"), a direct
+     * Harmony Activity start ("activityId", optionally "hub" — bypasses
+     * HA, same as scene_grid's own Harmony-activity mode), and a local IR
+     * command ("irDevice"+"irCommand", no hub needed). A button can carry
+     * any combination — most will only set one, but e.g. a button could
+     * both call an HA service AND send a direct IR command in one tap.
+     * "closePopup": true dismisses whichever popup is currently open,
+     * fired last so it runs after every action above — the exact
+     * TV/Projector-source-picker-inside-a-popup case scene_grid's own
+     * "closePopup" documents, just as likely (if not more) on a
+     * button_grid button. No-op when no popup is open. See the class doc
+     * for the full config shape. */
     @Suppress("UNCHECKED_CAST")
     private fun fire(ctx: CardContext, b: Map<String, Any?>) {
-        val service = b["service"] as? String ?: return
-        val domain = service.substringBefore('.')
-        val svc = service.substringAfter('.')
-        val entityId = b["entity_id"] as? String
-        val data = (b["data"] as? Map<String, Any?>).orEmpty()
-        ctx.client.callService(
-            ServiceCall.of(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())
-        )
+        val service = b["service"] as? String
+        if (service != null) {
+            val domain = service.substringBefore('.')
+            val svc = service.substringAfter('.')
+            val entityId = b["entity_id"] as? String
+            val data = (b["data"] as? Map<String, Any?>).orEmpty()
+            ctx.client.callService(
+                ServiceCall.of(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())
+            )
+        }
+        val hub = b["hub"] as? String
+        val harmonyDevice = b["harmonyDevice"] as? String
+        val harmonyCommand = b["harmonyCommand"] as? String
+        if (harmonyDevice != null && harmonyCommand != null) {
+            ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
+        }
+        (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
+        val irDevice = b["irDevice"] as? String
+        val irCommand = b["irCommand"] as? String
+        if (irDevice != null && irCommand != null) {
+            ctx.sendIrCommand(irDevice, irCommand)
+        }
+        if (b["closePopup"] == true) ctx.closePopup()
     }
 
     /** True when this button's optional `"state_entity"`/`"state_value"`

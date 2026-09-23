@@ -344,6 +344,14 @@ private data class CardContextInputs(
     val entities: EntityMap,
     val client: HaClient,
     val navigateToPage: (String) -> Unit,
+    /** See [CardContext.openPagePopup] — built in [Dashboard] from the same
+     * `linkedPopupPage`/`popupOpenedByEntityId` slot `DashboardEntityPageEffect`
+     * and the `linkedPage` swipe-up already share, so a tile-opened popup,
+     * an entity-opened one, and a swipe-up one can never fight over the
+     * screen at once. */
+    val openPagePopup: (String) -> Unit,
+    /** See [CardContext.closePopup]. */
+    val closePopup: () -> Unit,
     val harmonyRegistry: HarmonyHubRegistry,
     val deviceSettings: DeviceSettingsState,
     val harmonyConnected: Boolean,
@@ -365,6 +373,8 @@ private fun buildCardContext(inputs: CardContextInputs): CardContext = CardConte
     entities = inputs.entities,
     client = inputs.client,
     navigateToPage = inputs.navigateToPage,
+    openPagePopup = inputs.openPagePopup,
+    closePopup = inputs.closePopup,
     startHarmonyActivity = { activityId, hub ->
         inputs.harmonyRegistry.client(hub)?.startActivity(activityId)
             ?: Log.w("Dashboard", "startHarmonyActivity($activityId, hub=$hub) but that hub isn't configured")
@@ -607,12 +617,71 @@ fun Dashboard(
                 onStopActivityReady(stopActivity)
             }
 
+            // Shared with DashboardContent below (its swipe-up-to-linked-page
+            // handler also writes this) — lifted up here rather than kept
+            // local to DashboardContent because DashboardEntityPageEffect
+            // needs to read AND write it too, and it needs `entities`
+            // (only available at this level).
+            var linkedJump by remember { mutableStateOf<Pair<String, String>?>(null) }
+            // The linked/auto-opened page currently shown as a popup, or
+            // null when none is open — shared by three different triggers
+            // now (linkedPage swipe-up, below in DashboardContent;
+            // DashboardEntityPageEffect's openWhenEntity+openMode="popup"
+            // path right here; and any tile's own `ctx.openPagePopup` right
+            // below) since only one popup can sensibly be on screen at a
+            // time. Lifted to this level, same reasoning as `linkedJump`
+            // above: DashboardEntityPageEffect needs to write it and needs
+            // `entities` (only available here) — and it has to exist before
+            // `ctx` below, which also closes over it.
+            var linkedPopupPage by remember { mutableStateOf<LinkedPagePopupState?>(null) }
+            // Which entity (if any) is responsible for the CURRENTLY open
+            // popup — lets DashboardEntityPageEffect's auto-close only ever
+            // dismiss a popup it opened itself, never one opened by hand
+            // via linkedPage swipe-up, a tile's openPagePopup (both null),
+            // or by a *different* entity.
+            var popupOpenedByEntityId by remember { mutableStateOf<String?>(null) }
+
+            // Opens `pageName` as a popup on a direct tile tap — e.g. a
+            // scene_grid item with `"page"` + `"pageMode": "popup"`, or a
+            // title/subtitle with `"..._pageMode": "popup"` — reusing the
+            // exact same `linkedPopupPage` slot as the swipe-up and
+            // entity-driven paths above, and the target page's own
+            // popupWidthFraction/popupHeightFraction/popupPosition (same
+            // fields `onOpenPopup` below reads), so it looks identical
+            // regardless of which of the three opened it. A tile popup
+            // counts as "opened by hand" for auto-close purposes, same as
+            // a swipe-up one: popupOpenedByEntityId stays null.
+            val openPagePopup: (String) -> Unit = { pageName ->
+                val target = config.pages.firstOrNull { it.name.equals(pageName, ignoreCase = true) }
+                if (target != null) {
+                    popupOpenedByEntityId = null
+                    linkedPopupPage =
+                        LinkedPagePopupState(
+                            targetPage = target,
+                            widthFraction = target.popupWidthFraction,
+                            heightFraction = target.popupHeightFraction,
+                            position = target.popupPosition
+                        )
+                }
+            }
+            // Closes whichever popup is currently open, from any of the
+            // three triggers above — used by a tile's own `"closePopup":
+            // true` option so it can fire its action (e.g. pick a TV/
+            // Projector input) and dismiss the popup it's shown in, in one
+            // tap. No-op when nothing is open.
+            val closePopup: () -> Unit = {
+                popupOpenedByEntityId = null
+                linkedPopupPage = null
+            }
+
             val ctx =
                 buildCardContext(
                     CardContextInputs(
                         entities = entities,
                         client = client,
                         navigateToPage = navigateToPage,
+                        openPagePopup = openPagePopup,
+                        closePopup = closePopup,
                         harmonyRegistry = harmonyRegistry,
                         deviceSettings = deviceSettings,
                         harmonyConnected = harmonyConnected,
@@ -626,26 +695,6 @@ fun Dashboard(
                     )
                 )
 
-            // Shared with DashboardContent below (its swipe-up-to-linked-page
-            // handler also writes this) — lifted up here rather than kept
-            // local to DashboardContent because DashboardEntityPageEffect
-            // needs to read AND write it too, and it needs `entities`
-            // (only available at this level).
-            var linkedJump by remember { mutableStateOf<Pair<String, String>?>(null) }
-            // The linked/auto-opened page currently shown as a popup, or
-            // null when none is open — shared by two different triggers
-            // (linkedPage swipe-up, below in DashboardContent, and
-            // DashboardEntityPageEffect's new openWhenEntity+openMode=
-            // "popup" path right here) since only one popup can sensibly be
-            // on screen at a time. Lifted to this level, same reasoning as
-            // `linkedJump` above: DashboardEntityPageEffect needs to write
-            // it and needs `entities` (only available here).
-            var linkedPopupPage by remember { mutableStateOf<LinkedPagePopupState?>(null) }
-            // Which entity (if any) is responsible for the CURRENTLY open
-            // popup — lets DashboardEntityPageEffect's auto-close only ever
-            // dismiss a popup it opened itself, never one opened by hand
-            // via linkedPage swipe-up (null) or by a *different* entity.
-            var popupOpenedByEntityId by remember { mutableStateOf<String?>(null) }
             DashboardEntityPageEffect(
                 pages = config.pages,
                 entities = entities,

@@ -75,11 +75,44 @@ data class DeviceSettingsState(
  * Gives the card read access to live entity states and service calls.
  * It also enables navigation between pages (e.g. tapping an item to open a page).
  */
-class CardContext(
+// This is THE EXTENSIBILITY CORE (see the file's own top comment) — every
+// card renderer reads its capabilities as flat `ctx.xxx` properties, and
+// all but the first two already have safe no-op/empty defaults specifically
+// so existing cards/tests keep compiling as new ones are added over time.
+// Bundling the less-central ones into a sub-object (the usual fix for
+// detekt's LongParameterList elsewhere in this codebase — see
+// CardContextInputs/ActivityDispatcherInputs) would mean rewriting every
+// `ctx.xxx` access across every CardRenderer for a purely internal lint
+// threshold, so this is suppressed here instead. Note the explicit
+// `constructor` keyword below: detekt's LongParameterList reports on the
+// primary constructor itself, and in Kotlin `@Suppress` only attaches to
+// it via that keyword — `@Suppress(...) class CardContext(` (annotating
+// the class, no `constructor`) does NOT suppress it.
+class CardContext
+@Suppress("LongParameterList")
+constructor(
     val entities: EntityMap,
     val client: HaClient,
     /** No-op default so existing cards/tests that don't pass this keep working. */
     val navigateToPage: (String) -> Unit = {},
+    /** Opens `pageName` (matched case-insensitively against
+     * `dashboard.json`'s `pages[].name`, same as [navigateToPage]) as a
+     * floating popup over whatever page is currently on screen, instead of
+     * navigating the pager itself. Uses that page's own
+     * `popupWidthFraction`/`popupHeightFraction`/`popupPosition` — the same
+     * floating overlay a `linkedPage` swipe-up or an `openWhenEntity` with
+     * `openMode: "popup"` already use, just triggered here by a direct tap
+     * on any tile instead. No-op if `pageName` isn't found, and a no-op
+     * default so existing cards/tests that don't pass this keep working. */
+    val openPagePopup: (String) -> Unit = {},
+    /** Closes whichever popup is currently shown (however it was opened —
+     * [openPagePopup], a `linkedPage` swipe-up, or `openWhenEntity`), if
+     * any; no-op when none is open. Lets a tile INSIDE a popup (e.g. a
+     * TV/Projector source picker) fire its own action and then dismiss the
+     * popup it's showing in, in the same tap — see each card's own
+     * `closePopup` option. No-op default, same reasoning as
+     * [openPagePopup]. */
+    val closePopup: () -> Unit = {},
     /** Starts a Harmony Activity directly on a hub (bypasses HA). `hub` is a
      * HarmonyHubConfig.localId; null/blank falls back to the first configured hub. */
     val startHarmonyActivity: (activityId: String, hub: String?) -> Unit = { _, _ -> },

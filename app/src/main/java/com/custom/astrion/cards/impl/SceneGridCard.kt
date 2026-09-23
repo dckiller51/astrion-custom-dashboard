@@ -73,6 +73,18 @@ private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(empty
  *   Activity itself, and every tile/hotkey that starts it shares it.
  * - "page": navigates to a specific dashboard page (ctx.navigateToPage).
  *   Ignored on a tile that also sets "activity" — see above.
+ * - "pageMode": "popup" (alongside "page") opens that page as a floating
+ *   popup instead (ctx.openPagePopup) — same overlay a linkedPage swipe-up
+ *   or an openWhenEntity with "openMode": "popup" already use, just
+ *   triggered by tapping this tile directly. Any other/missing value keeps
+ *   the default full-page navigate.
+ * - "closePopup": true dismisses whichever popup is currently on screen,
+ *   fired after every other action on this tile — e.g. a tile *inside* an
+ *   already-open popup (a TV/Projector source picker) that fires an
+ *   IR/Harmony/service action and then closes the popup it's shown in, in
+ *   one tap. Independent of "page"/"pageMode" on the same tile — a tile can
+ *   open a popup while a *different* tile inside it closes it. No-op when
+ *   no popup is open.
  * - "track"+"room": marks a tile with any of the single-action fields above
  *   as a trackable Activity — see ActivityRuntime. Not needed alongside
  *   "activity": a composed Activity is always implicitly tracked.
@@ -153,13 +165,28 @@ class SceneGridCard : CardRenderer {
                 // is actually confirmed active.
                 ctx.startActivity(activityId)
             } else {
-                (scene["page"] as? String)?.let(ctx.navigateToPage)
+                (scene["page"] as? String)?.let { page ->
+                    // "pageMode": "popup" opens `page` as a floating popup
+                    // instead of navigating the pager — same idea as
+                    // linkedPage's own linkedPageMode, just on a normal
+                    // tile's tap. Any other/missing value keeps the
+                    // original full-page navigate.
+                    if (scene["pageMode"] == "popup") ctx.openPagePopup(page) else ctx.navigateToPage(page)
+                }
             }
             // If this tile is `"track": true`, records it as the active
             // Activity for its `"room"` — see ActivityRuntime. No-op for
             // ordinary (untracked) tiles, and for "activity" tiles (already
             // marked active by ctx.startActivity itself).
             ctx.activityRuntime?.trackTap(scene)
+            // "closePopup": true dismisses whichever popup is currently
+            // open, fired last so it runs after every action above — e.g. a
+            // tile *inside* an already-open TV/Projector popup that picks a
+            // source and then closes that popup in the same tap. No-op
+            // when no popup is open, and independent of this tile's own
+            // "page"/"pageMode" (a tile can open one popup while another
+            // tile inside it closes it — see this card's class doc).
+            if (scene["closePopup"] == true) ctx.closePopup()
         }
 
         fun nameOf(scene: Map<String, Any?>): String {
