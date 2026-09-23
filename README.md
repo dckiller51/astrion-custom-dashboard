@@ -142,7 +142,15 @@ For now, contributions are welcome specifically for **translations** — see the
 
 ## Credits
 
-Special thanks to [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard) for the original work this project is built on.
+Special thanks to [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard) for the original work this project is built on (MIT License — see [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md)).
+
+## License
+
+**Astrion Custom Dashboard** is licensed under the [GNU GPLv3](./LICENSE).
+
+This project started as a fork of [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard)'s original work, released under the MIT License — that original notice is preserved in [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md), as its terms require.
+
+[![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](./LICENSE)
 
 ---
 
