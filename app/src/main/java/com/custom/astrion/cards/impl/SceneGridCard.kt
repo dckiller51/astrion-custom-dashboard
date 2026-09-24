@@ -37,7 +37,6 @@ import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.ServiceCall
-import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -114,6 +113,22 @@ private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(empty
  * option and same four positions as button_grid. It has no effect on an
  * icon-only tile ("show_labels": false): there's no label to position
  * against.
+ *
+ * A tile is border-highlighted from either of two independent, combinable
+ * mechanisms:
+ * - It represents the Activity currently active in its room (a tile with
+ *   "activity" or "track"+"room" — see ActivityRuntime), drawn with the
+ *   theme's accent color. Unchanged from before.
+ * - Its own "state_entity"/"state_value"/"active_color"/"active_border"
+ *   condition currently matches — same fields, same semantics as
+ *   button_grid's own (see ButtonGridCard's class doc for the full
+ *   explanation), added so a tile that ISN'T an Activity can still be
+ *   highlighted off an arbitrary HA entity's state: e.g. a plain
+ *   navigation tile to the "Lights" page, lit up via
+ *   "state_entity": "light.living_room", "state_value": "on" while any
+ *   light in the room is on — unlike the Activity mechanism above, this
+ *   one also changes the tile's *background* (via "active_color"), not
+ *   just its border.
  */
 class SceneGridCard : CardRenderer {
     override val type = "scene_grid"
@@ -137,6 +152,26 @@ class SceneGridCard : CardRenderer {
         val activeByRoom by (ctx.activityRuntime?.activeByRoom ?: emptyActiveByRoomFlow).collectAsState()
 
         fun isActive(scene: Map<String, Any?>): Boolean = ctx.activityRuntime?.isActiveTile(scene, activeByRoom) == true
+
+        // Second, independent highlighting mechanism — same "state_entity"/
+        // "state_value"/"active_color"/"active_border" fields as
+        // ButtonGridCard's own (see there for the full doc), added here so
+        // a scene_grid tile that ISN'T an Activity (e.g. a plain
+        // navigation tile like "Audio"/"Lights") can still be highlighted
+        // off an arbitrary HA entity's state — "Lights" lit up while any
+        // light in the room is on, say. Reads `ctx.entities` directly
+        // (like ButtonGridCard's own isConditionActive), which is already
+        // observed reactively wherever CardContext builds it — no
+        // additional collectAsState needed here.
+        fun isConditionActive(scene: Map<String, Any?>): Boolean {
+            val stateEntity = scene["state_entity"] as? String ?: return false
+            val current = ctx.entities[stateEntity]?.state ?: return false
+            return when (val target = scene["state_value"]) {
+                is String -> current == target
+                is List<*> -> target.any { it == current }
+                else -> false
+            }
+        }
 
         fun activate(entityId: String) {
             val domain = entityId.substringBefore('.')
@@ -200,6 +235,17 @@ class SceneGridCard : CardRenderer {
 
         fun iconOf(scene: Map<String, Any?>): String? = scene["icon"] as? String
 
+        // "active_border" resolution — identical semantics to
+        // ButtonGridCard's own: true draws the theme accent, a hex string
+        // draws that color, anything else (including absent) draws no
+        // border from THIS mechanism specifically (the older
+        // Activity-tracking border below still applies independently).
+        fun conditionBorderColor(scene: Map<String, Any?>): Color? = when (val raw = scene["active_border"]) {
+            is Boolean -> if (raw) ctx.theme.accent else null
+            is String -> parseHexColor(raw)
+            else -> null
+        }
+
         // Decided once for the whole grid (not per-tile) so every tile in a
         // row/grid shares the same height — a mix of icon (74dp) and
         // text-only (58dp) tiles side by side looked uneven.
@@ -207,6 +253,33 @@ class SceneGridCard : CardRenderer {
         val showLabels = remember(config) { config.options["show_labels"] as? Boolean ?: true }
         val iconFill = remember(config) { config.options["icon_fill"] as? Boolean ?: false }
         val tileHeight = remember(config) { config.int("tile_height", if (iconFill) 120 else 74) }
+
+        // Combines both highlighting mechanisms into the one border+background
+        // every tile shape below draws — the state-entity one (background AND
+        // border, only when "state_entity"/"state_value" match) and the older
+        // Activity-tracking one (border only, unchanged, theme.accent) — so a
+        // tile can use either, both, or neither without the two fighting.
+        fun stateFor(scene: Map<String, Any?>): SceneButtonState {
+            val stateActive = isConditionActive(scene)
+            val activityActive = isActive(scene)
+            val background = (if (stateActive) parseHexColor(scene["active_color"] as? String) else null) ?: colorOf(scene)
+            val stateBorder = if (stateActive) conditionBorderColor(scene) else null
+            val (borderActive, borderColor) =
+                when {
+                    stateBorder != null -> true to stateBorder
+                    activityActive -> true to ctx.theme.accent
+                    else -> false to null
+                }
+            return SceneButtonState(
+                name = nameOf(scene),
+                color = background,
+                iconPath = iconOf(scene),
+                hasIcon = hasIcon,
+                showLabel = showLabels,
+                active = borderActive,
+                borderColor = borderColor
+            )
+        }
 
         if (row) {
             Row(
@@ -217,17 +290,9 @@ class SceneGridCard : CardRenderer {
             ) {
                 scenes.forEach { scene ->
                     SceneButton(
-                        state = SceneButtonState(
-                            name = nameOf(scene),
-                            color = colorOf(scene),
-                            iconPath = iconOf(scene),
-                            hasIcon = hasIcon,
-                            showLabel = showLabels,
-                            active = isActive(scene)
-                        ),
+                        state = stateFor(scene),
                         layout = TileLayout(iconFill, tileHeight, iconPosition),
-                        modifier = Modifier.width(104.dp),
-                        theme = ctx.theme
+                        modifier = Modifier.width(104.dp)
                     ) { onTap(scene) }
                 }
             }
@@ -237,17 +302,9 @@ class SceneGridCard : CardRenderer {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         chunk.forEach { scene ->
                             SceneButton(
-                                state = SceneButtonState(
-                                    name = nameOf(scene),
-                                    color = colorOf(scene),
-                                    iconPath = iconOf(scene),
-                                    hasIcon = hasIcon,
-                                    showLabel = showLabels,
-                                    active = isActive(scene)
-                                ),
+                                state = stateFor(scene),
                                 layout = TileLayout(iconFill, tileHeight, iconPosition),
-                                modifier = Modifier.weight(1f),
-                                theme = ctx.theme
+                                modifier = Modifier.weight(1f)
                             ) { onTap(scene) }
                         }
                         repeat(columns - chunk.size) { Spacer(Modifier.weight(1f)) }
@@ -272,22 +329,31 @@ class SceneGridCard : CardRenderer {
         val iconPath: String?,
         val hasIcon: Boolean,
         val showLabel: Boolean,
-        /** True when this tile represents the Activity currently active in
-         * its room (see ActivityRuntime.isActiveTile) — drawn as an accent
-         * border so, unlike before, there's some visible indication of
-         * which scene/Activity tile you actually landed on after a tap. */
-        val active: Boolean = false
+        /** True when this tile is highlighted, from either of two
+         * independent, combinable mechanisms: it represents the Activity
+         * currently active in its room (see ActivityRuntime.isActiveTile),
+         * or its own "state_entity"/"state_value" condition currently
+         * matches (see the class doc) — drawn as a [borderColor] border. */
+        val active: Boolean = false,
+        /** The border color to draw when [active] — resolved by the caller
+         * from whichever mechanism triggered [active] (a custom
+         * "active_border" color/theme.accent for the state-entity one,
+         * always theme.accent for the older Activity one, see `stateFor()`
+         * in [Render]). Null draws no border even when [active] is true —
+         * e.g. a state condition matched but no "active_border" was set,
+         * so only the background changes via "active_color". */
+        val borderColor: Color? = null
     )
 
-    /** The border every tile shares when [SceneButtonState.active] is true —
-     * a no-op (zero-width, transparent) modifier otherwise, so callers can
-     * always chain it in without an extra branch at each of the three tile
-     * shapes below. */
-    private fun activeBorderModifier(active: Boolean, theme: ThemeColors): Modifier =
-        if (active) Modifier.border(2.dp, theme.accent, RoundedCornerShape(14.dp)) else Modifier
+    /** The border every tile shares when [SceneButtonState.active] is true
+     * and [SceneButtonState.borderColor] is non-null — a no-op (zero-width,
+     * transparent) modifier otherwise, so callers can always chain it in
+     * without an extra branch at each of the three tile shapes below. */
+    private fun activeBorderModifier(active: Boolean, color: Color?): Modifier =
+        if (active && color != null) Modifier.border(2.dp, color, RoundedCornerShape(14.dp)) else Modifier
 
     @Composable
-    private fun SceneButton(state: SceneButtonState, layout: TileLayout, modifier: Modifier, theme: ThemeColors, onClick: () -> Unit) {
+    private fun SceneButton(state: SceneButtonState, layout: TileLayout, modifier: Modifier, onClick: () -> Unit) {
         val textColor = if (luminance(state.color) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)
         // iconFill tiles render the bitmap at the full tile height (ContentScale.
         // FillHeight), otherwise it's a 28dp square — pick the larger of the two
@@ -303,7 +369,7 @@ class SceneGridCard : CardRenderer {
 
         if (state.hasIcon) {
             if (layout.iconFill && bitmap != null && !state.showLabel) {
-                FillIconTile(bitmap, state, layout, modifier, theme, onClick)
+                FillIconTile(bitmap, state, layout, modifier, onClick)
             } else {
                 // Every tile in the grid uses this branch once any one of them has
                 // an icon, even tiles with no icon of their own — a blank 28dp
@@ -332,7 +398,7 @@ class SceneGridCard : CardRenderer {
                     .height(layout.tileHeight.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(state.color)
-                    .then(activeBorderModifier(state.active, theme))
+                    .then(activeBorderModifier(state.active, state.borderColor))
                     .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                     .padding(6.dp)
 
@@ -348,7 +414,7 @@ class SceneGridCard : CardRenderer {
                     .height(58.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(state.color)
-                    .then(activeBorderModifier(state.active, theme))
+                    .then(activeBorderModifier(state.active, state.borderColor))
                     .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
@@ -417,20 +483,13 @@ class SceneGridCard : CardRenderer {
      * unchanged. Only reached when there's a real [bitmap] and no label
      * (see the caller), so both are non-null/false by the time this runs. */
     @Composable
-    private fun FillIconTile(
-        bitmap: ImageBitmap,
-        state: SceneButtonState,
-        layout: TileLayout,
-        modifier: Modifier,
-        theme: ThemeColors,
-        onClick: () -> Unit
-    ) {
+    private fun FillIconTile(bitmap: ImageBitmap, state: SceneButtonState, layout: TileLayout, modifier: Modifier, onClick: () -> Unit) {
         Box(
             modifier = modifier
                 .height(layout.tileHeight.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(state.color)
-                .then(activeBorderModifier(state.active, theme))
+                .then(activeBorderModifier(state.active, state.borderColor))
                 .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
                 .padding(6.dp),
             contentAlignment = Alignment.Center

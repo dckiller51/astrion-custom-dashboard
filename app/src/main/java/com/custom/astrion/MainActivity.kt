@@ -27,11 +27,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import com.custom.astrion.cards.DeviceSettingsState
@@ -96,6 +98,10 @@ class MainActivity : ComponentActivity() {
         // Keys that pop up a temporary volume readout when their hotkey
         // fires an HA service call — see runHotkey()'s bottom branch.
         val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
+
+        // The four D-pad keys that move Compose focus when unmapped — see
+        // clearFocusTrigger's own doc, dispatchKeyEvent().
+        val DIRECTIONAL_KEYS = setOf(HardwareKey.UP, HardwareKey.DOWN, HardwareKey.LEFT, HardwareKey.RIGHT)
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -359,6 +365,21 @@ class MainActivity : ComponentActivity() {
      * fires against a real HA entity, in runHotkey() below. */
     private var volumeHotkeyTrigger by mutableStateOf<VolumeHotkeyTrigger?>(null)
 
+    /** Bumped (nanoTime, never meaningfully "cleared" — only ever compared
+     * for change, same one-shot-nonce pattern as [volumeHotkeyTrigger])
+     * every time a directional D-pad key (UP/DOWN/LEFT/RIGHT) is consumed
+     * by a configured hotkey in [dispatchKeyEvent] instead of reaching
+     * Compose's own focus-navigation. Without this, whichever tile/card
+     * already had Compose focus (e.g. from an earlier touch, or the
+     * initial default) kept showing its focus outline even though that
+     * D-pad key can no longer move it on this page — a cursor that looks
+     * navigable but isn't. [composeContent] observes this to clear focus
+     * at that moment instead, so no outline is drawn until the person
+     * touches a tile or presses a direction that IS still free to move
+     * focus (a page/config with no hotkey on that key at all — untouched,
+     * "the current focus outline behavior is perfect" for that case). */
+    private var clearFocusTrigger by mutableStateOf(0L)
+
     /** Which page is currently visible — used to know which page-scoped
      * hotkeys should currently be layered on top of the global ones. */
     private var currentPageIndex = 0
@@ -528,6 +549,14 @@ class MainActivity : ComponentActivity() {
             val connection = client.connection.collectAsState()
             val isDocked = chargeDockMonitor.state.isDocked
             Box {
+                val focusManager = LocalFocusManager.current
+                LaunchedEffect(clearFocusTrigger) {
+                    // 0L is the initial/never-fired value (see its own doc)
+                    // — skip clearing focus on first composition for that
+                    // reason alone, so app launch doesn't itself strip the
+                    // very first default focus for no reason.
+                    if (clearFocusTrigger != 0L) focusManager.clearFocus(force = true)
+                }
                 Dashboard(
                     connection = DashboardConnection(client = client, entitiesState = entities, connectionState = connection),
                     registries = DashboardRegistries(harmonyRegistry = harmonyRegistry, extenderRegistry = extenderRegistry),
@@ -819,6 +848,27 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Clears Compose's D-pad focus the moment a directional key (UP/DOWN/
+     * LEFT/RIGHT) is about to be consumed as a hotkey below — split out of
+     * [dispatchKeyEvent] purely to keep that function's cyclomatic
+     * complexity under detekt's threshold, no behavior difference from
+     * having it inline. See [clearFocusTrigger]'s own doc for why: without
+     * this, any focus outline already shown would otherwise sit there
+     * looking like a movable cursor that in fact can't move on this key
+     * anymore, since the key never reaches Compose's own focus-navigation
+     * (`super.dispatchKeyEvent` is never called for a mapped key). CENTER
+     * is deliberately excluded — an activation key, not a "move" one.
+     */
+    private fun maybeClearFocusForDirectionalHotkey(event: KeyEvent, code: Int) {
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0 &&
+            HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS
+        ) {
+            clearFocusTrigger = System.nanoTime()
+        }
+    }
+
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val code = event.keyCode
@@ -833,6 +883,10 @@ class MainActivity : ComponentActivity() {
             }
             return super.dispatchKeyEvent(event)
         }
+
+        // This key is about to be fully consumed as a hotkey below (never
+        // reaching Compose's own focus-navigation via super.dispatchKeyEvent).
+        maybeClearFocusForDirectionalHotkey(event, code)
 
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
