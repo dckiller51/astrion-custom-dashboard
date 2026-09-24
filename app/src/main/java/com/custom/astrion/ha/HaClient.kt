@@ -198,17 +198,23 @@ class HaClient(
     /**
      * Fetch an image (e.g. a media_player `entity_picture`) as an ImageBitmap.
      * `path` may be absolute or an HA-relative path like /api/media_player_proxy/…;
-     * the bearer token is attached so proxied/authenticated art loads too.
+     * the bearer token is attached so proxied/authenticated art loads too —
+     * but only when `path` actually targets this HA instance (relative, or
+     * an absolute URL on `baseUrl` itself). A genuinely external URL (e.g.
+     * a media_player's raw `entity_picture` pointing straight at a
+     * third-party CDN — see MediaPlayerCard's own comment on
+     * `entity_picture_local`) never gets the HA token attached: some
+     * external hosts reject requests carrying an unexpected Authorization
+     * header, and there's no reason to hand an HA credential to a
+     * third-party server that never asked for it either way.
      */
     suspend fun fetchBitmap(path: String): ImageBitmap? = withContext(Dispatchers.IO) {
         try {
             val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val req =
-                Request
-                    .Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $token")
-                    .build()
+            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+            val reqBuilder = Request.Builder().url(url)
+            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+            val req = reqBuilder.build()
             imageHttp.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 val bytes = resp.body?.bytes() ?: return@withContext null
@@ -224,17 +230,16 @@ class HaClient(
      * Fetch a URL/HA-relative path as raw bytes, with the bearer token attached.
      * Same auth/one-shot semantics as [fetchBitmap] but returns the undecoded
      * body — used to proxy a single camera frame through the config server so
-     * the editor preview can show a real still without the HA token.
+     * the editor preview can show a real still without the HA token. Same
+     * external-vs-HA-target token guard as [fetchBitmap] — see its doc.
      */
     suspend fun fetchBytes(path: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
             val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val req =
-                Request
-                    .Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $token")
-                    .build()
+            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+            val reqBuilder = Request.Builder().url(url)
+            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+            val req = reqBuilder.build()
             imageHttp.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 resp.body?.bytes()

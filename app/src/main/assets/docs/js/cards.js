@@ -318,6 +318,12 @@ function updateCardFormInputs() {
           ${(dashboardData.activities || []).length === 0 ? '<div class="hint">No Activities yet — create one in the "Activities" section below for multi-device setups (e.g. IR-only, no Harmony/HA).</div>' : '<div class="hint">Saving this tile sets this as the Activity\'s page (its own "Page to open" above if set, otherwise whichever page this card is on) \u2014 used by the Active Activities overlay\'s tap-to-navigate, and to bind the physical volume keys if this Activity has a volume device set.</div>'}
           <label>Color (optional, ARGB hex — defaults to the standard tile color)</label>${colorFieldHtml('giColor', '', '#66009688')}
           <div class="divider" style="margin:12px 0"></div>
+          <label>State entity (optional — highlights this tile based on an HA entity's state)</label><input type="text" id="giStateEntity" placeholder="e.g., light.living_room">
+          <label>Target state (optional, comma-separated for multiple)</label><input type="text" id="giStateValue" placeholder="e.g., on">
+          <label>Active color (optional, hex — background while the state above matches)</label>${colorFieldHtml('giActiveColor', '', '#FF2A4954')}
+          <label class="inline-check"><input type="checkbox" id="giActiveBorder"> Accent border while active</label>
+          <div class="hint">Independent of "Track as Activity" below — works on any tile, not just an Activity one. Useful for a plain navigation tile (e.g. to a "Lights" page) that you want lit up while any light in the room is on, say.</div>
+          <div class="divider" style="margin:12px 0"></div>
           <label><input type="checkbox" id="giTrack" onchange="onGiTrackChange()"> Track as Activity</label>
           <div class="hint">Makes this tile show up as the active AV Activity for its room — see ActivityRuntime. At most one tracked Activity is active per room at a time. Not needed if you picked a Composed Activity above — that's always tracked automatically, using its own room.</div>
           <div id="giRoomField" style="display:none">
@@ -568,6 +574,10 @@ function fillGridItemForm(type, item) {
     const actRefSel = document.getElementById('giActivityRef');
     if (actRefSel) actRefSel.value = item.activity || '';
     setColorFieldValue('giColor', item.color || '');
+    document.getElementById('giStateEntity').value = item.state_entity || '';
+    document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
+    setColorFieldValue('giActiveColor', item.active_color || '');
+    document.getElementById('giActiveBorder').checked = item.active_border === true || typeof item.active_border === 'string';
     document.getElementById('giTrack').checked = item.track === true;
     document.getElementById('giRoom').value = item.room || '';
     document.getElementById('giDevices').value = (item.devices || []).join(', ');
@@ -786,6 +796,19 @@ function addGridItem(type) {
       const devices = document.getElementById('giDevices').value.split(',').map(s => s.trim()).filter(Boolean);
       if (devices.length) item.devices = devices;
     }
+
+    const stateEntity = document.getElementById('giStateEntity').value.trim();
+    const stateValueRaw = document.getElementById('giStateValue').value.trim();
+    const activeColor = colorFieldValue('giActiveColor');
+    const activeBorder = document.getElementById('giActiveBorder').checked;
+    if (stateEntity && !stateValueRaw) { alert('Give a Target state for the State entity, or clear the State entity field.'); return; }
+    if (stateEntity) {
+      item.state_entity = stateEntity;
+      const values = stateValueRaw.split(',').map(s => s.trim()).filter(Boolean);
+      item.state_value = values.length > 1 ? values : values[0];
+      if (activeColor) item.active_color = activeColor;
+      if (activeBorder) item.active_border = true;
+    }
   }
   window._pendingGridItems = window._pendingGridItems || [];
   if (editingGridItem !== null) {
@@ -965,7 +988,7 @@ function fillCardForm(card) {
     document.getElementById('optMediaCtrlPlayPause').checked = mCtrls.includes('play_pause');
     document.getElementById('optMediaCtrlNext').checked = mCtrls.includes('next');
     document.getElementById('optMediaCtrlRepeat').checked = mCtrls.includes('repeat');
-    const vCtrls = (o.volume_controls || 'mute,buttons').split(',').map(s => s.trim());
+    const vCtrls = (o.volume_controls ?? 'mute,buttons').split(',').map(s => s.trim());
     document.getElementById('optMediaVolMute').checked = vCtrls.includes('mute');
     document.getElementById('optMediaVolButtons').checked = vCtrls.includes('buttons');
     document.getElementById('optMediaVolSet').checked = vCtrls.includes('set');

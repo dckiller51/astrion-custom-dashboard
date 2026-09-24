@@ -107,7 +107,22 @@ class MediaPlayerCard : CardRenderer {
         val isOff = e == null || e.state == "off" || e.isUnavailable
         val text = resolveMediaText(e, config, entityId, isOff, playerConfig.useMediaInfo, playerConfig.showVolumeLevel)
 
-        val artPath = e?.attrString("entity_picture")
+        // "entity_picture_local" (when present) is Home Assistant's own
+        // locally-proxied copy of the artwork — always an HA-relative path
+        // like /api/media_player_proxy/…, so it goes through fetchBitmap's
+        // baseUrl+bearer-token path exactly like every other entity's art.
+        // "entity_picture" alone is sometimes instead the raw, external CDN
+        // URL the media integration reported directly (e.g. a Yandex
+        // Station media_player's avatar.mds.yandex.net link) — fetchBitmap
+        // still attaches the same HA bearer token even to that external
+        // host, which not every third-party CDN accepts, so an entity that
+        // only offers this form of "entity_picture" (no "_local" variant)
+        // could fail to load art here even though HA itself resolves it
+        // fine client-side (a browser fetches it with no auth header at
+        // all). Falling back to the raw "entity_picture" keeps every
+        // entity that never had a "_local" variant working exactly as
+        // before.
+        val artPath = e?.attrString("entity_picture_local") ?: e?.attrString("entity_picture")
         var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
         LaunchedEffect(artPath) { art = artPath?.let { ctx.client.fetchBitmap(it) } }
 
@@ -519,16 +534,27 @@ class MediaPlayerCard : CardRenderer {
             Image(art, null, modifier = artMod, contentScale = playerConfig.artworkFit)
         } else {
             val isOff = e == null || e.state == "off" || e.isUnavailable
+            // No per-app icon here — HA's media_player integrations (Apple TV
+            // included) don't appear to expose one, only "app_name"/"app_id"
+            // as plain text, so that's the most specific thing there is to
+            // show in place of an actual artwork image.
+            val appName = if (isOff) null else e?.attrString("app_name")
             Box(
                 artMod.background(if (isOff) ctx.theme.controlBackground else ctx.theme.accentSecondary),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    if (isOff) MdiIcons.CastOff else MdiIcons.Cast,
-                    contentDescription = null,
-                    tint = if (isOff) Color.White.copy(alpha = 0.6f) else Color.White,
-                    modifier = Modifier.size(48.dp)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        if (isOff) MdiIcons.CastOff else MdiIcons.Cast,
+                        contentDescription = null,
+                        tint = if (isOff) Color.White.copy(alpha = 0.6f) else Color.White,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    if (appName != null) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(appName, color = Color.White.copy(alpha = 0.85f), fontSize = 13.sp)
+                    }
+                }
             }
         }
     }

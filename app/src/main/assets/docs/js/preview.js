@@ -834,7 +834,7 @@ function renderPreview() {
       const useMediaInfo = o.use_media_info !== false;
       const showVolumeLevel = o.show_volume_level === true;
       const mediaControls = (o.media_controls || 'previous,play_pause,next').split(',').map(s => s.trim()).filter(Boolean);
-      const volumeControls = (o.volume_controls || 'mute,buttons').split(',').map(s => s.trim()).filter(Boolean);
+      const volumeControls = (o.volume_controls ?? 'mute,buttons').split(',').map(s => s.trim()).filter(Boolean);
 
       const title = useMediaInfo ? (mock.media_title || o.name || haFriendlyName(o.entity_id) || mock.friendly_name) : (o.name || haFriendlyName(o.entity_id) || mock.friendly_name);
       const subtitle = useMediaInfo ? (mock.media_artist || mock.app_name) : null;
