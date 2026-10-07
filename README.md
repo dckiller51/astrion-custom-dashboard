@@ -24,20 +24,44 @@ It features a swipe-navigable, full-screen dashboard driven entirely by a JSON c
 - **Harmony Hub integration** (optional) for IR remotes/activities.
 - **Physical keys**: `HardwareKeyRouter` maps the box's hardware keys to hotkeys defined in the config (page navigation, quick actions...).
 
-### Local configuration (no adb needed)
+### Local configuration & Web UI
 
 The app ships with **no Home Assistant credentials baked in** — every install starts unconfigured on purpose, so a prebuilt APK can be shared publicly without exposing anyone's personal setup. The device runs a small local web server on **`http://<remote-ip>:8080`** (the address is also shown in the Settings panel). From any browser on the same network you can:
 
 - set the Home Assistant URL/token and Harmony Hub IP/ID,
-- upload a new `dashboard.json` (and download the current one as a backup),
+- upload or download your `dashboard.json` configuration file directly from the remote,
 - upload icon PNGs into `/sdcard/astrion/icons/`,
-- check for and install app updates (see below).
+- check for and install app updates.
 
 Saving connection settings restarts the app to reconnect; uploading `dashboard.json` reloads the dashboard live.
 
-### Dashboard editor
+## Available Cards & Compatibility
 
-Building `dashboard.json` by hand is optional — the [**online dashboard editor**](https://dckiller51.github.io/astrion-custom-dashboard/) lets you add pages, cards, and hotkeys through forms and generates the JSON for you (or lets you load and edit an existing file). Download the result and upload it from the local `:8080` configuration page above, no adb needed.
+Astrion provides various card types tailored for home automation and multimedia control. Depending on the card, compatibility ranges across Home Assistant entities, Harmony Hub, local IR emitters, and a directly-paired Apple TV:
+
+| Card Type | Description | Home Assistant | Harmony Hub | Local IR | Apple TV (Direct) |
+| :--- | :--- | :---: | :---: | :---: | :---: |
+| **`light`** | Controls lights (brightness, color, temp) | ✅ | ❌ | ❌ | ❌ |
+| **`cover`** | Controls roller shutters, blinds, and gates | ✅ | ❌ | ❌ | ❌ |
+| **`switch`** | Simple on/off toggle for switches or inputs | ✅ | ❌ | ❌ | ❌ |
+| **`climate`** | Thermostats and climate control units | ✅ | ❌ | ❌ | ❌ |
+| **`fan`** | Ventilation speed and preset modes | ✅ | ❌ | ❌ | ❌ |
+| **`media_player`** | Media playback and volume management | ✅ | ❌ | ❌ | ✅ |
+| **`speaker_group`** | Multiroom audio groups (e.g., Sonos) | ✅ | ❌ | ❌ | ❌ |
+| **`camera`** | Live camera streaming or snapshots | ✅ | ❌ | ❌ | ❌ |
+| **`vacuum`** | Robot vacuum cleaner controls and maps | ✅ | ❌ | ❌ | ❌ |
+| **`climate_weather`** | Weather forecast and time display | ✅ | ❌ | ❌ | ❌ |
+| **`monitor`** | Read-only sensor values list | ✅ | ❌ | ❌ | ❌ |
+| **`row`** | Horizontal container layout for sub-cards | ✅ | ✅ | ✅ | ✅ |
+| **`title`** | Section headers with optional click actions | ✅ | ✅ | ✅ | ✅ |
+| **`button_grid`** | Grid of custom action buttons | ✅ | ✅ | ✅ | ✅ |
+| **`scene_grid`** | Grid of scenes, scripts, or shortcuts | ✅ | ✅ | ✅ | ✅ |
+| **`tv_remote`** | Remote control layout for TVs/boxes | ✅ | ✅ | ✅ | ✅ |
+| **`apple_tv_remote`**| Dedicated Apple TV remote layout | ❌ | ✅ | ❌ | ✅ |
+| **`source_select`** | Media player source selection dropdown | ✅ | ❌ | ❌ | ✅ |
+| **`select`** | Input select helper dropdown | ✅ | ❌ | ❌ | ❌ |
+| **`plex`** | Plex media server on-deck browser | ✅ | ❌ | ❌ | ❌ |
+| **`picture_elements`**| Interactive floorplan and mmWave radar | ✅ | ❌ | ❌ | ❌ |
 
 ### Updates
 
@@ -45,7 +69,7 @@ The same local page can check this repository's [GitHub Releases](https://github
 
 ### Beta builds
 
-For testing fixes before they land in an official release, pushes to `dev` are also published as a rolling **pre-release** (tag `dev-latest`, overwritten by each new push — never picked up by the updater above, which explicitly skips pre-releases). Grab it from the [**online dashboard editor**](https://dckiller51.github.io/astrion-custom-dashboard/): flip the "Version bêta (dev)" switch near the top to reveal the current beta version and a direct APK download link.
+For testing fixes before they land in an official release, pushes to `dev` are also published as a rolling **pre-release** (tag `dev-latest`, overwritten by each new push — never picked up by the updater above, which explicitly skips pre-releases).
 
 The beta installs as a separate app (`com.custom.astrion.debug`) alongside the official release — no signature conflict, no need to uninstall either one to switch between them. Its Home Assistant/Harmony settings are configured independently the first time you install it (see Local configuration above), then kept per install from then on.
 

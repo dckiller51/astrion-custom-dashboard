@@ -43,7 +43,7 @@
                 <button type="button" class="tile tile-appletv" onclick="showView('viewAppleTv')">
                     <span class="tile-icon">📱</span>
                     <span class="tile-name">Apple TV</span>
-                    <span class="tile-count">Coming soon</span>
+                    <span class="tile-count" id="tileAppleTvCount">No Apple TV yet</span>
                 </button>
             </div>
 
@@ -289,14 +289,75 @@
             </div>
         </div>
 
-        <!-- ---- Apple TV (placeholder) --------------------------------------- -->
+        <!-- ---- Apple TV ----------------------------------------------------- -->
         <div id="viewAppleTv" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
             <h2 style="margin-top:0">Apple TV</h2>
-            <div class="hint">
-                Direct Apple TV control isn't built yet — this tile is here so cards will be
-                ready to reference it once it lands. In the meantime, an Apple TV reachable
-                through Home Assistant or a Harmony hub already works via those tiles.
+            <div class="hint" style="margin-bottom:14px">
+                Control an Apple TV directly over your network — no Home Assistant and no Harmony hub needed.
+                Each paired Apple TV shows up as a <code>media_player</code> entity (for example <code>media_player.appletv_salon</code>)
+                that any media player / source card, button or hotkey can use, and the Apple TV remote card can target it too.
+                Your phone or this remote must be on the same network as the Apple TV.
+            </div>
+
+            <div id="appleTvsList" style="margin-bottom:14px"></div>
+            <div class="btn-row">
+                <button type="button" onclick="openDeviceForm('appleTv')">+ Add Apple TV</button>
+            </div>
+
+            <div id="appleTvForm" class="section-box" style="display:none;margin-top:14px">
+                <h3 class="subsection-title" style="margin-top:0">Add an Apple TV</h3>
+                <div id="appleTvScanBox">
+                    <div id="appleTvScanStatus" class="hint">Searching your network…</div>
+                    <div id="appleTvScanResults" style="margin-top:8px"></div>
+                    <div class="btn-row" style="margin-top:10px">
+                        <button type="button" class="secondary" onclick="scanAppleTvs()">Search again</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                    </div>
+                </div>
+                <div id="appleTvPinBox" style="display:none">
+                    <div class="hint" style="margin-bottom:10px">
+                        A 4-digit code is now showing on your TV screen. Enter it below to finish pairing.
+                    </div>
+                    <label>Code shown on the TV</label>
+                    <input type="text" id="appleTvPin" inputmode="numeric" maxlength="4" placeholder="1234" autocomplete="off">
+                    <label>Name</label>
+                    <input type="text" id="appleTvName" placeholder="e.g., Living Room">
+                    <div class="btn-row" style="margin-top:10px">
+                        <button id="appleTvFinishBtn" type="button" onclick="finishAppleTvPairing()">Pair</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                    </div>
+                </div>
+                <div id="appleTvMrpOfferBox" style="display:none">
+                    <div class="hint" style="margin-bottom:10px">
+                        Paired. You can also pair for <strong>Now Playing info</strong> (title, artist, artwork,
+                        position) — this is a separate, optional pairing; your TV will show a second code. Skip it
+                        any time and add it later from the list.
+                    </div>
+                    <div class="btn-row">
+                        <button type="button" onclick="scanAppleTvMrp()">Also get Now Playing info</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()">Skip for now</button>
+                    </div>
+                </div>
+                <div id="appleTvMrpScanBox" style="display:none">
+                    <div id="appleTvMrpScanStatus" class="hint">Searching for the Now Playing service…</div>
+                    <div id="appleTvMrpScanResults" style="margin-top:8px"></div>
+                    <div class="btn-row" style="margin-top:10px">
+                        <button type="button" class="secondary" onclick="scanAppleTvMrp()">Search again</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                    </div>
+                </div>
+                <div id="appleTvMrpPinBox" style="display:none">
+                    <div class="hint" style="margin-bottom:10px">
+                        A second 4-digit code is now showing on your TV. Enter it below to finish.
+                    </div>
+                    <label>Code shown on the TV</label>
+                    <input type="text" id="appleTvMrpPin" inputmode="numeric" maxlength="4" placeholder="1234" autocomplete="off">
+                    <div class="btn-row" style="margin-top:10px">
+                        <button id="appleTvMrpFinishBtn" type="button" onclick="finishAppleTvMrpPairing()">Pair</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                    </div>
+                </div>
             </div>
         </div>
 

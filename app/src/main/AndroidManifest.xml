@@ -9,6 +9,9 @@
     <!-- Wi-Fi + boot -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- mDNS/NSD discovery (Apple TV): some Android builds filter multicast packets by default
+         unless the app explicitly holds a multicast lock (acquired in AppleTvDiscovery). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- Storage access for /sdcard/astrion/dashboard.json (Android 8.1 / HA100) -->

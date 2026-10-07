@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -179,6 +181,14 @@ class MediaPlayerCard : CardRenderer {
                     src.scale(w, h, filter = true).asImageBitmap()
                 }
             }
+        // The "full" variant previously had no way at all to reach MediaBrowser: unlike the
+        // compact variant (long-press opens MediaPlayerDetailDialog, which has its own Browse
+        // button), top_buttons/button_grid can only fire HA services, and full mode is already
+        // meant to be the detailed view, so opening the detail dialog from inside it would be
+        // redundant. Showing the same Browse button directly here — gated on BROWSE_MEDIA, same
+        // as the detail dialog — gives dedicated media pages (built with variant: "full") a way
+        // to launch apps / browse content at all.
+        var showBrowse by remember { mutableStateOf(false) }
         Box(
             modifier =
             Modifier
@@ -199,9 +209,13 @@ class MediaPlayerCard : CardRenderer {
                     artist = text.subtitle ?: text.finalState,
                     art = art,
                     mp = actions::fire,
-                    playerConfig = playerConfig
+                    playerConfig = playerConfig,
+                    onBrowse = { showBrowse = true }
                 )
             )
+        }
+        if (showBrowse) {
+            MediaBrowser(entityId = entityId, client = ctx.client, theme = ctx.theme) { showBrowse = false }
         }
     }
 
@@ -465,7 +479,8 @@ class MediaPlayerCard : CardRenderer {
         val artist: String,
         val art: ImageBitmap?,
         val mp: (String, Array<out Pair<String, Any?>>) -> Unit,
-        val playerConfig: MediaPlayerConfig
+        val playerConfig: MediaPlayerConfig,
+        val onBrowse: () -> Unit
     )
 
     @Composable
@@ -487,11 +502,44 @@ class MediaPlayerCard : CardRenderer {
             FullTopButtons(ctx, playerConfig.topButtons)
             FullArtwork(ctx, e, data.art, playerConfig)
             FullTitleArtist(ctx.theme, data.title, data.artist)
+            if (e?.supports(Feature.BROWSE_MEDIA) == true) {
+                FullBrowseButton(ctx.theme, data.onBrowse)
+            }
             if (e?.attrDouble("media_duration") != null) {
                 MediaProgressBar(e, ctx.theme)
             }
             FullMediaButtonsRow(ctx.theme, mediaButtons, data.mp)
             FullVolumeRow(FullVolumeRowData(data.entityId, e, data.mp, volumeButtons, hasVolumeSlider, ctx.theme))
+        }
+    }
+
+    /** The "Browse" button shown in the full variant when the entity supports BROWSE_MEDIA —
+     * mirrors the one in MediaPlayerDetailDialog, since "full" has no long-press affordance to
+     * reach that dialog and top_buttons/button_grid can only fire HA services, not open
+     * MediaBrowser. See [FullTopButtons]'s doc comment for why this is split out. */
+    @Composable
+    private fun FullBrowseButton(theme: ThemeColors, onBrowse: () -> Unit) {
+        Row(
+            modifier =
+            Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(theme.controlBackground)
+                .tapClickable(onClick = onBrowse)
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.List,
+                contentDescription = null,
+                tint = theme.primaryText,
+                modifier = Modifier.size(16.dp)
+            )
+            Text(
+                stringResource(R.string.media_browse),
+                color = theme.primaryText,
+                fontSize = 13.sp,
+                modifier = Modifier.padding(start = 6.dp)
+            )
         }
     }
 

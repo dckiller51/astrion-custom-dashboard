@@ -15,6 +15,8 @@ config:
   warningsAsErrors: false
 
 complexity:
+  LargeClass:
+    threshold: 1200
   LongMethod:
     threshold: 200 # default is 60 — Compose functions with a lot of UI tend to run long legitimately
   LongParameterList:

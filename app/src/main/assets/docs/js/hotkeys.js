@@ -46,6 +46,55 @@ const ANDROID_TV_COMMANDS = [
   'SYSDOWN', 'SYSUP', 'SYSLEFT', 'SYSRIGHT',
 ];
 
+// Every command name AppleTvCommands.kt's forCommand() recognizes, one
+// canonical spelling each (it accepts several aliases per command — this is
+// just what the hotkey form offers/stores). Covers the trackpad directions
+// and Select/Play-Pause/volume/power that the apple_tv_remote card's fixed
+// controls already send, plus every id from ATV_EXTRA_BUTTONS below.
+const ATV_ALL_COMMANDS = [
+  { id: 'Up', label: 'Up' },
+  { id: 'Down', label: 'Down' },
+  { id: 'Left', label: 'Left' },
+  { id: 'Right', label: 'Right' },
+  { id: 'Select', label: 'Select' },
+  { id: 'PlayPause', label: 'Play / Pause' },
+  { id: 'Play', label: 'Play' },
+  { id: 'Pause', label: 'Pause' },
+  { id: 'Next', label: 'Next track' },
+  { id: 'Previous', label: 'Previous track' },
+  { id: 'Wake', label: 'Wake' },
+  { id: 'Sleep', label: 'Sleep' },
+  { id: 'Menu', label: 'Menu' },
+  { id: 'Home', label: 'Home' },
+  { id: 'Siri', label: 'Siri' },
+  { id: 'Screensaver', label: 'Screensaver' },
+  { id: 'Guide', label: 'Guide' },
+  { id: 'VolumeUp', label: 'Volume +' },
+  { id: 'VolumeDown', label: 'Volume −' },
+  { id: 'ControlCenter', label: 'Control Center' },
+  { id: 'ChannelUp', label: 'Channel +' },
+  { id: 'ChannelDown', label: 'Channel −' }
+];
+
+/** Populates the Apple TV picker for the hotkey form with every paired Apple TV, selecting [selectedEntityId] if given. */
+async function populateHkAppleTvSelect(selectedEntityId) {
+  const select = document.getElementById('hkAppleTv');
+  if (!select) return;
+  const tvs = await loadNativeAppleTvs();
+  select.innerHTML = tvs.length
+    ? tvs.map(tv => `<option value="${tv.entityId}">${tv.name} (${tv.entityId})</option>`).join('')
+    : '<option value="">— no Apple TV paired yet —</option>';
+  if (selectedEntityId) {
+    if (![...select.options].some(opt => opt.value === selectedEntityId)) {
+      const missing = document.createElement('option');
+      missing.value = selectedEntityId;
+      missing.textContent = selectedEntityId + ' (not paired)';
+      select.appendChild(missing);
+    }
+    select.value = selectedEntityId;
+  }
+}
+
 // Returns the command list to suggest for a given remote entity, or null
 // when no live HA state is available (HA not configured, or offline). Prefers
 // the entity's own `commands_list` attribute when present; otherwise falls
@@ -96,7 +145,7 @@ function populateHkPageSelect() {
     `<optgroup label="Shortcuts">${shortcutOptions}</optgroup>`;
 }
 
-function updateHotkeyActionInputs() {
+function updateHotkeyActionInputs(preselect) {
   const action = document.getElementById('hkAction').value;
   const container = document.getElementById('dynamicHotkeyInputs');
   if (action === 'page') {
@@ -131,6 +180,16 @@ function updateHotkeyActionInputs() {
     `;
     attachEntityAutocomplete(document.getElementById('hkEntityId'), 'remote');
     refreshRemoteCommandDatalist();
+  } else if (action === 'appleTvCommand') {
+    container.innerHTML = `
+      <label>Apple TV</label>
+      <select id="hkAppleTv"></select>
+      <label>Command</label>
+      <select id="hkAppleTvCommand">
+        ${ATV_ALL_COMMANDS.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+      </select>
+    `;
+    populateHkAppleTvSelect(preselect && preselect.appleTvEntityId);
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       renderHarmonyHubSelect(container, 'command', 'hk');
@@ -156,6 +215,10 @@ function describeHotkey(h) {
   if (h.service === 'remote.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
     return `→ remote ${h.entityId || '?'} / ${cmd}`;
+  }
+  if (h.service === 'astrion_appletv.send_command') {
+    const cmd = h.data && h.data.command ? h.data.command : '?';
+    return `→ Apple TV ${h.entityId || '?'} / ${cmd}`;
   }
   if (h.service) return `→ ${h.service}${h.entityId ? ' (' + h.entityId + ')' : ''}`;
   if (h.harmonyCommand) return `→ Harmony ${h.harmonyDevice || '?'} / ${h.harmonyCommand}`;
@@ -240,9 +303,9 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
-  updateHotkeyActionInputs();
+  updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
 
   if (action === 'page') {
     document.getElementById('hkPage').value = h.page || '';
@@ -258,6 +321,8 @@ async function editHotkey(scope, listType, i) {
     document.getElementById('hkEntityId').value = h.entityId || '';
     document.getElementById('hkCommand').value = (h.data && h.data.command) || '';
     refreshRemoteCommandDatalist();
+  } else if (action === 'appleTvCommand') {
+    document.getElementById('hkAppleTvCommand').value = (h.data && h.data.command) || '';
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       const hubId = h.hub || (harmonyHubsList[0] && harmonyHubsList[0].localId) || '';
@@ -335,6 +400,13 @@ function addHotkey() {
     if (!entityId || !command) { alert('Pick a remote entity and a command.'); return; }
     hkObj.service = 'remote.send_command';
     hkObj.entityId = entityId;
+    hkObj.data = { command };
+  } else if (action === 'appleTvCommand') {
+    const appleTv = document.getElementById('hkAppleTv').value.trim();
+    const command = document.getElementById('hkAppleTvCommand').value.trim();
+    if (!appleTv || !command) { alert('Pick an Apple TV and a command.'); return; }
+    hkObj.service = 'astrion_appletv.send_command';
+    hkObj.entityId = appleTv;
     hkObj.data = { command };
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {

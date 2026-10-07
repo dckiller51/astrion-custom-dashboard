@@ -342,8 +342,20 @@ function updateCardFormInputs() {
     window._pendingGridItems = window._pendingGridItems || [];
     renderGridItemsList(type);
   } else if (type === 'apple_tv_remote') {
-    container.innerHTML = `<div id="atvHarmonyPicker"></div>`;
+    container.innerHTML = `
+      <div id="atvSourceBox" style="display:none">
+        <label>Control via</label>
+        <select id="atvSource" onchange="onAtvSourceChange()">
+          <option value="direct">Apple TV (direct — no Home Assistant needed)</option>
+          <option value="harmony">Harmony hub</option>
+        </select>
+        <div id="atvDirectPicker"><label>Apple TV</label><select id="atvDirectSelect"></select></div>
+      </div>
+      <div id="atvHarmonyPicker"></div>
+      <label>Buttons (below the trackpad)</label>
+      <div id="atvButtonsBox">${atvButtonsCheckboxesHtml()}</div>`;
     renderAppleTvHarmonyFields();
+    initAtvSource();
   } else if (type === 'tv_remote') {
     container.innerHTML = `
       <label>Name</label><input type="text" id="optName" placeholder="e.g., Living Room TV">
@@ -489,6 +501,77 @@ function onGiIrDeviceChange() {
   datalist.innerHTML = ids.map(id => `<option value="${id}">`).join('');
 }
 
+/** Apple TVs paired directly in the Devices page (fetched fresh each time the form opens). */
+async function loadNativeAppleTvs() {
+  try {
+    const res = await fetch('/devices-config');
+    const data = await res.json();
+    return Array.isArray(data.appleTvs) ? data.appleTvs : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/** True when the Apple TV remote form is set to the direct (Companion) source. */
+function atvDirectActive() {
+  const box = document.getElementById('atvSourceBox');
+  const source = document.getElementById('atvSource');
+  return !!box && box.style.display !== 'none' && !!source && source.value === 'direct';
+}
+
+function onAtvSourceChange() {
+  const direct = atvDirectActive();
+  const directPicker = document.getElementById('atvDirectPicker');
+  const harmonyPicker = document.getElementById('atvHarmonyPicker');
+  if (directPicker) directPicker.style.display = direct ? '' : 'none';
+  if (harmonyPicker) harmonyPicker.style.display = direct ? 'none' : '';
+}
+
+/** Shows the "Control via" choice only when at least one Apple TV is paired; otherwise the form is exactly as before (Harmony only). */
+async function initAtvSource() {
+  const tvs = await loadNativeAppleTvs();
+  const box = document.getElementById('atvSourceBox');
+  if (!box) return;
+  if (!tvs.length) { box.style.display = 'none'; onAtvSourceChange(); return; }
+  const select = document.getElementById('atvDirectSelect');
+  select.innerHTML = '';
+  tvs.forEach(tv => {
+    const option = document.createElement('option');
+    option.value = tv.entityId;
+    option.textContent = `${tv.name} (${tv.entityId})`;
+    select.appendChild(option);
+  });
+  box.style.display = '';
+  document.getElementById('atvSource').value = 'direct';
+  onAtvSourceChange();
+}
+
+// Keep in sync with AppleTvRemoteCard.kt's ExtraButtons.CATALOG (ids and default selection).
+const ATV_EXTRA_BUTTONS = [
+  { id: 'Menu', label: 'Menu' },
+  { id: 'Home', label: 'Home' },
+  { id: 'Siri', label: 'Siri' },
+  { id: 'Screensaver', label: 'Screensaver' },
+  { id: 'Guide', label: 'Guide' },
+  { id: 'VolumeUp', label: 'Volume +' },
+  { id: 'VolumeDown', label: 'Volume −' },
+  { id: 'ControlCenter', label: 'Control Center' }
+];
+const ATV_DEFAULT_BUTTONS = ['Menu', 'Home'];
+
+function atvButtonsCheckboxesHtml(selected) {
+  const checked = selected && selected.length ? selected : ATV_DEFAULT_BUTTONS;
+  return ATV_EXTRA_BUTTONS.map(b => `
+    <label class="inline-check">
+      <input type="checkbox" class="atv-button-check" value="${b.id}" ${checked.includes(b.id) ? 'checked' : ''}>
+      ${b.label}
+    </label>`).join('');
+}
+
+function selectedAtvButtons() {
+  return [...document.querySelectorAll('.atv-button-check:checked')].map(el => el.value);
+}
+
 function renderAppleTvHarmonyFields() {
   const container = document.getElementById('atvHarmonyPicker');
   if (!container) return;
@@ -501,6 +584,26 @@ function renderAppleTvHarmonyFields() {
 
 async function fillAppleTvHarmonyFields(o) {
   renderAppleTvHarmonyFields();
+  const buttonsBox = document.getElementById('atvButtonsBox');
+  if (buttonsBox) buttonsBox.innerHTML = atvButtonsCheckboxesHtml(o.buttons);
+  await initAtvSource();
+  const box = document.getElementById('atvSourceBox');
+  if (o.appleTv && box && box.style.display !== 'none') {
+    document.getElementById('atvSource').value = 'direct';
+    const select = document.getElementById('atvDirectSelect');
+    if (![...select.options].some(opt => opt.value === o.appleTv)) {
+      const missing = document.createElement('option'); // a card pointing at an Apple TV that is no longer paired
+      missing.value = o.appleTv; missing.textContent = o.appleTv + ' (not paired)';
+      select.appendChild(missing);
+    }
+    select.value = o.appleTv;
+    onAtvSourceChange();
+    return;
+  }
+  if (box && box.style.display !== 'none') {
+    document.getElementById('atvSource').value = 'harmony';
+    onAtvSourceChange();
+  }
   if (harmonyAvailable) {
     document.getElementById('atvHub').value = o.hub || '';
     if (o.hub) {
@@ -1252,7 +1355,11 @@ function addCardToPage() {
     if (_th) newCard.options.tile_height = _th;
     window._pendingGridItems = [];
   } else if (type === 'apple_tv_remote') {
-    if (harmonyAvailable) {
+    if (atvDirectActive()) {
+      const appleTv = document.getElementById('atvDirectSelect').value.trim();
+      if (!appleTv) { alert('Pick an Apple TV.'); return; }
+      newCard.options.appleTv = appleTv;
+    } else if (harmonyAvailable) {
       const hub = document.getElementById('atvHub').value.trim();
       const deviceId = document.getElementById('atvDeviceSelect').value.trim();
       if (!hub || !deviceId) { alert('Pick a hub and a device.'); return; }
@@ -1261,6 +1368,7 @@ function addCardToPage() {
     } else {
       newCard.options.deviceId = document.getElementById('optDeviceId').value || '';
     }
+    newCard.options.buttons = selectedAtvButtons();
   } else if (type === 'tv_remote') {
     newCard.options.name = document.getElementById('optName').value || 'TV';
     newCard.options.remote_entity = document.getElementById('optRemoteEntity').value || '';
