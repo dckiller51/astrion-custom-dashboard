@@ -122,6 +122,7 @@
     <string name="media_no_items">Aucun élément</string>
     <string name="media_nothing_here">Rien ici</string>
     <string name="media_default_title">Médias</string>
+    <string name="media_apps_title">Applications</string>
     <string name="media_load_timeout">Impossible de charger les médias (délai dépassé)</string>
     <string name="media_load_failed">Impossible de charger les médias</string>
     <string name="media_browse">Parcourir</string>

@@ -113,6 +113,49 @@ private suspend fun loadFolder(context: Context, client: HaClient, entityId: Str
  */
 private fun isAppsOrRadiosContentType(ctype: String?): Boolean = ctype == "radios" || ctype == "apps" || ctype?.startsWith("app-") == true
 
+/**
+ * Resolves what a short tap on a browser row should do. Split out of [MediaBrowserBody] purely to
+ * keep that composable's Cyclomatic Complexity under detekt's threshold — same reasoning as
+ * [FullTopButtons] and friends in MediaPlayerCard, just for this file.
+ */
+private fun handleItemClick(
+    item: MediaItem,
+    entityId: String,
+    client: HaClient,
+    stack: MutableList<Pair<String?, String?>>,
+    onClose: () -> Unit
+) {
+    when {
+        item.canExpand -> stack.add(item.contentId to item.contentType)
+        item.canPlay -> {
+            client.playMedia(entityId, item.contentId, item.contentType)
+            onClose()
+        }
+        // Home Assistant's Apple TV integration lists each
+        // installed app as media_content_type "app" with both
+        // can_play and can_expand false — it's neither a folder
+        // nor a conventional "playable" item by those flags, but
+        // media_player.play_media does accept "app" and launches
+        // it by bundle ID, exactly like any other content type.
+        // Without this branch a tap on an app silently did
+        // nothing, matched by neither case above.
+        item.contentType == "app" -> {
+            client.playMedia(entityId, item.contentId, item.contentType)
+            onClose()
+        }
+        // Apps/Radios data from this integration is unreliable in
+        // both directions (see isAppsOrRadiosContentType's doc) —
+        // here specifically, a genuine sub-folder came back marked
+        // can_expand=false despite having real children underneath.
+        // Try browsing into it anyway; if that turns out to have
+        // been correct after all (a true dead end), the empty-
+        // folder fallback in MediaBrowser's reload effect catches
+        // it and plays the item instead.
+        isAppsOrRadiosContentType(item.contentType) ->
+            stack.add(item.contentId to item.contentType)
+    }
+}
+
 @Composable
 fun MediaBrowser(entityId: String, client: HaClient, theme: ThemeColors = ThemeColors.Default, onClose: () -> Unit) {
     // Navigation stack of (contentId, contentType); root is (null, null).
@@ -230,25 +273,7 @@ private fun MediaBrowserBody(
                             MediaRow(
                                 item = item,
                                 theme = theme,
-                                onClick = {
-                                    when {
-                                        item.canExpand -> stack.add(item.contentId to item.contentType)
-                                        item.canPlay -> {
-                                            client.playMedia(entityId, item.contentId, item.contentType)
-                                            onClose()
-                                        }
-                                        // Apps/Radios data from this integration is unreliable in
-                                        // both directions (see isAppsOrRadiosContentType's doc) —
-                                        // here specifically, a genuine sub-folder came back marked
-                                        // can_expand=false despite having real children underneath.
-                                        // Try browsing into it anyway; if that turns out to have
-                                        // been correct after all (a true dead end), the empty-
-                                        // folder fallback in MediaBrowser's reload effect catches
-                                        // it and plays the item instead.
-                                        isAppsOrRadiosContentType(item.contentType) ->
-                                            stack.add(item.contentId to item.contentType)
-                                    }
-                                },
+                                onClick = { handleItemClick(item, entityId, client, stack, onClose) },
                                 // A playable item gets the popup outright (an album/playlist
                                 // is often both can_play and can_expand). A can_expand-only
                                 // item ALSO gets it now: some integrations (confirmed for Home
@@ -388,7 +413,9 @@ private fun MediaRow(item: MediaItem, theme: ThemeColors, onClick: () -> Unit, o
         )
         if (item.canExpand) {
             Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = theme.mutedText)
-        } else if (item.canPlay) {
+        } else if (item.canPlay || item.contentType == "app") {
+            // An "app" item is launched the same way a playable item is (see the click handler
+            // above), so it gets the same play icon rather than looking like a dead end.
             Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = theme.accent)
         }
     }

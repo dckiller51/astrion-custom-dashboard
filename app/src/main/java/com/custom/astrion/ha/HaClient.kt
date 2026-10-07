@@ -141,6 +141,47 @@ class HaClient(
     // Hz) can't force the whole UI to repaint faster than the SoC can handle.
     private val entityStore = ConcurrentHashMap<String, EntityState>()
 
+    // Entities that don't come from Home Assistant but from devices this app
+    // drives directly (e.g. an Apple TV over its Companion link). They're
+    // merged into [entities] alongside the HA ones, so every card, hotkey and
+    // picker that understands a media_player entity works with them unchanged
+    // — including when no Home Assistant is configured at all.
+    private val localEntityStore = ConcurrentHashMap<String, EntityState>()
+
+    /**
+     * Optional interceptor for [callService]: return true to consume a call
+     * (it is then NOT sent to Home Assistant). Used to route service calls
+     * aimed at a locally-driven entity to the device that owns it.
+     */
+    @Volatile
+    var localServiceHandler: ((ServiceCall) -> Boolean)? = null
+
+    /**
+     * Optional interceptor for [browseMedia]: for an entity this handler owns, return the same
+     * `result` shape Home Assistant's own `media_player/browse_media` reply carries (a `title` and
+     * a `children` array of `media_content_id`/`media_content_type`/`can_expand`/`can_play`
+     * items) — or null to let the ordinary HA round-trip happen instead for an entity it doesn't
+     * recognize. Used so a locally-driven entity (e.g. a directly-paired Apple TV's installed
+     * apps) can be browsed through [com.custom.astrion.cards.impl.MediaBrowser] exactly like a
+     * real Home Assistant media_player, with no Home Assistant involved at all.
+     */
+    @Volatile
+    var localBrowseMediaHandler: ((entityId: String, contentId: String?, contentType: String?) -> JsonObject?)? = null
+
+    /** Adds or replaces a locally-driven entity and republishes [entities]. */
+    fun setLocalEntity(state: EntityState) {
+        localEntityStore[state.entityId] = state
+        _entities.value = mergedEntities()
+    }
+
+    /** Removes a locally-driven entity and republishes [entities]. */
+    fun removeLocalEntity(entityId: String) {
+        if (localEntityStore.remove(entityId) != null) _entities.value = mergedEntities()
+    }
+
+    private fun mergedEntities(): EntityMap =
+        if (localEntityStore.isEmpty()) HashMap(entityStore) else HashMap(entityStore).apply { putAll(localEntityStore) }
+
     @Volatile private var entitiesDirty = false
 
     @Volatile private var publisherStarted = false
@@ -170,6 +211,7 @@ class HaClient(
 
     /** Fire an HA service call, e.g. light.toggle on light.kitchen. */
     fun callService(call: ServiceCall) {
+        if (localServiceHandler?.invoke(call) == true) return
         val target =
             buildJsonObject {
                 call.entityId?.let { put("entity_id", it) }
@@ -313,6 +355,7 @@ class HaClient(
      * Pass a null contentId/type to browse the root.
      */
     suspend fun browseMedia(entityId: String, contentId: String? = null, contentType: String? = null): JsonObject? {
+        localBrowseMediaHandler?.invoke(entityId, contentId, contentType)?.let { return it }
         val id = idCounter.getAndIncrement()
         val deferred = CompletableDeferred<JsonObject>()
         pending[id] = deferred
@@ -450,7 +493,7 @@ class HaClient(
                 delay(PUBLISH_INTERVAL)
                 if (entitiesDirty) {
                     entitiesDirty = false
-                    _entities.value = HashMap(entityStore)
+                    _entities.value = mergedEntities()
                 }
             }
         }
@@ -517,7 +560,7 @@ class HaClient(
                 )
         }
         // Seed is important — publish immediately so the first frame has data.
-        _entities.value = HashMap(entityStore)
+        _entities.value = mergedEntities()
     }
 
     /** state_changed events carry event.data.new_state. */

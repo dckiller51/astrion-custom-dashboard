@@ -134,7 +134,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .tile.tile-harmony .tile-icon { background: rgba(255,183,77,0.14); color: #FFB74D; }
   .tile.tile-ir { border-color: #3d2333; } .tile.tile-ir:hover, .tile.tile-ir:focus-visible { border-color: #FF4FA3; }
   .tile.tile-ir .tile-icon { background: rgba(255,79,163,0.14); color: #FF4FA3; }
-  .tile.tile-appletv { opacity: 0.6; cursor: default; }
+  .tile.tile-appletv { border-color: #333; } .tile.tile-appletv:hover, .tile.tile-appletv:focus-visible { border-color: #d8d8d8; }
   .tile.tile-appletv .tile-icon { background: rgba(216,216,216,0.1); color: #d8d8d8; }
 
   .utility-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 28px; }

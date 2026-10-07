@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.custom.astrion.appletv.AppleTvRegistry
+import com.custom.astrion.appletv.installAppleTv
 import com.custom.astrion.cards.DeviceSettingsState
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.DashboardConfig
@@ -312,6 +314,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var harmonyRegistry: HarmonyHubRegistry
     private lateinit var extenderRegistry: ExtenderRegistry
 
+    private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
+
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
      * Dashboard.kt's own Compose-scoped instance; this one is MainActivity's
@@ -506,6 +510,7 @@ class MainActivity : ComponentActivity() {
                 onStartActivity = { id -> runOnUiThread { startActivityFn?.invoke(id) } },
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
+        appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -517,6 +522,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        appleTvRegistry.stop()
 
         initClientsAndServer()
         if (configServerEnabled) configServerSupervisor.start()
@@ -1098,6 +1104,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        appleTvRegistry.stop()
         super.onDestroy()
     }
 }

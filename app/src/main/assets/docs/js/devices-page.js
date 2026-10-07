@@ -18,6 +18,11 @@
 let haConfig = { url: '', token: '', webhookId: '' };
 let harmonyHubs = [];      // full [{localId, name, ip, hubId}]
 let extenders = [];        // full [{localId, name, host}]
+let appleTvs = [];         // full [{localId, name, entityId, host, port, serviceName, credentials}]
+let appleTvScanResults = []; // last /appletv-scan result
+let appleTvPairing = null;  // { sessionId, device } while waiting for the PIN
+let appleTvMrpPairing = null; // { sessionId, device, localId } while waiting for the second (MRP) PIN
+let appleTvMrpScanResults = []; // last /appletv-mrp-scan result
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
 
@@ -58,6 +63,7 @@ async function loadAll() {
     haConfig = data.ha || { url: '', token: '', webhookId: '' };
     harmonyHubs = Array.isArray(data.harmonyHubs) ? data.harmonyHubs : [];
     extenders = Array.isArray(data.extenders) ? data.extenders : [];
+    appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
   } catch (e) {
     showToast("Couldn't reach this device — check the connection, then reload this page.", 'error');
     console.error('Failed to load /devices-config', e);
@@ -71,8 +77,31 @@ async function loadAll() {
   dashboardData.irDevices = fullDashboard.irDevices || [];
   dashboardData.haDevices = fullDashboard.haDevices || [];
   dashboardData.harmonyAliases = fullDashboard.harmonyAliases || {};
+  await reconcileAppleTvHaDevices();
   await refreshHaStates();
   renderDevicesList();
+}
+
+/** One-time catch-up for Apple TVs paired before auto-sync into haDevices
+ * existed (or added from another remote): makes sure every currently paired
+ * Apple TV has a matching catalog entry, without waiting for the person to
+ * rename or re-pair it. No-op, no save, once everything is already in sync. */
+async function reconcileAppleTvHaDevices() {
+  dashboardData.haDevices = dashboardData.haDevices || [];
+  let changed = false;
+  appleTvs.forEach(tv => {
+    const id = 'appletv_' + tv.localId;
+    const existing = dashboardData.haDevices.find(d => d.id === id);
+    if (!existing) {
+      dashboardData.haDevices.push({ id, domain: 'media_player', entityId: tv.entityId, name: tv.name });
+      changed = true;
+    } else if (existing.entityId !== tv.entityId || existing.name !== tv.name) {
+      existing.entityId = tv.entityId;
+      existing.name = tv.name;
+      changed = true;
+    }
+  });
+  if (changed) await saveHaDevicesSilently();
 }
 
 async function refreshHaStates() {
@@ -140,6 +169,27 @@ function renderDevicesList() {
       : '<div class="hint">No extender yet.</div>';
   }
 
+  const tileAppleTvCount = document.getElementById('tileAppleTvCount');
+  if (tileAppleTvCount) {
+    tileAppleTvCount.textContent = appleTvs.length
+      ? `${appleTvs.length} Apple TV${appleTvs.length === 1 ? '' : 's'}`
+      : 'No Apple TV yet';
+  }
+  const appleTvList = document.getElementById('appleTvsList');
+  if (appleTvList) {
+    appleTvList.innerHTML = appleTvs.length
+      ? appleTvs.map(tv => {
+          const st = haStates && haStates[tv.entityId] ? haStates[tv.entityId].state : null;
+          const status = st ? (st === 'unavailable' ? '○ not reachable' : '● connected') : '';
+          const nowPlayingAction = tv.mrpCredentials
+            ? '<span style="color:#888">· Now Playing info on</span>'
+            : `<span class="remove" style="color:#00E5FF" onclick="scanAppleTvMrp('${tv.localId}')">+ Now Playing info</span>`;
+          return `<div class="list-item"><span>${atvEsc(tv.name)} <span style="color:#888">(<code>${atvEsc(tv.entityId)}</code>${status ? ' · ' + status : ''})</span></span>` +
+            `<span>${nowPlayingAction} <span class="remove" style="color:#00E5FF" onclick="renameAppleTv('${tv.localId}')">✎</span> <span class="remove" onclick="removeAppleTv('${tv.localId}')">✕</span></span></div>`;
+        }).join('')
+      : '<div class="hint">No Apple TV yet.</div>';
+  }
+
   const tileIrCount = document.getElementById('tileIrCount');
   if (tileIrCount) {
     tileIrCount.textContent = dashboardData.irDevices.length
@@ -172,12 +222,27 @@ function showView(id) {
 
 // ---- form show/hide ---------------------------------------------------------
 
+/** Sets [id]'s display style if the element is actually in the DOM right now; a silent no-op
+ * otherwise. Several flows below call closeDeviceForms()/openDeviceForm() back-to-back with other
+ * renders (e.g. persistHaAndHubs() already closes every form on save, so a caller that also
+ * closes them afterward would previously crash on the second, now-redundant call) — this keeps
+ * that merely a no-op instead of a thrown TypeError that aborts whatever else that handler meant
+ * to do (and surfaces to the user as a misleading "Save failed"/"Pairing failed" toast even when
+ * the save itself already succeeded). */
+function setDisplay(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = value;
+}
+
 function closeDeviceForms() {
-  document.getElementById('haForm').style.display = 'none';
-  document.getElementById('haEntityForm').style.display = 'none';
-  document.getElementById('harmonyForm').style.display = 'none';
-  document.getElementById('extenderForm').style.display = 'none';
-  document.getElementById('irForm').style.display = 'none';
+  setDisplay('haForm', 'none');
+  setDisplay('haEntityForm', 'none');
+  setDisplay('harmonyForm', 'none');
+  setDisplay('extenderForm', 'none');
+  setDisplay('appleTvForm', 'none');
+  appleTvPairing = null;
+  appleTvMrpPairing = null;
+  setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
   editingIrDevice = null;
@@ -218,6 +283,10 @@ async function openDeviceForm(type) {
     document.getElementById('saveExtenderBtn').textContent = 'Save';
     document.getElementById('removeExtenderBtn').style.display = 'none';
     document.getElementById('extenderForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else if (type === 'appleTv') {
+    document.getElementById('appleTvForm').style.display = '';
+    document.getElementById('appleTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    scanAppleTvs();
   } else if (type === 'ir') {
     document.getElementById('irForm').style.display = '';
     renderIrTargetOptions();
@@ -256,7 +325,7 @@ async function removeHa() {
   await persistHaAndHubs();
 }
 
-/** Always resends the full Harmony hub AND extender lists alongside HA
+/** Always resends the full Harmony hub, extender AND Apple TV lists alongside HA
  * fields — /save-connection replaces all three together, so omitting
  * either here would wipe it even though this form never touched it. */
 async function persistHaAndHubs() {
@@ -280,6 +349,21 @@ async function persistHaAndHubs() {
       body.append('extender_host[]', ext.host || '');
       body.append('extender_mac[]', ext.mac || '');
     });
+    body.set('atv_present', '1'); // tells the device this form carries the Apple TV list (even if empty)
+    appleTvs.forEach(tv => {
+      body.append('atv_localid[]', tv.localId || '');
+      body.append('atv_name[]', tv.name || '');
+      body.append('atv_entityid[]', tv.entityId || '');
+      body.append('atv_host[]', tv.host || '');
+      body.append('atv_port[]', tv.port || 0);
+      body.append('atv_service[]', tv.serviceName || '');
+      body.append('atv_credentials[]', tv.credentials || '');
+      body.append('atv_mrphost[]', tv.mrpHost || '');
+      body.append('atv_mrpport[]', tv.mrpPort || 0);
+      body.append('atv_mrpservice[]', tv.mrpServiceName || '');
+      body.append('atv_mrpcredentials[]', tv.mrpCredentials || '');
+      body.append('atv_mrptransport[]', tv.mrpTransport || 'airplay');
+    });
     const res = await fetch('/save-connection', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -293,6 +377,306 @@ async function persistHaAndHubs() {
     showToast('Save failed: ' + e, 'error');
   } finally {
     if (btn) { btn.textContent = originalText; btn.disabled = false; }
+  }
+}
+
+// ---- Apple TV (direct, no Home Assistant) --------------------------------
+
+/**
+ * Keeps dashboardData.haDevices (the catalog the media_player / source_select
+ * / etc. card pickers read from — see the "Home Assistant Device" section
+ * below) in sync with the media_player entity a paired Apple TV publishes.
+ * Without this, using an Apple TV in anything other than the Apple TV remote
+ * card would need a separate, easy-to-miss "Add device" step; pairing it
+ * already is that explicit step, so this makes the sync automatic.
+ */
+function upsertAppleTvHaDevice(tv) {
+  dashboardData.haDevices = dashboardData.haDevices || [];
+  const id = 'appletv_' + tv.localId;
+  const existing = dashboardData.haDevices.find(d => d.id === id);
+  if (existing) {
+    existing.entityId = tv.entityId;
+    existing.name = tv.name;
+  } else {
+    dashboardData.haDevices.push({ id, domain: 'media_player', entityId: tv.entityId, name: tv.name });
+  }
+}
+
+function removeAppleTvHaDevice(localId) {
+  dashboardData.haDevices = (dashboardData.haDevices || []).filter(d => d.id !== 'appletv_' + localId);
+}
+
+/** Saves dashboardData.haDevices only — no toast/button/UI side effects, so
+ * it's safe to call from flows (pairing, rename, remove) that aren't the
+ * "Add device" form itself. Errors still surface via a toast. */
+async function saveHaDevicesSilently() {
+  try {
+    const payload = { ...fullDashboard, haDevices: dashboardData.haDevices };
+    const form = new FormData();
+    form.append('file', new Blob([JSON.stringify(payload)], { type: 'application/json' }), 'dashboard.json');
+    const res = await fetch('/dashboard.json', { method: 'POST', body: form });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    fullDashboard = payload;
+  } catch (e) {
+    showToast('Could not update the media player catalog: ' + e, 'error');
+  }
+}
+
+function atvEsc(text) {
+  return String(text == null ? '' : text).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/** Browses the LAN for Apple TVs (the device does the mDNS lookup) and lists them. */
+async function scanAppleTvs() {
+  appleTvPairing = null;
+  appleTvMrpPairing = null;
+  document.getElementById('appleTvScanBox').style.display = '';
+  document.getElementById('appleTvPinBox').style.display = 'none';
+  document.getElementById('appleTvMrpOfferBox').style.display = 'none';
+  document.getElementById('appleTvMrpScanBox').style.display = 'none';
+  document.getElementById('appleTvMrpPinBox').style.display = 'none';
+  const status = document.getElementById('appleTvScanStatus');
+  const results = document.getElementById('appleTvScanResults');
+  status.textContent = 'Searching your network…';
+  results.innerHTML = '';
+  try {
+    const res = await fetch('/appletv-scan');
+    const data = await res.json();
+    appleTvScanResults = Array.isArray(data.devices) ? data.devices : [];
+  } catch (e) {
+    appleTvScanResults = [];
+    status.textContent = "Couldn't search: " + e;
+    return;
+  }
+  if (!appleTvScanResults.length) {
+    status.textContent = 'No Apple TV found. Make sure it is awake and on the same network as this remote, then search again.';
+    return;
+  }
+  status.textContent = 'Choose the Apple TV to pair:';
+  results.innerHTML = appleTvScanResults.map((tv, i) => {
+    const known = appleTvs.some(x => x.serviceName === tv.serviceName);
+    const action = known
+      ? '<span style="color:#888">already added</span>'
+      : `<button type="button" onclick="startAppleTvPairing(${i})">Pair</button>`;
+    return `<div class="list-item"><span>${atvEsc(tv.name)} <span style="color:#888">(${atvEsc(tv.model || 'Apple TV')} · ${atvEsc(tv.host)})</span></span>${action}</div>`;
+  }).join('');
+}
+
+/** Asks the Apple TV to show its PIN, then reveals the code entry. */
+async function startAppleTvPairing(index) {
+  const device = appleTvScanResults[index];
+  if (!device) return;
+  const status = document.getElementById('appleTvScanStatus');
+  status.textContent = 'Contacting ' + device.name + '…';
+  try {
+    const body = new URLSearchParams({ host: device.host, port: String(device.port) });
+    const res = await fetch('/appletv-pair-start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+    appleTvPairing = { sessionId: data.sessionId, device };
+  } catch (e) {
+    status.textContent = 'Could not start pairing: ' + e.message;
+    return;
+  }
+  document.getElementById('appleTvScanBox').style.display = 'none';
+  document.getElementById('appleTvPinBox').style.display = '';
+  document.getElementById('appleTvPin').value = '';
+  document.getElementById('appleTvName').value = device.name || '';
+  document.getElementById('appleTvPin').focus();
+}
+
+function uniqueAppleTvEntityId(name, ignoreLocalId) {
+  const base = 'media_player.appletv_' + slugify(name, 'tv');
+  const taken = id => appleTvs.some(t => t.entityId === id && t.localId !== ignoreLocalId) || (haStates && haStates[id]);
+  let id = base;
+  let n = 2;
+  while (taken(id)) id = base + '_' + (n++);
+  return id;
+}
+
+async function finishAppleTvPairing() {
+  if (!appleTvPairing) return;
+  const pin = document.getElementById('appleTvPin').value.trim();
+  const name = document.getElementById('appleTvName').value.trim() || appleTvPairing.device.name || 'Apple TV';
+  if (!/^\d{4}$/.test(pin)) { showToast('Enter the 4-digit code shown on the TV.', 'error'); return; }
+  const btn = document.getElementById('appleTvFinishBtn');
+  btn.disabled = true;
+  btn.textContent = 'Pairing…';
+  try {
+    const body = new URLSearchParams({ sessionId: appleTvPairing.sessionId, pin });
+    const res = await fetch('/appletv-pair-finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+    const device = appleTvPairing.device;
+    const existing = appleTvs.find(t => t.localId === data.localId);
+    const entry = {
+      localId: data.localId,
+      name,
+      entityId: existing ? existing.entityId : uniqueAppleTvEntityId(name, data.localId),
+      host: device.host,
+      port: device.port,
+      serviceName: device.serviceName,
+      credentials: data.credentials
+    };
+    appleTvs = existing ? appleTvs.map(t => (t.localId === data.localId ? entry : t)) : appleTvs.concat(entry);
+    appleTvPairing = null;
+    btn.disabled = false;
+    btn.textContent = 'Pair';
+    upsertAppleTvHaDevice(entry);
+    await persistHaAndHubs();
+    await saveHaDevicesSilently();
+    showToast('Apple TV paired — its entity is ' + entry.entityId);
+    if (!entry.mrpCredentials) {
+      // persistHaAndHubs() above already closed every form, including this one's parent — reopen
+      // it so the "Now Playing info" offer below is actually visible instead of hidden inside a
+      // display:none container.
+      setDisplay('appleTvForm', '');
+      setDisplay('appleTvPinBox', 'none');
+      setDisplay('appleTvMrpOfferBox', '');
+      document.getElementById('appleTvMrpOfferBox').dataset.localId = entry.localId;
+    } else {
+      closeDeviceForms();
+    }
+  } catch (e) {
+    showToast('Pairing failed: ' + e.message, 'error');
+    // The device drops the pairing session after a failed attempt, so start over from the list.
+    btn.disabled = false;
+    btn.textContent = 'Pair';
+    scanAppleTvs();
+  }
+}
+
+async function renameAppleTv(localId) {
+  const tv = appleTvs.find(t => t.localId === localId);
+  if (!tv) return;
+  const name = prompt('Name for this Apple TV:', tv.name);
+  if (name === null || !name.trim()) return;
+  tv.name = name.trim(); // the entity id is kept, so existing cards keep working
+  upsertAppleTvHaDevice(tv);
+  await persistHaAndHubs();
+  await saveHaDevicesSilently();
+}
+
+async function removeAppleTv(localId) {
+  const tv = appleTvs.find(t => t.localId === localId);
+  if (!tv) return;
+  if (!confirm('Remove "' + tv.name + '"? Cards using ' + tv.entityId + ' will stop working until you pair it again.\n\n(You can also remove this remote from the Apple TV under Settings → Remotes and Devices.)')) return;
+  appleTvs = appleTvs.filter(t => t.localId !== localId);
+  removeAppleTvHaDevice(localId);
+  await persistHaAndHubs();
+  await saveHaDevicesSilently();
+}
+
+/**
+ * Step 2 (optional): the Apple TV's separate MRP service, which is what actually gives
+ * title/artist/artwork/position. [localId] defaults to whichever Apple TV was just paired
+ * (see finishAppleTvPairing); pass it explicitly when pairing this in later from the list's
+ * "+ Now Playing info" link.
+ */
+async function scanAppleTvMrp(localId) {
+  const targetId = localId || document.getElementById('appleTvMrpOfferBox').dataset.localId;
+  appleTvMrpPairing = null;
+  document.getElementById('appleTvScanBox').style.display = 'none';
+  document.getElementById('appleTvPinBox').style.display = 'none';
+  document.getElementById('appleTvMrpOfferBox').style.display = 'none';
+  document.getElementById('appleTvMrpScanBox').style.display = '';
+  document.getElementById('appleTvMrpPinBox').style.display = 'none';
+  document.getElementById('appleTvForm').style.display = '';
+  const status = document.getElementById('appleTvMrpScanStatus');
+  const results = document.getElementById('appleTvMrpScanResults');
+  status.textContent = 'Searching for the Now Playing service…';
+  results.innerHTML = '';
+  try {
+    const res = await fetch('/appletv-mrp-scan');
+    const data = await res.json();
+    appleTvMrpScanResults = Array.isArray(data.devices) ? data.devices : [];
+  } catch (e) {
+    appleTvMrpScanResults = [];
+    status.textContent = "Couldn't search: " + e;
+    return;
+  }
+  if (!appleTvMrpScanResults.length) {
+    status.textContent = 'Nothing found. Make sure the TV is awake and on the same network, then search again.';
+    return;
+  }
+  status.textContent = 'Choose the same Apple TV:';
+  results.innerHTML = appleTvMrpScanResults.map((tv, i) => {
+    const badge = tv.transport === 'classic' ? ' · classic MRP' : '';
+    return `<div class="list-item"><span>${atvEsc(tv.name)} <span style="color:#888">(${atvEsc(tv.host)}${badge})</span></span>` +
+      `<button type="button" onclick="startAppleTvMrpPairing(${i}, '${targetId}')">Pair</button></div>`;
+  }).join('');
+}
+
+async function startAppleTvMrpPairing(index, localId) {
+  const device = appleTvMrpScanResults[index];
+  if (!device) return;
+  const status = document.getElementById('appleTvMrpScanStatus');
+  status.textContent = 'Contacting ' + device.name + '…';
+  try {
+    const body = new URLSearchParams({ host: device.host, port: String(device.port), transport: device.transport || 'airplay' });
+    const res = await fetch('/appletv-mrp-pair-start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+    appleTvMrpPairing = { sessionId: data.sessionId, device, localId };
+  } catch (e) {
+    status.textContent = 'Could not start pairing: ' + e.message;
+    return;
+  }
+  document.getElementById('appleTvMrpScanBox').style.display = 'none';
+  document.getElementById('appleTvMrpPinBox').style.display = '';
+  document.getElementById('appleTvMrpPin').value = '';
+  document.getElementById('appleTvMrpPin').focus();
+}
+
+async function finishAppleTvMrpPairing() {
+  if (!appleTvMrpPairing) return;
+  const pin = document.getElementById('appleTvMrpPin').value.trim();
+  if (!/^\d{4}$/.test(pin)) { showToast('Enter the 4-digit code shown on the TV.', 'error'); return; }
+  const btn = document.getElementById('appleTvMrpFinishBtn');
+  btn.disabled = true;
+  btn.textContent = 'Pairing…';
+  try {
+    const body = new URLSearchParams({ sessionId: appleTvMrpPairing.sessionId, pin });
+    const res = await fetch('/appletv-mrp-pair-finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+    const { device, localId } = appleTvMrpPairing;
+    appleTvs = appleTvs.map(t => (t.localId === localId
+      ? {
+          ...t,
+          mrpHost: device.host,
+          mrpPort: device.port,
+          mrpServiceName: device.serviceName,
+          mrpCredentials: data.credentials,
+          mrpTransport: device.transport || 'airplay'
+        }
+      : t));
+    appleTvMrpPairing = null;
+    btn.disabled = false;
+    btn.textContent = 'Pair';
+    await persistHaAndHubs(); // already closes every open form and re-renders the list on success
+    showToast('Now Playing info enabled.');
+  } catch (e) {
+    showToast('Pairing failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Pair';
+    scanAppleTvMrp(appleTvMrpPairing && appleTvMrpPairing.localId);
   }
 }
 
