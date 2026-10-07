@@ -46,6 +46,55 @@ const ANDROID_TV_COMMANDS = [
   'SYSDOWN', 'SYSUP', 'SYSLEFT', 'SYSRIGHT',
 ];
 
+// Every command name AppleTvCommands.kt's forCommand() recognizes, one
+// canonical spelling each (it accepts several aliases per command — this is
+// just what the hotkey form offers/stores). Covers the trackpad directions
+// and Select/Play-Pause/volume/power that the apple_tv_remote card's fixed
+// controls already send, plus every id from ATV_EXTRA_BUTTONS below.
+const ATV_ALL_COMMANDS = [
+  { id: 'Up', label: 'Up' },
+  { id: 'Down', label: 'Down' },
+  { id: 'Left', label: 'Left' },
+  { id: 'Right', label: 'Right' },
+  { id: 'Select', label: 'Select' },
+  { id: 'PlayPause', label: 'Play / Pause' },
+  { id: 'Play', label: 'Play' },
+  { id: 'Pause', label: 'Pause' },
+  { id: 'Next', label: 'Next track' },
+  { id: 'Previous', label: 'Previous track' },
+  { id: 'Wake', label: 'Wake' },
+  { id: 'Sleep', label: 'Sleep' },
+  { id: 'Menu', label: 'Menu' },
+  { id: 'Home', label: 'Home' },
+  { id: 'Siri', label: 'Siri' },
+  { id: 'Screensaver', label: 'Screensaver' },
+  { id: 'Guide', label: 'Guide' },
+  { id: 'VolumeUp', label: 'Volume +' },
+  { id: 'VolumeDown', label: 'Volume −' },
+  { id: 'ControlCenter', label: 'Control Center' },
+  { id: 'ChannelUp', label: 'Channel +' },
+  { id: 'ChannelDown', label: 'Channel −' }
+];
+
+/** Populates the Apple TV picker for the hotkey form with every paired Apple TV, selecting [selectedEntityId] if given. */
+async function populateHkAppleTvSelect(selectedEntityId) {
+  const select = document.getElementById('hkAppleTv');
+  if (!select) return;
+  const tvs = await loadNativeAppleTvs();
+  select.innerHTML = tvs.length
+    ? tvs.map(tv => `<option value="${tv.entityId}">${tv.name} (${tv.entityId})</option>`).join('')
+    : '<option value="">— no Apple TV paired yet —</option>';
+  if (selectedEntityId) {
+    if (![...select.options].some(opt => opt.value === selectedEntityId)) {
+      const missing = document.createElement('option');
+      missing.value = selectedEntityId;
+      missing.textContent = selectedEntityId + ' (not paired)';
+      select.appendChild(missing);
+    }
+    select.value = selectedEntityId;
+  }
+}
+
 // Returns the command list to suggest for a given remote entity, or null
 // when no live HA state is available (HA not configured, or offline). Prefers
 // the entity's own `commands_list` attribute when present; otherwise falls
@@ -69,17 +118,45 @@ function refreshRemoteCommandDatalist() {
   dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('');
 }
 
-function updateHotkeyActionInputs() {
+// Selecting "Settings" or "Active Activities" here is a shortcut, not a
+// real page: addHotkey() below detects these two sentinel values and
+// writes an "openOverlay" hotkey instead of a "page" one — same end
+// result as picking the separate "Open overlay" action, just reachable
+// from the one dropdown someone's already looking at instead of having to
+// switch the Action selector for what's arguably the same kind of thing
+// ("go here"). Editing an existing hotkey never shows these two selected
+// (an openOverlay hotkey routes to the openOverlay action branch instead,
+// see editHotkey) — they're an input-only convenience.
+const HK_PAGE_OVERLAY_SHORTCUTS = [
+  { value: '__overlay_settings__', label: 'Settings', overlay: 'settings' },
+  { value: '__overlay_activities__', label: 'Active Activities', overlay: 'activities' }
+];
+
+function populateHkPageSelect() {
+  const select = document.getElementById('hkPage');
+  const pageOptions = (dashboardData.pages || [])
+    .map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`)
+    .join('');
+  const shortcutOptions = HK_PAGE_OVERLAY_SHORTCUTS
+    .map(s => `<option value="${s.value}">${s.label}</option>`)
+    .join('');
+  select.innerHTML =
+    `<optgroup label="Pages">${pageOptions}</optgroup>` +
+    `<optgroup label="Shortcuts">${shortcutOptions}</optgroup>`;
+}
+
+function updateHotkeyActionInputs(preselect) {
   const action = document.getElementById('hkAction').value;
   const container = document.getElementById('dynamicHotkeyInputs');
   if (action === 'page') {
-    container.innerHTML = `<label>Target page name</label><input type="text" id="hkPage" placeholder="e.g., Media">`;
+    container.innerHTML = `<label>Target page name</label><select id="hkPage"></select>`;
+    populateHkPageSelect();
   } else if (action === 'openOverlay') {
     container.innerHTML = `
       <label>Overlay</label>
       <select id="hkOverlay">
-        <option value="settings">Settings (same as swipe down from the top bar)</option>
-        <option value="activities">Active Activities (same as swipe up from the page dots)</option>
+        <option value="settings">Settings</option>
+        <option value="activities">Active Activities (same as swipe down from the top bar)</option>
       </select>
     `;
   } else if (action === 'openCurrentActivity') {
@@ -103,6 +180,16 @@ function updateHotkeyActionInputs() {
     `;
     attachEntityAutocomplete(document.getElementById('hkEntityId'), 'remote');
     refreshRemoteCommandDatalist();
+  } else if (action === 'appleTvCommand') {
+    container.innerHTML = `
+      <label>Apple TV</label>
+      <select id="hkAppleTv"></select>
+      <label>Command</label>
+      <select id="hkAppleTvCommand">
+        ${ATV_ALL_COMMANDS.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+      </select>
+    `;
+    populateHkAppleTvSelect(preselect && preselect.appleTvEntityId);
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       renderHarmonyHubSelect(container, 'command', 'hk');
@@ -128,6 +215,10 @@ function describeHotkey(h) {
   if (h.service === 'remote.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
     return `→ remote ${h.entityId || '?'} / ${cmd}`;
+  }
+  if (h.service === 'astrion_appletv.send_command') {
+    const cmd = h.data && h.data.command ? h.data.command : '?';
+    return `→ Apple TV ${h.entityId || '?'} / ${cmd}`;
   }
   if (h.service) return `→ ${h.service}${h.entityId ? ' (' + h.entityId + ')' : ''}`;
   if (h.harmonyCommand) return `→ Harmony ${h.harmonyDevice || '?'} / ${h.harmonyCommand}`;
@@ -212,9 +303,9 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
-  updateHotkeyActionInputs();
+  updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
 
   if (action === 'page') {
     document.getElementById('hkPage').value = h.page || '';
@@ -230,6 +321,8 @@ async function editHotkey(scope, listType, i) {
     document.getElementById('hkEntityId').value = h.entityId || '';
     document.getElementById('hkCommand').value = (h.data && h.data.command) || '';
     refreshRemoteCommandDatalist();
+  } else if (action === 'appleTvCommand') {
+    document.getElementById('hkAppleTvCommand').value = (h.data && h.data.command) || '';
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       const hubId = h.hub || (harmonyHubsList[0] && harmonyHubsList[0].localId) || '';
@@ -280,7 +373,13 @@ function addHotkey() {
 
   let hkObj = { key };
   if (action === 'page') {
-    hkObj.page = document.getElementById('hkPage').value.trim();
+    const selected = document.getElementById('hkPage').value.trim();
+    const shortcut = HK_PAGE_OVERLAY_SHORTCUTS.find(s => s.value === selected);
+    if (shortcut) {
+      hkObj.openOverlay = shortcut.overlay;
+    } else {
+      hkObj.page = selected;
+    }
   } else if (action === 'openOverlay') {
     hkObj.openOverlay = document.getElementById('hkOverlay').value;
   } else if (action === 'openCurrentActivity') {
@@ -301,6 +400,13 @@ function addHotkey() {
     if (!entityId || !command) { alert('Pick a remote entity and a command.'); return; }
     hkObj.service = 'remote.send_command';
     hkObj.entityId = entityId;
+    hkObj.data = { command };
+  } else if (action === 'appleTvCommand') {
+    const appleTv = document.getElementById('hkAppleTv').value.trim();
+    const command = document.getElementById('hkAppleTvCommand').value.trim();
+    if (!appleTv || !command) { alert('Pick an Apple TV and a command.'); return; }
+    hkObj.service = 'astrion_appletv.send_command';
+    hkObj.entityId = appleTv;
     hkObj.data = { command };
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
@@ -348,7 +454,8 @@ const RELEASE_STRINGS = {
     stableUnavailable: 'Official release unavailable',
     betaUnavailable: 'Beta unavailable',
     downloadApk: 'download the APK',
-    installToDevice: 'Install on this device',
+    installOfficial: 'Install this official update',
+    installBeta: 'Install this beta update',
     installing: 'Installing…',
     installStarted: 'Install launched on the remote.',
     installFailed: 'Install failed: ',
@@ -359,7 +466,8 @@ const RELEASE_STRINGS = {
     stableUnavailable: 'Version officielle indisponible',
     betaUnavailable: 'Bêta indisponible',
     downloadApk: "télécharger l'APK",
-    installToDevice: 'Installer sur cet appareil',
+    installOfficial: 'Installer cette version officielle',
+    installBeta: 'Installer cette bêta',
     installing: 'Installation…',
     installStarted: 'Installation lancée sur la télécommande.',
     installFailed: "Échec de l'installation : ",
@@ -415,7 +523,16 @@ async function loadStableBadge() {
   const html = await fetchReleaseBadge(
     'https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/latest', '✅'
   );
-  badge.innerHTML = html || t('stableUnavailable');
+  if (!html) {
+    badge.innerHTML = t('stableUnavailable');
+    return;
+  }
+  if (typeof deviceModeAvailable !== 'undefined' && deviceModeAvailable) {
+    const label = html.replace(/ — <a[^>]*>.*?<\/a>/, '');
+    badge.innerHTML = `${label} — <button type="button" onclick="installStableUpdate(this)" style="padding:4px 10px;font-size:0.8rem">${t('installOfficial')}</button>`;
+  } else {
+    badge.innerHTML = html;
+  }
 }
 
 async function toggleBetaBadge() {
@@ -431,17 +548,27 @@ async function toggleBetaBadge() {
     badge.innerHTML = t('betaUnavailable');
     return;
   }
-  // A real one-click install button posts to /install-beta-update —
-  // same-origin, so it runs server-side on the remote regardless of which
-  // browser/device clicked it, exactly like the existing official-update
-  // button. Only shown once dashboard.json has actually finished loading
-  // (deviceModeAvailable); until then the plain download link from
-  // fetchReleaseBadge stays as the fallback.
   if (typeof deviceModeAvailable !== 'undefined' && deviceModeAvailable) {
     const label = html.replace(/ — <a[^>]*>.*?<\/a>/, '');
-    badge.innerHTML = `${label} — <button type="button" onclick="installBetaUpdate(this)" style="padding:4px 10px;font-size:0.8rem">${t('installToDevice')}</button>`;
+    badge.innerHTML = `${label} — <button type="button" onclick="installBetaUpdate(this)" style="padding:4px 10px;font-size:0.8rem">${t('installBeta')}</button>`;
   } else {
     badge.innerHTML = html;
+  }
+}
+
+async function installStableUpdate(btn) {
+  const original = btn.textContent;
+  btn.textContent = t('installing');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/install-update', { method: 'POST' });
+    const text = await res.text();
+    if (!res.ok) throw new Error(text || ('HTTP ' + res.status));
+    showToast(t('installStarted'));
+  } catch (e) {
+    showToast(t('installFailed') + e.message, 'error');
+    btn.textContent = original;
+    btn.disabled = false;
   }
 }
 

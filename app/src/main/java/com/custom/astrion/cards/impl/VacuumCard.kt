@@ -340,7 +340,7 @@ private fun VacuumCtrlBtn(icon: ImageVector, theme: ThemeColors, accent: Boolean
             .size(52.dp)
             .clip(CircleShape)
             .background(if (accent) theme.accentSecondary else theme.controlBackground)
-            .tapClickable(onClick = onClick),
+            .tapClickable(focusShape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = null, tint = Color.White)

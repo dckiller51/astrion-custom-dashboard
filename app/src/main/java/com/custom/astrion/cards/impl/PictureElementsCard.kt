@@ -150,7 +150,7 @@ class PictureElementsCard : CardRenderer {
                         .size(iconBox)
                         .clip(CircleShape)
                         .background(bg)
-                        .tapClickable {
+                        .tapClickable(focusShape = CircleShape) {
                             when {
                                 entityId != null -> ctx.client.toggle(entityId)
                                 service != null -> {

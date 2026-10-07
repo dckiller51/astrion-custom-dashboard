@@ -165,7 +165,7 @@ fun LightDetailDialog(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(if (on) theme.amber else theme.controlBackground)
-                    .tapClickable { client.toggle(entityId) },
+                    .tapClickable(focusShape = CircleShape) { client.toggle(entityId) },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -199,7 +199,7 @@ fun LightDetailDialog(
                                     .size(36.dp)
                                     .clip(CircleShape)
                                     .background(Color(r, g, b))
-                                    .tapClickable { setRgb(r, g, b) }
+                                    .tapClickable(focusShape = CircleShape) { setRgb(r, g, b) }
                             )
                         }
                     }
@@ -215,7 +215,7 @@ fun LightDetailDialog(
                             Modifier
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(theme.controlBackground)
-                                .tapClickable { setKelvin(k) }
+                                .tapClickable(focusShape = RoundedCornerShape(12.dp)) { setKelvin(k) }
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         ) {
                             Text(label, color = theme.iconTint, fontSize = 12.sp)

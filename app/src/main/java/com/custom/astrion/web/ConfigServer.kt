@@ -16,8 +16,13 @@ import android.util.Log
 import androidx.core.net.toUri
 import com.custom.astrion.BuildConfig
 import com.custom.astrion.R
+import com.custom.astrion.appletv.AppleTvCredentials
+import com.custom.astrion.appletv.AppleTvRegistry
+import com.custom.astrion.appletv.AppleTvServiceKind
 import com.custom.astrion.config.ActivityRuntime
+import com.custom.astrion.config.AppleTvConfig
 import com.custom.astrion.config.DashboardLoader
+import com.custom.astrion.config.ExtenderConfig
 import com.custom.astrion.config.HarmonyHubConfig
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.RemoteSettings
@@ -77,6 +82,18 @@ import org.json.JSONObject
  *  GET  /devices-config  full read-back of everything /save-connection accepts
  *                        (HA url/token/webhook + Harmony hubs incl. ip/hubId) —
  *                        lets the Devices page (/) pre-fill a device's edit form
+ *  GET  /appletv-scan    browse the LAN (mDNS) for Apple TVs — used by the
+ *                        Devices page's "Apple TV" section
+ *  POST /appletv-pair-start   begin PIN pairing with one Apple TV
+ *                        (host, port) — the TV shows a code; returns a sessionId
+ *  POST /appletv-pair-finish  complete pairing (sessionId, pin) and return the
+ *                        credentials, which the page then saves with the form
+ *  GET  /appletv-mrp-scan     browse the LAN for the Apple TV's separate MRP service — step 2,
+ *                        optional, only meaningful once Companion is already paired
+ *  POST /appletv-mrp-pair-start   begin MRP PIN pairing (host, port) — returns a sessionId
+ *  POST /appletv-mrp-pair-finish  complete MRP pairing (sessionId, pin) and return the credentials
+ *  GET  /appletv-artwork/<localId>  the current artwork for a paired Apple TV, if MRP has fetched
+ *                        one; this is what a device's `entity_picture` attribute points at
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -194,6 +211,14 @@ class ConfigServer(
     /** Stops whichever Activity is active in a room. Backs POST /activities/stop. */
     private val onStopActivity: (room: String) -> Unit
 ) : NanoHTTPD(8080) {
+    /**
+     * Backs the Devices page's Apple TV discovery/pairing endpoints. Assigned right after
+     * construction (rather than passed to the constructor, which is already at the limit of
+     * what's readable); until then those endpoints answer 503.
+     */
+    @Volatile
+    var appleTvRegistry: AppleTvRegistry? = null
+
     @Volatile
     private var lastResult: UpdateChecker.CheckResult? = null
 
@@ -232,6 +257,12 @@ class ConfigServer(
             "/harmony-hubs" -> if (method == Method.GET) serveHarmonyHubs() else methodNotAllowed()
             "/devices-config" -> if (method == Method.GET) serveDevicesConfig() else methodNotAllowed()
             "/harmony-discover" -> if (method == Method.GET) serveHarmonyDiscover(session) else methodNotAllowed()
+            "/appletv-scan" -> if (method == Method.GET) serveAppleTvScan() else methodNotAllowed()
+            "/appletv-pair-start" -> if (method == Method.POST) handleAppleTvPairStart(session) else methodNotAllowed()
+            "/appletv-pair-finish" -> if (method == Method.POST) handleAppleTvPairFinish(session) else methodNotAllowed()
+            "/appletv-mrp-scan" -> if (method == Method.GET) serveAppleTvMrpScan() else methodNotAllowed()
+            "/appletv-mrp-pair-start" -> if (method == Method.POST) handleAppleTvMrpPairStart(session) else methodNotAllowed()
+            "/appletv-mrp-pair-finish" -> if (method == Method.POST) handleAppleTvMrpPairFinish(session) else methodNotAllowed()
             "/camera-snapshot" -> if (method == Method.GET) serveCameraSnapshot(session) else methodNotAllowed()
             "/ha-states" -> if (method == Method.GET) serveHaStates() else methodNotAllowed()
             "/icons-list" -> if (method == Method.GET) serveIconsList() else methodNotAllowed()
@@ -264,6 +295,8 @@ class ConfigServer(
                     uri.startsWith("/icons/") -> if (method == Method.GET) serveIcon(uri) else methodNotAllowed()
                     uri.startsWith("/ir-database/") ->
                         if (method == Method.GET) serveIrDatabaseFile(uri) else methodNotAllowed()
+                    uri.startsWith("/appletv-artwork/") ->
+                        if (method == Method.GET) serveAppleTvArtwork(uri) else methodNotAllowed()
                     // Any other GET falls through to a plain docs/ asset lookup —
                     // styles.css, every file under js/, images (the hero logo,
                     // favicons, future additions to assets/docs/...) all "just
@@ -315,7 +348,47 @@ class ConfigServer(
                 "No dashboard.json yet"
             )
         }
-        return newFixedLengthResponse(Response.Status.OK, "application/json", file.readText())
+        val content = runCatching { reconcileAppleTvHaDevices(file.readText()) }.getOrElse { file.readText() }
+        return newFixedLengthResponse(Response.Status.OK, "application/json", content)
+    }
+
+    /**
+     * Makes sure every paired Apple TV has a matching `haDevices` catalog entry — what the
+     * media_player / source_select card pickers in the builder read from — so a paired Apple TV
+     * is selectable there with no separate manual step. The builder's own JS does this too on
+     * pair/rename/remove for an instant UI update, but that only runs if the Devices page happens
+     * to load first; this is the authoritative, always-correct version, since it runs on every
+     * dashboard.json read regardless of which page asked for it. Idempotent: leaves the file (and
+     * the returned text) untouched when nothing needs to change.
+     */
+    private fun reconcileAppleTvHaDevices(rawJson: String): String {
+        val appleTvs = RemoteSettings.appleTvs(context)
+        if (appleTvs.isEmpty()) return rawJson
+        val root = JSONObject(rawJson)
+        val haDevices = root.optJSONArray("haDevices") ?: JSONArray()
+        val byId = HashMap<String, JSONObject>()
+        for (i in 0 until haDevices.length()) {
+            val obj = haDevices.optJSONObject(i) ?: continue
+            obj.optString("id").takeIf { it.isNotEmpty() }?.let { byId[it] = obj }
+        }
+        var changed = false
+        for (tv in appleTvs) {
+            val id = "appletv_${tv.localId}"
+            val existing = byId[id]
+            if (existing == null) {
+                haDevices.put(JSONObject().put("id", id).put("domain", "media_player").put("entityId", tv.entityId).put("name", tv.name))
+                changed = true
+            } else if (existing.optString("entityId") != tv.entityId || existing.optString("name") != tv.name) {
+                existing.put("entityId", tv.entityId)
+                existing.put("name", tv.name)
+                changed = true
+            }
+        }
+        if (!changed) return rawJson
+        root.put("haDevices", haDevices)
+        val result = root.toString()
+        runCatching { DashboardLoader.configFile.writeText(result) }
+        return result
     }
 
     /**
@@ -442,6 +515,22 @@ class ConfigServer(
                                     put("name", hub.name)
                                     put("ip", hub.ip)
                                     put("hubId", hub.hubId)
+                                }
+                            )
+                        }
+                    }
+                )
+                put("appleTvs", appleTvsJson())
+                put(
+                    "extenders",
+                    JSONArray().apply {
+                        RemoteSettings.extenders(context).forEach { ext ->
+                            put(
+                                JSONObject().apply {
+                                    put("localId", ext.localId)
+                                    put("name", ext.name)
+                                    put("host", ext.host)
+                                    put("mac", ext.mac)
                                 }
                             )
                         }
@@ -965,6 +1054,12 @@ class ConfigServer(
             haWebhookId = params["ha_webhook_id"]?.firstOrNull().orEmpty().trim()
         )
         RemoteSettings.saveHarmonyHubs(context, parseHubRows(params))
+        RemoteSettings.saveExtenders(context, parseExtenderRows(params))
+        // Only touched when the form explicitly carries the Apple TV section, so a
+        // client that predates it (or posts just HA/Harmony) can't wipe paired TVs.
+        if (params["atv_present"]?.firstOrNull() == "1") {
+            RemoteSettings.saveAppleTvs(context, parseAppleTvRows(params))
+        }
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
@@ -991,6 +1086,257 @@ class ConfigServer(
                 ip = ip,
                 hubId = hubId
             )
+        }
+    }
+
+    /**
+     * Mirrors [parseHubRows] above, for the extenders section of the web
+     * form — repeatable rows via `extender_localid[]`/`extender_name[]`/
+     * `extender_host[]`/`extender_mac[]`.
+     *
+     * Unlike Harmony hubs, an extender's localId is *always* derived from
+     * its MAC address (`ext_<12 lowercase hex digits>`), never random:
+     * IR devices reference an extender by this id, so it has to survive a
+     * rename, an IP change, or a remove-and-re-add of the same physical
+     * unit. A random id here is exactly the bug already fixed once for
+     * Harmony hubs (deleting and re-adding the same physical hub silently
+     * orphaned every reference to its old localId) — and it was hit again
+     * here in testing before the form required a MAC.
+     *
+     * The form enforces this client-side too; this is the server-side
+     * guard for anything posting directly. A row whose MAC doesn't clean
+     * up to 12 hex digits falls back to any localId the client already
+     * sent (an existing extender being edited), and is skipped entirely
+     * otherwise rather than silently persisted under an unstable id.
+     */
+    private fun parseExtenderRows(params: Map<String, List<String>>): List<ExtenderConfig> {
+        val ids = params["extender_localid[]"].orEmpty()
+        val names = params["extender_name[]"].orEmpty()
+        val hosts = params["extender_host[]"].orEmpty()
+        val macs = params["extender_mac[]"].orEmpty()
+        val rowCount = maxOf(ids.size, names.size, hosts.size, macs.size)
+
+        return (0 until rowCount).mapNotNull { i ->
+            val name = names.getOrNull(i).orEmpty().trim()
+            val host = hosts.getOrNull(i).orEmpty().trim()
+            if (name.isBlank() && host.isBlank()) return@mapNotNull null // empty "+" row never filled in
+
+            // 12 hex digits once separators are stripped -- accepts
+            // 2C:B4:71:FF:C7:98, 2c-b4-71-ff-c7-98, 2cb471ffc798 alike.
+            val mac = macs.getOrNull(i).orEmpty().filter { it.isDigit() || it in 'a'..'f' || it in 'A'..'F' }.lowercase()
+            val existingLocalId = ids.getOrNull(i).orEmpty().trim()
+            val localId = when {
+                mac.length == 12 -> "ext_$mac"
+                existingLocalId.isNotBlank() -> existingLocalId
+                else -> {
+                    Log.w("ConfigServer", "Skipping extender row \"$name\": no usable MAC address and no existing id")
+                    return@mapNotNull null
+                }
+            }
+            ExtenderConfig(
+                localId = localId,
+                name = name.ifBlank { "IR Extender" },
+                host = host,
+                mac = mac
+            )
+        }
+    }
+
+    /**
+     * Reassembles the repeatable Apple TV rows (`atv_localid[]`, `atv_name[]`,
+     * `atv_entityid[]`, `atv_host[]`, `atv_port[]`, `atv_service[]`,
+     * `atv_credentials[]`). Rows without valid pairing credentials are dropped.
+     * The localId is always derived from the credentials (the accessory's own
+     * identifier), and entity ids are forced into the `media_player.<slug>`
+     * shape and made unique, since cards and hotkeys reference them.
+     */
+    private fun parseAppleTvRows(params: Map<String, List<String>>): List<AppleTvConfig> {
+        val names = params["atv_name[]"].orEmpty()
+        val entityIds = params["atv_entityid[]"].orEmpty()
+        val hosts = params["atv_host[]"].orEmpty()
+        val ports = params["atv_port[]"].orEmpty()
+        val services = params["atv_service[]"].orEmpty()
+        val credentials = params["atv_credentials[]"].orEmpty()
+        val mrpHosts = params["atv_mrphost[]"].orEmpty()
+        val mrpPorts = params["atv_mrpport[]"].orEmpty()
+        val mrpServices = params["atv_mrpservice[]"].orEmpty()
+        val mrpCredentials = params["atv_mrpcredentials[]"].orEmpty()
+        val mrpTransports = params["atv_mrptransport[]"].orEmpty()
+        val used = HashSet<String>()
+        val entityPattern = Regex("^media_player\\.[a-z0-9_]+$")
+
+        return credentials.indices.mapNotNull { i ->
+            val parsed = AppleTvCredentials.parse(credentials[i]) ?: return@mapNotNull null
+            val name = names.getOrNull(i).orEmpty().trim().ifBlank { "Apple TV" }
+            val slug = name.lowercase().replace(Regex("[^a-z0-9]+"), "_").trim('_').ifBlank { "salon" }
+            var entityId = entityIds.getOrNull(i).orEmpty().trim().takeIf { entityPattern.matches(it) } ?: "media_player.appletv_$slug"
+            var suffix = 2
+            while (!used.add(entityId)) entityId = "media_player.appletv_${slug}_${suffix++}"
+            // The MRP credentials are only kept if they still parse and were paired with this same
+            // accessory (its atvId matches) — otherwise a stale/foreign value is silently dropped
+            // rather than saved, since AppleTvRegistry would reject it at connect time anyway.
+            val mrpParsed = AppleTvCredentials.parse(mrpCredentials.getOrNull(i))?.takeIf { it.atvId.contentEquals(parsed.atvId) }
+            AppleTvConfig(
+                localId = parsed.deviceKey(),
+                name = name,
+                entityId = entityId,
+                host = hosts.getOrNull(i).orEmpty().trim(),
+                port = ports.getOrNull(i)?.trim()?.toIntOrNull() ?: 0,
+                serviceName = services.getOrNull(i).orEmpty().trim(),
+                credentials = parsed.serialize(),
+                mrpHost = mrpHosts.getOrNull(i).orEmpty().trim(),
+                mrpPort = mrpPorts.getOrNull(i)?.trim()?.toIntOrNull() ?: 0,
+                mrpServiceName = mrpServices.getOrNull(i).orEmpty().trim(),
+                mrpCredentials = mrpParsed?.serialize().orEmpty(),
+                mrpTransport = mrpTransports.getOrNull(i)?.trim()?.ifBlank { null } ?: "airplay"
+            )
+        }
+    }
+
+    private fun jsonResponse(status: Response.Status, body: JSONObject): Response =
+        newFixedLengthResponse(status, "application/json", body.toString())
+
+    private fun appleTvNotReady(): Response =
+        jsonResponse(Response.Status.SERVICE_UNAVAILABLE, JSONObject().put("error", "Apple TV support is still starting"))
+
+    private fun appleTvsJson(): JSONArray = JSONArray().apply {
+        RemoteSettings.appleTvs(context).forEach { tv ->
+            put(
+                JSONObject().apply {
+                    put("localId", tv.localId)
+                    put("name", tv.name)
+                    put("entityId", tv.entityId)
+                    put("host", tv.host)
+                    put("port", tv.port)
+                    put("serviceName", tv.serviceName)
+                    put("credentials", tv.credentials)
+                    put("mrpHost", tv.mrpHost)
+                    put("mrpPort", tv.mrpPort)
+                    put("mrpServiceName", tv.mrpServiceName)
+                    put("mrpCredentials", tv.mrpCredentials)
+                    put("mrpTransport", tv.mrpTransport)
+                    put("mrpPaired", tv.mrpCredentials.isNotBlank())
+                }
+            )
+        }
+    }
+
+    private fun serveAppleTvScan(): Response {
+        val found = runCatching { appleTvRegistry?.scan() }.getOrNull().orEmpty()
+        val array = JSONArray()
+        found.forEach { tv ->
+            array.put(
+                JSONObject().apply {
+                    put("serviceName", tv.serviceName)
+                    put("name", tv.serviceName)
+                    put("host", tv.host)
+                    put("port", tv.port)
+                    put("model", tv.model)
+                }
+            )
+        }
+        return jsonResponse(Response.Status.OK, JSONObject().put("devices", array))
+    }
+
+    private fun handleAppleTvPairStart(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        val host = session.parameters["host"]?.firstOrNull()?.trim().orEmpty()
+        val port = session.parameters["port"]?.firstOrNull()?.trim()?.toIntOrNull() ?: 0
+        if (host.isBlank() || port <= 0) {
+            return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "missing host or port"))
+        }
+        val registry = appleTvRegistry ?: return appleTvNotReady()
+        return try {
+            val id = registry.beginPairing(host, port)
+            jsonResponse(Response.Status.OK, JSONObject().put("sessionId", id))
+        } catch (e: Exception) {
+            Log.w("ConfigServer", "Apple TV pairing start failed", e)
+            jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", e.message ?: "pairing failed"))
+        }
+    }
+
+    private fun handleAppleTvPairFinish(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        val sessionId = session.parameters["sessionId"]?.firstOrNull()?.trim().orEmpty()
+        val pin = session.parameters["pin"]?.firstOrNull()?.trim().orEmpty()
+        if (sessionId.isBlank() || pin.isBlank()) {
+            return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "missing sessionId or pin"))
+        }
+        val registry = appleTvRegistry ?: return appleTvNotReady()
+        return try {
+            val credentials = registry.finishPairing(sessionId, pin)
+            jsonResponse(
+                Response.Status.OK,
+                JSONObject().put("credentials", credentials.serialize()).put("localId", credentials.deviceKey())
+            )
+        } catch (e: Exception) {
+            Log.w("ConfigServer", "Apple TV pairing finish failed", e)
+            jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", e.message ?: "pairing failed"))
+        }
+    }
+
+    /** Serves a paired Apple TV's current artwork (see [AppleTvEntityMapper]'s `entity_picture`); 404 until MRP has fetched one. */
+    private fun serveAppleTvArtwork(uri: String): Response {
+        val localId = uri.removePrefix("/appletv-artwork/").substringBefore('?')
+        val jpeg = appleTvRegistry?.artworkFor(localId)
+        if (jpeg == null) {
+            return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "No artwork yet for $localId")
+        }
+        return newFixedLengthResponse(Response.Status.OK, "image/jpeg", java.io.ByteArrayInputStream(jpeg), jpeg.size.toLong())
+    }
+
+    private fun serveAppleTvMrpScan(): Response {
+        val found = runCatching { appleTvRegistry?.scanMrp() }.getOrNull().orEmpty()
+        val array = JSONArray()
+        found.forEach { tv ->
+            array.put(
+                JSONObject().apply {
+                    put("serviceName", tv.serviceName)
+                    put("name", tv.serviceName)
+                    put("host", tv.host)
+                    put("port", tv.port)
+                    put("transport", if (tv.kind == AppleTvServiceKind.AirPlay) "airplay" else "classic")
+                }
+            )
+        }
+        return jsonResponse(Response.Status.OK, JSONObject().put("devices", array))
+    }
+
+    private fun handleAppleTvMrpPairStart(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        val host = session.parameters["host"]?.firstOrNull()?.trim().orEmpty()
+        val port = session.parameters["port"]?.firstOrNull()?.trim()?.toIntOrNull() ?: 0
+        val transport = session.parameters["transport"]?.firstOrNull()?.trim().orEmpty().ifBlank { "airplay" }
+        if (host.isBlank() || port <= 0) {
+            return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "missing host or port"))
+        }
+        val registry = appleTvRegistry ?: return appleTvNotReady()
+        return try {
+            val id = registry.beginMrpPairing(host, port, transport)
+            jsonResponse(Response.Status.OK, JSONObject().put("sessionId", id))
+        } catch (e: Exception) {
+            Log.w("ConfigServer", "Apple TV MRP pairing start failed", e)
+            jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", e.message ?: "pairing failed"))
+        }
+    }
+
+    private fun handleAppleTvMrpPairFinish(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        val sessionId = session.parameters["sessionId"]?.firstOrNull()?.trim().orEmpty()
+        val pin = session.parameters["pin"]?.firstOrNull()?.trim().orEmpty()
+        if (sessionId.isBlank() || pin.isBlank()) {
+            return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "missing sessionId or pin"))
+        }
+        val registry = appleTvRegistry ?: return appleTvNotReady()
+        return try {
+            val credentials = registry.finishMrpPairing(sessionId, pin)
+            jsonResponse(
+                Response.Status.OK,
+                JSONObject().put("credentials", credentials.serialize())
+            )
+        } catch (e: Exception) {
+            Log.w("ConfigServer", "Apple TV MRP pairing finish failed", e)
+            jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", e.message ?: "pairing failed"))
         }
     }
 

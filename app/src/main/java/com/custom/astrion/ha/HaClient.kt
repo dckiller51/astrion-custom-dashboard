@@ -23,7 +23,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -71,6 +73,20 @@ class HaClient(
         private val PUBLISH_INTERVAL = 120.milliseconds
         private val RECONNECT_DELAY = 3.seconds
         private val RESPONSE_TIMEOUT = 8.seconds
+
+        // media_player/browse_media specifically can legitimately take far
+        // longer than any other request this client makes: some
+        // integrations (confirmed for Home Assistant's own Squeezebox/Lyrion
+        // "Apps"/"Radios" listing, which can run into the hundreds of
+        // entries, each carrying its own icon URL) return a response large
+        // enough — and slow enough for the LMS/Lyrion server itself to
+        // assemble — that it blows straight past the general 8s timeout,
+        // even though a small local-library folder (an album's tracks, say)
+        // loads comfortably within it. Using RESPONSE_TIMEOUT here made
+        // Astrion silently time out and show "Couldn't load media" for
+        // exactly these large folders, while Home Assistant's own frontend
+        // (with no client-side timeout of its own) just waited it out.
+        private val MEDIA_BROWSE_TIMEOUT = 25.seconds
     }
 
     private val json =
@@ -125,6 +141,47 @@ class HaClient(
     // Hz) can't force the whole UI to repaint faster than the SoC can handle.
     private val entityStore = ConcurrentHashMap<String, EntityState>()
 
+    // Entities that don't come from Home Assistant but from devices this app
+    // drives directly (e.g. an Apple TV over its Companion link). They're
+    // merged into [entities] alongside the HA ones, so every card, hotkey and
+    // picker that understands a media_player entity works with them unchanged
+    // — including when no Home Assistant is configured at all.
+    private val localEntityStore = ConcurrentHashMap<String, EntityState>()
+
+    /**
+     * Optional interceptor for [callService]: return true to consume a call
+     * (it is then NOT sent to Home Assistant). Used to route service calls
+     * aimed at a locally-driven entity to the device that owns it.
+     */
+    @Volatile
+    var localServiceHandler: ((ServiceCall) -> Boolean)? = null
+
+    /**
+     * Optional interceptor for [browseMedia]: for an entity this handler owns, return the same
+     * `result` shape Home Assistant's own `media_player/browse_media` reply carries (a `title` and
+     * a `children` array of `media_content_id`/`media_content_type`/`can_expand`/`can_play`
+     * items) — or null to let the ordinary HA round-trip happen instead for an entity it doesn't
+     * recognize. Used so a locally-driven entity (e.g. a directly-paired Apple TV's installed
+     * apps) can be browsed through [com.custom.astrion.cards.impl.MediaBrowser] exactly like a
+     * real Home Assistant media_player, with no Home Assistant involved at all.
+     */
+    @Volatile
+    var localBrowseMediaHandler: ((entityId: String, contentId: String?, contentType: String?) -> JsonObject?)? = null
+
+    /** Adds or replaces a locally-driven entity and republishes [entities]. */
+    fun setLocalEntity(state: EntityState) {
+        localEntityStore[state.entityId] = state
+        _entities.value = mergedEntities()
+    }
+
+    /** Removes a locally-driven entity and republishes [entities]. */
+    fun removeLocalEntity(entityId: String) {
+        if (localEntityStore.remove(entityId) != null) _entities.value = mergedEntities()
+    }
+
+    private fun mergedEntities(): EntityMap =
+        if (localEntityStore.isEmpty()) HashMap(entityStore) else HashMap(entityStore).apply { putAll(localEntityStore) }
+
     @Volatile private var entitiesDirty = false
 
     @Volatile private var publisherStarted = false
@@ -154,6 +211,7 @@ class HaClient(
 
     /** Fire an HA service call, e.g. light.toggle on light.kitchen. */
     fun callService(call: ServiceCall) {
+        if (localServiceHandler?.invoke(call) == true) return
         val target =
             buildJsonObject {
                 call.entityId?.let { put("entity_id", it) }
@@ -182,17 +240,23 @@ class HaClient(
     /**
      * Fetch an image (e.g. a media_player `entity_picture`) as an ImageBitmap.
      * `path` may be absolute or an HA-relative path like /api/media_player_proxy/…;
-     * the bearer token is attached so proxied/authenticated art loads too.
+     * the bearer token is attached so proxied/authenticated art loads too —
+     * but only when `path` actually targets this HA instance (relative, or
+     * an absolute URL on `baseUrl` itself). A genuinely external URL (e.g.
+     * a media_player's raw `entity_picture` pointing straight at a
+     * third-party CDN — see MediaPlayerCard's own comment on
+     * `entity_picture_local`) never gets the HA token attached: some
+     * external hosts reject requests carrying an unexpected Authorization
+     * header, and there's no reason to hand an HA credential to a
+     * third-party server that never asked for it either way.
      */
     suspend fun fetchBitmap(path: String): ImageBitmap? = withContext(Dispatchers.IO) {
         try {
             val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val req =
-                Request
-                    .Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $token")
-                    .build()
+            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+            val reqBuilder = Request.Builder().url(url)
+            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+            val req = reqBuilder.build()
             imageHttp.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 val bytes = resp.body?.bytes() ?: return@withContext null
@@ -208,17 +272,16 @@ class HaClient(
      * Fetch a URL/HA-relative path as raw bytes, with the bearer token attached.
      * Same auth/one-shot semantics as [fetchBitmap] but returns the undecoded
      * body — used to proxy a single camera frame through the config server so
-     * the editor preview can show a real still without the HA token.
+     * the editor preview can show a real still without the HA token. Same
+     * external-vs-HA-target token guard as [fetchBitmap] — see its doc.
      */
     suspend fun fetchBytes(path: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
             val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val req =
-                Request
-                    .Builder()
-                    .url(url)
-                    .header("Authorization", "Bearer $token")
-                    .build()
+            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+            val reqBuilder = Request.Builder().url(url)
+            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+            val req = reqBuilder.build()
             imageHttp.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 resp.body?.bytes()
@@ -292,6 +355,7 @@ class HaClient(
      * Pass a null contentId/type to browse the root.
      */
     suspend fun browseMedia(entityId: String, contentId: String? = null, contentType: String? = null): JsonObject? {
+        localBrowseMediaHandler?.invoke(entityId, contentId, contentType)?.let { return it }
         val id = idCounter.getAndIncrement()
         val deferred = CompletableDeferred<JsonObject>()
         pending[id] = deferred
@@ -304,7 +368,7 @@ class HaClient(
                 contentType?.let { put("media_content_type", it) }
             }
         send(msg)
-        val reply = withTimeoutOrNull(RESPONSE_TIMEOUT) { deferred.await() }
+        val reply = withTimeoutOrNull(MEDIA_BROWSE_TIMEOUT) { deferred.await() }
         pending.remove(id)
         return reply?.get("result")?.jsonObject
     }
@@ -341,16 +405,21 @@ class HaClient(
     }
 
     /** Play a specific media item on a player. */
-    fun playMedia(entityId: String, contentId: String, contentType: String) {
-        callService(
-            ServiceCall.of(
-                "media_player",
-                "play_media",
-                entityId,
-                "media_content_id" to contentId,
-                "media_content_type" to contentType
-            )
-        )
+    /**
+     * [enqueue] mirrors `media_player.play_media`'s own optional field
+     * ("add", "next", "play", "replace" — see Home Assistant's docs); left
+     * null (the default) for the existing immediate-replace behavior every
+     * other call site already relies on. Only the Media Browser's long-press
+     * "Add to queue" action passes `"add"` today.
+     */
+    fun playMedia(entityId: String, contentId: String, contentType: String, enqueue: String? = null) {
+        val data =
+            buildMap<String, JsonElement> {
+                put("media_content_id", JsonPrimitive(contentId))
+                put("media_content_type", JsonPrimitive(contentType))
+                if (enqueue != null) put("enqueue", JsonPrimitive(enqueue))
+            }
+        callService(ServiceCall("media_player", "play_media", entityId, data))
     }
 
     // ---- internals ----------------------------------------------------------
@@ -424,7 +493,7 @@ class HaClient(
                 delay(PUBLISH_INTERVAL)
                 if (entitiesDirty) {
                     entitiesDirty = false
-                    _entities.value = HashMap(entityStore)
+                    _entities.value = mergedEntities()
                 }
             }
         }
@@ -491,7 +560,7 @@ class HaClient(
                 )
         }
         // Seed is important — publish immediately so the first frame has data.
-        _entities.value = HashMap(entityStore)
+        _entities.value = mergedEntities()
     }
 
     /** state_changed events carry event.data.new_state. */

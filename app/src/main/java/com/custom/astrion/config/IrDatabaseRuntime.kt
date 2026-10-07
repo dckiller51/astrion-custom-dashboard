@@ -101,6 +101,10 @@ object IrDatabaseRuntime {
         val step = runCatching { prontoToPattern(pronto) }
             .onFailure { Log.e(TAG, "resolve: bad Pronto code for $brand/$model/$commandId in $category.json", it) }
             .getOrNull()
+            // prontoToPattern() only computes freq/pattern; the raw string
+            // it was decoded from is attached here so IrTarget.Extender
+            // routing has it later without recomputing anything.
+            ?.copy(pronto = pronto)
         resolvedCache[cacheKey] = step
         return step
     }

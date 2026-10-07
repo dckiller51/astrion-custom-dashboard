@@ -6,10 +6,12 @@ import com.custom.astrion.cards.CardConfig
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
@@ -121,7 +123,37 @@ object DashboardLoader {
                     val pageHotkeys = obj["hotkeys"]?.jsonArray?.map { parseHotkey(it.jsonObject) } ?: emptyList()
                     val pageLongHotkeys = obj["longHotkeys"]?.jsonArray?.map { parseHotkey(it.jsonObject) } ?: emptyList()
                     val parent = obj["parent"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
-                    PageConfig(name, cards, pageHotkeys, pageLongHotkeys, parent)
+                    val parentKey = obj["parentKey"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "BACK"
+                    val linkedPage = obj["linkedPage"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val linkedPageModeRaw = obj["linkedPageMode"]?.jsonPrimitive?.content
+                    val linkedPageMode = if (linkedPageModeRaw == "popup") "popup" else "page"
+                    val popupWidthFraction = obj["popupWidth"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.7f
+                    val popupHeightFraction = obj["popupHeight"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.5f
+                    val popupPositionRaw = obj["popupPosition"]?.jsonPrimitive?.content
+                    val popupPosition = if (popupPositionRaw in setOf("top", "bottom", "left", "right")) popupPositionRaw!! else "center"
+                    val hiddenUnlessActivity = obj["hiddenUnlessActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val openWhenEntity = obj["openWhenEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val openWhenState = obj["openWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "on"
+                    val closeWhenState = obj["closeWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val openMode = if (obj["openMode"]?.jsonPrimitive?.content == "popup") "popup" else "page"
+                    PageConfig(
+                        name = name,
+                        cards = cards,
+                        hotkeys = pageHotkeys,
+                        longHotkeys = pageLongHotkeys,
+                        parent = parent,
+                        parentKey = parentKey,
+                        linkedPage = linkedPage,
+                        linkedPageMode = linkedPageMode,
+                        popupWidthFraction = popupWidthFraction,
+                        popupHeightFraction = popupHeightFraction,
+                        popupPosition = popupPosition,
+                        hiddenUnlessActivity = hiddenUnlessActivity,
+                        openWhenEntity = openWhenEntity,
+                        openWhenState = openWhenState,
+                        closeWhenState = closeWhenState,
+                        openMode = openMode
+                    )
                 }
             if (pages.isEmpty()) error("\"pages\" is empty")
             val start = root["startPage"]?.jsonPrimitive?.intOrNull ?: 0
@@ -212,7 +244,29 @@ object DashboardLoader {
                     "or \"category\"+\"brand\"+\"model\" (a reference into /sdcard/astrion/ir-database/)"
             )
         }
-        return IrDeviceConfig(id, name, source)
+        val target = parseIrTarget(id, obj["target"])
+        return IrDeviceConfig(id, name, source, target)
+    }
+
+    /**
+     * Absent entirely -> [IrTarget.Local], same as every dashboard.json
+     * written before this field existed. `"target": "local"` is the
+     * explicit spelling of the same thing (accepted, never written by the
+     * encoder below — no reason to clutter every device's JSON with the
+     * default). `"target": {"extender": "<id>"}` -> [IrTarget.Extender].
+     */
+    private fun parseIrTarget(deviceId: String, value: JsonElement?): IrTarget = when {
+        value == null -> IrTarget.Local
+        value is JsonPrimitive && value.content == "local" -> IrTarget.Local
+        value is JsonObject && value.containsKey("extender") -> {
+            val extenderId = value["extender"]!!.jsonPrimitive.content
+            if (extenderId.isBlank()) error("irDevice \"$deviceId\" has a blank \"target.extender\" id")
+            IrTarget.Extender(extenderId)
+        }
+        else -> error(
+            "irDevice \"$deviceId\" has an unrecognized \"target\" " +
+                "(expected omitted, \"local\", or {\"extender\": \"<id>\"})"
+        )
     }
 
     private fun parseIrStep(obj: JsonObject): IrStepConfig {
@@ -314,7 +368,26 @@ object DashboardLoader {
                     add(
                         buildJsonObject {
                             put("name", page.name)
-                            page.parent?.let { put("parent", it) }
+                            page.parent?.let {
+                                put("parent", it)
+                                put("parentKey", page.parentKey)
+                            }
+                            page.linkedPage?.let { put("linkedPage", it) }
+                            if (page.linkedPageMode == "popup") put("linkedPageMode", "popup")
+                            page.hiddenUnlessActivity?.let { put("hiddenUnlessActivity", it) }
+                            page.openWhenEntity?.let {
+                                put("openWhenEntity", it)
+                                if (page.openWhenState != "on") put("openWhenState", page.openWhenState)
+                                page.closeWhenState?.let { closeState -> put("closeWhenState", closeState) }
+                                if (page.openMode == "popup") put("openMode", "popup")
+                            }
+                            // Shared by linkedPageMode and openMode — a page's popup shape is
+                            // one property regardless of which mechanism opens it as one.
+                            if (page.linkedPageMode == "popup" || page.openMode == "popup") {
+                                put("popupWidth", page.popupWidthFraction)
+                                put("popupHeight", page.popupHeightFraction)
+                                if (page.popupPosition != "center") put("popupPosition", page.popupPosition)
+                            }
                             put(
                                 "cards",
                                 buildJsonArray {
@@ -366,6 +439,13 @@ object DashboardLoader {
                                         put("brand", source.brand)
                                         put("model", source.model)
                                     }
+                                }
+                                when (val target = device.target) {
+                                    IrTarget.Local -> {} // default, omitted rather than written explicitly
+                                    is IrTarget.Extender -> put(
+                                        "target",
+                                        buildJsonObject { put("extender", target.extenderId) }
+                                    )
                                 }
                             }
                         )

@@ -95,6 +95,11 @@ class HardwareKeyRouter {
      * hotkey already claiming that key, instead of overriding it. */
     fun isShortBound(key: HardwareKey): Boolean = shortHandlers.containsKey(key)
 
+    /** Same idea as [isShortBound], for long-press — lets a built-in default
+     * (e.g. POWER long-press → restart, see MainActivity.rebindHotkeysForCurrentPage)
+     * yield to an explicit `longHotkeys` entry on the same key. */
+    fun isLongBound(key: HardwareKey): Boolean = longHandlers.containsKey(key)
+
     /** Drop all bindings — used before rebinding from a reloaded config. */
     fun clear() {
         shortHandlers.clear()

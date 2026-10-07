@@ -27,21 +27,28 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.custom.astrion.appletv.AppleTvRegistry
+import com.custom.astrion.appletv.installAppleTv
 import com.custom.astrion.cards.DeviceSettingsState
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.DashboardConfig
 import com.custom.astrion.config.DashboardLoader
 import com.custom.astrion.config.HotkeyConfig
 import com.custom.astrion.config.IrDatabaseRuntime
+import com.custom.astrion.config.IrStepConfig
+import com.custom.astrion.config.IrTarget
 import com.custom.astrion.config.JsonPlain
 import com.custom.astrion.config.RemoteSettings
+import com.custom.astrion.extender.ExtenderRegistry
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.harmony.HarmonyHubRegistry
@@ -49,10 +56,15 @@ import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
 import com.custom.astrion.ui.ChargingScreen
 import com.custom.astrion.ui.Dashboard
+import com.custom.astrion.ui.DashboardActivityCallbacks
+import com.custom.astrion.ui.DashboardConnection
+import com.custom.astrion.ui.DashboardNavigation
+import com.custom.astrion.ui.DashboardRegistries
+import com.custom.astrion.ui.DashboardUiState
 import com.custom.astrion.ui.ProvideTheme
+import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.web.ConfigServer
-import fi.iki.elonen.NanoHTTPD
 import kotlin.math.acos
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
@@ -84,6 +96,14 @@ class MainActivity : ComponentActivity() {
         const val KEEP_SCREEN_HOLD_MS = 10000L
         const val AMBIENT_WINDOW_MS = 5000L
         const val WAKE_COOLDOWN_MS = 2000L
+
+        // Keys that pop up a temporary volume readout when their hotkey
+        // fires an HA service call — see runHotkey()'s bottom branch.
+        val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
+
+        // The four D-pad keys that move Compose focus when unmapped — see
+        // clearFocusTrigger's own doc, dispatchKeyEvent().
+        val DIRECTIONAL_KEYS = setOf(HardwareKey.UP, HardwareKey.DOWN, HardwareKey.LEFT, HardwareKey.RIGHT)
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -292,6 +312,9 @@ class MainActivity : ComponentActivity() {
 
     /** Owns one HarmonyHubClient per configured Harmony hub. */
     private lateinit var harmonyRegistry: HarmonyHubRegistry
+    private lateinit var extenderRegistry: ExtenderRegistry
+
+    private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -303,6 +326,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private lateinit var configServer: ConfigServer
+    private lateinit var configServerSupervisor: ConfigServerSupervisor
 
     /**
      * Off by default: this is a battery-powered handheld remote that spends
@@ -339,6 +363,26 @@ class MainActivity : ComponentActivity() {
     private var dashboard by mutableStateOf(DashboardLoader.Result(DashboardConfig.default, null))
     private var navTarget by mutableStateOf<Int?>(null)
     private var overlayTarget by mutableStateOf<String?>(null)
+
+    /** See DashboardNavigation.volumeHotkeyTrigger — set fresh (never
+     * cleared back to null) every time a VOLUME_UP/VOLUME_DOWN/MUTE hotkey
+     * fires against a real HA entity, in runHotkey() below. */
+    private var volumeHotkeyTrigger by mutableStateOf<VolumeHotkeyTrigger?>(null)
+
+    /** Bumped (nanoTime, never meaningfully "cleared" — only ever compared
+     * for change, same one-shot-nonce pattern as [volumeHotkeyTrigger])
+     * every time a directional D-pad key (UP/DOWN/LEFT/RIGHT) is consumed
+     * by a configured hotkey in [dispatchKeyEvent] instead of reaching
+     * Compose's own focus-navigation. Without this, whichever tile/card
+     * already had Compose focus (e.g. from an earlier touch, or the
+     * initial default) kept showing its focus outline even though that
+     * D-pad key can no longer move it on this page — a cursor that looks
+     * navigable but isn't. [composeContent] observes this to clear focus
+     * at that moment instead, so no outline is drawn until the person
+     * touches a tile or presses a direction that IS still free to move
+     * focus (a page/config with no hotkey on that key at all — untouched,
+     * "the current focus outline behavior is perfect" for that case). */
+    private var clearFocusTrigger by mutableStateOf(0L)
 
     /** Which page is currently visible — used to know which page-scoped
      * hotkeys should currently be layered on top of the global ones. */
@@ -412,11 +456,17 @@ class MainActivity : ComponentActivity() {
         chargeDockMonitor.start()
 
         initClientsAndServer()
+        configServerSupervisor =
+            ConfigServerSupervisor(
+                scope = lifecycleScope,
+                serverProvider = { configServer },
+                isEnabled = { configServerEnabled && !isDestroyed }
+            )
         configServerEnabled = prefs.getBoolean("config_server_enabled", true)
         tapFeedbackEnabled = prefs.getBoolean("tap_feedback_enabled", true)
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
-        if (configServerEnabled) startConfigServer()
+        if (configServerEnabled) configServerSupervisor.start()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
 
         currentPageIndex = dashboard.config.startPage
@@ -438,6 +488,11 @@ class MainActivity : ComponentActivity() {
                 onError = { hubName, msg -> Log.e("HarmonyHubClient", "[$hubName] $msg") },
                 onHubIdDiscovered = { updatedHubs -> RemoteSettings.saveHarmonyHubs(this, updatedHubs) }
             )
+        extenderRegistry =
+            ExtenderRegistry(
+                extenders = RemoteSettings.extenders(this),
+                onError = { extName, msg -> Log.e("ExtenderClient", "[$extName] $msg") }
+            )
         configServer =
             ConfigServer(
                 context = this,
@@ -455,6 +510,7 @@ class MainActivity : ComponentActivity() {
                 onStartActivity = { id -> runOnUiThread { startActivityFn?.invoke(id) } },
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
+        appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -463,12 +519,13 @@ class MainActivity : ComponentActivity() {
      *  all within the same Activity instance, no recreate() needed. */
     private fun reconnectWithNewSettings() {
         Log.i("MainActivity", "reconnectWithNewSettings")
+        configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
-        runCatching { configServer.stop() }
+        appleTvRegistry.stop()
 
         initClientsAndServer()
-        if (configServerEnabled) startConfigServer()
+        if (configServerEnabled) configServerSupervisor.start()
         client.connect()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
 
@@ -498,36 +555,52 @@ class MainActivity : ComponentActivity() {
             val connection = client.connection.collectAsState()
             val isDocked = chargeDockMonitor.state.isDocked
             Box {
+                val focusManager = LocalFocusManager.current
+                LaunchedEffect(clearFocusTrigger) {
+                    // 0L is the initial/never-fired value (see its own doc)
+                    // — skip clearing focus on first composition for that
+                    // reason alone, so app launch doesn't itself strip the
+                    // very first default focus for no reason.
+                    if (clearFocusTrigger != 0L) focusManager.clearFocus(force = true)
+                }
                 Dashboard(
-                    client = client,
-                    harmonyRegistry = harmonyRegistry,
-                    entitiesState = entities,
-                    connectionState = connection,
+                    connection = DashboardConnection(client = client, entitiesState = entities, connectionState = connection),
+                    registries = DashboardRegistries(harmonyRegistry = harmonyRegistry, extenderRegistry = extenderRegistry),
                     config = dashboard.config,
-                    configNotice = dashboard.notice,
-                    navTarget = navTarget,
-                    onNavHandled = { navTarget = null },
-                    overlayTarget = overlayTarget,
-                    onOverlayHandled = { overlayTarget = null },
-                    onPageChanged = { pageIndex ->
-                        currentPageIndex = pageIndex
-                        rebindHotkeysForCurrentPage()
-                    },
-                    deviceSettings =
-                    DeviceSettingsState(
-                        wakeOnMotionEnabled = wakeOnMotionEnabled,
-                        setWakeOnMotionEnabled = { enabled -> setWakeOnMotion(enabled) },
-                        wifiKeepAwakeEnabled = wifiKeepAwakeEnabled,
-                        setWifiKeepAwakeEnabled = { enabled -> setWifiKeepAwake(enabled) },
-                        configServerEnabled = configServerEnabled,
-                        setConfigServerEnabled = { enabled -> updateConfigServerEnabled(enabled) },
-                        tapFeedbackEnabled = tapFeedbackEnabled,
-                        setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) }
+                    navigation =
+                    DashboardNavigation(
+                        navTarget = navTarget,
+                        onNavHandled = { navTarget = null },
+                        overlayTarget = overlayTarget,
+                        onOverlayHandled = { overlayTarget = null },
+                        onPageChanged = { pageIndex ->
+                            currentPageIndex = pageIndex
+                            rebindHotkeysForCurrentPage()
+                        },
+                        volumeHotkeyTrigger = volumeHotkeyTrigger
                     ),
-                    screenOn = screenOn && !isDocked,
-                    onActivityRuntimeReady = { activityRuntime = it },
-                    onStartActivityReady = { fn -> startActivityFn = fn },
-                    onStopActivityReady = { fn -> stopActivityFn = fn }
+                    uiState =
+                    DashboardUiState(
+                        configNotice = dashboard.notice,
+                        deviceSettings =
+                        DeviceSettingsState(
+                            wakeOnMotionEnabled = wakeOnMotionEnabled,
+                            setWakeOnMotionEnabled = { enabled -> setWakeOnMotion(enabled) },
+                            wifiKeepAwakeEnabled = wifiKeepAwakeEnabled,
+                            setWifiKeepAwakeEnabled = { enabled -> setWifiKeepAwake(enabled) },
+                            configServerEnabled = configServerEnabled,
+                            setConfigServerEnabled = { enabled -> updateConfigServerEnabled(enabled) },
+                            tapFeedbackEnabled = tapFeedbackEnabled,
+                            setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) }
+                        ),
+                        screenOn = screenOn && !isDocked
+                    ),
+                    activityCallbacks =
+                    DashboardActivityCallbacks(
+                        onActivityRuntimeReady = { activityRuntime = it },
+                        onStartActivityReady = { fn -> startActivityFn = fn },
+                        onStopActivityReady = { fn -> stopActivityFn = fn }
+                    )
                 )
                 if (isDocked) {
                     val theme = remember(dashboard.config.theme) { dashboard.config.theme.toColors() }
@@ -566,7 +639,7 @@ class MainActivity : ComponentActivity() {
      * simply no longer this page's configured "leave" button. Either way,
      * BACK is never allowed to dismiss the launcher itself (kiosk mode).
      */
-    @Suppress("DEPRECATION")
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     @SuppressLint("MissingSuperCall") // intentional: BACK is fully intercepted on root pages
     // to keep this a kiosk-mode launcher — see class doc above.
     override fun onBackPressed() {
@@ -680,6 +753,50 @@ class MainActivity : ComponentActivity() {
      *  6. Local IR command (irDevice + irCommand) — no hub, no HA, fully offline
      *  7. Home Assistant service call
      */
+    /** Resolves and routes a hotkey's IR command to wherever `device.target`
+     * points — extracted out of [runHotkey] itself, which was pushed over
+     * detekt's cyclomatic-complexity/nesting-depth thresholds by this
+     * branch when it lived inline. */
+    private fun sendHotkeyIrCommand(irDevice: String, irCommand: String) {
+        val device = dashboard.config.irDevices.firstOrNull { it.id == irDevice }
+        if (device == null) {
+            Log.w("MainActivity", "hotkey irDevice=$irDevice not found in AppConfig.irDevices")
+            return
+        }
+        val irStep = IrDatabaseRuntime.resolve(device, irCommand)
+        if (irStep == null) {
+            Log.w("MainActivity", "hotkey irDevice=$irDevice irCommand=$irCommand not found")
+            return
+        }
+        when (val target = device.target) {
+            // Unchanged from before this device gained a `target` field —
+            // every dashboard.json without one defaults here.
+            IrTarget.Local ->
+                runCatching { irManager?.transmit(irStep.freq, irStep.pattern.toIntArray()) }
+                    .onFailure { Log.e("MainActivity", "hotkey IR send failed: $irDevice/$irCommand", it) }
+            is IrTarget.Extender -> sendHotkeyIrViaExtender(irDevice, irCommand, irStep, target)
+        }
+    }
+
+    private fun sendHotkeyIrViaExtender(irDevice: String, irCommand: String, irStep: IrStepConfig, target: IrTarget.Extender) {
+        val prontoCode = irStep.pronto
+        if (prontoCode == null) {
+            // Inline-sourced devices don't carry the original Pronto string in
+            // dashboard.json today (only the already-decoded freq/pattern) --
+            // only ir-database (SdCardRef) devices can target an extender for
+            // now. See IrStepConfig's kdoc.
+            Log.w(
+                "MainActivity",
+                "hotkey irDevice=$irDevice irCommand=$irCommand targets an extender but has no raw Pronto " +
+                    "string (Inline-sourced IR devices can't target an extender yet)"
+            )
+            return
+        }
+        extenderRegistry.client(target.extenderId)?.let { client ->
+            lifecycleScope.launch { client.send(prontoCode) }
+        }
+    }
+
     private fun runHotkey(hk: HotkeyConfig): Boolean {
         if (hk.openOverlay != null) return openOverlayHotkey(hk.openOverlay)
         if (hk.openCurrentActivityRoom != null) return openCurrentActivityHotkey(hk.openCurrentActivityRoom)
@@ -708,13 +825,7 @@ class MainActivity : ComponentActivity() {
         val irDevice = hk.irDevice
         val irCommand = hk.irCommand
         if (irDevice != null && irCommand != null) {
-            val irStep = IrDatabaseRuntime.resolveFrom(dashboard.config.irDevices, irDevice, irCommand)
-            if (irStep != null) {
-                runCatching { irManager?.transmit(irStep.freq, irStep.pattern.toIntArray()) }
-                    .onFailure { Log.e("MainActivity", "hotkey IR send failed: $irDevice/$irCommand", it) }
-            } else {
-                Log.w("MainActivity", "hotkey irDevice=$irDevice irCommand=$irCommand not found in AppConfig.irDevices")
-            }
+            sendHotkeyIrCommand(irDevice, irCommand)
             return true
         }
 
@@ -723,7 +834,45 @@ class MainActivity : ComponentActivity() {
         val svc = service.substringAfter('.')
         val data = hk.data.mapValues { JsonPlain.toJson(it.value) }
         client.callService(ServiceCall(domain, svc, hk.entityId, data))
+        maybeTriggerVolumePopup(hk)
         return true
+    }
+
+    /**
+     * Pops up a temporary volume readout for a VOLUME_UP/VOLUME_DOWN/MUTE
+     * hotkey that just fired an HA service call — split out of [runHotkey]
+     * purely to keep that function's cyclomatic complexity under detekt's
+     * threshold, no behavior difference from having it inline. No
+     * queryable numeric level exists for the harmonyCommand/irCommand
+     * branches earlier in [runHotkey] (no HA entity there at all), so this
+     * is only ever called from the HA-service-call path.
+     */
+    private fun maybeTriggerVolumePopup(hk: HotkeyConfig) {
+        val entityId = hk.entityId ?: return
+        if (hk.key.uppercase() in VOLUME_POPUP_KEYS) {
+            volumeHotkeyTrigger = VolumeHotkeyTrigger(entityId, System.nanoTime())
+        }
+    }
+
+    /**
+     * Clears Compose's D-pad focus the moment a directional key (UP/DOWN/
+     * LEFT/RIGHT) is about to be consumed as a hotkey below — split out of
+     * [dispatchKeyEvent] purely to keep that function's cyclomatic
+     * complexity under detekt's threshold, no behavior difference from
+     * having it inline. See [clearFocusTrigger]'s own doc for why: without
+     * this, any focus outline already shown would otherwise sit there
+     * looking like a movable cursor that in fact can't move on this key
+     * anymore, since the key never reaches Compose's own focus-navigation
+     * (`super.dispatchKeyEvent` is never called for a mapped key). CENTER
+     * is deliberately excluded — an activation key, not a "move" one.
+     */
+    private fun maybeClearFocusForDirectionalHotkey(event: KeyEvent, code: Int) {
+        if (event.action == KeyEvent.ACTION_DOWN &&
+            event.repeatCount == 0 &&
+            HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS
+        ) {
+            clearFocusTrigger = System.nanoTime()
+        }
     }
 
     @SuppressLint("RestrictedApi")
@@ -740,6 +889,10 @@ class MainActivity : ComponentActivity() {
             }
             return super.dispatchKeyEvent(event)
         }
+
+        // This key is about to be fully consumed as a hotkey below (never
+        // reaching Compose's own focus-navigation via super.dispatchKeyEvent).
+        maybeClearFocusForDirectionalHotkey(event, code)
 
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
@@ -878,21 +1031,6 @@ class MainActivity : ComponentActivity() {
         wifiLock = null
     }
 
-    private fun startConfigServer() {
-        runCatching { configServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }
-            .onSuccess { Log.i("ConfigServer", "started on :8080") }
-            .onFailure {
-                Log.e("ConfigServer", "failed to start on :8080", it)
-                keyHandler.postDelayed({
-                    if (!isDestroyed) {
-                        runCatching { configServer.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false) }
-                            .onSuccess { Log.i("ConfigServer", "retry: started on :8080") }
-                            .onFailure { e -> Log.e("ConfigServer", "retry failed on :8080", e) }
-                    }
-                }, 500L)
-            }
-    }
-
     /** Called from the settings page switch — persists the choice and
      * starts/stops the :8080 server immediately, no restart needed. Turning
      * it off also closes /builder/, icon uploads, and dashboard.json
@@ -900,11 +1038,7 @@ class MainActivity : ComponentActivity() {
     private fun updateConfigServerEnabled(enabled: Boolean) {
         configServerEnabled = enabled
         prefs.edit { putBoolean("config_server_enabled", enabled) }
-        if (enabled) {
-            startConfigServer()
-        } else {
-            runCatching { configServer.stop() }
-        }
+        if (enabled) configServerSupervisor.start() else configServerSupervisor.stop()
     }
 
     /** Called from the settings page switch — persists the choice, no
@@ -967,9 +1101,10 @@ class MainActivity : ComponentActivity() {
         runCatching { unregisterReceiver(screenStateReceiver) }
         chargeDockMonitor.stop()
         releaseWifiLock()
+        if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
-        runCatching { configServer.stop() }
+        appleTvRegistry.stop()
         super.onDestroy()
     }
 }

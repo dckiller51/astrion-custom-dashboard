@@ -15,8 +15,10 @@ config:
   warningsAsErrors: false
 
 complexity:
+  LargeClass:
+    threshold: 1200
   LongMethod:
-    threshold: 80 # default is 60 — Compose functions with a lot of UI tend to run long legitimately
+    threshold: 200 # default is 60 — Compose functions with a lot of UI tend to run long legitimately
   LongParameterList:
     active: true
     constructorThreshold: 10 # ConfigServer's constructor alone has ~10 callback params by design

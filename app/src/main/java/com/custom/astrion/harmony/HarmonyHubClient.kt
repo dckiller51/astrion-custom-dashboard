@@ -446,55 +446,66 @@ class HarmonyHubClient(
             .getOrNull()
     }
 
+    private fun parseConfig(reply: JSONObject): HarmonyConfig {
+        val data = extractConfigData(reply)
+        val devices = parseDevices(data.optJSONArray("device") ?: JSONArray())
+        val activities = parseActivities(data.optJSONArray("activity") ?: JSONArray())
+        return HarmonyConfig(devices = devices, activities = activities)
+    }
+
     /**
      * The hub's "config" response nests its payload in a `data` field that,
      * depending on hub firmware, is either a JSON object directly or a JSON
-     * *string* that itself needs parsing — handle both (same quirk other
-     * community Harmony clients, e.g. harmonyhubjs-client, work around).
+     * *string* that itself needs parsing.
      */
-    private fun parseConfig(reply: JSONObject): HarmonyConfig {
-        val data: JSONObject =
-            when (val rawData = reply.opt("data")) {
-                is JSONObject -> rawData
-                is String -> JSONObject(rawData)
-                else -> error("no \"data\" field in config response")
-            }
+    private fun extractConfigData(reply: JSONObject): JSONObject = when (val rawData = reply.opt("data")) {
+        is JSONObject -> rawData
+        is String -> JSONObject(rawData)
+        else -> error("no \"data\" field in config response")
+    }
 
-        val devices =
-            (data.optJSONArray("device") ?: JSONArray()).let { arr ->
-                (0 until arr.length()).map { i ->
-                    val d = arr.getJSONObject(i)
-                    val commands = mutableListOf<HarmonyCommand>()
-                    val groups = d.optJSONArray("controlGroup") ?: JSONArray()
-                    for (g in 0 until groups.length()) {
-                        val functions = groups.getJSONObject(g).optJSONArray("function") ?: JSONArray()
-                        for (f in 0 until functions.length()) {
-                            val fn = functions.getJSONObject(f)
-                            val name = fn.optString("name")
-                            if (name.isNotBlank()) {
-                                commands += HarmonyCommand(name = name, label = fn.optString("label", name))
-                            }
-                        }
-                    }
-                    HarmonyDevice(
-                        id = d.optString("id"),
-                        label = d.optString("label", d.optString("name", d.optString("id"))),
-                        commands = commands
-                    )
-                }
-            }
+    private fun parseDevices(arr: JSONArray): List<HarmonyDevice> = (0 until arr.length()).map { i -> parseDevice(arr.getJSONObject(i)) }
 
-        val activities =
-            (data.optJSONArray("activity") ?: JSONArray()).let { arr ->
-                (0 until arr.length()).map { i ->
-                    val a = arr.getJSONObject(i)
-                    HarmonyActivity(
-                        id = a.optString("id"),
-                        label = a.optString("label", a.optString("name", a.optString("id")))
-                    )
-                }
-            }
+    private fun parseDevice(d: JSONObject): HarmonyDevice {
+        val groups = d.optJSONArray("controlGroup") ?: JSONArray()
+        val commands = (0 until groups.length()).flatMap { g ->
+            parseFunctions(groups.getJSONObject(g).optJSONArray("function") ?: JSONArray())
+        }
+        return HarmonyDevice(
+            id = d.optString("id"),
+            label = d.optString("label", d.optString("name", d.optString("id"))),
+            commands = commands
+        )
+    }
 
-        return HarmonyConfig(devices = devices, activities = activities)
+    private fun parseFunctions(functions: JSONArray): List<HarmonyCommand> =
+        (0 until functions.length()).mapNotNull { f -> parseCommand(functions.getJSONObject(f)) }
+
+    private fun parseCommand(fn: JSONObject): HarmonyCommand? {
+        val displayName = fn.optString("name")
+        val label = fn.optString("label", displayName)
+        val irCommand = (extractIrCommand(fn) ?: displayName).takeIf { it.isNotBlank() } ?: return null
+        return HarmonyCommand(name = irCommand, label = label.ifBlank { irCommand })
+    }
+
+    /**
+     * The real IR command the hub expects lives in the nested "action" JSON
+     * string (e.g. {"command":"OK",...}) — "name"/"label" are just UI display
+     * labels and can differ from it (e.g. name="Select" but action.command="OK").
+     * Returns null if "action" is missing, malformed, or has no "command".
+     */
+    private fun extractIrCommand(fn: JSONObject): String? = runCatching {
+        fn.optString("action")
+            .takeIf { it.isNotBlank() }
+            ?.let { JSONObject(it).optString("command") }
+            ?.takeIf { it.isNotBlank() }
+    }.getOrNull()
+
+    private fun parseActivities(arr: JSONArray): List<HarmonyActivity> = (0 until arr.length()).map { i ->
+        val a = arr.getJSONObject(i)
+        HarmonyActivity(
+            id = a.optString("id"),
+            label = a.optString("label", a.optString("name", a.optString("id")))
+        )
     }
 }

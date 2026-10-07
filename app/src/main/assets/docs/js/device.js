@@ -68,28 +68,13 @@ async function loadHaStates() {
   }
 }
 
-/** Normalizes a parsed dashboard.json into dashboardData — same shape importJson() builds,
- * factored out so both paths (paste and device auto-load) stay in sync. */
+/** Normalizes a parsed dashboard.json into dashboardData via
+ * normalizeDashboardData() (pages.js) — the single shared implementation
+ * importJson() also uses, so this path and the paste-box path can't
+ * silently diverge on which fields survive a round-trip again (see that
+ * function's own doc comment for the history of exactly that bug). */
 function applyParsedDashboard(parsed) {
-  dashboardData = {
-    startPage: parsed.startPage || 0,
-    pages: (parsed.pages || []).map(p => ({
-      name: p.name || 'Page',
-      cards: p.cards || [],
-      hotkeys: p.hotkeys || [],
-      longHotkeys: p.longHotkeys || [],
-    })),
-    hotkeys: parsed.hotkeys || [],
-    longHotkeys: parsed.longHotkeys || [],
-    irDevices: parsed.irDevices || [],
-    haDevices: parsed.haDevices || [],
-    harmonyAliases: parsed.harmonyAliases || {},
-    activities: parsed.activities || [],
-    theme: parsed.theme || {},
-  };
-  if (dashboardData.pages.length === 0) {
-    dashboardData.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });
-  }
+  dashboardData = normalizeDashboardData(parsed);
   currentActivePage = 0;
 }
 

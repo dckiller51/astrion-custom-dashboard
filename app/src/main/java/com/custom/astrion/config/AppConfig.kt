@@ -70,7 +70,121 @@ data class PageConfig(
      * other than "BACK", the hardware BACK button itself goes back to doing
      * nothing on this page (today's behavior for a page with no parent at
      * all), since it's no longer the configured "leave" button. */
-    val parentKey: String = "BACK"
+    val parentKey: String = "BACK",
+    /** Optional name of another page in [AppConfig.pages] that this page
+     * links to "below" it — swiping UP on this page's [PageIndicator]
+     * jumps straight there (same instant `scrollToPage` as any other
+     * hardware/tap navigation), the vertical counterpart of [parent]'s
+     * horizontal relationship. Typically used for a per-card "more options"
+     * page (e.g. an Apple TV page's extra controls).
+     *
+     * Several different pages can all set this to the *same* linked page —
+     * a shared "TV Remote" page with HDMI/amp-source controls, say, linked
+     * from both an "Apple TV" page and an "Xbox" page. Leave [parent] unset
+     * on a page used this way: [PageIndicator] then falls back to
+     * whichever page the most recent swipe-up actually came from, rather
+     * than the single fixed page a static [parent] could only ever name
+     * one of — so the back chevron always returns to the right place
+     * regardless of which of the several linking pages you arrived from.
+     * (If the shared page DOES set [parent], that still wins outright —
+     * this fallback only fills in when it hasn't.)
+     *
+     * Case-insensitive; an unresolved name is simply ignored (swipe-up does
+     * nothing). null (default) = no linked page, and on a page with no
+     * [linkedPage] swiping up does nothing (see DashboardContent's
+     * PageIndicator wiring). */
+    val linkedPage: String? = null,
+    /** How [linkedPage] is reached on swipe-up. `"page"` (default) —
+     * unchanged, an instant `scrollToPage` jump exactly like today.
+     * `"popup"` — the linked page's own cards render inside a floating
+     * overlay on top of the current page instead, sized/placed by
+     * [popupWidthFraction]/[popupHeightFraction]/[popupPosition], and the
+     * current page (and pager position) is left completely untouched —
+     * dismissed by tapping outside it, BACK, or swiping it down. Meant for
+     * a quick secondary control (e.g. "TV" / "Projector" on a Video page)
+     * that doesn't warrant leaving the page you're on. Unrecognized value
+     * falls back to `"page"`. */
+    val linkedPageMode: String = "page",
+    /** Popup width as a fraction of the screen width (0–1). Only consulted
+     * when [linkedPageMode] is `"popup"`. Defaults to a compact 0.7 rather
+     * than full-width — a popup that fills the screen edge to edge reads as
+     * a full page, undermining the point of using popup mode at all. */
+    val popupWidthFraction: Float = 0.7f,
+    /** Popup height as a fraction of the screen height (0–1). See
+     * [popupWidthFraction]. Defaults to 0.5. */
+    val popupHeightFraction: Float = 0.5f,
+    /** Where the popup is anchored on screen: "center" (default), "top",
+     * "bottom", "left", or "right". Only consulted when [linkedPageMode] is
+     * `"popup"`. Unrecognized value falls back to "center". */
+    val popupPosition: String = "center",
+    /** Optional Activity id — an [ActivityRuntime.TrackedActivity.id], which
+     * covers BOTH a composed [ActivityConfig.id] (same id space as a
+     * scene_grid item's `"activity"` field) AND any `"track": true`
+     * scene_grid tile or hotkey, Harmony-backed ones included (see
+     * [ActivityRuntime.scan] for exactly how each kind's id is derived) —
+     * NOT a room name. While set, this page's dot is left out of
+     * [PageIndicator] until [ActivityRuntime.activeByRoom] reports that
+     * specific Activity as the active one somewhere, then the dot appears
+     * (and disappears again once a different Activity — or none — takes
+     * over that room), decluttering the indicator for a page tied to a
+     * device that isn't always in use. null (default) = always shown,
+     * today's behavior.
+     *
+     * Deliberately dot-only, not a real filter on the pager itself
+     * (`AppConfig.pages`/`pagerState` always cover every page, regardless of
+     * this field) — a page tied to an Activity is exactly the page a
+     * scene_grid tile's own `"page"` field jumps to right after firing
+     * `"activity"` (see SceneGridCard's `onTap`), and that jump is a
+     * synchronous call while the Activity dispatch is still mid-flight
+     * (ActivityDispatcher.switchActivity only calls `markActiveById` — what
+     * actually updates `activeByRoom` — *after* every device command in the
+     * plan has been sent). Gating the pager itself on live Activity state
+     * made that combination silently fail to navigate the first version of
+     * this feature shipped with, since the target page wasn't "visible" yet
+     * at the moment of the jump; keeping the pager itself ungated sidesteps
+     * that whole race by construction. */
+    val hiddenUnlessActivity: String? = null,
+    /** Optional Home Assistant entity id to watch: when its state matches
+     * [openWhenState] (default `"on"`), automatically navigates to this
+     * page — e.g. a doorbell `switch` turning on pops open a "Doorbell"
+     * page — remembering wherever you were before via the same dynamic
+     * back-target [linkedPage] uses ([resolveBackTargetName] in
+     * Dashboard.kt), so BACK/the chevron return there.
+     *
+     * When the entity's state stops matching WHILE this page is the one on
+     * screen, automatically navigates back too — same target. Only fires
+     * once per "on" streak: leaving this page manually while the entity is
+     * still matching does not immediately re-open it (see
+     * `DashboardEntityPageEffect`'s own `autoOpenedFor` tracking) — it can
+     * trigger again on the next transition into [openWhenState].
+     *
+     * For BACK to close this page from a hardware button (not just an
+     * on-screen tap), set [parent] explicitly too: the hardware BACK key is
+     * wired in MainActivity against `AppConfig.pages` directly, and only
+     * knows about a page's static [parent] — it has no visibility into the
+     * dynamic, Compose-only back-target this field alone would leave you
+     * with. Leaving [parent] unset still gives on-screen closing (chevron
+     * tap) and the automatic close-on-state-change above. */
+    val openWhenEntity: String? = null,
+    val openWhenState: String = "on",
+    val closeWhenState: String? = null,
+    /** How [openWhenEntity] reaching [openWhenState] opens this page.
+     * `"page"` (default) — unchanged, the same `scrollToPage` navigation
+     * described on [openWhenEntity]. `"popup"` — this page's own cards
+     * render inside the same floating overlay [linkedPageMode] uses
+     * instead, sized/placed by the same [popupWidthFraction] /
+     * [popupHeightFraction] / [popupPosition] fields (a page's popup shape
+     * is one property of the page, regardless of which of the two
+     * mechanisms opens it as one) — the pager is left completely
+     * untouched, ideal for something like an intercom/doorbell call you
+     * want to see without losing whatever page you were on. Auto-closes
+     * the same way `"page"` mode does — the entity's state leaving
+     * [openWhenState] (or reaching [closeWhenState] when set) — but by
+     * dismissing the popup instead of navigating back, and only when it
+     * was this same entity that opened it (a popup opened by hand via
+     * [linkedPage] swipe-up is never auto-closed by an unrelated entity's
+     * state). Unrecognized value falls back to `"page"`. */
+    val openMode: String = "page"
 )
 
 /**
@@ -170,8 +284,40 @@ data class HotkeyConfig(
 data class IrDeviceConfig(
     val id: String,
     val name: String = id,
-    val source: IrDeviceSource
+    val source: IrDeviceSource,
+    /** Where this device's commands actually get transmitted from. Lives
+     * here (per-device), not on individual cards/hotkeys referencing this
+     * device — a device is physically in one place, so every card/hotkey
+     * that sends to it should automatically go the same way without
+     * having to be configured (or risk being mis-configured) separately.
+     * Defaults to [IrTarget.Local] so every existing dashboard.json with
+     * no "target" field at all keeps working exactly as before. */
+    val target: IrTarget = IrTarget.Local
 )
+
+/**
+ * Where an [IrDeviceConfig]'s commands actually get fired from.
+ *
+ * - [Local]: this device's own built-in IR blaster (`ConsumerIrManager`)
+ *   — the only option that has ever existed until now, still the default.
+ * - [Extender]: a network-connected Astrion IR Extender (see the
+ *   astrion-ir-extender project) reached over the LAN, for devices
+ *   that live somewhere the local blaster's line of sight doesn't reach
+ *   (a closed cabinet, a different room). [extenderId] matches a
+ *   registered extender's stable id — same id-by-string-reference
+ *   pattern already used for Harmony hubs (`HotkeyConfig.hub` against
+ *   `HarmonyHubConfig.localId`), rather than embedding the extender's
+ *   full config inline here. The registry that owns those ids (a
+ *   "Devices" screen, name+IP+MAC-derived localId, mirroring the Harmony
+ *   hub registry) doesn't exist yet — this is just the reference shape
+ *   the model is ready for once it does.
+ */
+@Suppress("Unused")
+sealed class IrTarget {
+    data object Local : IrTarget()
+
+    data class Extender(val extenderId: String) : IrTarget()
+}
 
 /**
  * Where an [IrDeviceConfig]'s commands come from.
@@ -208,7 +354,21 @@ sealed class IrDeviceSource {
 /** One IR transmission: `freq` (Hz) + `pattern` (alternating on/off
  * durations in µs) map straight onto `ConsumerIrManager.transmit()`. */
 @Suppress("Unused")
-data class IrStepConfig(val freq: Int, val pattern: List<Int>)
+data class IrStepConfig(
+    val freq: Int,
+    val pattern: List<Int>,
+    /** The original Pronto hex string this was decoded from, when known —
+     * populated for [IrDeviceSource.SdCardRef] (the ir-database file
+     * always has it), null for [IrDeviceSource.Inline] (dashboard.json
+     * only ever persists the already-decoded freq/pattern for those, not
+     * the original text). Needed to route a command to an
+     * [IrTarget.Extender], which takes a raw Pronto string, not a decoded
+     * pattern — recomputing one from [pattern] would need the exact
+     * inverse of `prontoToPattern()`, an unnecessary source of subtle
+     * rounding bugs when the original string can just be carried through
+     * instead. */
+    val pronto: String? = null
+)
 
 // NOTE: a *single-action* Activity (one HA script, one existing Harmony
 // Activity — the hub already orchestrates everything for that one — or one

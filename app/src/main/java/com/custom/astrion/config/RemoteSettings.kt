@@ -4,12 +4,72 @@ import android.content.Context
 import androidx.core.content.edit
 import java.util.UUID
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+
+/**
+ * A single Astrion IR Extender (see the astrion-ir-extender project) the
+ * app can send Pronto codes to over the LAN. [localId] is derived from the
+ * extender's MAC address (`ext_<mac>`) rather than random, so the same
+ * physical unit always maps back to the same id even if it's removed and
+ * re-added later — the earlier Harmony hub `localId` bug (random per-add,
+ * silently orphaning every reference on re-add) is deliberately not
+ * repeated here. Referenced from [IrTarget.Extender.extenderId].
+ */
+data class ExtenderConfig(
+    val localId: String,
+    val name: String,
+    /** IP or hostname, no scheme/port — ExtenderClient builds the full
+     * `http://<host>/pronto` URL. */
+    val host: String,
+    /** Normalized to 12 lowercase hex digits, no separators. [localId] is
+     * always `ext_<mac>`; this field keeps the value around so the edit
+     * form can show it back to the user. */
+    val mac: String = ""
+)
+
+/**
+ * A single Apple TV controlled directly over its Companion link — no Home
+ * Assistant involved. Created by the web configurator's pairing flow (the
+ * Apple TV shows a PIN, [credentials] is what comes out of it).
+ *
+ * [entityId] is the Home-Assistant-style id (`media_player.appletv_<slug>`)
+ * this device is published under, so any media_player-aware card, hotkey or
+ * button can target it exactly like an HA entity. It is generated once when
+ * the device is added and then kept, so renaming the device never breaks
+ * cards that reference it. [host]/[port] are only the last known address:
+ * the Companion port is dynamic, so the app re-finds the device by its mDNS
+ * [serviceName] on every connect and updates these when they change.
+ */
+data class AppleTvConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val port: Int,
+    val serviceName: String,
+    /** `ltpk:ltsk:atv_id:client_id` in hex — see AppleTvCredentials. */
+    val credentials: String,
+    /**
+     * The separate MRP pairing that gives title/artist/artwork/position — entirely optional
+     * (null until the person also pairs it), and independent of the Companion fields above: a
+     * device with no MRP pairing still works fully for control, just without now-playing info.
+     */
+    val mrpHost: String = "",
+    val mrpPort: Int = 0,
+    val mrpServiceName: String = "",
+    val mrpCredentials: String = "",
+    /** "airplay" (the default — MRP tunnelled through AirPlay 2, required by tvOS >= 15) or
+     * "classic" (plain MRP-over-TCP, only still usable on an older Apple TV). Decided once, from
+     * which [com.custom.astrion.appletv.AppleTvServiceKind] the person's scan result paired
+     * against, and then kept so reconnects use the same client. */
+    val mrpTransport: String = "airplay"
+)
 
 /**
  * A single Harmony Hub the app can talk to directly, bypassing Home
@@ -41,6 +101,8 @@ object RemoteSettings {
     private const val KEY_HA_TOKEN = "ha_token"
     private const val KEY_HA_WEBHOOK_ID = "ha_webhook_id"
     private const val KEY_HARMONY_HUBS = "harmony_hubs" // JSON array, see HarmonyHubConfig
+    private const val KEY_EXTENDERS = "ir_extenders" // JSON array, see ExtenderConfig
+    private const val KEY_APPLE_TVS = "apple_tvs" // JSON array, see AppleTvConfig
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -137,5 +199,101 @@ object RemoteSettings {
         }
     } catch (_: Exception) {
         emptyList()
+    }
+
+    /** All configured IR Extenders, in the order they were added. */
+    fun extenders(context: Context): List<ExtenderConfig> {
+        val raw = prefs(context).getString(KEY_EXTENDERS, null) ?: return emptyList()
+        return parseExtenders(raw)
+    }
+
+    fun saveExtenders(context: Context, extenders: List<ExtenderConfig>) {
+        val array =
+            buildJsonArray {
+                extenders.forEach { ext ->
+                    addJsonObject {
+                        put("localId", ext.localId)
+                        put("name", ext.name)
+                        put("host", ext.host)
+                        put("mac", ext.mac)
+                    }
+                }
+            }
+
+        prefs(context).edit {
+            putString(KEY_EXTENDERS, array.toString())
+        }
+    }
+
+    /** Convenience lookup used to resolve [IrTarget.Extender.extenderId]. */
+    fun extender(context: Context, localId: String): ExtenderConfig? = extenders(context).firstOrNull { it.localId == localId }
+
+    private fun parseExtenders(raw: String): List<ExtenderConfig> = try {
+        json.parseToJsonElement(raw).jsonArray.map { el ->
+            val obj = el.jsonObject
+            ExtenderConfig(
+                localId = obj["localId"]?.jsonPrimitive?.content ?: UUID.randomUUID().toString(),
+                name = obj["name"]?.jsonPrimitive?.content ?: "IR Extender",
+                host = obj["host"]?.jsonPrimitive?.content ?: "",
+                mac = obj["mac"]?.jsonPrimitive?.content ?: ""
+            )
+        }
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    /** All configured Apple TVs, in the order they were added. */
+    fun appleTvs(context: Context): List<AppleTvConfig> {
+        val raw = prefs(context).getString(KEY_APPLE_TVS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull(::jsonToAppleTvConfig)
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    /** Builds one [AppleTvConfig] from its stored JSON object, or null when a required field is missing. */
+    private fun jsonToAppleTvConfig(el: JsonElement): AppleTvConfig? {
+        val obj = el.jsonObject
+        fun str(key: String, default: String) = obj[key]?.jsonPrimitive?.content ?: default
+        val localId = obj["localId"]?.jsonPrimitive?.content ?: return null
+        val entityId = obj["entityId"]?.jsonPrimitive?.content ?: return null
+        return AppleTvConfig(
+            localId = localId,
+            name = str("name", "Apple TV"),
+            entityId = entityId,
+            host = str("host", ""),
+            port = obj["port"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            serviceName = str("serviceName", ""),
+            credentials = str("credentials", ""),
+            mrpHost = str("mrpHost", ""),
+            mrpPort = obj["mrpPort"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            mrpServiceName = str("mrpServiceName", ""),
+            mrpCredentials = str("mrpCredentials", ""),
+            mrpTransport = str("mrpTransport", "airplay")
+        )
+    }
+
+    fun saveAppleTvs(context: Context, appleTvs: List<AppleTvConfig>) {
+        val array =
+            buildJsonArray {
+                appleTvs.forEach { tv ->
+                    addJsonObject {
+                        put("localId", tv.localId)
+                        put("name", tv.name)
+                        put("entityId", tv.entityId)
+                        put("host", tv.host)
+                        put("port", tv.port)
+                        put("serviceName", tv.serviceName)
+                        put("credentials", tv.credentials)
+                        put("mrpHost", tv.mrpHost)
+                        put("mrpPort", tv.mrpPort)
+                        put("mrpServiceName", tv.mrpServiceName)
+                        put("mrpCredentials", tv.mrpCredentials)
+                        put("mrpTransport", tv.mrpTransport)
+                    }
+                }
+            }
+        prefs(context).edit { putString(KEY_APPLE_TVS, array.toString()) }
     }
 }

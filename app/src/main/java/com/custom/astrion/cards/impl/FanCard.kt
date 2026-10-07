@@ -214,7 +214,7 @@ class FanCard : CardRenderer {
                         .size(36.dp)
                         .clip(CircleShape)
                         .background(if (on) ctx.theme.success.copy(alpha = 0.25f) else ctx.theme.danger.copy(alpha = 0.25f))
-                        .tapClickable { ctx.client.toggle(entityId) },
+                        .tapClickable(focusShape = CircleShape) { ctx.client.toggle(entityId) },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -341,7 +341,7 @@ private fun CircleBtn(icon: ImageVector, theme: ThemeColors, onClick: () -> Unit
             .size(44.dp)
             .clip(CircleShape)
             .background(theme.controlBackground)
-            .tapClickable(onClick = onClick),
+            .tapClickable(focusShape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, contentDescription = null, tint = theme.iconTint)
@@ -357,7 +357,7 @@ private fun StepBtn(label: String, theme: ThemeColors, onClick: () -> Unit) {
             .size(44.dp)
             .clip(CircleShape)
             .background(theme.insetSurface)
-            .tapClickable(onClick = onClick),
+            .tapClickable(focusShape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Text(

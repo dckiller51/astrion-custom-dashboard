@@ -1,0 +1,78 @@
+{
+  "hvac_mode": {
+    "off": "Spento",
+    "auto": "Auto",
+    "heat_cool": "Auto",
+    "cool": "Raffreddamento",
+    "heat": "Riscaldamento",
+    "dry": "Secco",
+    "fan_only": "Ventilatore"
+  },
+  "fan_mode": {
+    "auto": "Auto",
+    "silent": "Silenzioso",
+    "quiet": "Silenzioso",
+    "low": "Basso",
+    "medium": "Medio",
+    "high": "Alto",
+    "turbo": "Turbo"
+  },
+  "swing_mode": {
+    "off": "Spento",
+    "stop": "Spento",
+    "on": "Attivo",
+    "swing": "Attivo",
+    "vertical": "Verticale",
+    "horizontal": "Orizzontale",
+    "both": "Entrambi"
+  },
+  "cover_state": {
+    "open": "Aperto",
+    "opening": "Apertura",
+    "closed": "Chiuso",
+    "closing": "Chiusura",
+    "stopped": "Fermato",
+    "unknown": "Sconosciuto"
+  },
+  "vacuum_state": {
+    "cleaning": "Pulizia",
+    "docked": "In ricarica",
+    "returning": "Ritorno alla base",
+    "idle": "Inattivo",
+    "paused": "In pausa",
+    "error": "Errore"
+  },
+  "vacuum_fan_speed": {
+    "min": "Min",
+    "quiet": "Silenzioso",
+    "silent": "Silenzioso",
+    "medium": "Medio",
+    "standard": "Standard",
+    "balanced": "Bilanciato",
+    "high": "Alto",
+    "strong": "Forte",
+    "turbo": "Turbo",
+    "max": "Max",
+    "gentle": "Delicato",
+    "mop": "Mocio",
+    "off": "Spento"
+  },
+  "weather_condition": {
+    "sunny": "Soleggiato",
+    "clear": "Sereno",
+    "clear-night": "Notte serena",
+    "partlycloudy": "Parzialmente nuvoloso",
+    "cloudy": "Nuvoloso",
+    "fog": "Nebbia",
+    "windy": "Ventoso",
+    "windy-variant": "Ventoso",
+    "rainy": "Piovoso",
+    "pouring": "Pioggia intensa",
+    "lightning": "Fulmine",
+    "lightning-rainy": "Fulmine con pioggia",
+    "snowy": "Nevoso",
+    "snowy-rainy": "Neve e pioggia",
+    "hail": "Grandine",
+    "exceptional": "Eccezionale"
+  }
+}

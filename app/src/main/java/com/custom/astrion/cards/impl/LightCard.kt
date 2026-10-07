@@ -450,7 +450,7 @@ private fun CycleControlButton(theme: ThemeColors, onClick: () -> Unit) {
             .size(36.dp)
             .clip(CircleShape)
             .background(theme.controlBackground)
-            .tapClickable(onClick = onClick),
+            .tapClickable(focusShape = CircleShape, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = theme.iconTint)
@@ -603,7 +603,7 @@ private fun ColorSwatchRow(onPick: (Int, Int, Int) -> Unit) {
                     .size(28.dp)
                     .clip(CircleShape)
                     .background(Color(r, g, b))
-                    .tapClickable { onPick(r, g, b) }
+                    .tapClickable(focusShape = CircleShape) { onPick(r, g, b) }
             )
         }
     }

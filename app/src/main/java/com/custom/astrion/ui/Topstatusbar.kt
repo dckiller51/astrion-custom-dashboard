@@ -52,11 +52,13 @@ import kotlin.time.Duration.Companion.seconds
  * Persistent status bar shown on every page — mirrors HaRemote's IndexTopView
  * (Wi-Fi left, time centered, battery + charging indicator right), decompiled
  * to understand the layout. Doubles as the swipe-down trigger for the
- * "Paramètres" page, since it's the natural discoverable spot for that gesture
- * (same as pulling down a phone's real status bar).
+ * "Active Activities" overlay ("activité en cours") — same natural,
+ * discoverable spot as pulling down a phone's real status bar. Settings
+ * moved off this gesture onto POWER (short press) — see MainActivity's
+ * bindDefaultPowerKey().
  */
 @Composable
-fun TopStatusBar(onSwipeDownToSettings: () -> Unit) {
+fun TopStatusBar(onSwipeDown: () -> Unit) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val triggerPx = with(density) { 40.dp.toPx() }
@@ -80,7 +82,7 @@ fun TopStatusBar(onSwipeDownToSettings: () -> Unit) {
                         change.consume()
                         dragAccumulated += dragAmount
                         if (dragAccumulated > triggerPx) {
-                            onSwipeDownToSettings()
+                            onSwipeDown()
                             dragAccumulated = 0f
                         }
                     }

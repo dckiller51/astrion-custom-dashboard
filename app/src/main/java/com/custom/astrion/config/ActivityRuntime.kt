@@ -147,6 +147,25 @@ class ActivityRuntime(config: AppConfig) {
         }
     }
 
+    /**
+     * True if [scene] — the exact same scene_grid item map [trackTap] would
+     * receive — represents the Activity currently active in its room, for a
+     * composed Activity (`"activity"` field) or a `track: true` tile alike.
+     * Takes the active-by-room snapshot as a parameter rather than reading
+     * [activeByRoom] itself, so a caller collecting it via `collectAsState()`
+     * in Compose (e.g. SceneGridCard, to highlight the active tile) stays
+     * reactive — this is a pure read, the caller owns observing it.
+     */
+    fun isActiveTile(scene: Map<String, Any?>, activeByRoom: Map<String, String?>): Boolean {
+        val activityId = scene["activity"] as? String
+        if (activityId != null) {
+            val room = activityConfigs[activityId]?.room ?: return false
+            return activeByRoom[room] == activityId
+        }
+        val candidate = activityFrom(scene, fallbackPage = null) ?: return false
+        return activeByRoom[candidate.room] == candidate.id
+    }
+
     /** Shared id/name derivation for a scene_grid item — used by both [scan]
      * (at config-load time) and [trackTap] (at tap time), so the two never
      * disagree on what a given item's id is. Returns null if not trackable. */

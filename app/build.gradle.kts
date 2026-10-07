@@ -17,8 +17,8 @@ android {
         applicationId = "com.custom.astrion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.1.0"
+        versionCode = 30
+        versionName = "1.2.0"
     }
 
     buildTypes {
@@ -106,4 +106,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // Apple TV Companion protocol: X25519 / Ed25519 / ChaCha20-Poly1305 are not in the
+    // Android platform before API 33 (minSdk is 26). Only the lightweight
+    // org.bouncycastle.crypto.* API is used, so it never touches the platform BC provider.
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
 }
