@@ -33,7 +33,7 @@ import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.decodeIconSampled
-import com.custom.astrion.ui.tapClickable
+import com.custom.astrion.ui.tapCombinedClickable
 
 /**
  * Generic grid of action buttons. Each button independently fires any
@@ -67,12 +67,18 @@ import com.custom.astrion.ui.tapClickable
  * where each source button here sends its IR/Harmony command and closes
  * the popup in the same tap.
  *
+ * "long_press": { ... } adds a separate action fired when the button is
+ * held (touch long-press or held D-pad CENTER) instead of tapped — same
+ * action fields as a button, see GridLongPress.kt. Without it, a hold is
+ * just a tap.
+ *
  * Config shape:
  *   { "type": "button_grid", "options": {
  *       "columns": 3,
  *       "iconPosition": "left",
  *       "buttons": [
- *         { "name": "Group",   "service": "script.group" },
+ *         { "name": "Group",   "service": "script.group",
+ *           "long_press": { "service": "script.ungroup" } },
  *         { "name": "Disco",   "icon": "/sdcard/astrion/icons/disco.png",
  *           "service": "script.playlist_disco" },
  *         { "name": "Netflix", "service": "media_player.play_media",
@@ -107,7 +113,11 @@ class ButtonGridCard : CardRenderer {
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     row.forEach { b ->
-                        GridButton(b, Modifier.weight(1f), ctx.theme, iconPosition, ctx.entities) { fire(ctx, b) }
+                        // Optional separate "long_press" block — see GridLongPress.kt.
+                        // Null when absent, so a hold stays a plain tap (unchanged).
+                        val onLongPress = longPressActionOf(b)?.let { lp -> { fireGridLongPress(ctx, lp, b["hub"] as? String) } }
+                        val actions = GridButtonActions(onClick = { fire(ctx, b) }, onLongClick = onLongPress)
+                        GridButton(b, Modifier.weight(1f), ctx.theme, iconPosition, ctx.entities, actions)
                     }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -194,6 +204,11 @@ class ButtonGridCard : CardRenderer {
         return Modifier.border(2.dp, color, RoundedCornerShape(14.dp))
     }
 
+    /** Tap + optional long-press callbacks for [GridButton], bundled so
+     * adding long-press didn't push it over detekt's parameter-count
+     * threshold. [onLongClick] is null when the button has no "long_press". */
+    private class GridButtonActions(val onClick: () -> Unit, val onLongClick: (() -> Unit)?)
+
     @Composable
     private fun GridButton(
         b: Map<String, Any?>,
@@ -201,7 +216,7 @@ class ButtonGridCard : CardRenderer {
         theme: ThemeColors,
         iconPosition: IconPosition,
         entities: EntityMap,
-        onClick: () -> Unit
+        actions: GridButtonActions
     ) {
         val name = b["name"] as? String
         val iconPath = b["icon"] as? String
@@ -240,7 +255,7 @@ class ButtonGridCard : CardRenderer {
                 .clip(RoundedCornerShape(14.dp))
                 .background(tileBackground(b, active, theme))
                 .then(activeBorderModifier(b, active, theme))
-                .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
+                .tapCombinedClickable(RoundedCornerShape(14.dp), onLongClick = actions.onLongClick, onClick = actions.onClick)
                 .padding(6.dp)
 
         if (sideBySide) {
