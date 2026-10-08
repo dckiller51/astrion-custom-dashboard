@@ -38,7 +38,7 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.decodeIconSampled
-import com.custom.astrion.ui.tapClickable
+import com.custom.astrion.ui.tapCombinedClickable
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Stable fallback for [SceneGridCard.Render] when `ctx.activityRuntime` is
@@ -84,6 +84,10 @@ private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(empty
  *   one tap. Independent of "page"/"pageMode" on the same tile — a tile can
  *   open a popup while a *different* tile inside it closes it. No-op when
  *   no popup is open.
+ * - "long_press": { ... }: a separate action fired when the tile is held
+ *   (touch long-press or held D-pad CENTER) instead of tapped — e.g. tap
+ *   opens the "Lights" page, hold switches every light off. Same action
+ *   fields as a tile (see GridLongPress.kt); without it a hold is a tap.
  * - "track"+"room": marks a tile with any of the single-action fields above
  *   as a trackable Activity — see ActivityRuntime. Not needed alongside
  *   "activity": a composed Activity is always implicitly tracked.
@@ -99,6 +103,8 @@ private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(empty
  *       { "page": "Apple TV", "name": "Apple TV", "color": "#66009688",
  *         "icon": "/sdcard/astrion/icons/apple-tv_dark_icon.png" },
  *       { "entity_id": "scene.night", "name": "Night" },
+ *       { "name": "Lights", "page": "Lights",
+ *         "long_press": { "service": "script.astrion_bed_lights_off" } },
  *       { "activity": "salon_appletv", "name": "Watch Apple TV" }
  *     ]
  *   }
@@ -224,6 +230,11 @@ class SceneGridCard : CardRenderer {
             if (scene["closePopup"] == true) ctx.closePopup()
         }
 
+        // Optional separate "long_press" block (see GridLongPress.kt) — null
+        // when absent, so a hold on that tile stays a plain tap, unchanged.
+        fun onLongPressOf(scene: Map<String, Any?>): (() -> Unit)? =
+            longPressActionOf(scene)?.let { lp -> { fireGridLongPress(ctx, lp, scene["hub"] as? String) } }
+
         fun nameOf(scene: Map<String, Any?>): String {
             (scene["name"] as? String)?.let { return it }
             val entityId = scene["entity_id"] as? String
@@ -292,7 +303,8 @@ class SceneGridCard : CardRenderer {
                     SceneButton(
                         state = stateFor(scene),
                         layout = TileLayout(iconFill, tileHeight, iconPosition),
-                        modifier = Modifier.width(104.dp)
+                        modifier = Modifier.width(104.dp),
+                        onLongClick = onLongPressOf(scene)
                     ) { onTap(scene) }
                 }
             }
@@ -304,7 +316,8 @@ class SceneGridCard : CardRenderer {
                             SceneButton(
                                 state = stateFor(scene),
                                 layout = TileLayout(iconFill, tileHeight, iconPosition),
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                onLongClick = onLongPressOf(scene)
                             ) { onTap(scene) }
                         }
                         repeat(columns - chunk.size) { Spacer(Modifier.weight(1f)) }
@@ -353,7 +366,13 @@ class SceneGridCard : CardRenderer {
         if (active && color != null) Modifier.border(2.dp, color, RoundedCornerShape(14.dp)) else Modifier
 
     @Composable
-    private fun SceneButton(state: SceneButtonState, layout: TileLayout, modifier: Modifier, onClick: () -> Unit) {
+    private fun SceneButton(
+        state: SceneButtonState,
+        layout: TileLayout,
+        modifier: Modifier,
+        onLongClick: (() -> Unit)?,
+        onClick: () -> Unit
+    ) {
         val textColor = if (luminance(state.color) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)
         // iconFill tiles render the bitmap at the full tile height (ContentScale.
         // FillHeight), otherwise it's a 28dp square — pick the larger of the two
@@ -369,7 +388,7 @@ class SceneGridCard : CardRenderer {
 
         if (state.hasIcon) {
             if (layout.iconFill && bitmap != null && !state.showLabel) {
-                FillIconTile(bitmap, state, layout, modifier, onClick)
+                FillIconTile(bitmap, state, layout, modifier, onLongClick, onClick)
             } else {
                 // Every tile in the grid uses this branch once any one of them has
                 // an icon, even tiles with no icon of their own — a blank 28dp
@@ -399,7 +418,7 @@ class SceneGridCard : CardRenderer {
                     .clip(RoundedCornerShape(14.dp))
                     .background(state.color)
                     .then(activeBorderModifier(state.active, state.borderColor))
-                    .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
+                    .tapCombinedClickable(RoundedCornerShape(14.dp), onLongClick = onLongClick, onClick = onClick)
                     .padding(6.dp)
 
                 if (layout.iconPosition.sideBySide) {
@@ -415,7 +434,7 @@ class SceneGridCard : CardRenderer {
                     .clip(RoundedCornerShape(14.dp))
                     .background(state.color)
                     .then(activeBorderModifier(state.active, state.borderColor))
-                    .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
+                    .tapCombinedClickable(RoundedCornerShape(14.dp), onLongClick = onLongClick, onClick = onClick)
                     .padding(horizontal = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -483,14 +502,21 @@ class SceneGridCard : CardRenderer {
      * unchanged. Only reached when there's a real [bitmap] and no label
      * (see the caller), so both are non-null/false by the time this runs. */
     @Composable
-    private fun FillIconTile(bitmap: ImageBitmap, state: SceneButtonState, layout: TileLayout, modifier: Modifier, onClick: () -> Unit) {
+    private fun FillIconTile(
+        bitmap: ImageBitmap,
+        state: SceneButtonState,
+        layout: TileLayout,
+        modifier: Modifier,
+        onLongClick: (() -> Unit)?,
+        onClick: () -> Unit
+    ) {
         Box(
             modifier = modifier
                 .height(layout.tileHeight.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(state.color)
                 .then(activeBorderModifier(state.active, state.borderColor))
-                .tapClickable(focusShape = RoundedCornerShape(14.dp), onClick = onClick)
+                .tapCombinedClickable(RoundedCornerShape(14.dp), onLongClick = onLongClick, onClick = onClick)
                 .padding(6.dp),
             contentAlignment = Alignment.Center
         ) {

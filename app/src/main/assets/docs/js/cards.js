@@ -333,6 +333,10 @@ function updateCardFormInputs() {
             <div class="hint">Lets a later *composed* Activity in the same room know this device was already on, so it doesn't needlessly re-toggle it (matters most for a device with only a Power Toggle command, no discrete on/off). Especially worth setting for a Harmony-backed tile — Astrion has no other way to know which physical devices a Harmony Activity touches.</div>
           </div>
         `}
+        <div class="divider" style="margin:12px 0"></div>
+        <label>Long-press action (optional, JSON — fired on hold instead of tap)</label>
+        <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
+        <div class="hint">A separate action for a long press (touch hold or held OK key) — the fields above still drive a normal tap. Accepts the same fields as a ${label.toLowerCase()}: "service" (+ "entity_id", "data"), "entity_id" alone (turn_on), "harmonyDevice"+"harmonyCommand", "activityId", "hub", "irDevice"+"irCommand", "activity", "page" (+ "pageMode": "popup"), "closePopup". Leave empty for no long-press.</div>
         ${iconFieldHtml('giIcon')}
         <button type="button" class="secondary" onclick="addGridItem('${type}')" id="giSubmitBtn">+ Add ${label.toLowerCase()} to this card</button>
         <button type="button" class="secondary" onclick="cancelGridItemEdit()" id="giCancelBtn" style="display:none">Cancel edit</button>
@@ -651,6 +655,8 @@ function renderGridItemsList(type) {
 
 function fillGridItemForm(type, item) {
   document.getElementById('giName').value = item.name || '';
+  const longPressEl = document.getElementById('giLongPress');
+  if (longPressEl) longPressEl.value = item.long_press ? JSON.stringify(item.long_press) : '';
   document.getElementById('giIcon').value = item.icon || '';
   updateIconThumb('giIcon');
   if (type === 'button_grid') {
@@ -737,7 +743,7 @@ function cancelGridItemEdit() {
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
-  ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giActivityRef', 'giStateEntity', 'giStateValue'].forEach(id => {
+  ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giActivityRef', 'giStateEntity', 'giStateValue', 'giLongPress'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -763,6 +769,16 @@ function addGridItem(type) {
   const icon = document.getElementById('giIcon').value.trim();
   let item = { name };
   if (icon) item.icon = icon;
+  // Optional separate long-press action — parsed up front so a typo is
+  // reported before anything else, and written last (below) so it never
+  // counts toward the tap action's own "needs an action" validation.
+  let longPress = null;
+  const rawLongPress = (document.getElementById('giLongPress')?.value || '').trim();
+  if (rawLongPress) {
+    try { longPress = JSON.parse(rawLongPress); } catch (e) { alert('Long-press action must be valid JSON'); return; }
+    if (!longPress || typeof longPress !== 'object' || Array.isArray(longPress)) { alert('Long-press action must be a JSON object, e.g. {"service":"script.lights_off"}'); return; }
+    if (Object.keys(longPress).length === 0) longPress = null;
+  }
   if (type === 'button_grid') {
     const service = document.getElementById('giService').value.trim();
     if (service) item.service = service;
@@ -913,6 +929,7 @@ function addGridItem(type) {
       if (activeBorder) item.active_border = true;
     }
   }
+  if (longPress) item.long_press = longPress;
   window._pendingGridItems = window._pendingGridItems || [];
   if (editingGridItem !== null) {
     window._pendingGridItems[editingGridItem] = item;

@@ -3,6 +3,23 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.1-beta] - 2026-10-08
+
+### Added
+
+- **Long-press on `button_grid` and `scene_grid` tiles.** A tile can now carry a separate `"long_press"` block, fired when the tile is held (touch long-press, or a held D-pad OK/CENTER key) instead of tapped. The tile's own top-level fields still drive the normal tap, so e.g. a tile can open its page on tap and switch every device off on hold:
+
+  ```json
+  { "name": "Lights", "page": "Lights",
+    "long_press": { "service": "script.astrion_bed_lights_off" } }
+  ```
+
+  The block accepts the same action fields as a tile: `service` (+ `entity_id`, `data`), `entity_id` alone (`turn_on`), `harmonyDevice`+`harmonyCommand`, `activityId`, `hub` (falls back to the tile's own), `irDevice`+`irCommand`, `activity`, `page` (+ `pageMode: "popup"`), `closePopup`. A tile without `long_press` behaves exactly as before (a hold is just a tap). The web config editor has a matching "Long-press action (JSON)" field, so the block is kept when a tile is edited there.
+
+### Fixed
+
+- **D-pad focus outline staying visible when an arrow key is bound to a hotkey.** The command was sent correctly, but a card/tile kept showing its accent focus outline. Clearing Compose focus alone couldn't fix it: the key press takes the window out of touch mode before the app sees it (which hands focus to a tile), and clearing focus outside touch mode makes Android hand it straight back. The outline is now hidden instead, from the moment a directional key is consumed by a hotkey, and comes back as soon as an unbound arrow key is used to navigate. While hidden, a press on OK/CENTER only brings the outline back rather than activating a tile the user can't see.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added

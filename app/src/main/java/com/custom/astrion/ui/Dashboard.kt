@@ -1502,7 +1502,8 @@ private fun RenderCard(cardConfig: CardConfig, ctx: CardContext) {
             .fillMaxWidth()
             .onFocusChanged { hasFocus = it.hasFocus }
             .then(
-                if (hasFocus) {
+                // Hidden while a D-pad hotkey owns the arrow keys — see FocusHighlight.
+                if (hasFocus && FocusHighlight.visible) {
                     Modifier.border(2.dp, ctx.theme.accent, RoundedCornerShape(18.dp))
                 } else {
                     Modifier

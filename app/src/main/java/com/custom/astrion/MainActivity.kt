@@ -61,6 +61,7 @@ import com.custom.astrion.ui.DashboardConnection
 import com.custom.astrion.ui.DashboardNavigation
 import com.custom.astrion.ui.DashboardRegistries
 import com.custom.astrion.ui.DashboardUiState
+import com.custom.astrion.ui.FocusHighlight
 import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
@@ -104,6 +105,10 @@ class MainActivity : ComponentActivity() {
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
         val DIRECTIONAL_KEYS = setOf(HardwareKey.UP, HardwareKey.DOWN, HardwareKey.LEFT, HardwareKey.RIGHT)
+
+        // Activation keys Compose's clickable reacts to — see
+        // shouldSwallowHiddenFocusActivation().
+        val ACTIVATION_KEYCODES = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -383,6 +388,11 @@ class MainActivity : ComponentActivity() {
      * focus (a page/config with no hotkey on that key at all — untouched,
      * "the current focus outline behavior is perfect" for that case). */
     private var clearFocusTrigger by mutableStateOf(0L)
+
+    /** Set when a CENTER/Enter press was swallowed because the focus
+     * outline was hidden (see [shouldSwallowHiddenFocusActivation]), so the
+     * matching key-up is swallowed too. */
+    private var swallowActivationUp = false
 
     /** Which page is currently visible — used to know which page-scoped
      * hotkeys should currently be layered on top of the global ones. */
@@ -872,7 +882,56 @@ class MainActivity : ComponentActivity() {
             HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS
         ) {
             clearFocusTrigger = System.nanoTime()
+            // clearFocusTrigger alone didn't fix the outline: the key press
+            // itself takes the window out of touch mode (ViewRootImpl does
+            // that before the event reaches dispatchKeyEvent), which hands
+            // the Compose view a default focus, and clearing Compose focus
+            // outside touch mode makes Android hand focus straight back to
+            // the root — so a tile got re-focused and outlined anyway. The
+            // outline itself is hidden instead, until a directional key is
+            // left to Compose's focus navigation again (dispatchUnmappedKey).
+            FocusHighlight.visible = false
         }
+    }
+
+    /**
+     * Unmapped-key path of [dispatchKeyEvent] (no hotkey on this key) —
+     * split out to keep that function under detekt's complexity threshold.
+     * Logs the key, then lets Compose handle it, except for a CENTER/Enter
+     * press swallowed by [shouldSwallowHiddenFocusActivation].
+     */
+    @SuppressLint("RestrictedApi")
+    private fun dispatchUnmappedKey(event: KeyEvent, code: Int): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)})")
+            if (DEBUG_KEYS) Toast.makeText(this, "Unmapped key: $code", Toast.LENGTH_SHORT).show()
+        }
+        return shouldSwallowHiddenFocusActivation(event, code) || super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Counterpart of [maybeClearFocusForDirectionalHotkey] for keys that DO
+     * reach Compose: a directional key brings the focus outline back
+     * ([FocusHighlight]). And while the outline is hidden, a CENTER/Enter
+     * press is swallowed (it only reveals the outline again) instead of
+     * activating whichever tile silently holds focus — otherwise "OK" could
+     * fire a tile the person can't see. Returns true when consumed here.
+     */
+    private fun shouldSwallowHiddenFocusActivation(event: KeyEvent, code: Int): Boolean = when {
+        event.action == KeyEvent.ACTION_DOWN && HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS -> {
+            FocusHighlight.visible = true
+            false
+        }
+        code !in ACTIVATION_KEYCODES -> false
+        event.action == KeyEvent.ACTION_DOWN -> {
+            if (!FocusHighlight.visible && event.repeatCount == 0) {
+                FocusHighlight.visible = true
+                swallowActivationUp = true
+            }
+            swallowActivationUp
+        }
+        event.action == KeyEvent.ACTION_UP -> swallowActivationUp.also { swallowActivationUp = false }
+        else -> false
     }
 
     @SuppressLint("RestrictedApi")
@@ -882,13 +941,7 @@ class MainActivity : ComponentActivity() {
         val shortH = keyRouter.shortHandler(code)
         val longH = keyRouter.longHandler(code)
 
-        if (shortH == null && longH == null) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)})")
-                if (DEBUG_KEYS) Toast.makeText(this, "Unmapped key: $code", Toast.LENGTH_SHORT).show()
-            }
-            return super.dispatchKeyEvent(event)
-        }
+        if (shortH == null && longH == null) return dispatchUnmappedKey(event, code)
 
         // This key is about to be fully consumed as a hotkey below (never
         // reaching Compose's own focus-navigation via super.dispatchKeyEvent).
