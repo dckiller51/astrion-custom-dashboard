@@ -51,10 +51,106 @@ function irDeviceCommandEntries(dev) {
   return hints.map(id => [id, id]);
 }
 
+// ---- ir-database model lookup (profile-aware Activities, 1.2.2+) ----------
+//
+// A *reference* IR device's real command list — and, for a device imported
+// from the Logitech Harmony archive through the sniffer, its "profile"
+// (power type, power-on delay, repeats, named input sequences) — lives in
+// /sdcard/astrion/ir-database/<category>.json on the remote, which the
+// remote's own server exposes at GET /ir-database/<category>.json (same
+// endpoint ir.js already uses). Only reachable when this builder is served
+// by the remote itself; resolves to null anywhere else, and every caller
+// falls back to the old typed-in hints.
+
+const irDatabaseCategoryCache = {}; // category -> Promise<parsed file | null>
+
+function loadIrDatabaseModel(dev) {
+  if (!dev || dev.commands || !dev.category || !dev.brand || !dev.model) return Promise.resolve(null);
+  if (!irDatabaseCategoryCache[dev.category]) {
+    irDatabaseCategoryCache[dev.category] = fetch(`/ir-database/${encodeURIComponent(dev.category)}.json`)
+      .then(r => (r.ok ? r.json() : null))
+      .catch(() => null);
+  }
+  return irDatabaseCategoryCache[dev.category].then(file => {
+    const brand = (file?.brands || []).find(b => b.brand_name.toLowerCase() === dev.brand.toLowerCase());
+    return (brand?.models || []).find(m => m.model_name.toLowerCase() === dev.model.toLowerCase()) || null;
+  });
+}
+
+/** [value, label] entries from an ir-database model entry; for the input
+ * field, the profile's named input sequences come first — picking one
+ * ("HDMI 1") makes the Activity run that whole sequence. */
+function modelCommandEntries(model, forInput) {
+  const commands = Object.entries(model.commands || {}).map(([id, c]) => [id, `${id} — ${c.label || id}`]);
+  if (!forInput) return commands;
+  const inputs = (model.profile?.inputs || []).map(i => [i.name, `${i.name} — input sequence (${i.steps.length} steps)`]);
+  return inputs.concat(commands);
+}
+
+function profileSummaryHtml(profile) {
+  if (!profile) return '';
+  const t = profile.timing || {};
+  const power = { discrete: 'separate on/off', toggle: 'single toggle button', none: 'no power command' }[profile.power?.type] || 'unknown';
+  const toggleNote = profile.power?.type === 'toggle'
+    ? ' Astrion remembers whether it is on, so the toggle is only sent when needed — if it ever gets out of sync, use "Help" in Active Activities.'
+    : '';
+  const inputNote = (profile.inputs || []).length
+    ? ' Pick a named input below to run its full key sequence — it is only sent when the input actually changes.'
+    : '';
+  return `<div class="hint" style="border-left:3px solid #00E5FF;padding-left:8px">
+    <strong>Harmony profile</strong> — power: ${power}; waits ${t.power_on_delay_ms || 0} ms after power-on;
+    each key sent ${t.repeats || 1}×. Leave the power commands empty to use the profile's own.${toggleNote}${inputNote}
+  </div>`;
+}
+
+// ---- Home Assistant / network Apple TV entities for the wizard ----------
+//
+// A network Apple TV paired in Astrion is exposed as a media_player entity
+// (media_player.appletv_…) that the app itself answers: turn_on = wake,
+// turn_off = sleep, select_source = launch an app by name. So it joins an
+// Activity exactly like a Home Assistant entity (source "ha"); it just gets
+// its own section so it's easy to find.
+
+const HA_ACTIVITY_DOMAINS = ['media_player', 'switch', 'light', 'remote', 'input_boolean', 'fan', 'climate'];
+
+function isNetworkAppleTv(entityId) {
+  return /^media_player\.appletv_/.test(entityId || '');
+}
+
+/** [{entityId, name, domain}] — the Devices catalog first, then every live
+ * HA entity of a domain an Activity can switch on/off (when /ha-states is
+ * reachable, i.e. the builder is opened from the remote). */
+function haEntityChoices() {
+  const out = new Map();
+  (dashboardData.haDevices || []).forEach(d => {
+    if (d.entityId) out.set(d.entityId, { entityId: d.entityId, name: d.name || d.entityId, domain: d.entityId.split('.')[0] });
+  });
+  Object.entries((typeof haStates !== 'undefined' && haStates) || {}).forEach(([entityId, e]) => {
+    const domain = entityId.split('.')[0];
+    if (!out.has(entityId) && HA_ACTIVITY_DOMAINS.includes(domain)) {
+      out.set(entityId, { entityId, name: (e && e.friendly_name) || entityId, domain });
+    }
+  });
+  return [...out.values()].sort((a, b) => a.domain.localeCompare(b.domain) || a.name.localeCompare(b.name));
+}
+
+function haEntityName(entityId) {
+  return haEntityChoices().find(c => c.entityId === entityId)?.name || entityId;
+}
+
+/** Sources/apps the entity reports (HA's source_list attribute — for a
+ * network Apple TV, its installed apps), as [value, label] suggestions. */
+function haSourceEntries(entityId) {
+  const e = (typeof haStates !== 'undefined' && haStates) ? haStates[entityId] : null;
+  const list = (e && e.attributes && Array.isArray(e.attributes.source_list)) ? e.attributes.source_list : [];
+  return list.map(src => [src, src]);
+}
+
 function deviceRefLabel(ref) {
   if (ref.source === 'ir') return `${irDevicesById()[ref.deviceId]?.name || ref.deviceId} (IR)`;
   if (ref.source === 'harmony') return `${ref.deviceLabel || ref.deviceId} (Harmony)`;
-  return `${ref.deviceId} (HA)`;
+  if (isNetworkAppleTv(ref.deviceId)) return `${haEntityName(ref.deviceId)} (Apple TV, network)`;
+  return `${haEntityName(ref.deviceId)} (HA — ${ref.deviceId})`;
 }
 
 
@@ -239,6 +335,10 @@ function renderWizardInfo() {
 function renderWizardDevices() {
   const irDevices = dashboardData.irDevices || [];
   const selectedIrIds = new Set(wizard.deviceRefs.filter(r => r.source === 'ir').map(r => r.deviceId));
+  const selectedHaIds = new Set(wizard.deviceRefs.filter(r => r.source === 'ha').map(r => r.deviceId));
+  const allHa = haEntityChoices();
+  const appleTvs = allHa.filter(c => isNetworkAppleTv(c.entityId));
+  const haChoices = allHa.filter(c => !isNetworkAppleTv(c.entityId));
   return `
     <div class="hint">Which devices does this Activity involve? You'll pick an input/command for each on the next screens.</div>
 
@@ -254,8 +354,25 @@ function renderWizardDevices() {
     <h3 style="margin-top:14px">Harmony device</h3>
     <div id="wizHarmonyAddFields"></div>
 
+    <h3 style="margin-top:14px">Apple TV (network)</h3>
+    ${appleTvs.length === 0 ? '<div class="hint">No Apple TV paired over the network — pair one from this device\'s home page (Apple TV), then reopen this wizard.</div>' :
+      appleTvs.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + '<div class="hint">Woken when the Activity starts, put to sleep when it ends; you can also pick an app to launch on the next screen.</div>'}
+
     <h3 style="margin-top:14px">Home Assistant entity</h3>
-    <input type="text" id="wizHaEntityId" placeholder="media_player.salon_ampli">
+    <select id="wizHaEntitySelect">
+      <option value="">— pick an entity —</option>
+      ${[...new Set(haChoices.map(c => c.domain))].map(domain => `
+        <optgroup label="${domain}">
+          ${haChoices.filter(c => c.domain === domain).map(c => `<option value="${c.entityId}">${c.name} — ${c.entityId}</option>`).join('')}
+        </optgroup>`).join('')}
+    </select>
+    <input type="text" id="wizHaEntityId" placeholder="…or type an entity id, e.g. media_player.salon_ampli" style="margin-top:6px">
+    ${haChoices.length === 0 ? '<div class="hint">No entity list available here (add HA devices on the Devices page, or open the builder from the remote) — type the entity id instead.</div>' : ''}
     <div class="btn-row" style="margin-top:6px">
       <button type="button" class="secondary" onclick="addHaDeviceRef()">+ Add HA entity</button>
     </div>
@@ -312,9 +429,11 @@ function renderWizardConfigure() {
     <div class="hint">Device ${n} of ${total}: <strong>${deviceRefLabel(ref)}</strong></div>
 
     ${ref.source === 'ha' ? `
-      <label>Source (optional, passed to media_player.select_source)</label>
-      <input type="text" id="wizInputText" value="${cfg.inputCommand || ''}" placeholder="e.g. Apple TV">
+      <label>${isNetworkAppleTv(ref.deviceId) ? 'App to launch (optional — e.g. Netflix)' : 'Source (optional, passed to media_player.select_source)'}</label>
+      <input type="text" id="wizInputText" value="${cfg.inputCommand || ''}" list="wizInputTextHints" placeholder="${isNetworkAppleTv(ref.deviceId) ? 'e.g. Netflix' : 'e.g. Apple TV'}">
+      <datalist id="wizInputTextHints">${haSourceEntries(ref.deviceId).map(([v]) => `<option value="${v}"></option>`).join('')}</datalist>
     ` : `
+      <div id="wizProfileHint"></div>
       ${commandFieldHtml('wizPowerOn', 'Power-on command (optional)', ref)}
       ${commandFieldHtml('wizPowerOff', 'Power-off command (optional)', ref)}
       ${commandFieldHtml('wizInput', 'Input/source command (optional — sent after power-on, or on its own if this device is shared with the outgoing Activity)', ref)}
@@ -383,10 +502,21 @@ function wireWizardPhase(phase) {
     const ref = wizard.deviceRefs[wizard.configureIndex];
     const cfg = wizard.deviceConfig[wizard.configureIndex] || {};
     if (ref.source === 'ir') {
-      const entries = irDeviceCommandEntries(irDevicesById()[ref.deviceId]);
+      const dev = irDevicesById()[ref.deviceId];
+      const entries = irDeviceCommandEntries(dev);
       fillCommandField('wizPowerOn', entries, cfg.powerOnCommand, ref);
       fillCommandField('wizPowerOff', entries, cfg.powerOffCommand, ref);
       fillCommandField('wizInput', entries, cfg.inputCommand, ref);
+      // Reference device: upgrade the suggestions with the real list (and
+      // the Harmony profile, if any) once the remote's copy is read.
+      loadIrDatabaseModel(dev).then(model => {
+        if (!model || wizard?.phase !== 'configure' || wizard.deviceRefs[wizard.configureIndex] !== ref) return;
+        fillWizCommandOptions('wizPowerOn', modelCommandEntries(model, false));
+        fillWizCommandOptions('wizPowerOff', modelCommandEntries(model, false));
+        fillWizCommandOptions('wizInput', modelCommandEntries(model, true));
+        const hint = document.getElementById('wizProfileHint');
+        if (hint) hint.innerHTML = profileSummaryHtml(model.profile);
+      });
     } else if (ref.source === 'harmony') {
       loadHarmonyConfig(ref.hub).then(data => {
         const device = (data.devices || []).find(d => d.id === ref.deviceId);
@@ -457,6 +587,10 @@ function renderWizardHarmonyAddFields() {
 
 function renderWizardDeviceRefsList() {
   const list = document.getElementById('wizDeviceRefsList');
+  // Keep the Apple TV checkboxes in step with the list (✕ removes too).
+  document.querySelectorAll('input[data-ha-ref]').forEach(cb => {
+    cb.checked = wizard.deviceRefs.some(r => r.source === 'ha' && r.deviceId === cb.dataset.haRef);
+  });
   if (!wizard.deviceRefs.length) {
     list.innerHTML = '<div class="hint">None yet.</div>';
     return;
@@ -520,15 +654,32 @@ function addHarmonyDeviceRef() {
   renderWizardDeviceRefsList();
 }
 
+function toggleHaDeviceRef(entityId, checked) {
+  if (checked) {
+    if (!wizard.deviceRefs.some(r => r.source === 'ha' && r.deviceId === entityId)) wizard.deviceRefs.push({ source: 'ha', deviceId: entityId });
+  } else {
+    const i = wizard.deviceRefs.findIndex(r => r.source === 'ha' && r.deviceId === entityId);
+    if (i >= 0) removeDeviceRef(i); // keeps deviceConfig aligned
+    return;
+  }
+  renderWizardDeviceRefsList();
+}
+
 function addHaDeviceRef() {
-  const deviceId = document.getElementById('wizHaEntityId').value.trim();
-  if (!deviceId) { alert('Enter an entity id.'); return; }
+  // Typed id wins; otherwise whatever is picked in the list.
+  const typed = document.getElementById('wizHaEntityId').value.trim();
+  const picked = document.getElementById('wizHaEntitySelect')?.value || '';
+  const deviceId = typed || picked;
+  if (!deviceId) { alert('Pick an entity in the list or type its id.'); return; }
+  if (!/^[a-z_]+\.[a-z0-9_]+$/.test(deviceId)) { alert('That doesn\'t look like an entity id (domain.object_id, e.g. media_player.salon_ampli).'); return; }
   if (wizard.deviceRefs.some(r => r.source === 'ha' && r.deviceId === deviceId)) {
     alert('That entity is already added.');
     return;
   }
   wizard.deviceRefs.push({ source: 'ha', deviceId });
   document.getElementById('wizHaEntityId').value = '';
+  const sel = document.getElementById('wizHaEntitySelect');
+  if (sel) sel.value = '';
   renderWizardDeviceRefsList();
 }
 

@@ -6,6 +6,13 @@
     <string name="active_activities">Active Activities</string>
     <string name="no_active_activities">Nothing active right now</string>
     <string name="stop_activity">Stop</string>
+    <string name="activity_help">Help</string>
+    <string name="activity_help_hint">Tap a device to correct what Astrion believes, then Fix. Nothing is sent until you tap Fix.</string>
+    <string name="device_state_on">On</string>
+    <string name="device_state_off">Off</string>
+    <string name="device_state_unknown">Unknown</string>
+    <string name="activity_fix">Fix</string>
+    <string name="activity_help_input">input: %1$s</string>
     <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
 

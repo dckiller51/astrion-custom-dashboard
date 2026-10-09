@@ -24,6 +24,7 @@ import com.custom.astrion.config.AppleTvConfig
 import com.custom.astrion.config.DashboardLoader
 import com.custom.astrion.config.ExtenderConfig
 import com.custom.astrion.config.HarmonyHubConfig
+import com.custom.astrion.config.IrDatabaseMerge
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.ha.ConnectionState
@@ -114,6 +115,9 @@ import org.json.JSONObject
  *  POST /icons           upload a PNG into /sdcard/astrion/icons/
  *  GET  /icons-list       list every uploaded icon's filename, as JSON — feeds
  *                        the dashboard editor's icon picker
+ *  DELETE /icons/<file>  delete an uploaded icon (Devices page → Icons)
+ *  DELETE /ir-database/<category>.json  delete an ir-database category file
+ *                        (Devices page → IR database)
  *  GET  /icons/<file>     serve an uploaded icon back out — lets the dashboard
  *                        editor's picker/preview (docs/js/cards.js) show a
  *                        card's real configured icon when opened from this
@@ -292,9 +296,18 @@ class ConfigServer(
                 when {
                     uri.startsWith("/builder/") ->
                         if (method == Method.GET) serveBuilderAsset(uri) else methodNotAllowed()
-                    uri.startsWith("/icons/") -> if (method == Method.GET) serveIcon(uri) else methodNotAllowed()
+                    uri.startsWith("/icons/") ->
+                        when (method) {
+                            Method.GET -> serveIcon(uri)
+                            Method.DELETE -> deleteIcon(uri)
+                            else -> methodNotAllowed()
+                        }
                     uri.startsWith("/ir-database/") ->
-                        if (method == Method.GET) serveIrDatabaseFile(uri) else methodNotAllowed()
+                        when (method) {
+                            Method.GET -> serveIrDatabaseFile(uri)
+                            Method.DELETE -> deleteIrDatabaseFile(uri)
+                            else -> methodNotAllowed()
+                        }
                     uri.startsWith("/appletv-artwork/") ->
                         if (method == Method.GET) serveAppleTvArtwork(uri) else methodNotAllowed()
                     // Any other GET falls through to a plain docs/ asset lookup —
@@ -1402,7 +1415,17 @@ class ConfigServer(
             "Expected a single .json ir-database category file (with \"category\"+\"brands\" keys)"
         )
 
-        File(tmpPath).copyTo(File(irDatabaseDir, target), overwrite = true)
+        val dest = File(irDatabaseDir, target)
+        if (wantsJson && dest.exists()) {
+            // The sniffer's "Send to my remote" only exports the models
+            // checked in that browser session (often a single device just
+            // imported from the Harmony archive): merge it into what's
+            // already there instead of wiping the category's other devices.
+            // This page's own upload form still replaces the whole file.
+            dest.writeText(IrDatabaseMerge.merge(dest.readText(), File(tmpPath).readText()))
+        } else {
+            File(tmpPath).copyTo(dest, overwrite = true)
+        }
         IrDatabaseRuntime.invalidate()
 
         return if (wantsJson) {
@@ -1483,6 +1506,28 @@ class ConfigServer(
     }
 
     /**
+     * Deletes one category file from [irDatabaseDir] (`DELETE
+     * /ir-database/<category>.json`, the Devices page's per-file "Delete").
+     * Same case-insensitive match and `sanitize()` as [serveIrDatabaseFile],
+     * so the path can't leave [irDatabaseDir]; the runtime cache is
+     * dropped so devices referencing it stop resolving right away.
+     */
+    private fun deleteIrDatabaseFile(uri: String): Response {
+        val category = sanitize(uri.removePrefix("/ir-database/").removeSuffix(".json"))
+        val file = irDatabaseDir.listFiles()?.firstOrNull { it.name.equals("$category.json", ignoreCase = true) }
+        val deleted = category.isNotBlank() && file != null && file.delete()
+        if (deleted) IrDatabaseRuntime.invalidate()
+        return when {
+            deleted -> irDatabaseJson(Response.Status.OK, "deleted", "$category.json")
+            file == null -> irDatabaseError(Response.Status.NOT_FOUND, "No ir-database file for $category")
+            else -> irDatabaseError(Response.Status.INTERNAL_ERROR, "Could not delete $category.json")
+        }
+    }
+
+    private fun irDatabaseJson(status: Response.Status, key: String, value: String): Response =
+        jsonResponse(status, buildJsonObject { put(key, value) })
+
+    /**
      * Lists every icon previously uploaded to [iconsDir], as a JSON array of
      * bare filenames — feeds the dashboard builder's icon picker (`docs/js/
      * cards.js`'s `openIconPicker()`), which shows them as clickable
@@ -1497,6 +1542,25 @@ class ConfigServer(
                 ?.sorted() ?: emptyList()
         val json = JSONArray(names).toString()
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
+    }
+
+    /**
+     * Deletes one uploaded icon from [iconsDir] (`DELETE /icons/<file>`, the
+     * Devices page's per-icon "Delete"). Same `sanitize()` as upload/serve,
+     * so the path can't leave [iconsDir]. Cards still pointing at a deleted
+     * icon just render without it — the page warns before deleting one
+     * that dashboard.json still references.
+     */
+    private fun deleteIcon(uri: String): Response {
+        val name = sanitize(uri.removePrefix("/icons/"))
+        val file = File(iconsDir, name)
+        return when {
+            name.isBlank() || !file.isFile ->
+                jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "No icon named $name"))
+            !file.delete() ->
+                jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", "Could not delete $name"))
+            else -> jsonResponse(Response.Status.OK, JSONObject().put("status", "ok").put("deleted", name))
+        }
     }
 
     /**

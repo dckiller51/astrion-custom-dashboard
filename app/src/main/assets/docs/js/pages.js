@@ -97,8 +97,21 @@ function resetAll() {
 // parent/linkedPage/hiddenUnlessActivity/openWhen* were only ever added to
 // this function's old importJson()-only copy, so loading a dashboard via
 // the device (not the paste box) silently dropped every one of them.
+//
+// Fields this function doesn't know about are carried over untouched (see
+// PAGE_FIELDS_NORMALIZED): a page field added to the app later must never
+// again vanish on import the way "openMode" did — it wasn't listed here,
+// so an imported popup page came back as a full page and lost it on save.
+const PAGE_FIELDS_NORMALIZED = new Set([
+  'name', 'cards', 'hotkeys', 'longHotkeys', 'parent', 'parentKey', 'linkedPage', 'linkedPageMode',
+  'popupWidth', 'popupHeight', 'popupPosition', 'hiddenUnlessActivity',
+  'openWhenEntity', 'openWhenState', 'closeWhenState', 'openMode'
+]);
+
 function normalizePageFromJson(p) {
+  const unknownFields = Object.fromEntries(Object.entries(p).filter(([key]) => !PAGE_FIELDS_NORMALIZED.has(key)));
   return {
+    ...unknownFields,
     name: p.name || 'Page',
     cards: p.cards || [],
     hotkeys: p.hotkeys || [],
@@ -120,6 +133,7 @@ function normalizePageFromJson(p) {
     ...(p.openWhenEntity ? { openWhenEntity: p.openWhenEntity } : {}),
     ...(p.openWhenEntity && p.openWhenState && p.openWhenState !== 'on' ? { openWhenState: p.openWhenState } : {}),
     ...(p.openWhenEntity && p.closeWhenState ? { closeWhenState: p.closeWhenState } : {}),
+    ...(p.openWhenEntity && p.openMode === 'popup' ? { openMode: 'popup' } : {}),
   };
 }
 

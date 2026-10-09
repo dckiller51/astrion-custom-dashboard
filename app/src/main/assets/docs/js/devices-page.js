@@ -1393,12 +1393,92 @@ async function uploadIrDatabase() {
     input.value = '';
     irOnDeviceCache = {};
     await tryLoadOnDeviceIrDatabase();
+    await loadIrDatabaseFiles();
   } catch (e) {
     showToast('Upload failed: ' + e, 'error');
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
   }
+}
+
+/** Lists the category files in /sdcard/astrion/ir-database/ (GET
+ * /ir-database), each with its brands/models and a delete button. */
+async function loadIrDatabaseFiles() {
+  const list = document.getElementById('irDatabaseFilesList');
+  if (!list) return;
+  try {
+    const res = await fetch('/ir-database');
+    const ids = await res.json();
+    list.innerHTML = '';
+    if (!Array.isArray(ids) || !ids.length) {
+      list.innerHTML = '<div class="hint">No IR database file on this remote yet.</div>';
+      return;
+    }
+    for (const id of ids) {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      const label = document.createElement('span');
+      const title = document.createElement('strong');
+      title.textContent = `${id}.json`;
+      const models = document.createElement('div');
+      models.className = 'hint';
+      models.style.margin = '2px 0 0';
+      models.textContent = await describeIrDatabaseFile(id);
+      label.append(title, models);
+      const del = document.createElement('span');
+      del.className = 'remove';
+      del.title = 'Delete this file from the remote';
+      del.textContent = '✕';
+      del.addEventListener('click', () => deleteIrDatabaseFile(id));
+      row.append(label, del);
+      list.appendChild(row);
+    }
+  } catch (e) {
+    list.innerHTML = '<div class="hint">Could not load the IR database file list.</div>';
+    console.error('Failed to load /ir-database', e);
+  }
+}
+
+/** "LG: OLED65B8, HU710PW-GL · Samsung: UE48H6200" — or '' if unreadable. */
+async function describeIrDatabaseFile(id) {
+  try {
+    const res = await fetch(`/ir-database/${encodeURIComponent(id)}.json`);
+    if (!res.ok) return '';
+    const file = await res.json();
+    return (file.brands || [])
+      .map(b => `${b.brand_name}: ${(b.models || []).map(m => m.model_name).join(', ')}`)
+      .join(' · ');
+  } catch (e) {
+    return '';
+  }
+}
+
+async function deleteIrDatabaseFile(id) {
+  // IR devices in dashboard.json that point at this category stop sending
+  // anything once the file is gone — say which before deleting.
+  let users = [];
+  try {
+    const res = await fetch('/dashboard.json');
+    if (res.ok) {
+      const dash = await res.json();
+      users = (dash.irDevices || []).filter(d => !d.commands && (d.category || '').toLowerCase() === id).map(d => d.name || d.id);
+    }
+  } catch (e) { /* no warning possible — still ask */ }
+  const warning = users.length
+    ? `\n\n⚠ Still used by: ${users.join(', ')} — their IR commands will stop working until the file is sent again.`
+    : '';
+  if (!confirm(`Delete "${id}.json" from the remote?${warning}`)) return;
+  try {
+    const res = await fetch(`/ir-database/${encodeURIComponent(id)}.json`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showToast('IR database file deleted.');
+    irOnDeviceCache = {};
+    await tryLoadOnDeviceIrDatabase();
+  } catch (e) {
+    showToast('Delete failed: ' + e, 'error');
+  }
+  await loadIrDatabaseFiles();
 }
 
 // ---- Icons (upload PNGs for use on scene_grid/button_grid cards in the
@@ -1412,13 +1492,64 @@ async function loadIconsList() {
   try {
     const res = await fetch('/icons-list');
     const names = await res.json();
-    list.innerHTML = Array.isArray(names) && names.length
-      ? names.map(n => `<div class="list-item"><span>${n}</span></div>`).join('')
-      : '<div class="hint">No icons uploaded yet.</div>';
+    list.innerHTML = '';
+    if (!Array.isArray(names) || !names.length) {
+      list.innerHTML = '<div class="hint">No icons uploaded yet.</div>';
+      return;
+    }
+    names.forEach(name => {
+      const row = document.createElement('div');
+      row.className = 'list-item';
+      const label = document.createElement('span');
+      label.style.cssText = 'display:flex;align-items:center;gap:8px';
+      const img = document.createElement('img');
+      img.src = `/icons/${encodeURIComponent(name)}`;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.style.cssText = 'width:24px;height:24px;object-fit:contain';
+      label.append(img, document.createTextNode(name));
+      const del = document.createElement('span');
+      del.className = 'remove';
+      del.title = 'Delete this icon from the remote';
+      del.textContent = '✕';
+      del.addEventListener('click', () => deleteIcon(name));
+      row.append(label, del);
+      list.appendChild(row);
+    });
   } catch (e) {
     list.innerHTML = '<div class="hint">Could not load the icon list.</div>';
     console.error('Failed to load /icons-list', e);
   }
+}
+
+/** How many times dashboard.json mentions this icon's file (cards, scene/
+ * button tiles, Activities…) — 0 if the file can't be read. Used only to
+ * warn before deleting an icon that's still in use. */
+async function countIconUses(name) {
+  try {
+    const res = await fetch('/dashboard.json');
+    if (!res.ok) return 0;
+    const text = await res.text();
+    return text.split(`/icons/${name}"`).length - 1;
+  } catch (e) {
+    return 0;
+  }
+}
+
+async function deleteIcon(name) {
+  const uses = await countIconUses(name);
+  const warning = uses
+    ? `\n\n⚠ dashboard.json still uses it ${uses} time(s) — those cards will show no icon until you pick another one.`
+    : '';
+  if (!confirm(`Delete "${name}" from the remote?${warning}`)) return;
+  try {
+    const res = await fetch(`/icons/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showToast('Icon deleted.');
+  } catch (e) {
+    showToast('Delete failed: ' + e, 'error');
+  }
+  await loadIconsList();
 }
 
 async function uploadIcon() {
@@ -1487,4 +1618,5 @@ onIrSourceModeChange();
 renderIrCommandsList();
 tryLoadOnDeviceIrDatabase();
 loadIconsList();
+loadIrDatabaseFiles();
 loadAll();

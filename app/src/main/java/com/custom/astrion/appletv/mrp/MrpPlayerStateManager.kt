@@ -107,9 +107,23 @@ class MrpPlayerStateManager(private val onChange: (MrpPlaying?) -> Unit) {
         val player = playerOf(setState.message(Mrp.SS_PLAYER_PATH))
         setState.enumValue(Mrp.SS_PLAYBACK_STATE)?.let { player.playbackState = it }
         setState.message(Mrp.SS_PLAYBACK_QUEUE)?.let { queue ->
-            player.items = items(queue)
+            val previous = player.items.filter { it.identifier != null }.associateBy { it.identifier }
+            player.items = items(queue).onEach { keepKnownMetadata(it, previous[it.identifier]) }
             player.location = queue.int32(Mrp.PQ_LOCATION) ?: 0
         }
+    }
+
+    /**
+     * A re-sent queue often carries the *same* item (same identifier) without its metadata —
+     * typical of a live stream, where tvOS refreshes the queue every few seconds and only
+     * re-adds the title/artwork a moment later via `UpdateContentItemMessage`. Taking the queue
+     * as-is (as pyatv does) made the title and artwork flicker to empty each time. Same
+     * identifier → keep what was known and merge the new fields over it; a genuinely new item
+     * (other identifier) still starts empty, so a stale title never sticks to it.
+     */
+    private fun keepKnownMetadata(item: Item, previous: Item?) {
+        val known = previous?.metadata ?: return
+        item.metadata = item.metadata?.let { known.merge(it) } ?: known
     }
 
     private fun updateContentItem(update: ProtobufWire.ProtoMessage) {

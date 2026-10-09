@@ -6,6 +6,13 @@
     <string name="active_activities">Attività attive</string>
     <string name="no_active_activities">Nulla di attivo al momento</string>
     <string name="stop_activity">Arresta</string>
+    <string name="activity_help">Aiuto</string>
+    <string name="activity_help_hint">Tocca un dispositivo per correggere ciò che Astrion crede, poi Correggi. Nulla viene inviato prima di toccare Correggi.</string>
+    <string name="device_state_on">Acceso</string>
+    <string name="device_state_off">Spento</string>
+    <string name="device_state_unknown">Sconosciuto</string>
+    <string name="activity_fix">Correggi</string>
+    <string name="activity_help_input">ingresso: %1$s</string>
     <string name="connected">Connesso</string>
     <string name="disconnected">Disconnesso</string>
 
