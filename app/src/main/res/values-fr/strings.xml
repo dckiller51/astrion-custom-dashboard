@@ -6,6 +6,13 @@
     <string name="active_activities">Activités actives</string>
     <string name="no_active_activities">Rien d\'actif pour l\'instant</string>
     <string name="stop_activity">Arrêter</string>
+    <string name="activity_help">Aide</string>
+    <string name="activity_help_hint">Touchez un appareil pour corriger ce qu\'Astrion croit, puis Corriger. Rien n\'est envoyé avant de toucher Corriger.</string>
+    <string name="device_state_on">Allumé</string>
+    <string name="device_state_off">Éteint</string>
+    <string name="device_state_unknown">Inconnu</string>
+    <string name="activity_fix">Corriger</string>
+    <string name="activity_help_input">entrée : %1$s</string>
     <string name="connected">Connecté</string>
     <string name="disconnected">Déconnecté</string>
 

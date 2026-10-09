@@ -62,6 +62,7 @@ import com.custom.astrion.ui.DashboardNavigation
 import com.custom.astrion.ui.DashboardRegistries
 import com.custom.astrion.ui.DashboardUiState
 import com.custom.astrion.ui.FocusHighlight
+import com.custom.astrion.ui.IrTransmit
 import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
@@ -781,9 +782,7 @@ class MainActivity : ComponentActivity() {
         when (val target = device.target) {
             // Unchanged from before this device gained a `target` field —
             // every dashboard.json without one defaults here.
-            IrTarget.Local ->
-                runCatching { irManager?.transmit(irStep.freq, irStep.pattern.toIntArray()) }
-                    .onFailure { Log.e("MainActivity", "hotkey IR send failed: $irDevice/$irCommand", it) }
+            IrTarget.Local -> IrTransmit.local(irManager, irDevice, irCommand, irStep)
             is IrTarget.Extender -> sendHotkeyIrViaExtender(irDevice, irCommand, irStep, target)
         }
     }
@@ -802,7 +801,11 @@ class MainActivity : ComponentActivity() {
             )
             return
         }
-        extenderRegistry.client(target.extenderId)?.let { client ->
+        val client = extenderRegistry.client(target.extenderId)
+        if (client == null) {
+            Log.w(IrTransmit.TAG, "NOT SENT $irDevice/$irCommand: extender ${target.extenderId} isn't registered")
+        } else {
+            IrTransmit.extender(irDevice, irCommand, target.extenderId, prontoCode)
             lifecycleScope.launch { client.send(prontoCode) }
         }
     }

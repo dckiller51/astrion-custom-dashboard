@@ -156,18 +156,47 @@ object UpdateChecker {
         return false
     }
 
-    /** Downloads the APK into the app cache dir. Blocking — invoke off the main thread. */
+    /** Downloads the APK into the app cache dir. Blocking — invoke off the main thread.
+     * Streamed straight to the file: reading the whole APK into memory first
+     * (as this used to) briefly held tens of MB of RAM on a small device. */
     fun download(context: Context, apkUrl: String): File? {
         val request = Request.Builder().url(apkUrl).build()
-        val bytes =
+        val file = File(context.cacheDir, UPDATE_APK_NAME)
+        val ok =
             http.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                resp.body?.bytes() ?: return null
+                val body = resp.body
+                if (resp.isSuccessful && body != null) {
+                    file.outputStream().use { out -> body.byteStream().copyTo(out) }
+                    true
+                } else {
+                    false
+                }
             }
-        val file = File(context.cacheDir, "astrion-update.apk")
-        file.writeBytes(bytes)
-        return file
+        return if (ok) file else null
     }
+
+    /**
+     * Frees storage the app no longer needs — called once at startup:
+     *  - the update APK downloaded by [download]: once the new version runs,
+     *    it's a dead copy of the whole app that used to stay in the cache
+     *    forever;
+     *  - upload temp files the local web server (NanoHTTPD) left behind when
+     *    a request was interrupted.
+     * Only files older than [STALE_AFTER_MS] go, so an install still on
+     * screen keeps its APK.
+     */
+    fun cleanupStaleDownloads(context: Context) {
+        val cutoff = System.currentTimeMillis() - STALE_AFTER_MS
+        context.cacheDir
+            .listFiles()
+            ?.filter { it.isFile && isDisposable(it.name) && it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
+    }
+
+    private fun isDisposable(name: String): Boolean = name == UPDATE_APK_NAME || name.startsWith("NanoHTTPD-")
+
+    private const val UPDATE_APK_NAME = "astrion-update.apk"
+    private const val STALE_AFTER_MS = 10 * 60 * 1000L
 
     /**
      * Launches the system installer UI for the given APK file.

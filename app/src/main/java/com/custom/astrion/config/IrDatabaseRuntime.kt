@@ -6,6 +6,7 @@ import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -44,8 +45,15 @@ fun prontoToPattern(pronto: String): IrStepConfig {
     return IrStepConfig(carrierHz, chosen.map { Math.round(it * periodUs).toInt() })
 }
 
-/** brand_name.lowercase() -> model_name.lowercase() -> commandId -> pronto */
-private typealias CategoryIndex = Map<String, Map<String, Map<String, String>>>
+/** One command's codes: the frame, plus an optional separate repeat burst. */
+private data class CommandCodes(val pronto: String, val prontoRepeat: String?)
+
+/** One model entry: its commands, plus the optional Harmony-style
+ * [IrDeviceProfile] (see that class) when the entry carries a "profile". */
+private data class ModelData(val commands: Map<String, CommandCodes>, val profile: IrDeviceProfile?)
+
+/** brand_name.lowercase() -> model_name.lowercase() -> model data */
+private typealias CategoryIndex = Map<String, Map<String, ModelData>>
 
 /**
  * Resolves [IrDeviceSource.SdCardRef] devices against the curated JSON
@@ -82,13 +90,10 @@ object IrDatabaseRuntime {
         val cacheKey = "$category\u0000$brand\u0000$model\u0000$commandId"
         if (resolvedCache.containsKey(cacheKey)) return resolvedCache[cacheKey] // hit, incl. a cached failure
 
-        val index = categoryCache.getOrPut(category) { loadCategory(category) }
-        val pronto = index
-            ?.get(brand.lowercase())
-            ?.get(model.lowercase())
-            ?.get(commandId)
+        val modelData = modelData(category, brand, model)
+        val codes = commandCodes(modelData, commandId)
 
-        if (pronto == null) {
+        if (codes == null) {
             Log.w(
                 TAG,
                 "resolve: no command \"$commandId\" for $brand/$model in $category.json " +
@@ -98,6 +103,11 @@ object IrDatabaseRuntime {
             return null
         }
 
+        // A device with a profile gets each press sent the way its own
+        // remote does (Harmony's pressMinRepeats) — everywhere: Activities,
+        // tiles, hotkeys. No profile = one frame, exactly as before.
+        val repeats = modelData?.profile?.timing?.repeats ?: 1
+        val pronto = buildRepeatedPronto(codes.pronto, codes.prontoRepeat, repeats)
         val step = runCatching { prontoToPattern(pronto) }
             .onFailure { Log.e(TAG, "resolve: bad Pronto code for $brand/$model/$commandId in $category.json", it) }
             .getOrNull()
@@ -107,6 +117,47 @@ object IrDatabaseRuntime {
             ?.copy(pronto = pronto)
         resolvedCache[cacheKey] = step
         return step
+    }
+
+    /**
+     * The model entry for brand+model (both case-insensitive). Also accepts a
+     * file entry named "<model> (Harmony)": the IR sniffer's archive import
+     * (0.5.0) renamed a model that way when one with the same name already
+     * existed, which made dashboards referencing the plain name find nothing.
+     */
+    private fun modelData(category: String, brand: String, model: String): ModelData? {
+        val models = categoryCache.getOrPut(category) { loadCategory(category) }?.get(brand.lowercase()) ?: return null
+        val key = model.lowercase()
+        return models[key] ?: models["$key$HARMONY_SUFFIX"] ?: models[key.removeSuffix(HARMONY_SUFFIX)]
+    }
+
+    private const val HARMONY_SUFFIX = " (harmony)"
+
+    /**
+     * Exact command id first, else the same id ignoring case, spaces, `_`
+     * and `-` — so a dashboard written against the old sniffer ids
+     * (`volume_up`, `power_off`) still finds the Harmony names
+     * (`VolumeUp`, `PowerOff`) after the device file is replaced.
+     */
+    private fun commandCodes(model: ModelData?, commandId: String): CommandCodes? {
+        val commands = model?.commands ?: return null
+        val looseId = { id: String -> id.lowercase().replace(Regex("[^a-z0-9]"), "") }
+        val wanted = looseId(commandId)
+        return commands[commandId] ?: commands.entries.firstOrNull { looseId(it.key) == wanted }?.value
+    }
+
+    /** True when [command] resolves for [device] (same lookup as [resolve], no logging). */
+    fun hasCommand(device: IrDeviceConfig, command: String): Boolean = when (val source = device.source) {
+        is IrDeviceSource.Inline -> source.commands.containsKey(command)
+        is IrDeviceSource.SdCardRef -> commandCodes(modelData(source.category, source.brand, source.model), command) != null
+    }
+
+    /** The Harmony-style [IrDeviceProfile] of an ir-database device, when
+     * its model entry has a "profile" block — null for inline devices and
+     * for entries without one (they keep the original Activity behavior). */
+    fun profile(device: IrDeviceConfig): IrDeviceProfile? = when (val source = device.source) {
+        is IrDeviceSource.Inline -> null
+        is IrDeviceSource.SdCardRef -> modelData(source.category, source.brand, source.model)?.profile
     }
 
     /** Resolves one command against a single already-looked-up device — the
@@ -155,18 +206,31 @@ object IrDatabaseRuntime {
         }
         return try {
             val root = Json.parseToJsonElement(file.readText()).jsonObject
-            parseBrands(root).associate { (brandName, models) -> brandName.lowercase() to models }
+            repairedOnLoad = 0
+            val index = parseBrands(root).associate { (brandName, models) -> brandName.lowercase() to models }
+            // One summary line per file — what's in it, and whether it still
+            // had codes damaged by the old IR sniffer (regenerate it then).
+            val models = index.values.flatMap { it.values }
+            Log.i(
+                TAG,
+                "loaded ${file.name}: ${models.size} model(s), ${models.sumOf { it.commands.size }} command(s), " +
+                    "${models.count { it.profile != null }} with a Harmony profile, $repairedOnLoad damaged code(s) repaired"
+            )
+            index
         } catch (e: Exception) {
             Log.e(TAG, "loadCategory: failed to parse ${file.absolutePath}", e)
             null
         }
     }
 
+    /** Codes rejoined by [repairSplitPronto] while parsing the current file. */
+    private var repairedOnLoad = 0
+
     /**
-     * [{brand_name, models:[{model_name, commands:{id:{pronto,...}}}]}]
-     * -> [(brand_name, model_name.lowercase() -> commandId -> pronto)]
+     * [{brand_name, models:[{model_name, commands:{id:{pronto, pronto_repeat?}}, profile?}]}]
+     * -> [(brand_name, model_name.lowercase() -> model data)]
      */
-    private fun parseBrands(root: JsonObject): List<Pair<String, Map<String, Map<String, String>>>> {
+    private fun parseBrands(root: JsonObject): List<Pair<String, Map<String, ModelData>>> {
         val brandsArray = root["brands"] as? JsonArray ?: error("missing or malformed \"brands\" array")
         return brandsArray.map { brandEl ->
             val brandObj = brandEl.jsonObject
@@ -178,9 +242,18 @@ object IrDatabaseRuntime {
                 val modelName = modelObj["model_name"]!!.jsonPrimitive.content
                 val commands = modelObj["commands"]?.jsonObject
                     ?.entries
-                    ?.associate { (cmdId, cmdEl) -> cmdId to cmdEl.jsonObject["pronto"]!!.jsonPrimitive.content }
+                    ?.associate { (cmdId, cmdEl) ->
+                        val cmd = cmdEl.jsonObject
+                        // Files made by the IR sniffer before 0.4.1 can hold
+                        // a code split in two — see repairSplitPronto().
+                        val stored = cmd["pronto"]!!.jsonPrimitive.content
+                        val (pronto, repeat) =
+                            repairSplitPronto(stored, (cmd["pronto_repeat"] as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() })
+                        if (pronto != stored) repairedOnLoad++
+                        cmdId to CommandCodes(pronto, repeat)
+                    }
                     .orEmpty()
-                modelName.lowercase() to commands
+                modelName.lowercase() to ModelData(commands, IrDeviceProfile.parse(modelObj["profile"]))
             }
             brandName to models
         }

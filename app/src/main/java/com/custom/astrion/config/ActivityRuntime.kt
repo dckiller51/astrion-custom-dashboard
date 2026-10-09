@@ -48,13 +48,18 @@ data class TrackedActivity(
  *     the physical Harmony remote) is reflected here too, not just the ones
  *     Astrion itself triggered.
  */
-class ActivityRuntime(config: AppConfig) {
+class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore = ActiveActivityStore.shared) {
     /** Every trackable Activity found in the config, in declaration order. */
     val all: List<TrackedActivity> = scan(config)
 
     private val byRoom: Map<String, List<TrackedActivity>> = all.groupBy { it.room }
 
-    private val _activeByRoom = MutableStateFlow<Map<String, String?>>(emptyMap())
+    /** Restored from [memory] (only ids still trackable in their room), so
+     * the active Activity survives a restart, an update or a config reload.
+     * Every write below also hands the new map to [memory] (`also(memory::save)`). */
+    private val _activeByRoom = MutableStateFlow<Map<String, String?>>(
+        memory.active.filter { (room, id) -> byRoom[room].orEmpty().any { it.id == id } }
+    )
 
     /** room -> id of the currently active TrackedActivity in that room (or null). */
     val activeByRoom: StateFlow<Map<String, String?>> = _activeByRoom.asStateFlow()
@@ -74,7 +79,7 @@ class ActivityRuntime(config: AppConfig) {
 
     /** Call right after firing a tracked item's own action (HA/Harmony/IR). */
     fun markActive(activity: TrackedActivity) {
-        _activeByRoom.value = _activeByRoom.value + (activity.room to activity.id)
+        _activeByRoom.value = (_activeByRoom.value + (activity.room to activity.id)).also(memory::save)
     }
 
     /** Marks [room] as having no active Activity — the counterpart of
@@ -83,7 +88,7 @@ class ActivityRuntime(config: AppConfig) {
      * confirmed PowerOff via [bind]'s own "-1" handling); never call this
      * speculatively before the stop action itself has been dispatched. */
     fun clear(room: String) {
-        _activeByRoom.value = _activeByRoom.value + (room to null)
+        _activeByRoom.value = (_activeByRoom.value + (room to null)).also(memory::save)
     }
 
     /** Same as [markActive], by id — for callers (like a composed Activity's
@@ -142,7 +147,8 @@ class ActivityRuntime(config: AppConfig) {
             if (activityId == "-1") {
                 // PowerOff: clear every room this hub could have been driving.
                 val roomsForHub = all.filter(::targetsThisHub).map { it.room }.toSet()
-                _activeByRoom.value = _activeByRoom.value.filterKeys { it !in roomsForHub }
+                val remaining = _activeByRoom.value.filterKeys { it !in roomsForHub }
+                _activeByRoom.value = remaining.also(memory::save)
             }
         }
     }

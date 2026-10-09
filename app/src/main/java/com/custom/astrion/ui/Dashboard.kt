@@ -612,6 +612,8 @@ fun Dashboard(
             val sendIrCommand = dispatcher::sendIrCommand
             val startActivity: (String) -> Unit = dispatcher::startActivity
             val stopActivity = dispatcher::stopActivity
+            val activityActions =
+                remember(dispatcher) { ActivityOverlayActions(stop = dispatcher::stopActivity, resync = dispatcher::resyncActivity) }
             LaunchedEffect(activityRuntime) {
                 onStartActivityReady(startActivity)
                 onStopActivityReady(stopActivity)
@@ -741,7 +743,7 @@ fun Dashboard(
                     configNotice = configNotice,
                     overlayState = overlayState,
                     activityRuntime = activityRuntime,
-                    stopActivity = stopActivity,
+                    activityActions = activityActions,
                     onPageChanged = onPageChanged,
                     webhookContext = webhookContext,
                     client = client,
@@ -771,7 +773,7 @@ private data class DashboardContentInputs(
     val configNotice: String?,
     val overlayState: DashboardOverlayState,
     val activityRuntime: ActivityRuntime,
-    val stopActivity: (String) -> Unit,
+    val activityActions: ActivityOverlayActions,
     val onPageChanged: (Int) -> Unit,
     val webhookContext: Context,
     val client: HaClient,
@@ -950,7 +952,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
     val configNotice = inputs.configNotice
     val overlayState = inputs.overlayState
     val activityRuntime = inputs.activityRuntime
-    val stopActivity = inputs.stopActivity
+    val activityActions = inputs.activityActions
     val onPageChanged = inputs.onPageChanged
     val webhookContext = inputs.webhookContext
     val client = inputs.client
@@ -1057,7 +1059,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             ActivitiesOverlay(
                 activityRuntime = activityRuntime,
                 ctx = ctx,
-                onStop = stopActivity,
+                actions = activityActions,
                 onClose = { overlayState.onShowActivitiesChange(false) }
             )
         }
@@ -1151,10 +1153,10 @@ private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
 private fun ActivitiesOverlay(
     activityRuntime: ActivityRuntime,
     ctx: CardContext,
-    /** Stops the Activity active in a given room — see Dashboard()'s own
-     * `stopActivity`. Separate from `onClose`: stopping doesn't dismiss the
-     * overlay, so more than one room can be stopped in a row. */
-    onStop: (room: String) -> Unit,
+    /** Stop / Help per room — see [ActivityOverlayActions]. Separate from
+     * `onClose`: stopping doesn't dismiss the overlay, so more than one
+     * room can be stopped in a row. */
+    actions: ActivityOverlayActions,
     onClose: () -> Unit
 ) {
     val activeByRoom by activityRuntime.activeByRoom.collectAsState()
@@ -1205,40 +1207,13 @@ private fun ActivitiesOverlay(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
                 activities.forEach { activity ->
-                    Row(
-                        modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(LocalTheme.current.insetSurface)
-                            .tapClickable(enabled = activity.page != null) {
-                                activity.page?.let {
-                                    ctx.navigateToPage(it)
-                                    onClose()
-                                }
-                            }.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(activity.name, color = LocalTheme.current.primaryText, fontSize = 15.sp)
-                        // Dedicated per-room stop — the missing piece this
-                        // overlay didn't have before: previously the only
-                        // way to end a classic Harmony Activity was a
-                        // generic PowerOff hotkey, which (when a hub drives
-                        // more than one room) kills every room on that hub
-                        // instead of just this one. stopActivity() targets
-                        // only this Activity's own hub.
-                        Text(
-                            stringResource(R.string.stop_activity),
-                            color = LocalTheme.current.danger,
-                            fontSize = 13.sp,
-                            modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .tapClickable { onStop(room) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
+                    ActiveActivityRow(
+                        activity = activity,
+                        composed = activityRuntime.activityConfigs[activity.id],
+                        ctx = ctx,
+                        actions = actions,
+                        onClose = onClose
+                    )
                 }
             }
         }

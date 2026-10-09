@@ -95,6 +95,7 @@ internal class AirPlayMrpClient(
     private var dataChannel: AirPlayChannel? = null
     private var eventChannel: AirPlayChannel? = null
     private var dataReaderThread: Thread? = null
+    private var eventReaderThread: Thread? = null
 
     @Volatile private var sendSeqNo: Long = 0
 
@@ -143,6 +144,7 @@ internal class AirPlayMrpClient(
         feedbackLoop?.interrupt()
         dataHeartbeat?.interrupt()
         dataReaderThread?.interrupt()
+        eventReaderThread?.interrupt()
         pending.values.forEach { it.cancel(false) }
         pending.clear()
         runCatching { eventChannel?.close() }
@@ -177,10 +179,32 @@ internal class AirPlayMrpClient(
         val channel = AirPlayChannel(host, eventPort, "event")
         channel.connect(REQUEST_TIMEOUT_MS.toInt(), write, read)
         eventChannel = channel
-        // Never read from afterwards — tvOS requires this channel to exist, but nothing useful
-        // arrives on it for a remote-control-only session (confirmed: pyatv's own client doesn't
-        // read it either). A background drain thread still exists for the data channel's
-        // equivalent only; this one is simply left connected and idle.
+        startEventReader(channel)
+    }
+
+    /**
+     * Answers every request tvOS sends on the event channel with an empty `200 OK` — see
+     * [AirPlayEventChannel]. This channel used to be left unread (on the belief that pyatv
+     * doesn't read it either — it does, `EventChannel.handle_received`), and the unanswered
+     * requests made tvOS drop the whole session about every 30 seconds.
+     */
+    private fun startEventReader(channel: AirPlayChannel) {
+        val parser = AirPlayEventChannel()
+        eventReaderThread =
+            Thread({
+                try {
+                    while (!closing.get()) {
+                        parser.feed(channel.receiveFrame()).forEach { request ->
+                            channel.send(AirPlayEventChannel.okResponse(request))
+                        }
+                    }
+                } catch (e: Exception) {
+                    if (closing.compareAndSet(false, true)) listener.onDisconnected(e)
+                }
+            }, "atv-airplay-events-$host").apply {
+                isDaemon = true
+                start()
+            }
     }
 
     private fun setupDataChannel(rtsp: AirPlayRtspSession, verify: AirPlayPairVerify) {

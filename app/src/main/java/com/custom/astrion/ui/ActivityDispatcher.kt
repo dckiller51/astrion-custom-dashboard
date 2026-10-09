@@ -4,10 +4,14 @@ import android.hardware.ConsumerIrManager
 import android.util.Log
 import com.custom.astrion.config.ActivityConfig
 import com.custom.astrion.config.ActivityDeviceConfig
+import com.custom.astrion.config.ActivityPlan
+import com.custom.astrion.config.ActivityPlanner
 import com.custom.astrion.config.ActivityRuntime
+import com.custom.astrion.config.DeviceStateStore
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.IrDeviceConfig
 import com.custom.astrion.config.IrTarget
+import com.custom.astrion.config.PlannedAction
 import com.custom.astrion.extender.ExtenderBatchCommand
 import com.custom.astrion.extender.ExtenderRegistry
 import com.custom.astrion.ha.HaClient
@@ -114,43 +118,35 @@ class ActivityDispatcher(
         data class Immediate(override val gapBeforeMs: Int, val run: () -> Unit) : DispatchStep()
     }
 
-    /** Accumulates [DispatchStep]s for one Activity switch/stop in device
-     * order, tracking the "gap before the next step" implied by a
-     * device's own `delayAfterMs` so it lands on the right step
-     * regardless of how many steps that device itself produces (a power
-     * command, an input command, or both). */
+    /** Turns an [ActivityPlanner]'s [PlannedAction]s into [DispatchStep]s
+     * — each action already carries its own gap (inter-key, inter-device,
+     * power-on and input delays are all decided by the planner). */
     private inner class StepPlan {
         val steps = mutableListOf<DispatchStep>()
-        private var pendingGapMs = 0
 
-        fun setGapBeforeNext(ms: Int) {
-            this.pendingGapMs = ms
-        }
-
-        fun addPower(d: ActivityDeviceConfig, on: Boolean) {
-            if (d.source == "ha") {
-                val gap = this.takeGap()
-                val domain = d.deviceId.substringBefore('.')
-                this.steps += DispatchStep.Immediate(gap) {
-                    client.callService(ServiceCall(domain = domain, service = if (on) "turn_on" else "turn_off", entityId = d.deviceId))
-                }
-            } else {
-                this.addCommand(d, if (on) d.powerOnCommand else d.powerOffCommand)
-            }
-        }
-
-        fun addCommand(d: ActivityDeviceConfig, command: String?) {
-            if (command == null) return
-            val gap = this.takeGap()
-            when (d.source) {
-                "ir" -> this.addIrCommand(d, command, gap)
-                "harmony" -> this.steps += DispatchStep.Immediate(gap) {
-                    harmonyRegistry.client(d.hub)?.sendCommand(d.deviceId, command)
-                        ?: Log.w("Dashboard", "activity device ${d.deviceId}: hub ${d.hub} not configured")
-                }
-                "ha" -> this.steps += DispatchStep.Immediate(gap) {
+        fun add(action: PlannedAction) {
+            val d = action.device
+            val gap = action.gapBeforeMs
+            when (action) {
+                is PlannedAction.HaPower -> this.steps += DispatchStep.Immediate(gap) {
                     val domain = d.deviceId.substringBefore('.')
-                    client.callService(ServiceCall.of(domain, "select_source", d.deviceId, "source" to command))
+                    val service = if (action.on) "turn_on" else "turn_off"
+                    client.callService(ServiceCall(domain = domain, service = service, entityId = d.deviceId))
+                }
+                is PlannedAction.HaSource -> this.steps += DispatchStep.Immediate(gap) {
+                    val domain = d.deviceId.substringBefore('.')
+                    client.callService(ServiceCall.of(domain, "select_source", d.deviceId, "source" to action.source))
+                }
+                is PlannedAction.Command -> when (d.source) {
+                    "ir" -> this.addIrCommand(d, action.command, gap)
+                    "harmony" -> this.steps += DispatchStep.Immediate(gap) {
+                        harmonyRegistry.client(d.hub)?.sendCommand(d.deviceId, action.command)
+                            ?: Log.w("Dashboard", "activity device ${d.deviceId}: hub ${d.hub} not configured")
+                    }
+                    else -> {
+                        Log.w("Dashboard", "activity device ${d.deviceId}: unknown source \"${d.source}\"")
+                        this.keepGap(gap)
+                    }
                 }
             }
         }
@@ -159,14 +155,19 @@ class ActivityDispatcher(
             val device = irDevicesById[d.deviceId]
             val resolved = device?.let { IrDatabaseRuntime.resolve(it, command) }
             when {
-                device == null -> Log.w("Dashboard", "activity device ${d.deviceId}: unknown irDevice")
-                resolved == null -> Log.w("Dashboard", "activity device ${d.deviceId}: command \"$command\" not found")
+                device == null -> {
+                    Log.w("Dashboard", "activity device ${d.deviceId}: unknown irDevice")
+                    this.keepGap(gap)
+                }
+                resolved == null -> {
+                    Log.w("Dashboard", "activity device ${d.deviceId}: command \"$command\" not found")
+                    this.keepGap(gap)
+                }
                 else -> when (val target = device.target) {
                     // Unchanged from before this device gained a `target` field —
                     // every dashboard.json without one defaults here.
                     IrTarget.Local -> this.steps += DispatchStep.Immediate(gap) {
-                        runCatching { irManager?.transmit(resolved.freq, resolved.pattern.toIntArray()) }
-                            .onFailure { Log.e("Dashboard", "IR send failed: ${d.deviceId}/$command", it) }
+                        IrTransmit.local(irManager, d.deviceId, command, resolved)
                     }
                     is IrTarget.Extender -> {
                         val pronto = resolved.pronto
@@ -180,7 +181,9 @@ class ActivityDispatcher(
                                 "activity device ${d.deviceId}/$command targets an extender but has no raw " +
                                     "Pronto string (Inline-sourced IR devices can't target an extender yet)"
                             )
+                            this.keepGap(gap)
                         } else {
+                            IrTransmit.extender(d.deviceId, command, target.extenderId, pronto)
                             this.steps += DispatchStep.Extender(target.extenderId, pronto, gap)
                         }
                     }
@@ -188,10 +191,10 @@ class ActivityDispatcher(
             }
         }
 
-        private fun takeGap(): Int {
-            val gap = this.pendingGapMs
-            this.pendingGapMs = 0
-            return gap
+        /** A skipped action (unknown device/command) still keeps its wait —
+         * it may carry a device's power-on delay that later steps rely on. */
+        private fun keepGap(gap: Int) {
+            if (gap > 0) this.steps += DispatchStep.Immediate(gap) {}
         }
     }
 
@@ -224,7 +227,7 @@ class ActivityDispatcher(
      * didn't belong to this run — [runSteps] resumes from there. Split
      * out purely to keep [runSteps] itself under detekt's
      * NestedBlockDepth threshold. */
-    private fun runExtenderRun(steps: List<DispatchStep>, start: Int, extenderId: String): Int {
+    private suspend fun runExtenderRun(steps: List<DispatchStep>, start: Int, extenderId: String): Int {
         val batch = mutableListOf<ExtenderBatchCommand>()
         var j = start
         while (j < steps.size) {
@@ -234,6 +237,13 @@ class ActivityDispatcher(
             j++
         }
         extenderRegistry.client(extenderId)?.let { c -> extenderScope.launch { c.sendBatch(batch) } }
+            ?: Log.w(IrTransmit.TAG, "NOT SENT ${batch.size} command(s): extender $extenderId isn't registered")
+        // The batch's delays play out on the extender itself; wait the same
+        // total here so whatever follows (local IR, Harmony, HA) still lands
+        // at the planned time — matters now that a power-on delay can be
+        // several seconds long. Nothing follows → no need to wait.
+        val batchMs = batch.sumOf { it.delayBeforeMs.toLong() }
+        if (j < steps.size && batchMs > 0) delay(batchMs.milliseconds)
         return j
     }
 
@@ -253,9 +263,7 @@ class ActivityDispatcher(
             )
             // Unchanged from before this device gained a `target` field —
             // every dashboard.json without one defaults here.
-            device.target == IrTarget.Local ->
-                runCatching { irManager?.transmit(resolved.freq, resolved.pattern.toIntArray()) }
-                    .onFailure { Log.e("Dashboard", "IR send failed: $deviceId/$command", it) }
+            device.target == IrTarget.Local -> IrTransmit.local(irManager, deviceId, command, resolved)
             else -> this.sendIrCommandViaExtender(deviceId, command, resolved.pronto, device.target as IrTarget.Extender)
         }
     }
@@ -275,56 +283,74 @@ class ActivityDispatcher(
             )
             return
         }
-        extenderRegistry.client(target.extenderId)?.let { c -> extenderScope.launch { c.send(pronto) } }
+        val client = extenderRegistry.client(target.extenderId)
+        if (client == null) {
+            Log.w(IrTransmit.TAG, "NOT SENT $deviceId/$command: extender ${target.extenderId} isn't registered")
+        } else {
+            IrTransmit.extender(deviceId, command, target.extenderId, pronto)
+            extenderScope.launch { client.send(pronto) }
+        }
+    }
+
+    /** Decides what to send — see [ActivityPlanner] for the Harmony-style
+     * order (and the unchanged original order for Activities whose devices
+     * have no ir-database profile). */
+    private val planner =
+        ActivityPlanner(
+            profileOf = { d -> if (d.source == "ir") irDevicesById[d.deviceId]?.let(IrDatabaseRuntime::profile) else null },
+            states = DeviceStateStore.shared,
+            hasCommand = { d, command ->
+                d.source != "ir" || irDevicesById[d.deviceId]?.let { IrDatabaseRuntime.hasCommand(it, command) } == true
+            }
+        )
+
+    /** Sends a plan, then records the devices' new power/input state —
+     * the memory that keeps toggle-only devices in sync across restarts. */
+    private suspend fun execute(plan: ActivityPlan) {
+        val stepPlan = StepPlan()
+        plan.actions.forEach(stepPlan::add)
+        runSteps(stepPlan.steps)
+        val states = DeviceStateStore.shared
+        plan.powerChanges.forEach { (id, on) -> states.setPower(id, on) }
+        plan.inputChanges.forEach { (id, input) -> states.setInput(id, input) }
     }
 
     /**
-     * The composed-Activity switch: diffs the outgoing Activity (whatever
-     * was active in `activity.room` before, if anything — Harmony-backed or
-     * composed, both work uniformly via TrackedActivity.devices, see below)
-     * against `activity` itself. A device present in both is left alone —
-     * no power cycle, and its input is only re-sent if this Activity gives
-     * it one — a device only in the outgoing one gets powered off (unless
-     * powerOffOnExit is false), a device only in the incoming one gets
-     * powered on + its input (unless powerOnFirst is false). Devices are
-     * *planned* in declared order, each carrying its own delayAfterMs as
-     * the gap before the next step — [runSteps] then decides, per step,
-     * whether that gap becomes a real wait or an embedded batch delay.
-     *
-     * "Already on" is read from TrackedActivity.devices, not from a
-     * composed ActivityConfig's own device list — this matters a lot for a
-     * shared device with only a toggle command (no discrete on/off, e.g.
-     * many IR soundbars): if the outgoing Activity was Harmony-backed (no
-     * ActivityConfig of its own at all), we'd otherwise have no idea a
-     * shared device was already on and could send an unwanted toggle. See
-     * HotkeyConfig.devices / the scene_grid "devices" hint for how a
-     * Harmony-backed tracked tile declares which physical devices it
-     * touches. Actual *stop* commands (powerOffCommand) still only fire for
-     * a genuinely composed outgoing Activity — a Harmony-backed one has no
-     * ActivityDeviceConfig of its own to run one from; its hub is left to
-     * manage its own devices' power on its own terms.
+     * Starts [activity] in its room, taking over from whatever was active
+     * there (composed or Harmony-backed — TrackedActivity.devices tells
+     * which devices that one used). A Harmony-backed outgoing Activity's
+     * own devices are still left to its hub to power off.
      */
     suspend fun switchActivity(activity: ActivityConfig) {
         val outgoingTracked = activityRuntime.activeActivity(activity.room)
-        val outgoingDeviceIds = outgoingTracked?.devices?.toSet().orEmpty()
-        val incomingIds = activity.devices.map { it.deviceId }.toSet()
         val outgoingComposed = outgoingTracked?.let { activitiesById[it.id] }
-
-        val plan = StepPlan()
-        outgoingComposed?.devices?.forEach { d ->
-            if (d.deviceId !in incomingIds && d.powerOffOnExit) plan.addPower(d, on = false)
-        }
-
-        activity.devices.forEachIndexed { index, d ->
-            val alreadyOn = d.deviceId in outgoingDeviceIds
-            if (!alreadyOn && d.powerOnFirst) plan.addPower(d, on = true)
-            plan.addCommand(d, d.inputCommand)
-            if (index < activity.devices.lastIndex) plan.setGapBeforeNext(d.delayAfterMs)
-        }
-
-        runSteps(plan.steps)
+        val roomDevices = activitiesById.values.filter { it.room == activity.room }.flatMap { it.devices }
+        val plan =
+            planner.planStart(
+                incoming = activity,
+                roomDevices = roomDevices,
+                outgoingDevices = outgoingTracked?.devices?.toSet().orEmpty(),
+                outgoingConfigs = outgoingComposed?.devices.orEmpty()
+            )
+        execute(plan)
         activityRuntime.markActiveById(activity.id)
         activity.page?.let(navigateToPage)
+    }
+
+    /** "Help": replays [room]'s active composed Activity against the
+     * (possibly just corrected) device states — powers on the devices
+     * marked off, re-selects inputs not known to be set. No-op for a
+     * room without an active composed Activity. */
+    fun resyncActivity(room: String) {
+        val tracked = activityRuntime.activeActivity(room) ?: return
+        val composed = activitiesById[tracked.id] ?: return
+        scope.launch {
+            // Unknown state = assumed on (the Activity is running): only
+            // devices the person marked "off" get powered, so a toggle-only
+            // device is never flipped by mistake.
+            val running = composed.devices.map { it.deviceId }.toSet()
+            execute(planner.planStart(composed, roomDevices = emptyList(), outgoingDevices = running, outgoingConfigs = emptyList()))
+        }
     }
 
     fun startActivity(activityId: String) {
@@ -356,9 +382,7 @@ class ActivityDispatcher(
         val composed = activitiesById[tracked.id]
         when {
             composed != null -> {
-                val plan = StepPlan()
-                composed.devices.forEach { d -> if (d.powerOffOnExit) plan.addPower(d, on = false) }
-                scope.launch { runSteps(plan.steps) }
+                scope.launch { execute(planner.planStop(composed)) }
                 activityRuntime.clear(room)
             }
             tracked.harmonyActivityId != null ->
