@@ -388,17 +388,38 @@ function renderPreview() {
     const cardEl = document.createElement('div');
 
     if (card.type === 'apple_tv_remote' || card.type === 'tv_remote') {
+      const atv = card.type === 'apple_tv_remote' ? (card.options || {}) : {};
+      const atvLayout = atv.layout === 'compact' || atv.layout === 'full' ? atv.layout : 'classic';
+      const atvHasMedia = !!(atv.appleTv || atv.entity);
+      const atvStrip = atvHasMedia && atvLayout === 'compact' && (atv.showArtwork !== false || atv.showProgress !== false);
+      const atvApps = atvHasMedia ? (atv.apps || []).slice(0, atvLayout === 'full' ? 12 : 6) : [];
+      const atvAppsHtml = atvApps.length
+        ? `<div style="display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:8px">${atvApps.map(a =>
+            `<div title="${a.label || a.source}" style="width:30px; height:30px; border-radius:8px; background:${a.color || '#3a3a40'}; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center">${(a.label || a.source).slice(0, 2).toUpperCase()}</div>`).join('')}</div>`
+        : '';
+      const atvTop = atvStrip
+        ? `<div style="display:flex; align-items:center; gap:8px; padding:6px; border-radius:10px; background:rgba(255,255,255,0.06); margin-bottom:8px; width:100%; box-sizing:border-box">
+             ${atv.showArtwork !== false ? '<div style="width:30px; height:30px; border-radius:6px; background:#2a3550"></div>' : ''}
+             <div style="flex:1; font-size:11px; text-align:left">Now playing…${atv.showProgress !== false ? '<div style="height:3px; background:#444; margin-top:4px"><div style="width:38%; height:3px; background:#0A84FF"></div></div>' : ''}</div>
+             <div>⏯</div></div>`
+        : (atvHasMedia && atvLayout === 'full'
+          ? `<div style="display:flex; gap:10px; align-items:center; width:100%; margin-bottom:8px">
+               ${atv.showArtwork !== false ? '<div style="width:56px; height:56px; border-radius:8px; background:#2a3550"></div>' : ''}
+               <div style="font-size:12px; text-align:left">Now playing…<br><span style="opacity:.6">−10 · ⏯ · +10</span></div></div>`
+          : '');
       cardEl.innerHTML = `
         <div class="card">
-          <div class="card-title"><span>${card.type}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+          <div class="card-title"><span>${card.type}${atvLayout !== 'classic' ? ' · ' + atvLayout : ''}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           <div class="preview-apple-remote">
+            ${atvTop}
             <div class="preview-trackpad">
               <div style="position:absolute; top:10px;">▲</div><div style="position:absolute; bottom:10px;">▼</div>
               <div style="position:absolute; left:10px;">◀</div><div style="position:absolute; right:10px;">▶</div>
               <div class="preview-inner-select"></div>
             </div>
             <div class="preview-row-buttons"><div class="preview-pill">☰ Menu</div><div class="preview-pill">Home</div></div>
-            <div class="preview-play-btn">⏯</div>
+            ${atvStrip || (atvHasMedia && atvLayout === 'full') ? '' : '<div class="preview-play-btn">⏯</div>'}
+            ${atvAppsHtml}
           </div>
         </div>`;
     } else if (card.type === 'clock_weather') {

@@ -52,16 +52,69 @@ internal object AppleTvCommands {
             "prev" to { c -> c.mediaControl(MediaCommand.PreviousTrack) },
             "previoustrack" to { c -> c.mediaControl(MediaCommand.PreviousTrack) },
             "skipback" to { c -> c.mediaControl(MediaCommand.PreviousTrack) },
-            "skipbackward" to { c -> c.mediaControl(MediaCommand.PreviousTrack) }
+            "skipbackward" to { c -> c.mediaControl(MediaCommand.PreviousTrack) },
+            // A jump within the current item, like clicking the edge of the Siri Remote's clickpad.
+            // Deliberately NOT "skipforward"/"skipbackward" above, which already mean next/previous
+            // track and may be bound to existing hotkeys.
+            "seekforward" to { c -> skipOrArrow(c, SEEK_STEP_SECONDS, HidButton.Right) },
+            "seekbackward" to { c -> skipOrArrow(c, -SEEK_STEP_SECONDS, HidButton.Left) },
+            "forward10" to { c -> skipOrArrow(c, SEEK_STEP_SECONDS, HidButton.Right) },
+            "replay10" to { c -> skipOrArrow(c, -SEEK_STEP_SECONDS, HidButton.Left) }
         )
+
+    const val SEEK_STEP_SECONDS = 10.0
 
     private fun normalize(rawName: String): String =
         rawName.lowercase().replace("_", "").replace("-", "").replace(" ", "").removePrefix("direction")
 
-    /** Resolves a remote command name (any accepted spelling) to the action that sends it, or null if unrecognised. */
-    fun forCommand(rawName: String): ((CompanionClient) -> Unit)? {
+    /**
+     * Resolves a remote command name (any accepted spelling) to the action that sends it, or null
+     * if unrecognised.
+     *
+     * A button can be *held* instead of tapped, either by suffixing/prefixing its name
+     * (`SelectHold`, `select_hold`, `LongSelect`, `long_select`) or by passing [holdMs] (what
+     * `hold_secs` on `send_command` becomes). Holding only applies to the HID buttons; a held
+     * name that isn't one (e.g. `PlayHold`) is unrecognised rather than silently tapped.
+     */
+    fun forCommand(rawName: String, holdMs: Long? = null): ((CompanionClient) -> Unit)? {
         val key = normalize(rawName)
-        return HID_COMMANDS[key]?.let { hid -> { c: CompanionClient -> c.press(hid) } } ?: OTHER_COMMANDS[key]
+        val namedHold = key.endsWith("hold") || key.startsWith("long")
+        val base = if (namedHold) key.removeSuffix("hold").removePrefix("long") else key
+        val hid = HID_COMMANDS[base]
+        if (hid != null) {
+            val duration = holdMs ?: if (namedHold) CompanionClient.DEFAULT_HOLD_MS else null
+            return if (duration != null && duration > 0) {
+                { c: CompanionClient -> c.hold(hid, duration) }
+            } else {
+                { c: CompanionClient -> c.press(hid) }
+            }
+        }
+        return if (namedHold) null else OTHER_COMMANDS[key]
+    }
+
+    /** [CompanionClient.skipBy], falling back to the arrow key when the app refuses it (some apps scrub with Left/Right instead). */
+    fun skipOrArrow(c: CompanionClient, seconds: Double, fallback: HidButton) {
+        try {
+            c.skipBy(seconds)
+        } catch (_: CompanionException) {
+            c.press(fallback)
+        }
+    }
+
+    /**
+     * `media_seek`: Companion has no absolute seek, so a target position becomes a relative jump
+     * from where playback is now ([currentPosition], computed from MRP's last report). Null when
+     * the call has no `seek_position` or nothing is known about the current position.
+     */
+    fun seekAction(data: Map<String, Any?>, currentPosition: () -> Double?): ((CompanionClient) -> Unit)? {
+        val target = (data["seek_position"] as? Number)?.toDouble() ?: return null
+        return { c ->
+            val now = currentPosition()
+            if (now != null) {
+                val delta = target - now
+                if (kotlin.math.abs(delta) >= 1.0) c.skipBy(delta)
+            }
+        }
     }
 
     /** Play/Pause via the media-control API, falling back to the HID toggle key when the Apple TV rejects it. */

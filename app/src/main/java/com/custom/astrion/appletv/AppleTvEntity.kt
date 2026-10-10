@@ -91,6 +91,7 @@ data class AppleTvEntityData(val entityId: String, val state: String, val attrib
 object AppleTvEntityMapper {
     // Home Assistant MediaPlayerEntityFeature bits.
     private const val PAUSE = 1
+    private const val SEEK = 2
     private const val VOLUME_SET = 4
     private const val PREVIOUS_TRACK = 16
     private const val NEXT_TRACK = 32
@@ -183,6 +184,11 @@ object AppleTvEntityMapper {
     fun featuresOf(s: AppleTvSnapshot): Int {
         var f = PAUSE or PLAY or PREVIOUS_TRACK or NEXT_TRACK or TURN_ON or TURN_OFF or SELECT_SOURCE or PLAY_MEDIA or BROWSE_MEDIA
         if (s.mediaFlags and MediaControlFlags.VOLUME != 0) f = f or VOLUME_SET or VOLUME_STEP
+        // media_seek is a relative SkipBy computed from MRP's position, so it needs a known item length.
+        // An app that explicitly declares no absolute seek doesn't get the bit, so cards show its
+        // progress bar as read-only instead of letting a drag silently do nothing.
+        val hasLength = (s.playing?.nowPlaying?.durationSeconds ?: 0.0) > 0.0
+        if (hasLength && s.playing?.canSeek != false) f = f or SEEK
         return f
     }
 }

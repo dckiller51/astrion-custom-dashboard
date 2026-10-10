@@ -356,8 +356,31 @@ function updateCardFormInputs() {
         <div id="atvDirectPicker"><label>Apple TV</label><select id="atvDirectSelect"></select></div>
       </div>
       <div id="atvHarmonyPicker"></div>
+      <label>Layout</label>
+      <select id="atvLayout" onchange="onAtvLayoutChange()">
+        <option value="classic">Classic — trackpad, buttons, Play/Pause</option>
+        <option value="compact">Compact — remote first, now-playing strip, app icons</option>
+        <option value="full">Full — artwork, seek bar, ±10 s, labelled apps, remote</option>
+      </select>
+      <div id="atvRichBox" style="display:none">
+        <label class="inline-check"><input type="checkbox" id="atvShowArtwork" checked> Show artwork</label>
+        <label class="inline-check"><input type="checkbox" id="atvShowProgress" checked> Show title progress bar</label>
+        <label class="inline-check"><input type="checkbox" id="atvShowSkip" checked> ±10 s buttons (full) and hold ◀ ▶ to jump 10 s</label>
+        <div class="hint">Compact: unticking both artwork and progress removes the now-playing strip and brings back the classic Play/Pause button. ±10 s and holds need a directly paired Apple TV.</div>
+      </div>
+      <label>Now-playing / apps entity (optional)</label>
+      <select id="atvEntity" onchange="refreshAtvSourceHints()">${atvEntityOptionsHtml()}</select>
+      <div class="hint">"Automatic" uses the directly paired Apple TV. Through a Harmony hub, pick Home Assistant's Apple TV media_player to get the artwork, title and app launching.</div>
       <label>Buttons (below the trackpad)</label>
-      <div id="atvButtonsBox">${atvButtonsCheckboxesHtml()}</div>`;
+      <div id="atvButtonsBox">${atvButtonsCheckboxesHtml()}</div>
+      <div class="hint">Full layout: the first 2 buttons sit beside −10 s / Play / +10 s; the next ones (up to 6) go in two columns either side of the trackpad. Compact and full size the trackpad so the card fits on one page (status bar and page dots included).</div>
+      <label>Apps (launched with media_player.select_source)</label>
+      <div id="atvAppsList"></div>
+      <datalist id="atvSourceHints"></datalist>
+      <button type="button" class="secondary" onclick="addAtvApp()">+ Add an app</button>
+      <div class="hint">"App" is the name as the Apple TV lists it (suggestions come from the entity's source_list). Icon: a PNG uploaded to the device (Choose…) or an image URL; without one, the app's initials are shown on its color. Compact shows up to 6, classic and full up to 5.</div>`;
+    window._pendingAtvApps = [];
+    renderAtvAppsList();
     renderAppleTvHarmonyFields();
     initAtvSource();
   } else if (type === 'tv_remote') {
@@ -547,13 +570,21 @@ async function initAtvSource() {
   });
   box.style.display = '';
   document.getElementById('atvSource').value = 'direct';
+  select.onchange = refreshAtvSourceHints;
   onAtvSourceChange();
+  refreshAtvSourceHints();
 }
 
 // Keep in sync with AppleTvRemoteCard.kt's ExtraButtons.CATALOG (ids and default selection).
 const ATV_EXTRA_BUTTONS = [
   { id: 'Menu', label: 'Menu' },
   { id: 'Home', label: 'Home' },
+  { id: 'SeekBackward', label: '−10 s' },
+  { id: 'SeekForward', label: '+10 s' },
+  { id: 'Rewind', label: 'Rewind ⏪' },
+  { id: 'FastForward', label: 'Fast forward ⏩' },
+  { id: 'Previous', label: 'Previous track' },
+  { id: 'Next', label: 'Next track' },
   { id: 'Siri', label: 'Siri' },
   { id: 'Screensaver', label: 'Screensaver' },
   { id: 'Guide', label: 'Guide' },
@@ -562,6 +593,170 @@ const ATV_EXTRA_BUTTONS = [
   { id: 'ControlCenter', label: 'Control Center' }
 ];
 const ATV_DEFAULT_BUTTONS = ['Menu', 'Home'];
+// Per-layout defaults (AppleTvRemoteCard.kt: DEFAULT_IDS for classic and full, COMPACT_DEFAULT_IDS).
+const ATV_LAYOUT_DEFAULT_BUTTONS = {
+  classic: ['Menu', 'Home'],
+  compact: ['Menu', 'Home', 'SeekBackward', 'SeekForward'],
+  full: ['Menu', 'Home']
+};
+
+function onAtvLayoutChange() {
+  const layout = document.getElementById('atvLayout').value;
+  const rich = document.getElementById('atvRichBox');
+  if (rich) rich.style.display = layout === 'classic' ? 'none' : '';
+  // Swap the button selection to the new layout's default, unless it was customised.
+  const current = selectedAtvButtons().join(',');
+  const untouched = Object.values(ATV_LAYOUT_DEFAULT_BUTTONS).some(d => d.join(',') === current);
+  const box = document.getElementById('atvButtonsBox');
+  if (untouched && box) box.innerHTML = atvButtonsCheckboxesHtml(ATV_LAYOUT_DEFAULT_BUTTONS[layout]);
+}
+
+/**
+ * Options for the now-playing entity dropdown: "Automatic" (empty value) first, then every
+ * media_player from the device catalog and from the live /ha-states data, without duplicates.
+ * [selected] is kept even when it is in neither list, so editing an older card never loses it.
+ */
+function atvEntityOptionsHtml(selected) {
+  const seen = new Map();
+  (dashboardData.haDevices || []).filter(d => d.domain === 'media_player')
+    .forEach(d => seen.set(d.entityId, d.name || d.entityId));
+  const states = (typeof haStates !== 'undefined' && haStates) ? haStates : {};
+  Object.keys(states).filter(id => id.startsWith('media_player.')).forEach(id => {
+    if (!seen.has(id)) seen.set(id, (states[id] && states[id].friendly_name) || id);
+  });
+  if (selected && !seen.has(selected)) seen.set(selected, selected + ' (not found)');
+  const items = [...seen.entries()].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+  return '<option value="">Automatic (the paired Apple TV)</option>' +
+    items.map(([id, name]) =>
+      `<option value="${escapeAttr(id)}" ${id === selected ? 'selected' : ''}>${escapeAttr(name)} (${escapeAttr(id)})</option>`
+    ).join('');
+}
+
+/** The media_player whose source_list feeds the app suggestions: the explicit entity, else the direct Apple TV. */
+function atvSourceEntity() {
+  const explicit = (document.getElementById('atvEntity') || {}).value;
+  if (explicit && explicit.trim()) return explicit.trim();
+  return atvDirectActive() ? document.getElementById('atvDirectSelect').value : '';
+}
+
+async function refreshAtvSourceHints() {
+  const datalist = document.getElementById('atvSourceHints');
+  if (!datalist) return;
+  let states = (typeof haStates !== 'undefined' && haStates) ? haStates : null;
+  if (!states) {
+    try {
+      const res = await fetch('/ha-states');
+      const data = await res.json();
+      states = data && data.states ? data.states : null;
+    } catch (e) {
+      states = null;
+    }
+  }
+  const entity = atvSourceEntity();
+  const st = states && entity ? states[entity] : null;
+  const sources = st && st.attributes && Array.isArray(st.attributes.source_list) ? st.attributes.source_list : [];
+  datalist.innerHTML = sources.map(src => `<option value="${escapeAttr(src)}">`).join('');
+}
+
+function escapeAttr(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function atvAppThumbUrl(icon) {
+  if (!icon) return null;
+  return /^https?:\/\//.test(icon) ? icon : iconUrl(icon);
+}
+
+function renderAtvAppsList() {
+  const list = document.getElementById('atvAppsList');
+  if (!list) return;
+  const apps = window._pendingAtvApps || [];
+  if (!apps.length) {
+    list.innerHTML = '<div class="hint">No app shortcuts yet.</div>';
+    return;
+  }
+  list.innerHTML = apps.map((app, i) => {
+    const thumb = atvAppThumbUrl(app.icon);
+    const color = /^#[0-9a-fA-F]{6}$/.test(app.color || '') ? app.color : '#3a3a40';
+    return `
+    <div class="atv-app-row">
+      <div class="atv-app-fields">
+        <div>
+          <label for="atvAppSource${i}">App ${i + 1}</label>
+          <input type="text" id="atvAppSource${i}" list="atvSourceHints" placeholder="e.g. Netflix" value="${escapeAttr(app.source)}" oninput="updateAtvApp(${i}, 'source', this.value)">
+        </div>
+        <div>
+          <label for="atvAppLabel${i}">Label (optional)</label>
+          <input type="text" id="atvAppLabel${i}" placeholder="same as app" value="${escapeAttr(app.label)}" oninput="updateAtvApp(${i}, 'label', this.value)">
+        </div>
+      </div>
+      <label for="atvAppIcon${i}">Icon (optional)</label>
+      <div class="icon-field-row">
+        <input type="text" id="atvAppIcon${i}" placeholder="/sdcard/astrion/icons/xxx.png or https://…" value="${escapeAttr(app.icon)}" oninput="updateAtvApp(${i}, 'icon', this.value); updateIconThumb('atvAppIcon${i}')">
+        <img class="icon-field-thumb${thumb ? ' shown' : ''}" id="atvAppIcon${i}Thumb" alt="" ${thumb ? `src="${escapeAttr(thumb)}"` : ''} onerror="this.classList.remove('shown')">
+        <button type="button" class="secondary" onclick="openIconPicker('atvAppIcon${i}')">Choose…</button>
+      </div>
+      <div class="atv-app-actions">
+        <label class="atv-app-color">Color <input type="color" value="${color}" onchange="updateAtvApp(${i}, 'color', this.value)"></label>
+        <span class="atv-app-spacer"></span>
+        <button type="button" class="secondary" title="Move up" onclick="moveAtvApp(${i}, -1)" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button type="button" class="secondary" title="Move down" onclick="moveAtvApp(${i}, 1)" ${i === apps.length - 1 ? 'disabled' : ''}>↓</button>
+        <button type="button" class="danger" onclick="removeAtvApp(${i})">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// The icon picker fills the icon input programmatically (no input event), so read the
+// icon fields back from the page before anything re-renders or saves the list.
+function syncAtvAppIcons() {
+  (window._pendingAtvApps || []).forEach((app, i) => {
+    const input = document.getElementById('atvAppIcon' + i);
+    if (input) app.icon = input.value;
+  });
+}
+
+function addAtvApp() {
+  syncAtvAppIcons();
+  window._pendingAtvApps = window._pendingAtvApps || [];
+  window._pendingAtvApps.push({ source: '', label: '', icon: '', color: '' });
+  renderAtvAppsList();
+  refreshAtvSourceHints();
+}
+
+function updateAtvApp(i, key, value) {
+  const app = (window._pendingAtvApps || [])[i];
+  if (app) app[key] = value;
+}
+
+function moveAtvApp(i, delta) {
+  syncAtvAppIcons();
+  const apps = window._pendingAtvApps || [];
+  const j = i + delta;
+  if (j < 0 || j >= apps.length) return;
+  [apps[i], apps[j]] = [apps[j], apps[i]];
+  renderAtvAppsList();
+}
+
+function removeAtvApp(i) {
+  syncAtvAppIcons();
+  (window._pendingAtvApps || []).splice(i, 1);
+  renderAtvAppsList();
+}
+
+/** Cleaned-up apps for the card's options: entries without an app name are dropped, empty fields omitted. */
+function collectAtvApps() {
+  syncAtvAppIcons();
+  return (window._pendingAtvApps || [])
+    .filter(a => a.source && a.source.trim())
+    .map(a => {
+      const out = { source: a.source.trim() };
+      if (a.label && a.label.trim()) out.label = a.label.trim();
+      if (a.icon && a.icon.trim()) out.icon = a.icon.trim();
+      if (a.color && a.color.toLowerCase() !== '#3a3a40') out.color = a.color;
+      return out;
+    });
+}
 
 function atvButtonsCheckboxesHtml(selected) {
   const checked = selected && selected.length ? selected : ATV_DEFAULT_BUTTONS;
@@ -588,9 +783,21 @@ function renderAppleTvHarmonyFields() {
 
 async function fillAppleTvHarmonyFields(o) {
   renderAppleTvHarmonyFields();
+  const layout = ['compact', 'full'].includes(o.layout) ? o.layout : 'classic';
+  document.getElementById('atvLayout').value = layout;
+  document.getElementById('atvRichBox').style.display = layout === 'classic' ? 'none' : '';
+  document.getElementById('atvShowArtwork').checked = o.showArtwork !== false;
+  document.getElementById('atvShowProgress').checked = o.showProgress !== false;
+  document.getElementById('atvShowSkip').checked = o.showSkip !== false;
+  document.getElementById('atvEntity').innerHTML = atvEntityOptionsHtml(o.entity || '');
+  window._pendingAtvApps = JSON.parse(JSON.stringify(o.apps || [])).map(a => ({
+    source: a.source || '', label: a.label || '', icon: a.icon || '', color: a.color || ''
+  }));
+  renderAtvAppsList();
   const buttonsBox = document.getElementById('atvButtonsBox');
-  if (buttonsBox) buttonsBox.innerHTML = atvButtonsCheckboxesHtml(o.buttons);
+  if (buttonsBox) buttonsBox.innerHTML = atvButtonsCheckboxesHtml(o.buttons && o.buttons.length ? o.buttons : ATV_LAYOUT_DEFAULT_BUTTONS[layout]);
   await initAtvSource();
+  refreshAtvSourceHints();
   const box = document.getElementById('atvSourceBox');
   if (o.appleTv && box && box.style.display !== 'none') {
     document.getElementById('atvSource').value = 'direct';
@@ -1386,6 +1593,18 @@ function addCardToPage() {
       newCard.options.deviceId = document.getElementById('optDeviceId').value || '';
     }
     newCard.options.buttons = selectedAtvButtons();
+    const atvLayout = document.getElementById('atvLayout').value;
+    if (atvLayout !== 'classic') {
+      newCard.options.layout = atvLayout;
+      if (!document.getElementById('atvShowArtwork').checked) newCard.options.showArtwork = false;
+      if (!document.getElementById('atvShowProgress').checked) newCard.options.showProgress = false;
+      if (!document.getElementById('atvShowSkip').checked) newCard.options.showSkip = false;
+    }
+    const atvEntity = document.getElementById('atvEntity').value.trim();
+    if (atvEntity) newCard.options.entity = atvEntity;
+    const atvApps = collectAtvApps();
+    if (atvApps.length) newCard.options.apps = atvApps;
+    window._pendingAtvApps = [];
   } else if (type === 'tv_remote') {
     newCard.options.name = document.getElementById('optName').value || 'TV';
     newCard.options.remote_entity = document.getElementById('optRemoteEntity').value || '';

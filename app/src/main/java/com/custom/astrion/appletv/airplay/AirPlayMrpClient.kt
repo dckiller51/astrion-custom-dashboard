@@ -312,6 +312,11 @@ internal class AirPlayMrpClient(
         request { MrpMessages.getKeyboardSession(it) }
     }
 
+    /** Same absolute seek as classic MRP, over this tunnel. */
+    override fun seekTo(seconds: Double): Boolean = MrpMessages.commandSucceeded(request { MrpMessages.seekToPosition(seconds, it) })
+
+    override fun sendCommand(command: Int): Boolean = MrpMessages.commandSucceeded(request { MrpMessages.command(command, it) })
+
     /** Same artwork fetch as classic MRP — same request message, just sent over this tunnel. */
     override fun fetchArtwork(location: Int, width: Double, height: Double): ByteArray? {
         val reply = request { MrpMessages.playbackQueueRequest(location, width, height, it) }
