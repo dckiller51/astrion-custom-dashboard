@@ -31,8 +31,9 @@ import kotlinx.serialization.json.doubleOrNull
  *  - `media_player.*` targeting an Apple TV's entity id (turn_on/off,
  *    media_play_pause, media_next_track, volume_up/down/set, select_source, ...)
  *  - `astrion_appletv.send_command` with `entity_id` and `command`
- *    (Up/Down/Left/Right/Select/Menu/Home/Play/Pause/...), used by the
- *    Apple TV remote card.
+ *    (Up/Down/Left/Right/Select/Menu/Home/Play/Pause/SeekForward/...), plus
+ *    an optional `hold_secs` to hold the button instead of tapping it, used
+ *    by the Apple TV remote card.
  */
 class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private val log: (String) -> Unit = { Log.d(TAG, it) }) {
     companion object {
@@ -123,7 +124,7 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
     }
 
     /** Sends a named remote command (see [AppleTvDevice.sendCommand]) to the Apple TV identified by [ref]. */
-    fun sendCommand(ref: String?, command: String): Boolean = device(ref)?.sendCommand(command) ?: false
+    fun sendCommand(ref: String?, command: String, holdMs: Long? = null): Boolean = device(ref)?.sendCommand(command, holdMs) ?: false
 
     /** The current artwork JPEG for the Apple TV identified by [ref] (its `entity_picture`
      * attribute points here), or null if MRP hasn't fetched one. */
@@ -134,7 +135,9 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
             if (call.service == "send_command") {
                 val command = plainValue(call.data["command"]) as? String
                 val target = device(call.entityId ?: plainValue(call.data["device"]) as? String)
-                if (command != null) target?.sendCommand(command)
+                // Same meaning as Home Assistant's remote.send_command: hold the button this long.
+                val holdMs = (plainValue(call.data["hold_secs"]) as? Number)?.let { (it.toDouble() * 1000).toLong() }
+                if (command != null) target?.sendCommand(command, holdMs)
             }
             return true
         }

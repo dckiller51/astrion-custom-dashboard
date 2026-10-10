@@ -18,4 +18,10 @@ internal interface NowPlayingClient {
     fun close()
 
     fun fetchArtwork(location: Int, width: Double = 512.0, height: Double = -1.0): ByteArray?
+
+    /** Asks the active app to jump to [seconds]; true when the app reports it accepted the command. */
+    fun seekTo(seconds: Double): Boolean
+
+    /** Sends a bare MRP command (see the `Mrp.CMD_*` values); true when the app accepted it. */
+    fun sendCommand(command: Int): Boolean
 }

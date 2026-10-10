@@ -10,7 +10,12 @@ data class MrpPlaying(
     val appBundleId: String?,
     val appName: String?,
     val location: Int,
-    val itemIdentifier: String?
+    val itemIdentifier: String?,
+    /**
+     * Whether the active app accepts an absolute seek (MRP `SeekToPlaybackPosition` among the
+     * commands it declares, and enabled). Null when the app hasn't declared its commands at all.
+     */
+    val canSeek: Boolean? = null
 )
 
 /**
@@ -35,6 +40,9 @@ class MrpPlayerStateManager(private val onChange: (MrpPlaying?) -> Unit) {
         var playbackState: Int? = null
         var location = 0
         var items: List<Item> = emptyList()
+
+        /** Declared commands → enabled; null until a SetStateMessage carries them. */
+        var supportedCommands: Map<Int, Boolean>? = null
 
         val current: Item? get() = items.getOrNull(location)
     }
@@ -106,6 +114,13 @@ class MrpPlayerStateManager(private val onChange: (MrpPlaying?) -> Unit) {
     private fun setState(setState: ProtobufWire.ProtoMessage) {
         val player = playerOf(setState.message(Mrp.SS_PLAYER_PATH))
         setState.enumValue(Mrp.SS_PLAYBACK_STATE)?.let { player.playbackState = it }
+        setState.message(Mrp.SS_SUPPORTED_COMMANDS)?.let { supported ->
+            // A command listed without an explicit `enabled` counts as enabled.
+            player.supportedCommands =
+                supported.repeatedMessages(Mrp.SUP_COMMANDS)
+                    .mapNotNull { info -> info.enumValue(Mrp.CMDI_COMMAND)?.let { it to (info.bool(Mrp.CMDI_ENABLED) ?: true) } }
+                    .toMap()
+        }
         setState.message(Mrp.SS_PLAYBACK_QUEUE)?.let { queue ->
             val previous = player.items.filter { it.identifier != null }.associateBy { it.identifier }
             player.items = items(queue).onEach { keepKnownMetadata(it, previous[it.identifier]) }
@@ -181,7 +196,8 @@ class MrpPlayerStateManager(private val onChange: (MrpPlaying?) -> Unit) {
             appBundleId = client.bundleId.ifEmpty { null },
             appName = client.displayName,
             location = player?.location ?: 0,
-            itemIdentifier = item?.identifier
+            itemIdentifier = item?.identifier,
+            canSeek = player?.supportedCommands?.let { it[Mrp.CMD_SEEK_TO_PLAYBACK_POSITION] == true }
         )
     }
 

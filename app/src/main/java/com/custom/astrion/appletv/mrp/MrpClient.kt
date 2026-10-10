@@ -98,6 +98,10 @@ class MrpClient(
         return item.bytesField(Mrp.CI_ARTWORK_DATA)?.takeIf { it.isNotEmpty() }
     }
 
+    override fun seekTo(seconds: Double): Boolean = MrpMessages.commandSucceeded(request { MrpMessages.seekToPosition(seconds, it) })
+
+    override fun sendCommand(command: Int): Boolean = MrpMessages.commandSucceeded(request { MrpMessages.command(command, it) })
+
     private fun startHeartbeat() {
         heartbeat =
             Thread({

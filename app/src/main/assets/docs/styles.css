@@ -419,6 +419,15 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .icon-field-thumb { width: 34px; height: 34px; flex: 0 0 auto; border-radius: 7px; background: #2d2d2d; object-fit: contain; padding: 3px; box-sizing: border-box; display: none; }
   .icon-field-thumb.shown { display: block; }
   .icon-field-row button.secondary { margin-top: 0; flex: 0 0 auto; white-space: nowrap; }
+  /* apple_tv_remote app shortcuts editor (cards.js renderAtvAppsList) */
+  .atv-app-row { border: 1px solid #383838; border-radius: 10px; background: #242424; padding: 4px 12px 12px; margin: 8px 0; }
+  .atv-app-fields { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 10px; }
+  .atv-app-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .atv-app-actions button { margin-top: 0; }
+  .atv-app-actions button:disabled { opacity: 0.35; cursor: default; }
+  .atv-app-spacer { flex: 1; }
+  label.atv-app-color { display: flex; align-items: center; gap: 8px; margin: 0; }
+  .atv-app-color input[type="color"] { width: 40px; height: 30px; padding: 2px; flex: 0 0 auto; cursor: pointer; }
 
   .icon-picker-inner { width: 380px; max-width: 90vw; }
   .icon-picker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 10px; max-height: 360px; overflow-y: auto; margin-top: 10px; }
