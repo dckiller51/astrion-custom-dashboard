@@ -169,6 +169,13 @@ function updateHotkeyActionInputs(preselect) {
       <label>Room</label><input type="text" id="hkActivityRoom" placeholder="e.g., Living Room">
       <div class="hint" style="margin-top:4px">Jumps straight to the page of whichever Activity is currently active in this room — no picker. Does nothing if that room has nothing active right now. Must match a room name used by a tracked Activity (a composed Activity, or a scene_grid tile / hotkey with "track": true) exactly.</div>
     `;
+  } else if (action === 'stopActivity') {
+    container.innerHTML = `
+      <label>Room</label>
+      <input type="text" id="hkStopRoom" list="hkStopRooms" placeholder="room name, or * for every room">
+      <datalist id="hkStopRooms">${activityRoomOptionsHtml()}</datalist>
+      <div class="hint" style="margin-top:4px">The Harmony-style "Off" (Harmony's -1): stops whatever Activity is running in that room — Harmony PowerOff for a Harmony Activity, devices off per their profile for a composed one. "*" turns off every room.</div>
+    `;
   } else if (action === 'service') {
     container.innerHTML = `
       <label>Service (domain.service)</label><input type="text" id="hkService" placeholder="e.g., light.toggle">
@@ -217,6 +224,7 @@ function describeHotkey(h) {
   if (h.page) return `→ page "${h.page}"`;
   if (h.openOverlay) return `→ open ${h.openOverlay === 'activities' ? 'Active Activities' : 'Settings'}`;
   if (h.openCurrentActivityRoom) return `→ current Activity in "${h.openCurrentActivityRoom}"`;
+  if (h.stopActivity) return h.stopActivity === '*' ? '→ Off (every room)' : `→ Off ("${h.stopActivity}")`;
   if (h.service === 'remote.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
     return `→ remote ${h.entityId || '?'} / ${cmd}`;
@@ -308,7 +316,7 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
   updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
 
@@ -318,6 +326,8 @@ async function editHotkey(scope, listType, i) {
     document.getElementById('hkOverlay').value = h.openOverlay || 'settings';
   } else if (action === 'openCurrentActivity') {
     document.getElementById('hkActivityRoom').value = h.openCurrentActivityRoom || '';
+  } else if (action === 'stopActivity') {
+    document.getElementById('hkStopRoom').value = h.stopActivity || '';
   } else if (action === 'service') {
     document.getElementById('hkService').value = h.service || '';
     document.getElementById('hkEntityId').value = h.entityId || '';
@@ -391,6 +401,10 @@ function addHotkey() {
     const room = document.getElementById('hkActivityRoom').value.trim();
     if (!room) { alert('Enter a room name.'); return; }
     hkObj.openCurrentActivityRoom = room;
+  } else if (action === 'stopActivity') {
+    const room = document.getElementById('hkStopRoom').value.trim();
+    if (!room) { alert('Enter a room name, or * for every room.'); return; }
+    hkObj.stopActivity = room;
   } else if (action === 'service') {
     hkObj.service = document.getElementById('hkService').value.trim();
     const entityId = document.getElementById('hkEntityId').value.trim();
@@ -591,4 +605,25 @@ async function installBetaUpdate(btn) {
     btn.textContent = original;
     btn.disabled = false;
   }
+}
+/**
+ * <option>s for every room an Activity can run in — composed Activities, and "track": true tiles
+ * and hotkeys — plus "*" (every room). Used by the "Off" (stopActivity) fields.
+ */
+function activityRoomOptionsHtml() {
+  const rooms = new Set();
+  (dashboardData.activities || []).forEach(a => { if (a.room) rooms.add(a.room); });
+  const scanHotkeys = list => (list || []).forEach(h => { if (h.track && h.room) rooms.add(h.room); });
+  scanHotkeys(dashboardData.hotkeys);
+  scanHotkeys(dashboardData.longHotkeys);
+  (dashboardData.pages || []).forEach(p => {
+    scanHotkeys(p.hotkeys);
+    scanHotkeys(p.longHotkeys);
+    (p.cards || []).forEach(c => {
+      const o = c.options || {};
+      [...(o.scenes || []), ...(o.buttons || [])].forEach(t => { if (t && t.track && t.room) rooms.add(t.room); });
+    });
+  });
+  const esc = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return '<option value="*">Every room</option>' + [...rooms].sort().map(r => `<option value="${esc(r)}">`).join('');
 }

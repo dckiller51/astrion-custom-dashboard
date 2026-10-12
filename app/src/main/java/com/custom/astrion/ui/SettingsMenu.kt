@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.Dock
 import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TouchApp
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.BuildConfig
 import com.custom.astrion.R
 import com.custom.astrion.cards.CardContext
+import com.custom.astrion.config.DockConfig
 import com.custom.astrion.ha.ConnectionState
 import com.custom.astrion.update.UpdateChecker
 import java.net.Inet4Address
@@ -168,6 +170,43 @@ fun SettingsMenu(ctx: CardContext) {
         WifiKeepAwakeRow(ctx)
         ConfigServerRow(ctx)
         TapFeedbackRow(ctx)
+        DockModeRow(ctx)
+    }
+}
+
+/**
+ * "Dock screen": what the remote shows on its charging dock — tapping cycles through following
+ * dashboard.json, the charging screen, the clock and the plain dashboard. Stored on the remote,
+ * so it overrides dashboard.json's `dock.mode` for this remote only.
+ */
+@Composable
+private fun DockModeRow(ctx: CardContext) {
+    val options =
+        listOf(
+            "" to R.string.dock_mode_default,
+            DockConfig.MODE_CHARGING to R.string.dock_mode_charging,
+            DockConfig.MODE_CLOCK to R.string.dock_mode_clock,
+            DockConfig.MODE_DASHBOARD to R.string.dock_mode_dashboard
+        )
+    val current = options.indexOfFirst { it.first == ctx.deviceSettings.dockMode }.coerceAtLeast(0)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(LocalTheme.current.controlBackground)
+                .tapClickable { ctx.deviceSettings.setDockMode(options[(current + 1) % options.size].first) }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(Icons.Filled.Dock, contentDescription = null, tint = LocalTheme.current.mutedText)
+            Text(stringResource(R.string.dock_screen), color = LocalTheme.current.primaryText, fontSize = 14.sp)
+            Spacer(Modifier.weight(1f))
+            Text(stringResource(options[current].second), color = LocalTheme.current.accent, fontSize = 14.sp)
+        }
+        Text(stringResource(R.string.dock_screen_hint), color = LocalTheme.current.mutedText, fontSize = 11.sp)
     }
 }
 

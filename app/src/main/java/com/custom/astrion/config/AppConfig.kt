@@ -35,8 +35,59 @@ data class AppConfig(
      * reads from here (via ThemeColors / LocalTheme in the Compose layer).
      * Missing fields fall back to the built-in defaults, so an empty `theme`
      * block renders identically to the original look. */
-    val theme: ThemeConfig = ThemeConfig()
+    val theme: ThemeConfig = ThemeConfig(),
+    /** What the screen shows while the remote sits on its charging dock — see [DockConfig]. */
+    val dock: DockConfig = DockConfig()
 )
+
+/**
+ * The `dock` block: what the remote shows while it sits on its charging dock.
+ *
+ *  - [MODE_CHARGING] (default): the battery screen, dimmed after [idleSeconds] — what Astrion has
+ *    always done.
+ *  - [MODE_CLOCK]: the dashboard stays usable; after [idleSeconds] untouched it gives way to a
+ *    dim, night-friendly clock (date, weather, battery, what's playing). Any touch or button
+ *    brings the dashboard back; lifting the remote off the dock too.
+ *  - [MODE_DASHBOARD]: the dashboard only, dimmed to [brightness] after [idleSeconds].
+ *
+ * The remote's own Settings page can override [mode] locally (see MainActivity's `dock_mode`).
+ */
+data class DockConfig(
+    val mode: String = MODE_CHARGING,
+    /** Seconds without a touch before dimming / showing the clock; null = the mode's default. */
+    val idleSeconds: Int? = null,
+    /** Backlight (0..1) while the clock is up or the dashboard is dimmed, by day … */
+    val brightness: Float = 0.2f,
+    /** … and at night (`sun.sun` below the horizon, else 21:00–07:00). */
+    val nightBrightness: Float = 0.05f,
+    /** 12 or 24; null follows the system setting. */
+    val timeFormat: Int? = null,
+    val weatherEntity: String? = null,
+    /** `media_player`s whose now-playing the clock shows; empty = any that is playing. */
+    val mediaEntities: List<String> = emptyList(),
+    val showBattery: Boolean = true
+) {
+    val idleMs: Long
+        get() =
+            1000L * (
+                idleSeconds ?: when (mode) {
+                    MODE_CLOCK -> DEFAULT_CLOCK_IDLE_S
+                    MODE_DASHBOARD -> DEFAULT_DASHBOARD_IDLE_S
+                    else -> DEFAULT_CHARGING_IDLE_S
+                }
+                ).coerceAtLeast(MIN_IDLE_S)
+
+    companion object {
+        const val MODE_CHARGING = "charging"
+        const val MODE_CLOCK = "clock"
+        const val MODE_DASHBOARD = "dashboard"
+        val MODES = listOf(MODE_CHARGING, MODE_CLOCK, MODE_DASHBOARD)
+        private const val DEFAULT_CHARGING_IDLE_S = 15
+        private const val DEFAULT_CLOCK_IDLE_S = 30
+        private const val DEFAULT_DASHBOARD_IDLE_S = 60
+        private const val MIN_IDLE_S = 5
+    }
+}
 
 /**
  * One swipeable page: a name (used by hotkey `page` navigation), its cards,
@@ -144,6 +195,11 @@ data class PageConfig(
      * at the moment of the jump; keeping the pager itself ungated sidesteps
      * that whole race by construction. */
     val hiddenUnlessActivity: String? = null,
+    /** With [hiddenUnlessActivity]: `"dots"` (default) only hides the page's dot; `"full"` also
+     * makes a swipe skip over the page while its Activity is off, and leaves the page if the
+     * Activity stops while it's on screen. A jump from a tile, hotkey or Home Assistant still
+     * lands on it (that's how "start Activity + open page" works). */
+    val hideMode: String = "dots",
     /** Optional Home Assistant entity id to watch: when its state matches
      * [openWhenState] (default `"on"`), automatically navigates to this
      * page — e.g. a doorbell `switch` turning on pops open a "Doorbell"
@@ -263,7 +319,11 @@ data class HotkeyConfig(
      * Activity's page with no picker, so it only makes sense on a
      * remote/page that's already dedicated to a single room. Checked right
      * after [openOverlay], before page navigation. */
-    val openCurrentActivityRoom: String? = null
+    val openCurrentActivityRoom: String? = null,
+    /** The Harmony-style "Off": stops the Activity running in this room (`"*"` = every room) —
+     * Harmony PowerOff for a Harmony Activity, the composed stop (devices off per their profile)
+     * otherwise. Checked with [openOverlay], before everything else. */
+    val stopActivity: String? = null
 ) {
     /** Helper flags to quickly check hotkey action type. */
     val isPageNavigation: Boolean get() = !page.isNullOrBlank()

@@ -184,4 +184,14 @@
     <string name="media_state_on">On</string>
     <string name="media_state_off">Off</string>
     <string name="volume_muted">Muted</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Dock screen</string>
+    <string name="dock_screen_hint">What the remote shows on its charging dock, for this remote only. Tap to change.</string>
+    <string name="dock_mode_default">From dashboard</string>
+    <string name="dock_mode_charging">Charging</string>
+    <string name="dock_mode_clock">Clock</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">Found me!</string>
+    <string name="ring_found_hint">Tap anywhere or press any button to stop</string>
 </resources>

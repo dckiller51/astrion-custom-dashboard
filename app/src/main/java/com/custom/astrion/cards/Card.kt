@@ -66,7 +66,11 @@ data class DeviceSettingsState(
      * [com.custom.astrion.ui.LocalTapFeedback] + Modifier.tapClickable);
      * when off they stay silent. See TapFeedback.kt for details. */
     val tapFeedbackEnabled: Boolean = true,
-    val setTapFeedbackEnabled: (Boolean) -> Unit = {}
+    val setTapFeedbackEnabled: (Boolean) -> Unit = {},
+    /** The Settings page's "Dock screen" choice: "" follows dashboard.json's `dock.mode`,
+     * else "charging" / "clock" / "dashboard" (see [com.custom.astrion.config.DockConfig]). */
+    val dockMode: String = "",
+    val setDockMode: (String) -> Unit = {}
 )
 
 /**
@@ -141,6 +145,9 @@ constructor(
      * device used by both is left alone — see ActivityRuntime.switchActivity),
      * then marks it active. No-op if `activityId` isn't found. */
     val startActivity: (activityId: String) -> Unit = {},
+    /** The "Off" action: stops the Activity running in a room (`"*"` = every room) — see
+     * ActivityDispatcher.stopActivities. No-op default, same as [startActivity]. */
+    val stopActivity: (room: String) -> Unit = {},
     /** Tracks which AV Activity is active in each room — see the NOTE atop
      * AppConfig.kt. Cards that render a trackable item (scene_grid with
      * `track: true`, or `activity`) call into this after firing their own

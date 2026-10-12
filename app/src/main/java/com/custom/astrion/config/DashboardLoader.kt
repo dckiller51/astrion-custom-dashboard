@@ -132,6 +132,7 @@ object DashboardLoader {
                     val popupPositionRaw = obj["popupPosition"]?.jsonPrimitive?.content
                     val popupPosition = if (popupPositionRaw in setOf("top", "bottom", "left", "right")) popupPositionRaw!! else "center"
                     val hiddenUnlessActivity = obj["hiddenUnlessActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val hideMode = if (obj["hideMode"]?.jsonPrimitive?.content == "full") "full" else "dots"
                     val openWhenEntity = obj["openWhenEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     val openWhenState = obj["openWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "on"
                     val closeWhenState = obj["closeWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
@@ -149,6 +150,7 @@ object DashboardLoader {
                         popupHeightFraction = popupHeightFraction,
                         popupPosition = popupPosition,
                         hiddenUnlessActivity = hiddenUnlessActivity,
+                        hideMode = hideMode,
                         openWhenEntity = openWhenEntity,
                         openWhenState = openWhenState,
                         closeWhenState = closeWhenState,
@@ -162,7 +164,8 @@ object DashboardLoader {
             val irDevices = root["irDevices"]?.jsonArray?.map { parseIrDevice(it.jsonObject) } ?: emptyList()
             val activities = root["activities"]?.jsonArray?.map { parseActivity(it.jsonObject) } ?: emptyList()
             val theme = root["theme"]?.jsonObject?.let { parseTheme(it) } ?: ThemeConfig()
-            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme)
+            val dock = (root["dock"] as? JsonObject)?.let { parseDock(it) } ?: DockConfig()
+            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme, dock)
         }
         else -> error("top level must be an object or array")
     }
@@ -202,6 +205,7 @@ object DashboardLoader {
         val devices = obj["devices"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
         val openOverlay = obj["openOverlay"]?.jsonPrimitive?.content
         val openCurrentActivityRoom = obj["openCurrentActivityRoom"]?.jsonPrimitive?.content
+        val stopActivity = obj["stopActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         return HotkeyConfig(
             key,
             page,
@@ -218,7 +222,8 @@ object DashboardLoader {
             room,
             devices,
             openOverlay,
-            openCurrentActivityRoom
+            openCurrentActivityRoom,
+            stopActivity
         )
     }
 
@@ -325,6 +330,26 @@ object DashboardLoader {
         )
     }
 
+    /** The `dock` block — every key optional, anything unparsable falls back to its default. */
+    private fun parseDock(obj: JsonObject): DockConfig {
+        fun str(key: String) = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+        fun num(key: String) = (obj[key] as? JsonPrimitive)?.floatOrNull
+        val defaults = DockConfig()
+        return DockConfig(
+            mode = str("mode")?.lowercase()?.takeIf { it in DockConfig.MODES } ?: DockConfig.MODE_CHARGING,
+            idleSeconds = (obj["idle_seconds"] as? JsonPrimitive)?.intOrNull,
+            brightness = num("brightness")?.coerceIn(0.01f, 1f) ?: defaults.brightness,
+            nightBrightness = num("night_brightness")?.coerceIn(0.01f, 1f) ?: defaults.nightBrightness,
+            timeFormat = (obj["time_format"] as? JsonPrimitive)?.intOrNull?.takeIf { it == 12 || it == 24 },
+            weatherEntity = str("weather_entity"),
+            mediaEntities =
+            (obj["media_entities"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> c.isNotBlank() } }
+                .orEmpty(),
+            showBattery = (obj["show_battery"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true
+        )
+    }
+
     private fun parseTheme(obj: JsonObject): ThemeConfig {
         fun s(key: String, default: String) = obj[key]
             ?.jsonPrimitive
@@ -374,7 +399,10 @@ object DashboardLoader {
                             }
                             page.linkedPage?.let { put("linkedPage", it) }
                             if (page.linkedPageMode == "popup") put("linkedPageMode", "popup")
-                            page.hiddenUnlessActivity?.let { put("hiddenUnlessActivity", it) }
+                            page.hiddenUnlessActivity?.let {
+                                put("hiddenUnlessActivity", it)
+                                if (page.hideMode == "full") put("hideMode", "full")
+                            }
                             page.openWhenEntity?.let {
                                 put("openWhenEntity", it)
                                 if (page.openWhenState != "on") put("openWhenState", page.openWhenState)

@@ -72,6 +72,7 @@
                 <option value="page">Go to page</option>
                 <option value="openOverlay">Open overlay (Settings / Active Activities)</option>
                 <option value="openCurrentActivity">Return to current Activity (for one room)</option>
+                <option value="stopActivity">Turn off a room's Activity ("Off", like Harmony's -1)</option>
                 <option value="service">Home Assistant service call</option>
                 <option value="remoteCommand">Home Assistant remote command</option>
                 <option value="appleTvCommand">Apple TV command (direct — no Home Assistant needed)</option>
@@ -106,7 +107,10 @@
         <h2>3. Theme &amp; Colors</h2>
         <div class="section-box" id="themeBox"></div>
 
-        <h2>4. Generated JSON</h2>
+        <h2>4. Dock screen</h2>
+        <div class="section-box" id="dockBox"></div>
+
+        <h2>5. Generated JSON</h2>
         <textarea id="jsonOutput" readonly></textarea>
         <div class="btn-row">
             <button onclick="copyJson()">Copy JSON</button>
@@ -334,7 +338,8 @@
                 <div id="pageDialogLinkedPopupHint" style="display:none" class="hint">The popup shows the linked page's own cards floating over whatever page you're on — the page itself doesn't change. Closed by tapping outside it or its ✕. Width/height/position are set below.</div>
             </div>
             <label style="margin-top:10px">Hide unless this Activity is running (optional)</label>
-            <select id="pageDialogHiddenUnlessActivity"></select>
+            <select id="pageDialogHiddenUnlessActivity" onchange="onPageDialogHiddenChange()"></select>
+            <label class="inline-check" id="pageDialogHideFullRow" style="display:none; margin-top:6px"><input type="checkbox" id="pageDialogHideFull"> Hide completely — swiping skips this page while the Activity is off, and the remote leaves it when the Activity stops (tiles, hotkeys and Home Assistant can still open it)</label>
             <div class="hint" style="margin-top:4px">Leaves this page's dot out of the indicator until the chosen Activity is actually running, then shows it automatically — handy for decluttering a page tied to a device that isn't always in use. Lists both composed Activities (the "Activities" tab) and "track": true scene_grid tiles/hotkeys, Harmony ones included — same set ActivityRuntime tracks at runtime. Doesn't affect swiping to the page directly (a scene_grid tile's own "page" field, a hardware button, etc. — see the field's own note in AppConfig.kt for why), just its dot.</div>
             <label style="margin-top:10px">Auto-open when this entity's state is (optional)</label>
             <div style="display:flex; gap:8px;">
@@ -419,6 +424,7 @@
 <script src="js/hotkeys.js"></script>
 <script src="js/activities.js"></script>
 <script src="js/theme.js"></script>
+<script src="js/dock.js"></script>
 <script src="js/export.js"></script>
 <script src="js/preview.js"></script>
 <script src="js/device.js"></script>

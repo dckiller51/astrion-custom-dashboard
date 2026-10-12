@@ -198,6 +198,8 @@ class SceneGridCard : CardRenderer {
             if (irDevice != null && irCommand != null) {
                 ctx.sendIrCommand(irDevice, irCommand)
             }
+            // "stopActivity": "<room>" (or "*") — the Harmony-style Off button.
+            (scene["stopActivity"] as? String)?.let(ctx.stopActivity)
             val activityId = scene["activity"] as? String
             if (activityId != null) {
                 // Deliberately not also firing scene["page"] here — see this

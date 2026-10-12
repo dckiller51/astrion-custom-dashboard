@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -141,7 +141,7 @@ private fun SelectIcon(color: Color?, size: Dp = 42.dp) {
             .background(color?.copy(alpha = 0.2f) ?: Color(0xFF2A4954)),
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Filled.List, contentDescription = null, tint = color ?: Color(0xFFB6C9CE))
+        Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, tint = color ?: Color(0xFFB6C9CE))
     }
 }
 

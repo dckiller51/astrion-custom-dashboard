@@ -27,7 +27,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +44,7 @@ import com.custom.astrion.cards.DeviceSettingsState
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.DashboardConfig
 import com.custom.astrion.config.DashboardLoader
+import com.custom.astrion.config.DockConfig
 import com.custom.astrion.config.HotkeyConfig
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.IrStepConfig
@@ -49,6 +52,7 @@ import com.custom.astrion.config.IrTarget
 import com.custom.astrion.config.JsonPlain
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.extender.ExtenderRegistry
+import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.harmony.HarmonyHubRegistry
@@ -61,9 +65,11 @@ import com.custom.astrion.ui.DashboardConnection
 import com.custom.astrion.ui.DashboardNavigation
 import com.custom.astrion.ui.DashboardRegistries
 import com.custom.astrion.ui.DashboardUiState
+import com.custom.astrion.ui.DockClockScreen
 import com.custom.astrion.ui.FocusHighlight
 import com.custom.astrion.ui.IrTransmit
 import com.custom.astrion.ui.ProvideTheme
+import com.custom.astrion.ui.RingFoundOverlay
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.web.ConfigServer
@@ -98,6 +104,7 @@ class MainActivity : ComponentActivity() {
         const val KEEP_SCREEN_HOLD_MS = 10000L
         const val AMBIENT_WINDOW_MS = 5000L
         const val WAKE_COOLDOWN_MS = 2000L
+        const val RING_WAKE_MS = 10_000L
 
         // Keys that pop up a temporary volume readout when their hotkey
         // fires an HA service call — see runHotkey()'s bottom branch.
@@ -419,6 +426,10 @@ class MainActivity : ComponentActivity() {
      * dot, etc. Plays the system touch sound (AudioManager.FX_KEY_CLICK). */
     private var tapFeedbackEnabled by mutableStateOf(true)
 
+    /** The Settings page's "Dock screen" choice: "" follows dashboard.json's `dock.mode`,
+     * otherwise one of [DockConfig.MODES] — persisted, applied live. */
+    private var dockModeOverride by mutableStateOf("")
+
     private val storagePermission =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -465,6 +476,9 @@ class MainActivity : ComponentActivity() {
         Log.i(SCREEN_TAG, "onCreate — initial screenOn=$screenOn pm.isInteractive=$pmInteractive")
 
         chargeDockMonitor.start()
+        lifecycleScope.launch {
+            FindMyRemote.ringing.collect { ringing -> if (ringing) wakeForRing() }
+        }
 
         initClientsAndServer()
         configServerSupervisor =
@@ -475,6 +489,8 @@ class MainActivity : ComponentActivity() {
             )
         configServerEnabled = prefs.getBoolean("config_server_enabled", true)
         tapFeedbackEnabled = prefs.getBoolean("tap_feedback_enabled", true)
+        dockModeOverride = prefs.getString("dock_mode", "").orEmpty().takeIf { it in DockConfig.MODES }.orEmpty()
+        chargeDockMonitor.sunIsDown = { client.entities.value["sun.sun"]?.state?.let { it == "below_horizon" } }
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
         if (configServerEnabled) configServerSupervisor.start()
@@ -565,6 +581,10 @@ class MainActivity : ComponentActivity() {
             val entities = client.entities.collectAsState()
             val connection = client.connection.collectAsState()
             val isDocked = chargeDockMonitor.state.isDocked
+            val ringing by FindMyRemote.ringing.collectAsState()
+            val dock = effectiveDockConfig()
+            SideEffect { chargeDockMonitor.dockConfig = dock }
+            val dockOverlay = dockOverlayFor(isDocked, dock)
             Box {
                 val focusManager = LocalFocusManager.current
                 LaunchedEffect(clearFocusTrigger) {
@@ -602,9 +622,12 @@ class MainActivity : ComponentActivity() {
                             configServerEnabled = configServerEnabled,
                             setConfigServerEnabled = { enabled -> updateConfigServerEnabled(enabled) },
                             tapFeedbackEnabled = tapFeedbackEnabled,
-                            setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) }
+                            setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) },
+                            dockMode = dockModeOverride,
+                            setDockMode = { mode -> setDockMode(mode) }
                         ),
-                        screenOn = screenOn && !isDocked
+                        // Heavy cards (camera/vacuum/...) pause while a dock screen covers them.
+                        screenOn = screenOn && dockOverlay == null
                     ),
                     activityCallbacks =
                     DashboardActivityCallbacks(
@@ -613,12 +636,35 @@ class MainActivity : ComponentActivity() {
                         onStopActivityReady = { fn -> stopActivityFn = fn }
                     )
                 )
-                if (isDocked) {
-                    val theme = remember(dashboard.config.theme) { dashboard.config.theme.toColors() }
-                    ProvideTheme(theme) { ChargingScreen(dimmed = chargeDockMonitor.dimmed) }
-                }
+                ScreenOverlays(dockOverlay, dock, entities.value, ringing)
             }
         }
+    }
+
+    /** Which dock screen covers the dashboard right now, or null for none — see [DockConfig]. */
+    private fun dockOverlayFor(isDocked: Boolean, dock: DockConfig): String? = when {
+        !isDocked -> null
+        dock.mode == DockConfig.MODE_CHARGING -> DockConfig.MODE_CHARGING
+        dock.mode == DockConfig.MODE_CLOCK && chargeDockMonitor.dimmed -> DockConfig.MODE_CLOCK
+        else -> null
+    }
+
+    /** The full-screen layers drawn over the dashboard: the dock screen, then "Find my remote". */
+    @Composable
+    private fun ScreenOverlays(dockOverlay: String?, dock: DockConfig, entities: EntityMap, ringing: Boolean) {
+        val theme = remember(dashboard.config.theme) { dashboard.config.theme.toColors() }
+        when (dockOverlay) {
+            DockConfig.MODE_CHARGING -> ProvideTheme(theme) { ChargingScreen(dimmed = chargeDockMonitor.dimmed) }
+            DockConfig.MODE_CLOCK ->
+                DockClockScreen(
+                    config = dock,
+                    entities = entities,
+                    client = client,
+                    isNight = chargeDockMonitor::isNight,
+                    onTouch = { chargeDockMonitor.onUserInteraction() }
+                )
+        }
+        if (ringing) ProvideTheme(theme) { RingFoundOverlay(onStop = { FindMyRemote.stop() }) }
     }
 
     /**
@@ -746,6 +792,28 @@ class MainActivity : ComponentActivity() {
      * configured for this is meant to be a dedicated "back to what's
      * playing" button, not a page-nav/service call in disguise for the
      * idle case. */
+    /** The overlay / Activity-room / Off actions of a hotkey, or null when it has none of them —
+     * split out of [runHotkey] to keep that function under detekt's complexity threshold. */
+    private fun runActivityHotkey(hk: HotkeyConfig): Boolean? = when {
+        hk.openOverlay != null -> openOverlayHotkey(hk.openOverlay)
+        hk.openCurrentActivityRoom != null -> openCurrentActivityHotkey(hk.openCurrentActivityRoom)
+        hk.stopActivity != null -> stopActivityHotkey(hk.stopActivity)
+        else -> null
+    }
+
+    /** `"stopActivity"`: that room's Activity off, or every running one for `"*"`. */
+    private fun stopActivityHotkey(room: String): Boolean {
+        val stop = stopActivityFn ?: return false
+        val rooms =
+            if (room.trim() == "*") {
+                activityRuntime?.activeByRoom?.value?.filterValues { it != null }?.keys.orEmpty()
+            } else {
+                setOf(room.trim())
+            }
+        rooms.forEach(stop)
+        return true
+    }
+
     private fun openCurrentActivityHotkey(room: String): Boolean {
         val pageName = activityRuntime?.activeActivity(room)?.page ?: return false
         val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -811,8 +879,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun runHotkey(hk: HotkeyConfig): Boolean {
-        if (hk.openOverlay != null) return openOverlayHotkey(hk.openOverlay)
-        if (hk.openCurrentActivityRoom != null) return openCurrentActivityHotkey(hk.openCurrentActivityRoom)
+        runActivityHotkey(hk)?.let { return it }
 
         hk.page?.let { pageName ->
             val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -939,6 +1006,11 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // While "Find my remote" rings, any button just stops it (and does nothing else).
+        if (FindMyRemote.ringing.value) {
+            if (event.action == KeyEvent.ACTION_UP) FindMyRemote.stop()
+            return true
+        }
         val code = event.keyCode
         logKeyEventDown(event)
         val shortH = keyRouter.shortHandler(code)
@@ -1101,6 +1173,18 @@ class MainActivity : ComponentActivity() {
      * restart needed. Dashboard reads [tapFeedbackEnabled] and rebuilds the
      * feedback lambda it provides via LocalTapFeedback, so taps go silent
      * (or come back) on the next recomposition. */
+    /** The Settings page's dock-screen choice ("" = follow dashboard.json). */
+    private fun setDockMode(mode: String) {
+        dockModeOverride = mode.takeIf { it in DockConfig.MODES }.orEmpty()
+        prefs.edit { putString("dock_mode", dockModeOverride) }
+    }
+
+    /** dashboard.json's `dock` block with the Settings page's mode override applied. */
+    private fun effectiveDockConfig(): DockConfig {
+        val fromDashboard = dashboard.config.dock
+        return if (dockModeOverride.isBlank()) fromDashboard else fromDashboard.copy(mode = dockModeOverride)
+    }
+
     private fun setTapFeedback(enabled: Boolean) {
         tapFeedbackEnabled = enabled
         prefs.edit { putBoolean("tap_feedback_enabled", enabled) }
@@ -1115,6 +1199,16 @@ class MainActivity : ComponentActivity() {
         if (!tapFeedbackEnabled) return
         val am = getSystemService(AUDIO_SERVICE) as? AudioManager ?: return
         am.playSoundEffect(AudioManager.FX_KEY_CLICK)
+    }
+
+    /** Turns the screen on (and lifts the dock's dimming/clock) when "Find my remote" starts. */
+    @Suppress("DEPRECATION")
+    private fun wakeForRing() {
+        chargeDockMonitor.onUserInteraction()
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+        if (pm.isInteractive) return
+        val flags = PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE
+        pm.newWakeLock(flags, "astrion:findmyremote").acquire(RING_WAKE_MS)
     }
 
     @Suppress("DEPRECATION")

@@ -15,6 +15,7 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.net.toUri
 import com.custom.astrion.BuildConfig
+import com.custom.astrion.FindMyRemote
 import com.custom.astrion.R
 import com.custom.astrion.appletv.AppleTvCredentials
 import com.custom.astrion.appletv.AppleTvRegistry
@@ -1814,6 +1815,8 @@ class ConfigServer(
         val handler = Handler(Looper.getMainLooper())
         ringStopHandler = handler
         handler.postDelayed({ stopRingInternal() }, durationSeconds * 1000L)
+        // Lets the remote itself wake its screen and stop the ring on the first touch/button.
+        FindMyRemote.started { handler.post { stopRingInternal() } }
 
         return newFixedLengthResponse(
             Response.Status.OK,
@@ -1843,6 +1846,7 @@ class ConfigServer(
             runCatching { player.release() }
         }
         ringMediaPlayer = null
+        FindMyRemote.stopped()
         ringOriginalAlarmVolume?.let { original ->
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             runCatching { audioManager.setStreamVolume(AudioManager.STREAM_ALARM, original, 0) }
