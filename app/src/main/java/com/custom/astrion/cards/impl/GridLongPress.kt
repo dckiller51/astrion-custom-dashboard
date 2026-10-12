@@ -73,6 +73,7 @@ internal fun fireGridLongPress(ctx: CardContext, action: Map<String, Any?>, fall
  * function under detekt's complexity threshold. */
 private fun fireDeviceActions(ctx: CardContext, action: Map<String, Any?>, hub: String?) {
     (action["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
+    (action["stopActivity"] as? String)?.let(ctx.stopActivity)
     val harmonyDevice = action["harmonyDevice"] as? String
     val harmonyCommand = action["harmonyCommand"] as? String
     if (harmonyDevice != null && harmonyCommand != null) {

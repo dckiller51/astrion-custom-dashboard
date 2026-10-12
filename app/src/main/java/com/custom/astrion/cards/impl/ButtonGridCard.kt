@@ -158,6 +158,7 @@ class ButtonGridCard : CardRenderer {
             ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
         }
         (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
+        (b["stopActivity"] as? String)?.let(ctx.stopActivity)
         val irDevice = b["irDevice"] as? String
         val irCommand = b["irCommand"] as? String
         if (irDevice != null && irCommand != null) {

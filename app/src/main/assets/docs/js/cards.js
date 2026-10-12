@@ -334,6 +334,10 @@ function updateCardFormInputs() {
           </div>
         `}
         <div class="divider" style="margin:12px 0"></div>
+        <label>Turn off a room's Activity — the Harmony-style "Off" button (optional)</label>
+        <input type="text" id="giStopActivity" list="giStopRooms" placeholder="room name, or * for every room">
+        <datalist id="giStopRooms">${activityRoomOptionsHtml()}</datalist>
+        <div class="hint">Stops whatever Activity is running in that room: Harmony PowerOff for a Harmony Activity, devices off (per their profile) for a composed one. "*" turns off every room. Works alone or with the other actions above.</div>
         <label>Long-press action (optional, JSON — fired on hold instead of tap)</label>
         <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
         <div class="hint">A separate action for a long press (touch hold or held OK key) — the fields above still drive a normal tap. Accepts the same fields as a ${label.toLowerCase()}: "service" (+ "entity_id", "data"), "entity_id" alone (turn_on), "harmonyDevice"+"harmonyCommand", "activityId", "hub", "irDevice"+"irCommand", "activity", "page" (+ "pageMode": "popup"), "closePopup". Leave empty for no long-press.</div>
@@ -864,6 +868,8 @@ function fillGridItemForm(type, item) {
   document.getElementById('giName').value = item.name || '';
   const longPressEl = document.getElementById('giLongPress');
   if (longPressEl) longPressEl.value = item.long_press ? JSON.stringify(item.long_press) : '';
+  const stopEl = document.getElementById('giStopActivity');
+  if (stopEl) stopEl.value = item.stopActivity || '';
   document.getElementById('giIcon').value = item.icon || '';
   updateIconThumb('giIcon');
   if (type === 'button_grid') {
@@ -950,7 +956,7 @@ function cancelGridItemEdit() {
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
-  ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giActivityRef', 'giStateEntity', 'giStateValue', 'giLongPress'].forEach(id => {
+  ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giActivityRef', 'giStateEntity', 'giStateValue', 'giLongPress', 'giStopActivity'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -976,6 +982,8 @@ function addGridItem(type) {
   const icon = document.getElementById('giIcon').value.trim();
   let item = { name };
   if (icon) item.icon = icon;
+  const stopActivity = (document.getElementById('giStopActivity')?.value || '').trim();
+  if (stopActivity) item.stopActivity = stopActivity;
   // Optional separate long-press action — parsed up front so a typo is
   // reported before anything else, and written last (below) so it never
   // counts toward the tap action's own "needs an action" validation.
@@ -1027,8 +1035,8 @@ function addGridItem(type) {
         item.harmonyCommand = document.getElementById('giHarmonyCommand').value.trim();
       }
     }
-    if (!item.service && !irDevice && !item.harmonyDevice && !item.activityId) {
-      alert('Give this button a Service, an IR device + command, or a Harmony action.');
+    if (!item.service && !irDevice && !item.harmonyDevice && !item.activityId && !item.stopActivity) {
+      alert('Give this button a Service, an IR device + command, a Harmony action, or an Activity to turn off.');
       return;
     }
 

@@ -359,6 +359,7 @@ private data class CardContextInputs(
     val sendIrCommand: (String, String) -> Unit,
     val activitiesById: Map<String, ActivityConfig>,
     val startActivity: (String) -> Unit,
+    val stopActivity: (String) -> Unit,
     val activityRuntime: ActivityRuntime,
     val theme: ThemeColors,
     val screenOn: Boolean
@@ -389,6 +390,7 @@ private fun buildCardContext(inputs: CardContextInputs): CardContext = CardConte
     sendIrCommand = inputs.sendIrCommand,
     activities = inputs.activitiesById,
     startActivity = inputs.startActivity,
+    stopActivity = inputs.stopActivity,
     activityRuntime = inputs.activityRuntime,
     theme = inputs.theme,
     screenOn = inputs.screenOn
@@ -479,6 +481,7 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
             initialPage = config.startPage.coerceIn(0, pageCount - 1),
             pageCount = { pageCount }
         )
+    HiddenPageSkipEffect(config.pages, pagerState, activeActivityIds)
 
     val navigateToPage: (String) -> Unit = { pageName ->
         val idx = config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -691,6 +694,7 @@ fun Dashboard(
                         sendIrCommand = sendIrCommand,
                         activitiesById = activitiesById,
                         startActivity = startActivity,
+                        stopActivity = dispatcher::stopActivities,
                         activityRuntime = activityRuntime,
                         theme = theme,
                         screenOn = screenOn

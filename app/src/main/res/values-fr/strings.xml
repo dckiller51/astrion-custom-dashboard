@@ -184,4 +184,14 @@
     <string name="media_state_on">Allumé</string>
     <string name="media_state_off">Éteint</string>
     <string name="volume_muted">Muet</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Écran sur le dock</string>
+    <string name="dock_screen_hint">Ce que la télécommande affiche sur son dock de charge, pour cette télécommande uniquement. Touchez pour changer.</string>
+    <string name="dock_mode_default">Selon le dashboard</string>
+    <string name="dock_mode_charging">Charge</string>
+    <string name="dock_mode_clock">Horloge</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">Retrouvée !</string>
+    <string name="ring_found_hint">Touchez l\'écran ou appuyez sur un bouton pour arrêter</string>
 </resources>

@@ -13,6 +13,7 @@ import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.custom.astrion.config.DockConfig
 
 /**
  * Detects whether [activity] is sitting on its charging dock — as opposed
@@ -24,8 +25,10 @@ import androidx.compose.runtime.setValue
  * real cable enumerates, the dock's power-only pins never do. So: charging
  * AND no USB data connection = genuinely docked.
  *
- * While docked, also owns the charging screen's auto-dim timer: window
- * brightness down to near-zero after [DIM_DELAY_MS] of no touches (see
+ * While docked, also owns the dock screen's idle timer: after the [DockConfig]'s idle time
+ * with no touches the remote goes "idle" — the charging screen dims to near-zero, the clock
+ * mode shows its clock at the configured day/night brightness, the dashboard mode just dims
+ * (see
  * [onUserInteraction], meant to be called from the Activity's own
  * override of the same name — the standard Android hook for "the user is
  * still there" regardless of which view or Compose node actually
@@ -41,11 +44,38 @@ class ChargeDockMonitor(private val activity: Activity) {
 
     var state by mutableStateOf(State(isCharging = false, isDocked = false))
         private set
+
+    /** True once the remote has sat untouched on the dock for the configured idle time. */
     var dimmed by mutableStateOf(false)
         private set
 
+    /** The effective `dock` settings (dashboard.json, with the Settings page's mode override). */
+    var dockConfig: DockConfig = DockConfig()
+        set(value) {
+            if (field == value) return
+            field = value
+            if (state.isDocked) armDimTimer()
+        }
+
+    /** Whether it's night per Home Assistant (`sun.sun`), or null when unknown — then 21:00–07:00. */
+    var sunIsDown: () -> Boolean? = { null }
+
+    /** Night decides between [DockConfig.brightness] and its night value, and the clock's colours. */
+    fun isNight(): Boolean = runCatching { sunIsDown() }.getOrNull() ?: defaultIsNight()
+
     private val handler = Handler(Looper.getMainLooper())
     private val dimRunnable = Runnable { applyDimmed(true) }
+
+    // While idle, re-applies the backlight now and then so dusk/dawn switches between the day
+    // and night levels without needing a touch.
+    private val nightCheckRunnable =
+        object : Runnable {
+            override fun run() {
+                if (!dimmed) return
+                setWindowBrightness(idleBrightness())
+                handler.postDelayed(this, NIGHT_CHECK_MS)
+            }
+        }
 
     private val receiver =
         object : BroadcastReceiver() {
@@ -70,6 +100,7 @@ class ChargeDockMonitor(private val activity: Activity) {
     fun stop() {
         runCatching { activity.unregisterReceiver(receiver) }
         handler.removeCallbacks(dimRunnable)
+        handler.removeCallbacks(nightCheckRunnable)
     }
 
     /** Call from Activity.onUserInteraction(). */
@@ -104,7 +135,7 @@ class ChargeDockMonitor(private val activity: Activity) {
     private fun armDimTimer() {
         handler.removeCallbacks(dimRunnable)
         applyDimmed(false)
-        handler.postDelayed(dimRunnable, DIM_DELAY_MS)
+        handler.postDelayed(dimRunnable, dockConfig.idleMs)
     }
 
     private fun clearDimTimer() {
@@ -115,16 +146,34 @@ class ChargeDockMonitor(private val activity: Activity) {
     private fun applyDimmed(dim: Boolean) {
         if (dimmed == dim) return
         dimmed = dim
-        val brightness = if (dim) DIMMED_BRIGHTNESS else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        setWindowBrightness(if (dim) idleBrightness() else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
+        handler.removeCallbacks(nightCheckRunnable)
+        if (dim) handler.postDelayed(nightCheckRunnable, NIGHT_CHECK_MS)
+    }
+
+    private fun setWindowBrightness(brightness: Float) {
         runCatching {
             activity.window.attributes = activity.window.attributes.apply { screenBrightness = brightness }
-        }.onFailure { Log.i(TAG, "set brightness ($dim) failed", it) }
+        }.onFailure { Log.i(TAG, "set brightness ($brightness) failed", it) }
+    }
+
+    /** Near-black for the charging screen (as always); the configured level otherwise. */
+    private fun idleBrightness(): Float = when (dockConfig.mode) {
+        DockConfig.MODE_CHARGING -> DIMMED_BRIGHTNESS
+        else -> if (isNight()) dockConfig.nightBrightness else dockConfig.brightness
+    }
+
+    private fun defaultIsNight(): Boolean {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return hour >= NIGHT_START_HOUR || hour < NIGHT_END_HOUR
     }
 
     private companion object {
         const val TAG = "ChargeDock"
-        const val DIM_DELAY_MS = 15_000L
         const val DIMMED_BRIGHTNESS = 0.01f
+        const val NIGHT_START_HOUR = 21
+        const val NIGHT_END_HOUR = 7
+        const val NIGHT_CHECK_MS = 10 * 60_000L
 
         // Real, sticky-broadcast constants (confirmed present in AOSP source
         // and at runtime) but *not* part of the public UsbManager SDK stub —

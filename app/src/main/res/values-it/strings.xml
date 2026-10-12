@@ -184,4 +184,14 @@
     <string name="media_state_on">Attivo</string>
     <string name="media_state_off">Inattivo</string>
     <string name="volume_muted">Muto</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Schermo sulla base</string>
+    <string name="dock_screen_hint">Cosa mostra il telecomando sulla base di ricarica, solo per questo telecomando. Tocca per cambiare.</string>
+    <string name="dock_mode_default">Dalla dashboard</string>
+    <string name="dock_mode_charging">Ricarica</string>
+    <string name="dock_mode_clock">Orologio</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">Trovato!</string>
+    <string name="ring_found_hint">Tocca lo schermo o premi un tasto per fermare</string>
 </resources>

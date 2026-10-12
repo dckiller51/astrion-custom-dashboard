@@ -377,6 +377,20 @@ class ActivityDispatcher(
      * A plain HA-entity tracked tile has no dedicated "stop" of its own
      * (it's whatever a scene_grid tap already toggles) — just clear it.
      */
+    /**
+     * The "Off" action of a tile or hotkey (`"stopActivity"`): [room] stops that room's Activity
+     * (Harmony PowerOff or the composed stop, see [stopActivity]); `"*"` stops every room that
+     * has one running — Harmony's -1, for the whole house.
+     */
+    fun stopActivities(room: String) {
+        val target = room.trim()
+        if (target == "*") {
+            activityRuntime.activeByRoom.value.filterValues { it != null }.keys.forEach(::stopActivity)
+        } else if (target.isNotEmpty()) {
+            stopActivity(target)
+        }
+    }
+
     fun stopActivity(room: String) {
         val tracked = activityRuntime.activeActivity(room) ?: return
         val composed = activitiesById[tracked.id]

@@ -3,10 +3,21 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.2.3-beta] - 2026-10-10
+## [1.2.4-beta] - 2026-10-10
 
 ### Added
 
+- **Dock screen: charging, clock or dashboard.** New `dock` block in `dashboard.json` (and a "Dock screen" section in the builder): `"mode": "charging"` keeps today's battery screen; `"clock"` leaves the dashboard usable and, after `idle_seconds` untouched (30 by default), shows a dim night-friendly clock — big time, date, weather (`weather_entity`), battery and, only while something plays, the artwork and title (`media_entities`, or any playing media player). It turns amber and darker at night (`sun.sun`, else 21:00–07:00) and drifts a few pixels each minute; a touch or button brings the dashboard back. `"dashboard"` just dims after `idle_seconds`. `brightness` / `night_brightness` set the backlight while idle, `time_format` forces 12 or 24 h. Each remote can override the mode locally from its Settings page ("Dock screen"). Inspired by baes-cloud's astrion-dashboard docked screensaver (MIT).
+
+  ```json
+  "dock": { "mode": "clock", "idle_seconds": 30, "brightness": 0.2, "night_brightness": 0.05,
+            "weather_entity": "weather.home", "media_entities": ["media_player.appletv_salon"] }
+  ```
+
+- **Find my remote: stop it from the remote.** While `/ring` rings, the remote wakes its screen and shows "Found me!"; the first touch or button press stops the sound (and does nothing else). Stopping from Home Assistant or the web page still works.
+- **Hide a page completely while its Activity is off.** New page option `"hideMode": "full"` (builder: "Hide completely" under "Hide unless this Activity is running"): a swipe skips the page while the Activity is off, and the remote leaves the page (to its parent, else the nearest visible page) when the Activity stops while it's on screen. Jumps from a tile, hotkey or Home Assistant still land on it, so "start Activity + open its page" keeps working. Without it, only the dot is hidden, as before.
+- **"Off" button for Activities.** Tiles (`scene_grid`, `button_grid`, `long_press`) and hotkeys accept `"stopActivity": "<room>"` — Harmony PowerOff for a Harmony Activity, devices off per their profile for a composed one — or `"*"` for every room (Harmony's -1 for the whole house). In the builder: the tile form's "Turn off a room's Activity" field and the hotkey action "Turn off a room's Activity".
+- Spanish localization support. Thanks to [@enigmat14](https://github.com/enigmat14) for the contribution! 🙏
 - **`apple_tv_remote`: compact and full layouts.** New `"layout"` option. `"compact"` keeps the remote first: a one-line now-playing strip (artwork, title, app, thin progress, Play/Pause) above the trackpad, the button row, then up to 6 app icons. `"full"` adds large artwork, title/series, a draggable progress bar (seeks the Apple TV), −10 s / Play-Pause / +10 s, a scrollable row of labelled apps, then the trackpad and buttons. Both size the trackpad from the screen height so the card fits on one page between the top status bar and the page dots. Without `layout` the card is unchanged. `showArtwork` / `showProgress` / `showSkip` toggle the parts (compact with both artwork and progress off is the classic card plus apps). Now-playing info comes from the directly paired Apple TV, or from `entity` (e.g. Home Assistant's Apple TV media_player when the card goes through a Harmony hub).
 - **App shortcuts on the Apple TV card.** `"apps": [{ "source": "Netflix", "label": "Netflix", "icon": "/sdcard/astrion/icons/netflix.png", "color": "#B3261E" }]`, launched with `media_player.select_source`. The icon is an uploaded PNG or an image URL; without one the app's initials are drawn on its color. The builder suggests app names from the entity's `source_list`, has an icon picker, and lets you reorder.
 - **Long press on the Apple TV trackpad (direct Apple TV).** Holding the centre sends a held Select, which opens tvOS's context menu (e.g. remove an item from the Apple TV app's Up Next / watchlist) — what HA's Apple TV integration does with `hold_secs`. Holding ◀ / ▶ jumps 10 s back / forward.

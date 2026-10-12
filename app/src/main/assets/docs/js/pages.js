@@ -156,6 +156,8 @@ function normalizeDashboardData(parsed) {
     harmonyAliases: parsed.harmonyAliases || {},
     activities: parsed.activities || [],
     theme: parsed.theme || {},
+    // Optional; absent stays absent so an untouched dashboard.json round-trips unchanged.
+    dock: parsed.dock && typeof parsed.dock === 'object' ? parsed.dock : undefined,
   };
   if (data.pages.length === 0) {
     data.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });
@@ -186,6 +188,7 @@ function initEditor() {
   renderHotkeysList();
   renderActivitiesList();
   if (typeof renderThemeForm === 'function') renderThemeForm();
+  if (typeof renderDockForm === 'function') renderDockForm();
   if (typeof applyThemeToPreview === 'function') applyThemeToPreview();
   updateJsonOutput();
   updateHotkeyActionInputs();
@@ -233,6 +236,8 @@ function openPageDialog(index) {
   onPageDialogLinkedPageModeChange();
   populatePageHiddenUnlessActivitySelect();
   document.getElementById('pageDialogHiddenUnlessActivity').value = isNew ? '' : (dashboardData.pages[index].hiddenUnlessActivity || '');
+  document.getElementById('pageDialogHideFull').checked = !isNew && dashboardData.pages[index].hideMode === 'full';
+  onPageDialogHiddenChange();
   document.getElementById('pageDialogOpenWhenEntity').value = isNew ? '' : (dashboardData.pages[index].openWhenEntity || '');
   document.getElementById('pageDialogOpenWhenState').value = isNew ? '' : (dashboardData.pages[index].openWhenState || '');
   document.getElementById('pageDialogCloseWhenState').value = isNew ? '' : (dashboardData.pages[index].closeWhenState || '');
@@ -369,6 +374,7 @@ function savePageDialog() {
   const popupPosition = document.getElementById('pageDialogPopupPosition').value;
   const tilePopup = document.getElementById('pageDialogTilePopup').checked;
   const hiddenUnlessActivity = document.getElementById('pageDialogHiddenUnlessActivity').value || undefined;
+  const hideFull = !!hiddenUnlessActivity && document.getElementById('pageDialogHideFull').checked;
   const openWhenEntity = document.getElementById('pageDialogOpenWhenEntity').value.trim() || undefined;
   const openWhenState = document.getElementById('pageDialogOpenWhenState').value.trim() || undefined;
   const closeWhenState = document.getElementById('pageDialogCloseWhenState').value.trim() || undefined;
@@ -386,6 +392,7 @@ function savePageDialog() {
       if (linkedPageMode === 'popup') page.linkedPageMode = 'popup';
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity;
+    if (hideFull) page.hideMode = 'full';
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState;
@@ -419,6 +426,7 @@ function savePageDialog() {
       delete page.linkedPageMode;
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity; else delete page.hiddenUnlessActivity;
+    if (hideFull) page.hideMode = 'full'; else delete page.hideMode;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState; else delete page.openWhenState;
@@ -550,3 +558,9 @@ function wireModalBackdropClose(modalId, closeFn) {
   ['activityWizardModal', () => closeActivityWizard()],
   ['iconPickerModal', () => closeIconPicker()],
 ].forEach(([id, fn]) => wireModalBackdropClose(id, fn));
+/** The "Hide completely" option only makes sense once an Activity is chosen. */
+function onPageDialogHiddenChange() {
+  const row = document.getElementById('pageDialogHideFullRow');
+  const hasActivity = !!document.getElementById('pageDialogHiddenUnlessActivity').value;
+  if (row) row.style.display = hasActivity ? '' : 'none';
+}
