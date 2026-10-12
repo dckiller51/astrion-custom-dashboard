@@ -14,6 +14,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.net.toUri
+import com.custom.astrion.AppLogs
 import com.custom.astrion.BuildConfig
 import com.custom.astrion.FindMyRemote
 import com.custom.astrion.R
@@ -145,6 +146,7 @@ import org.json.JSONObject
  *  GET  /version            `{"version","versionCode"}` — the installed
  *                        app's own version, static per build.
  *  GET  /battery         { level, charging } — this device's own battery
+ *  GET  /logs            this app's recent log lines, as a .txt download (bug reports without adb)
  *                        status, for the companion HA integration
  *  GET  /activities        every trackable Activity (`"track": true` tile,
  *                        hotkey, or composed AppConfig.activities entry),
@@ -286,6 +288,7 @@ class ConfigServer(
             "/current-page" -> if (method == Method.GET) serveCurrentPage() else methodNotAllowed()
             "/version" -> if (method == Method.GET) serveVersion() else methodNotAllowed()
             "/battery" -> if (method == Method.GET) serveBattery() else methodNotAllowed()
+            "/logs" -> if (method == Method.GET) serveLogs() else methodNotAllowed()
             "/set-page" -> if (method == Method.POST) handleSetPage(session) else methodNotAllowed()
             "/activities" -> if (method == Method.GET) serveActivities() else methodNotAllowed()
             "/activities/active" -> if (method == Method.GET) serveActiveActivities() else methodNotAllowed()
@@ -776,6 +779,13 @@ class ConfigServer(
     }
 
     // ---- version & battery --------------------------------------------------
+
+    /** This app's recent log lines as a downloadable text file (see [AppLogs]) — bug reports without adb. */
+    private fun serveLogs(): Response {
+        val response = newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", AppLogs.dump())
+        response.addHeader("Content-Disposition", "attachment; filename=\"${AppLogs.fileName()}\"")
+        return response
+    }
 
     /** The installed app version — lets a remote controller (the Home
      * Assistant integration's `update.*` entity, primarily) know what's
@@ -1759,25 +1769,42 @@ class ConfigServer(
         val files = HashMap<String, String>()
         session.parseBody(files)
         val soundParam = session.parameters["sound"]?.firstOrNull()?.trim()?.lowercase() ?: "ringtone"
-        val ringtoneType =
-            ringSounds[soundParam]
-                ?: return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    """{"error":"unknown sound '$soundParam', expected one of ${ringSounds.keys}"}"""
-                )
+        if (soundParam !in ringSounds) {
+            return newFixedLengthResponse(
+                Response.Status.BAD_REQUEST,
+                "application/json",
+                """{"error":"unknown sound '$soundParam', expected one of ${ringSounds.keys}"}"""
+            )
+        }
         val volume = (session.parameters["volume"]?.firstOrNull()?.trim()?.toIntOrNull() ?: 80).coerceIn(1, 100)
         val durationSeconds =
             (session.parameters["duration"]?.firstOrNull()?.trim()?.toIntOrNull() ?: 15).coerceIn(1, 60)
+        val error = startRing(soundParam, volume, durationSeconds)
+        if (error != null) {
+            return newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                JSONObject().put("error", error).toString()
+            )
+        }
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            """{"status":"ringing","sound":"$soundParam","volume":$volume,"duration":$durationSeconds}"""
+        )
+    }
 
+    /**
+     * Rings like `/ring` — also used by the remote's own Settings › Sound & touch › "Test Find my
+     * remote", which works even with the web server switched off. Returns an error message, or
+     * null once the sound is playing.
+     */
+    fun startRing(soundParam: String = "ringtone", volume: Int = 80, durationSeconds: Int = 15): String? {
+        val ringtoneType = ringSounds[soundParam] ?: return "unknown sound '$soundParam'"
         val ringtoneUri =
             RingtoneManager.getActualDefaultRingtoneUri(context, ringtoneType)
                 ?: RingtoneManager.getValidRingtoneUri(context)
-                ?: return newFixedLengthResponse(
-                    Response.Status.INTERNAL_ERROR,
-                    "application/json",
-                    """{"error":"no ringtone available on this device"}"""
-                )
+                ?: return "no ringtone available on this device"
 
         // A ring already in progress is replaced, not layered on top of.
         stopRingInternal()
@@ -1805,11 +1832,7 @@ class ConfigServer(
         } catch (e: Exception) {
             Log.e("ConfigServer", "ring: failed to start playback", e)
             stopRingInternal()
-            return newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                """{"error":"could not play sound: ${e.message}"}"""
-            )
+            return "could not play sound: ${e.message}"
         }
 
         val handler = Handler(Looper.getMainLooper())
@@ -1817,12 +1840,7 @@ class ConfigServer(
         handler.postDelayed({ stopRingInternal() }, durationSeconds * 1000L)
         // Lets the remote itself wake its screen and stop the ring on the first touch/button.
         FindMyRemote.started { handler.post { stopRingInternal() } }
-
-        return newFixedLengthResponse(
-            Response.Status.OK,
-            "application/json",
-            """{"status":"ringing","sound":"$soundParam","volume":$volume,"duration":$durationSeconds}"""
-        )
+        return null
     }
 
     private fun handleStopRing(): Response {

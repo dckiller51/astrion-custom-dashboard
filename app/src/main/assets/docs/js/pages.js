@@ -158,6 +158,7 @@ function normalizeDashboardData(parsed) {
     theme: parsed.theme || {},
     // Optional; absent stays absent so an untouched dashboard.json round-trips unchanged.
     dock: parsed.dock && typeof parsed.dock === 'object' ? parsed.dock : undefined,
+    power: parsed.power && typeof parsed.power === 'object' ? parsed.power : undefined,
   };
   if (data.pages.length === 0) {
     data.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });
@@ -189,6 +190,7 @@ function initEditor() {
   renderActivitiesList();
   if (typeof renderThemeForm === 'function') renderThemeForm();
   if (typeof renderDockForm === 'function') renderDockForm();
+  if (typeof renderPowerForm === 'function') renderPowerForm();
   if (typeof applyThemeToPreview === 'function') applyThemeToPreview();
   updateJsonOutput();
   updateHotkeyActionInputs();

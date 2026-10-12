@@ -4,7 +4,7 @@
 // (config/AppConfig.kt DockConfig). Every key is optional; the block is only
 // written when something differs from the defaults, so an untouched builder
 // keeps producing the same dashboard.json as before. The remote's own Settings
-// page can still override `mode` for that one remote.
+// page edits the same `mode` key in its dashboard.json.
 
 const DOCK_DEFAULTS = { mode: 'charging', brightness: 0.2, night_brightness: 0.05, show_battery: true };
 const DOCK_IDLE_DEFAULTS = { charging: 15, clock: 30, dashboard: 60 };
@@ -39,7 +39,7 @@ function renderDockForm() {
   selectedMedia.filter(id => !mediaOptions.some(([m]) => m === id)).forEach(id => mediaOptions.unshift([id, id]));
   const clock = d.mode === 'clock';
   box.innerHTML = `
-    <div class="hint" style="margin-bottom:10px">What the remote shows while it sits on its charging dock. Each remote can still override the mode in its own Settings page.</div>
+    <div class="hint" style="margin-bottom:10px">What the remote shows while it sits on its charging dock. The mode is also switchable on the remote (Settings › Dock screen) — it writes this same value.</div>
     <label for="dockMode">Mode</label>
     <select id="dockMode" onchange="onDockInput()">
       <option value="charging" ${d.mode === 'charging' ? 'selected' : ''}>Charging — battery screen (as before)</option>

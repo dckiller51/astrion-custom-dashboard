@@ -57,6 +57,13 @@ class ChargeDockMonitor(private val activity: Activity) {
             if (state.isDocked) armDimTimer()
         }
 
+    /** How long it must be charging before it counts as docked (dashboard.json `power.dock_debounce_seconds`):
+     * a remote seated badly flickers between charging and not, and would otherwise flip the dock
+     * screen (and the screen-on hold) on and off. Lifting it off counts at once. */
+    var dockDebounceMs: Long = DEFAULT_DOCK_DEBOUNCE_MS
+
+    private val confirmDock = Runnable { refresh(confirmed = true) }
+
     /** Whether it's night per Home Assistant (`sun.sun`), or null when unknown — then 21:00–07:00. */
     var sunIsDown: () -> Boolean? = { null }
 
@@ -101,6 +108,7 @@ class ChargeDockMonitor(private val activity: Activity) {
         runCatching { activity.unregisterReceiver(receiver) }
         handler.removeCallbacks(dimRunnable)
         handler.removeCallbacks(nightCheckRunnable)
+        handler.removeCallbacks(confirmDock)
     }
 
     /** Call from Activity.onUserInteraction(). */
@@ -112,7 +120,7 @@ class ChargeDockMonitor(private val activity: Activity) {
      * called once up front and again on every power-connected/-disconnected
      * or USB-state transition, rather than tracked incrementally, so it
      * can't drift out of sync with reality. */
-    private fun refresh() {
+    private fun refresh(confirmed: Boolean = false) {
         val batteryStatus =
             activity.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 ?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
@@ -124,7 +132,11 @@ class ChargeDockMonitor(private val activity: Activity) {
             activity.registerReceiver(null, IntentFilter(ACTION_USB_STATE))
                 ?.getBooleanExtra(EXTRA_USB_CONNECTED, false) ?: false
 
-        val newState = State(isCharging, isDocked = isCharging && !usbConnected)
+        val onDock = isCharging && !usbConnected
+        val docked = onDock && (state.isDocked || confirmed || dockDebounceMs <= 0L)
+        handler.removeCallbacks(confirmDock)
+        if (onDock && !docked) handler.postDelayed(confirmDock, dockDebounceMs)
+        val newState = State(isCharging, isDocked = docked)
         if (newState == state) return
         Log.i(TAG, "state -> $newState (usbConnected=$usbConnected)")
         state = newState
@@ -174,6 +186,7 @@ class ChargeDockMonitor(private val activity: Activity) {
         const val NIGHT_START_HOUR = 21
         const val NIGHT_END_HOUR = 7
         const val NIGHT_CHECK_MS = 10 * 60_000L
+        const val DEFAULT_DOCK_DEBOUNCE_MS = 5_000L
 
         // Real, sticky-broadcast constants (confirmed present in AOSP source
         // and at runtime) but *not* part of the public UsbManager SDK stub —

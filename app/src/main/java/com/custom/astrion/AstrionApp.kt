@@ -1,6 +1,7 @@
 package com.custom.astrion
 
 import android.app.Application
+import android.content.Context
 import androidx.core.content.edit
 import com.custom.astrion.cards.CardRegistry
 import com.custom.astrion.cards.impl.AppleTvRemoteCard
@@ -42,6 +43,10 @@ import com.custom.astrion.update.UpdateChecker
  */
 @Suppress("SpellCheckingInspection")
 class AstrionApp : Application() {
+    override fun attachBaseContext(base: Context) {
+        super.attachBaseContext(AppLanguage.wrap(base))
+    }
+
     override fun onCreate() {
         super.onCreate()
         HaLabels.init(this)
