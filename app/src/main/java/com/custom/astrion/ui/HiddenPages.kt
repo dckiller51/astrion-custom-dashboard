@@ -18,21 +18,34 @@ internal fun isFullyHidden(page: PageConfig?, activeActivityIds: Set<String>): B
 }
 
 /**
+ * What [HiddenPageSkipEffect] tells the pager: which page's content to draw in a slot. A fully
+ * hidden page reached by a swipe is drawn as the page the swipe will end up on, so the hidden
+ * page never shows — not even during the swipe — and the jump that follows is invisible.
+ */
+internal fun interface HiddenPageContent {
+    /** The page whose content is drawn in pager slot [index] (usually [index] itself). */
+    fun contentIndex(index: Int): Int
+}
+
+private val Identity = HiddenPageContent { it }
+
+/**
  * `"hideMode": "full"` on a page with `hiddenUnlessActivity`:
  *
- *  - A **swipe** that lands on such a page while its Activity is off carries on to the next
- *    visible page in the same direction (or goes back where it came from if there is none).
- *    Jumps from a tile, hotkey, dot or Home Assistant are left alone — that's how "start the
- *    Activity + open its page" works, since the Activity only counts as running once all its
- *    commands are sent, a moment *after* the jump.
+ *  - A **swipe** towards such a page while its Activity is off shows the next visible page in
+ *    the same direction in its place (or the page it came from if there is none), and once the
+ *    swipe settles the pager moves to that page with no visible change. The hidden page never
+ *    appears. Jumps from a tile, hotkey, dot or Home Assistant are left alone — that's how
+ *    "start the Activity + open its page" works, since the Activity only counts as running once
+ *    all its commands are sent, a moment *after* the jump.
  *  - If the Activity **stops** while its page is on screen, the remote leaves the page: to its
  *    `parent` if it has one, else the nearest visible page before it.
  *
  * The pager itself still holds every page (see PageConfig.hiddenUnlessActivity for why).
  */
 @Composable
-internal fun HiddenPageSkipEffect(pages: List<PageConfig>, pagerState: PagerState, activeActivityIds: Set<String>) {
-    if (pages.none { it.hideMode == "full" && it.hiddenUnlessActivity != null }) return
+internal fun HiddenPageSkipEffect(pages: List<PageConfig>, pagerState: PagerState, activeActivityIds: Set<String>): HiddenPageContent {
+    if (pages.none { it.hideMode == "full" && it.hiddenUnlessActivity != null }) return Identity
     val dragged by pagerState.interactionSource.collectIsDraggedAsState()
     var draggedSinceSettle by remember { mutableStateOf(false) }
     var lastSettled by remember { mutableIntStateOf(pagerState.settledPage) }
@@ -41,14 +54,30 @@ internal fun HiddenPageSkipEffect(pages: List<PageConfig>, pagerState: PagerStat
     LaunchedEffect(pagerState.settledPage) {
         val page = pagerState.settledPage
         if (draggedSinceSettle && isFullyHidden(pages.getOrNull(page), activeActivityIds)) {
-            val step = if (page >= lastSettled) 1 else -1
-            pagerState.scrollToPage(nextVisible(pages, page, step, activeActivityIds) ?: lastSettled)
+            // Its slot already shows the target's content: this move is invisible.
+            pagerState.scrollToPage(swipeTarget(pages, page, lastSettled, activeActivityIds))
             return@LaunchedEffect // runs again for the page we just moved to
         }
         draggedSinceSettle = false
         lastSettled = page
     }
 
+    HiddenPageExitEffect(pages, pagerState, activeActivityIds)
+
+    // Only while a swipe is under way (or settling): a jump onto the page must show the real thing.
+    return HiddenPageContent { index ->
+        val swiping = dragged || draggedSinceSettle
+        if (swiping && isFullyHidden(pages.getOrNull(index), activeActivityIds)) {
+            swipeTarget(pages, index, lastSettled, activeActivityIds)
+        } else {
+            index
+        }
+    }
+}
+
+/** Leaves a `"hideMode": "full"` page when its Activity stops while it's on screen. */
+@Composable
+private fun HiddenPageExitEffect(pages: List<PageConfig>, pagerState: PagerState, activeActivityIds: Set<String>) {
     var previousActive by remember { mutableStateOf(activeActivityIds) }
     LaunchedEffect(activeActivityIds) {
         val page = pages.getOrNull(pagerState.currentPage)
@@ -59,6 +88,12 @@ internal fun HiddenPageSkipEffect(pages: List<PageConfig>, pagerState: PagerStat
             pagerState.scrollToPage(exitTarget(pages, pagerState.currentPage, activeActivityIds))
         }
     }
+}
+
+/** Where a swipe onto hidden page [index], coming from [from], ends up: the next visible page in its direction. */
+private fun swipeTarget(pages: List<PageConfig>, index: Int, from: Int, active: Set<String>): Int {
+    val step = if (index >= from) 1 else -1
+    return nextVisible(pages, index, step, active) ?: from
 }
 
 /** The first page from [from] (exclusive) going [step] that isn't fully hidden, or null. */

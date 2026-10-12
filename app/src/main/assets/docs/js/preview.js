@@ -368,10 +368,10 @@ function renderPreview() {
   if (hkInfo) {
     if (globalKeys + pageKeys > 0) {
       let hkHtml = `<div class="hotkeys-badge"><strong>⚡ Hotkeys active on this page:</strong><br>`;
-      (dashboardData.hotkeys || []).forEach(h => hkHtml += `• [Global] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
-      (dashboardData.longHotkeys || []).forEach(h => hkHtml += `• [Global, long] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
-      (page.hotkeys || []).forEach(h => hkHtml += `• [Page] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
-      (page.longHotkeys || []).forEach(h => hkHtml += `• [Page, long] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
+      (dashboardData.hotkeys || []).forEach(h => hkHtml += `• [Global] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`);
+      (dashboardData.longHotkeys || []).forEach(h => hkHtml += `• [Global, long] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`);
+      (page.hotkeys || []).forEach(h => hkHtml += `• [Page] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`);
+      (page.longHotkeys || []).forEach(h => hkHtml += `• [Page, long] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`);
       hkHtml += `</div>`;
       hkInfo.innerHTML = hkHtml;
     } else {

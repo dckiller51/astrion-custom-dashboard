@@ -458,7 +458,9 @@ private data class DashboardRuntimeState(
      * one place that touches ConsumerIrManager. */
     val irManager: ConsumerIrManager?,
     val irDevicesById: Map<String, IrDeviceConfig>,
-    val activitiesById: Map<String, ActivityConfig>
+    val activitiesById: Map<String, ActivityConfig>,
+    /** Which page's content each pager slot draws — see [HiddenPageSkipEffect]. */
+    val hiddenPageContent: HiddenPageContent
 )
 
 @Composable
@@ -481,7 +483,7 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
             initialPage = config.startPage.coerceIn(0, pageCount - 1),
             pageCount = { pageCount }
         )
-    HiddenPageSkipEffect(config.pages, pagerState, activeActivityIds)
+    val hiddenPageContent = HiddenPageSkipEffect(config.pages, pagerState, activeActivityIds)
 
     val navigateToPage: (String) -> Unit = { pageName ->
         val idx = config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -508,7 +510,8 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
         navigateToPage = navigateToPage,
         irManager = irManager,
         irDevicesById = irDevicesById,
-        activitiesById = activitiesById
+        activitiesById = activitiesById,
+        hiddenPageContent = hiddenPageContent
     )
 }
 
@@ -755,6 +758,7 @@ fun Dashboard(
                     onLinkedJumpChange = { linkedJump = it },
                     volumeHotkeyTrigger = volumeHotkeyTrigger,
                     linkedPopupPage = linkedPopupPage,
+                    hiddenPageContent = runtime.hiddenPageContent,
                     onLinkedPopupPageChange = { page, entityId ->
                         linkedPopupPage = page
                         popupOpenedByEntityId = entityId
@@ -791,7 +795,8 @@ private data class DashboardContentInputs(
     /** Sets (or clears, when both args are null) the shared popup slot —
      * second arg is the entity responsible, null for a manual swipe-up
      * open/close. See [DashboardEntityPageEffect]'s doc comment. */
-    val onLinkedPopupPageChange: (LinkedPagePopupState?, String?) -> Unit
+    val onLinkedPopupPageChange: (LinkedPagePopupState?, String?) -> Unit,
+    val hiddenPageContent: HiddenPageContent
 )
 
 /** The dynamic "‹ back" target for [PageIndicator]: a page's own static
@@ -967,17 +972,20 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
     val volumeHotkeyTrigger = inputs.volumeHotkeyTrigger
     val linkedPopupPage = inputs.linkedPopupPage
     val onLinkedPopupPageChange = inputs.onLinkedPopupPageChange
+    // The page actually on screen: a fully hidden page swiped onto shows (and counts as) the page
+    // the swipe ends up on, so hotkeys and Home Assistant never see the hidden one.
+    val shownPage = inputs.hiddenPageContent.contentIndex(pagerState.currentPage)
 
-    LaunchedEffect(pagerState.currentPage) {
-        onPageChanged(pagerState.currentPage)
+    LaunchedEffect(shownPage) {
+        onPageChanged(shownPage)
         val webhookId = RemoteSettings.haWebhookId(webhookContext)
         if (webhookId.isNotBlank()) {
-            val page = config.pages.getOrNull(pagerState.currentPage)
+            val page = config.pages.getOrNull(shownPage)
             client.pushWebhook(
                 webhookId,
                 buildJsonObject {
                     put("type", "page")
-                    put("index", pagerState.currentPage)
+                    put("index", shownPage)
                     put("name", page?.name ?: "")
                 }
             )
@@ -1010,14 +1018,14 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                     .weight(1f)
                     .fillMaxWidth()
             ) { pageIndex ->
-                PageContent(config.pages[pageIndex], ctx)
+                PageContent(config.pages[inputs.hiddenPageContent.contentIndex(pageIndex)], ctx)
             }
 
-            val backTargetName = resolveBackTargetName(config.pages, pagerState.currentPage, linkedJump)
+            val backTargetName = resolveBackTargetName(config.pages, shownPage, linkedJump)
 
             PageIndicator(
                 pages = config.pages,
-                current = pagerState.currentPage,
+                current = shownPage,
                 activeActivityIds = activeActivityIds,
                 backTargetName = backTargetName,
                 // Same instant scrollToPage as navigateToPage/hardware nav —
@@ -1033,7 +1041,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                 // same as a page with no `parent`/remembered source does
                 // nothing on BACK.
                 onSwipeUpToLinkedPage = {
-                    val current = config.pages.getOrNull(pagerState.currentPage)
+                    val current = config.pages.getOrNull(shownPage)
                     if (current != null) {
                         val linkedName = current.linkedPage
                         val linkedPageConfig = linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }

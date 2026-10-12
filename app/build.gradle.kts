@@ -17,8 +17,8 @@ android {
         applicationId = "com.custom.astrion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 35
-        versionName = "1.2.5"
+        versionCode = 36
+        versionName = "1.2.6"
     }
 
     buildTypes {
