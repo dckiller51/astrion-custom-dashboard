@@ -3,10 +3,26 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.2.4-beta] - 2026-10-10
+## [1.2.5-beta] - 2026-10-12
 
 ### Added
 
+- **`power` block in `dashboard.json`** (builder: new "Standby & battery" section). Every key is optional:
+
+  ```json
+  "power": { "motion_wake_minutes": 5, "screen_off_filter_seconds": 30,
+             "screen_off_entities": [], "dock_debounce_seconds": 5, "screen_timeout_seconds": 30 }
+  ```
+
+- **Quiet Home Assistant while the screen is off.** `screen_off_filter_seconds` (30 by default) after the screen goes off, and when the remote isn't docked, it stops receiving every state change from Home Assistant: on a busy HA this was the main thing waking the Wi-Fi radio and CPU all night. Only the entities listed in `screen_off_entities` stay live (through a state trigger). When the screen comes on, every state is re-read, so the dashboard is current right away. `-1` turns this off. "Find my remote", page jumps and other calls to the remote's own server are not affected.
+- **Motion-wake for a limited time.** The accelerometer listens for `motion_wake_minutes` (5 by default) after the screen goes off, to catch a pick-up shortly after the remote was put down. After that it sleeps until a button turns the screen on. `0` = buttons only, `-1` = always (the old behaviour).
+- **Screen timeout held by the app.** `screen_timeout_seconds` keeps the system screen timeout at that value. Some setups leave it at "never", which keeps an undocked remote lit until its battery is flat. Also set from the remote (Settings › Display › Screen timeout: System / 15 s / 30 s / 1 min / 2 min / 5 min). It needs Android's "Modify system settings" permission — the same one as the brightness slider: choosing a value opens Android's page for it when it's missing. Without it, the system setting is left alone.
+- **Settings page reorganized.** The long list is now six groups — Display (brightness, screen timeout, wake on motion, dock screen), Connections (Home Assistant / Harmony status, "Reconnect now", Wi-Fi, IP address, keep Wi-Fi awake), Web configuration, Sound & touch, Language, About — each opening as a popup with a one-line summary on the list. Android system and an available update stay on the list.
+- **About.** Installed version and build number, channel (stable / beta), update status, device, Android version, battery level, IP address, package name, project page and the logs address, plus **Reload dashboard** (re-reads `dashboard.json`) and **Restart the app**.
+- **Language.** Settings › Language: System / English / Français / Italiano / Español, independent of Android's language (the app restarts to apply it).
+- **Test "Find my remote".** Settings › Sound & touch rings exactly like `/ring` from Home Assistant (default sound, 80 %, 15 s) — works even with the web server switched off. Touch or a button stops it.
+- **Logs without adb.** `GET /logs` on the remote's server (`http://<remote>:8080/logs`) downloads this app's recent log lines (its own process only, up to 5000 lines) with the version and device in the first line — enough for a bug report from a tester without adb.
+- **"Disconnected" banner: tap to retry.** Tapping the banner reconnects to Home Assistant right away.
 - **Dock screen: charging, clock or dashboard.** New `dock` block in `dashboard.json` (and a "Dock screen" section in the builder): `"mode": "charging"` keeps today's battery screen; `"clock"` leaves the dashboard usable and, after `idle_seconds` untouched (30 by default), shows a dim night-friendly clock — big time, date, weather (`weather_entity`), battery and, only while something plays, the artwork and title (`media_entities`, or any playing media player). It turns amber and darker at night (`sun.sun`, else 21:00–07:00) and drifts a few pixels each minute; a touch or button brings the dashboard back. `"dashboard"` just dims after `idle_seconds`. `brightness` / `night_brightness` set the backlight while idle, `time_format` forces 12 or 24 h. Each remote can override the mode locally from its Settings page ("Dock screen"). Inspired by baes-cloud's astrion-dashboard docked screensaver (MIT).
 
   ```json

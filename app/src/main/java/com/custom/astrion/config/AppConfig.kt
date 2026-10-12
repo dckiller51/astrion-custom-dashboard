@@ -37,7 +37,25 @@ data class AppConfig(
      * block renders identically to the original look. */
     val theme: ThemeConfig = ThemeConfig(),
     /** What the screen shows while the remote sits on its charging dock — see [DockConfig]. */
-    val dock: DockConfig = DockConfig()
+    val dock: DockConfig = DockConfig(),
+    /** Standby / battery tuning — see [PowerConfig]. */
+    val power: PowerConfig = PowerConfig()
+)
+
+/**
+ * The `power` block: how the remote saves battery while its screen is off. Every key is optional.
+ */
+data class PowerConfig(
+    /** How long after the screen goes off picking the remote up still wakes it. 0 = never, -1 = always. */
+    val motionWakeMinutes: Int = 5,
+    /** Screen off this long (and not docked) → Home Assistant goes quiet (see HaClient.setQuiet). -1 = never. */
+    val screenOffFilterSeconds: Int = 30,
+    /** Entities kept live while quiet (each one's changes still wake the remote). */
+    val screenOffEntities: List<String> = emptyList(),
+    /** How long it must be charging before it counts as docked; lifting it off counts at once. */
+    val dockDebounceSeconds: Int = 5,
+    /** System screen timeout to enforce (needs WRITE_SETTINGS, granted once over adb); null = leave alone. */
+    val screenTimeoutSeconds: Int? = null
 )
 
 /**
@@ -50,7 +68,7 @@ data class AppConfig(
  *    brings the dashboard back; lifting the remote off the dock too.
  *  - [MODE_DASHBOARD]: the dashboard only, dimmed to [brightness] after [idleSeconds].
  *
- * The remote's own Settings page can override [mode] locally (see MainActivity's `dock_mode`).
+ * The remote's own Settings page edits [mode] in this same file (DashboardLoader.updateDockMode).
  */
 data class DockConfig(
     val mode: String = MODE_CHARGING,

@@ -34,6 +34,45 @@
     <string name="settings_beta_update_available">Beta disponibile: %1$s</string>
     <string name="settings_local_config">Configurazione locale: %1$s</string>
 
+    <!-- Settings: groups, screen timeout, About (1.2.5) -->
+    <string name="settings_display">Schermo</string>
+    <string name="settings_connections">Connessioni</string>
+    <string name="settings_web_config">Configurazione web</string>
+    <string name="settings_sound_touch">Suono e tocco</string>
+    <string name="settings_about">Informazioni</string>
+    <string name="settings_display_summary">Spegnimento %1$s · Base: %2$s</string>
+    <string name="state_on">Attivo</string>
+    <string name="state_off">Disattivato</string>
+    <string name="screen_timeout">Spegnimento dello schermo</string>
+    <string name="screen_timeout_system">Sistema (%1$s)</string>
+    <string name="screen_timeout_hint">Quanto resta acceso lo schermo se non viene toccato. Salvato nel dashboard.json di questo telecomando; «Sistema» lascia l\'impostazione di Android com\'è.</string>
+    <string name="allow_write_settings">Consenti all\'app di modificare le impostazioni di sistema (tocca)</string>
+    <string name="reconnect_now">Riconnetti ora</string>
+    <string name="ip_address">Indirizzo IP</string>
+    <string name="about_version">Versione</string>
+    <string name="about_channel">Canale</string>
+    <string name="channel_beta">Beta</string>
+    <string name="channel_stable">Stabile</string>
+    <string name="about_update">Aggiornamento</string>
+    <string name="update_checking">Verifica…</string>
+    <string name="update_up_to_date">Aggiornato</string>
+    <string name="update_check_failed">Verifica non riuscita</string>
+    <string name="update_available_short">Disponibile</string>
+    <string name="about_device">Dispositivo</string>
+    <string name="about_battery">Batteria</string>
+    <string name="about_package">Pacchetto</string>
+    <string name="about_project">Progetto</string>
+    <string name="settings_language">Lingua</string>
+    <string name="language_system">Sistema</string>
+    <string name="language_hint">L\'app si riavvia per applicarla.</string>
+    <string name="test_ring">Prova «Find my remote»</string>
+    <string name="test_ring_hint">Suona come da Home Assistant. Tocca lo schermo o premi un tasto per fermarlo.</string>
+    <string name="reload_dashboard">Ricarica la dashboard</string>
+    <string name="dashboard_reloaded">Dashboard ricaricata</string>
+    <string name="restart_app">Riavvia l\'app</string>
+    <string name="about_logs">Log</string>
+    <string name="logs_server_off">attiva la Configurazione web</string>
+
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configurazione locale</string>
     <string name="web_config_save_button">Salva &amp; riconnetti</string>
@@ -187,8 +226,7 @@
 
     <!-- Dock screen & find-my-remote overlay -->
     <string name="dock_screen">Schermo sulla base</string>
-    <string name="dock_screen_hint">Cosa mostra il telecomando sulla base di ricarica, solo per questo telecomando. Tocca per cambiare.</string>
-    <string name="dock_mode_default">Dalla dashboard</string>
+    <string name="dock_screen_hint">Cosa mostra questo telecomando sulla base di ricarica — salvato nel suo dashboard.json (come la sezione Schermo sulla base del builder). Tocca per cambiare.</string>
     <string name="dock_mode_charging">Ricarica</string>
     <string name="dock_mode_clock">Orologio</string>
     <string name="dock_mode_dashboard">Dashboard</string>

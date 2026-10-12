@@ -1000,7 +1000,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             // now just a regular assignable hotkey (openOverlay: "settings"),
             // see the Hotkeys tab.
             TopStatusBar(onSwipeDown = { overlayState.onShowActivitiesChange(true) })
-            ConnectionBanner(connection)
+            ConnectionBanner(connection, onRetry = client::reconnectNow)
             if (configNotice != null) ConfigNoticeBanner(configNotice)
 
             HorizontalPager(
@@ -1089,6 +1089,9 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
  */
 @Composable
 private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
+    // The group opened from the list (Display, Connections...), drawn as a popup over everything below.
+    var section by remember { mutableStateOf<SettingsSection?>(null) }
+    val update = rememberUpdateCheck()
     Box(modifier = Modifier.fillMaxSize().background(LocalTheme.current.background)) {
         Column(
             modifier =
@@ -1110,7 +1113,7 @@ private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
-            SettingsMenu(ctx)
+            SettingsMenu(ctx, update, onOpen = { section = it })
         }
         // Bottom gesture strip: swipe up to close. Sits above the scrollable
         // content so the drag detector doesn't fight verticalScroll for events.
@@ -1137,6 +1140,7 @@ private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
                     .background(LocalTheme.current.controlBackground)
             )
         }
+        section?.let { SettingsSectionPopup(ctx, it, update, onDismiss = { section = null }) }
     }
 }
 
@@ -1691,7 +1695,7 @@ private fun EdgeEllipsis() {
 }
 
 @Composable
-private fun ConnectionBanner(connection: ConnectionState) {
+private fun ConnectionBanner(connection: ConnectionState, onRetry: () -> Unit) {
     if (connection == ConnectionState.CONNECTED) return
     val (label, color) =
         when (connection) {
@@ -1707,6 +1711,8 @@ private fun ConnectionBanner(connection: ConnectionState) {
         Modifier
             .fillMaxWidth()
             .background(color)
+            // Tap to retry right away instead of waiting for the next attempt.
+            .tapClickable(onClick = onRetry)
             .padding(12.dp),
         contentAlignment = Alignment.Center
     ) {

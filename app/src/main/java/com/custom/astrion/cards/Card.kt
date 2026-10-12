@@ -67,10 +67,21 @@ data class DeviceSettingsState(
      * when off they stay silent. See TapFeedback.kt for details. */
     val tapFeedbackEnabled: Boolean = true,
     val setTapFeedbackEnabled: (Boolean) -> Unit = {},
-    /** The Settings page's "Dock screen" choice: "" follows dashboard.json's `dock.mode`,
-     * else "charging" / "clock" / "dashboard" (see [com.custom.astrion.config.DockConfig]). */
+    /** dashboard.json's `dock.mode` — "charging" / "clock" / "dashboard" (see
+     * [com.custom.astrion.config.DockConfig]); [setDockMode] writes it back into the file. */
     val dockMode: String = "",
-    val setDockMode: (String) -> Unit = {}
+    val setDockMode: (String) -> Unit = {},
+    /** dashboard.json's `power.screen_timeout_seconds` (null = the system setting is left alone);
+     * [setScreenTimeout] writes it back into the file. */
+    val screenTimeoutSeconds: Int? = null,
+    val setScreenTimeout: (Int?) -> Unit = {},
+    /** The app's own language ("" = Android's) — see com.custom.astrion.AppLanguage; setting it restarts the app. */
+    val appLanguage: String = "",
+    val setAppLanguage: (String) -> Unit = {},
+    /** Settings actions: re-read dashboard.json, restart the app, ring "Find my remote" once. */
+    val reloadDashboard: () -> Unit = {},
+    val restartApp: () -> Unit = {},
+    val testRing: () -> Unit = {}
 )
 
 /**

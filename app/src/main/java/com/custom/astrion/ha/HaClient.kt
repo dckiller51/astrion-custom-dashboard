@@ -51,7 +51,13 @@ import okhttp3.WebSocketListener
  *   3. Server sends        { type: "auth_ok" }  (or "auth_invalid")
  *   4. We call             get_states  to seed the entity cache
  *   5. We                  subscribe_events (state_changed) for live updates
- *   6. Heartbeat via       { type: "ping" } / { type: "pong" }
+ *   6. Heartbeat           OkHttp's own WebSocket ping, every 30 s (one heartbeat, not two)
+ *
+ * While the screen is off the remote can go "quiet" ([setQuiet]): the state_changed subscription
+ * is dropped (only a short list of entities stays live, through a state trigger), so a chatty
+ * Home Assistant stops waking the Wi-Fi radio and the CPU all night. Waking up re-reads every
+ * state and subscribes again. Reconnects follow the network: no retry loop while Wi-Fi is down,
+ * an immediate one when it comes back ([onNetworkAvailable]), or on demand ([reconnectNow]).
  *
  * Because it's the stock protocol, this app needs nothing from Sanytron's
  * cloud or their custom integration to function — only a reachable HA instance
@@ -69,7 +75,7 @@ class HaClient(
 ) {
     companion object {
         private const val TAG = "HaClient"
-        private val PING_INTERVAL = 30.seconds
+        private const val WS_PING_SECONDS = 30L
         private val PUBLISH_INTERVAL = 120.milliseconds
         private val RECONNECT_DELAY = 3.seconds
         private val RESPONSE_TIMEOUT = 8.seconds
@@ -100,7 +106,7 @@ class HaClient(
     private val http =
         OkHttpClient
             .Builder()
-            .pingInterval(20, TimeUnit.SECONDS)
+            .pingInterval(WS_PING_SECONDS, TimeUnit.SECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .build()
 
@@ -123,7 +129,22 @@ class HaClient(
             .build()
 
     private var socket: WebSocket? = null
-    private var heartbeatJob: Job? = null
+
+    // Pending publish of [entityStore] (see [markDirty]) — null while nothing is waiting.
+    @Volatile private var publishJob: Job? = null
+
+    // ---- quiet mode (screen off) ---------------------------------------------------
+    @Volatile private var quiet = false
+
+    @Volatile private var quietEntities: Set<String> = emptySet()
+
+    // Ids of the live subscriptions, to unsubscribe them again.
+    @Volatile private var stateSubscriptionId: Int? = null
+
+    @Volatile private var triggerSubscriptionId: Int? = null
+
+    /** Whether the device has a usable network right now — set by the activity (ConnectivityManager). */
+    @Volatile var networkAvailable: () -> Boolean = { true }
 
     /** Outstanding request/response commands (e.g. browse_media), keyed by id. */
     private val pending = ConcurrentHashMap<Int, CompletableDeferred<JsonObject>>()
@@ -184,8 +205,6 @@ class HaClient(
 
     @Volatile private var entitiesDirty = false
 
-    @Volatile private var publisherStarted = false
-
     // ---- public API ---------------------------------------------------------
 
     fun connect() {
@@ -201,9 +220,49 @@ class HaClient(
         socket = http.newWebSocket(req, listener)
     }
 
+    /**
+     * Screen off → [quiet] = true: stop receiving every state change; only [keep] stays live (via a
+     * state trigger). Screen on → false: re-read all states (catching up on whatever changed) and
+     * subscribe to everything again. Safe to call repeatedly and while disconnected — the mode is
+     * applied on the next connection too.
+     */
+    fun setQuiet(quiet: Boolean, keep: Set<String> = emptySet()) {
+        if (this.quiet == quiet && quietEntities == keep) return
+        this.quiet = quiet
+        quietEntities = keep
+        if (_connection.value != ConnectionState.CONNECTED) return
+        Log.i(TAG, if (quiet) "Quiet: keeping ${keep.size} entities live" else "Awake: resubscribing to everything")
+        if (quiet) {
+            unsubscribe(stateSubscriptionId)
+            stateSubscriptionId = null
+            subscribeQuietEntities()
+        } else {
+            unsubscribe(triggerSubscriptionId)
+            triggerSubscriptionId = null
+            requestStates()
+            subscribeStateChanges()
+        }
+    }
+
+    /** Wi-Fi came back: reconnect now instead of waiting for a retry that never comes while offline. */
+    fun onNetworkAvailable() {
+        if (_connection.value == ConnectionState.ERROR) {
+            Log.i(TAG, "Network available — reconnecting now")
+            connect()
+        }
+    }
+
+    /** The "Disconnected" banner was tapped: try again right away. */
+    fun reconnectNow() {
+        // Only from a dead connection (its socket already failed or was closed): a live or
+        // in-progress one is left alone, so a tap can never open a second socket.
+        val state = _connection.value
+        if (state == ConnectionState.ERROR || state == ConnectionState.DISCONNECTED || state == ConnectionState.AUTH_FAILED) {
+            connect()
+        }
+    }
+
     fun disconnect() {
-        heartbeatJob?.cancel()
-        heartbeatJob = null
         socket?.close(1000, "client closing")
         socket = null
         _connection.value = ConnectionState.DISCONNECTED
@@ -478,25 +537,31 @@ class HaClient(
     private fun onAuthOk() {
         Log.i(TAG, "Authenticated")
         _connection.value = ConnectionState.CONNECTED
-        startPublisher()
+        stateSubscriptionId = null
+        triggerSubscriptionId = null
+        // Always seed every state (the screen may come on any moment); then subscribe to
+        // everything, or — still quiet — only to the few entities kept live.
         requestStates()
-        subscribeStateChanges()
-        startHeartbeat()
+        if (quiet) subscribeQuietEntities() else subscribeStateChanges()
     }
 
-    /** Coalesce entity updates: publish the store to the StateFlow at a bounded rate. */
-    private fun startPublisher() {
-        if (publisherStarted) return
-        publisherStarted = true
-        scope.launch {
-            while (true) {
+    /**
+     * Coalesce entity updates: the first change after a quiet spell schedules one publish
+     * [PUBLISH_INTERVAL] later, and every change until then rides along with it — so a chatty
+     * sensor can't force the UI to repaint faster than the SoC can handle, and nothing runs at
+     * all while Home Assistant is quiet (no polling loop).
+     */
+    private fun markDirty() {
+        entitiesDirty = true
+        if (publishJob?.isActive == true) return
+        publishJob =
+            scope.launch {
                 delay(PUBLISH_INTERVAL)
                 if (entitiesDirty) {
                     entitiesDirty = false
                     _entities.value = mergedEntities()
                 }
             }
-        }
     }
 
     private fun requestStates() {
@@ -509,29 +574,47 @@ class HaClient(
     }
 
     private fun subscribeStateChanges() {
+        val id = idCounter.getAndIncrement()
+        stateSubscriptionId = id
         val msg =
             buildJsonObject {
-                put("id", idCounter.getAndIncrement())
+                put("id", id)
                 put("type", "subscribe_events")
                 put("event_type", "state_changed")
             }
         send(msg)
     }
 
-    private fun startHeartbeat() {
-        heartbeatJob?.cancel()
-        heartbeatJob =
-            scope.launch {
-                while (_connection.value == ConnectionState.CONNECTED) {
-                    delay(PING_INTERVAL)
-                    val ping =
-                        buildJsonObject {
-                            put("id", idCounter.getAndIncrement())
-                            put("type", "ping")
-                        }
-                    send(ping)
-                }
+    /** Quiet mode: a state trigger on just [quietEntities] (nothing at all when the list is empty). */
+    private fun subscribeQuietEntities() {
+        val keep = quietEntities
+        if (keep.isEmpty()) return
+        val id = idCounter.getAndIncrement()
+        triggerSubscriptionId = id
+        val msg =
+            buildJsonObject {
+                put("id", id)
+                put("type", "subscribe_trigger")
+                put(
+                    "trigger",
+                    buildJsonObject {
+                        put("platform", "state")
+                        put("entity_id", JsonArray(keep.map { JsonPrimitive(it) }))
+                    }
+                )
             }
+        send(msg)
+    }
+
+    private fun unsubscribe(subscriptionId: Int?) {
+        if (subscriptionId == null) return
+        val msg =
+            buildJsonObject {
+                put("id", idCounter.getAndIncrement())
+                put("type", "unsubscribe_events")
+                put("subscription", subscriptionId)
+            }
+        send(msg)
     }
 
     /** Result of get_states arrives as an array in the `result` field. */
@@ -563,10 +646,15 @@ class HaClient(
         _entities.value = mergedEntities()
     }
 
-    /** state_changed events carry event.data.new_state. */
+    /** state_changed events carry event.data.new_state; quiet-mode trigger events carry
+     * event.variables.trigger.to_state — same shape. */
     private fun onEvent(obj: JsonObject) {
-        val data = obj["event"]?.jsonObject?.get("data")?.jsonObject ?: return
-        val newState = data["new_state"]?.jsonObject ?: return
+        // `as?` rather than `.jsonObject`: a removed entity sends new_state / to_state = null.
+        val event = obj["event"] as? JsonObject ?: return
+        val newState =
+            (event["data"] as? JsonObject)?.get("new_state") as? JsonObject
+                ?: ((event["variables"] as? JsonObject)?.get("trigger") as? JsonObject)?.get("to_state") as? JsonObject
+                ?: return
         val entityId = newState["entity_id"]?.jsonPrimitive?.content ?: return
         entityStore[entityId] =
             EntityState(
@@ -576,17 +664,27 @@ class HaClient(
                 lastChanged = newState["last_changed"]?.jsonPrimitive?.content,
                 lastUpdated = newState["last_updated"]?.jsonPrimitive?.content
             )
-        entitiesDirty = true // published by the coalescing publisher loop
+        markDirty()
     }
 
     private fun send(msg: JsonObject) {
         socket?.send(msg.toString())
     }
 
+    /**
+     * Retries every [RECONNECT_DELAY] while the network is up. With no network at all there's no
+     * point (each attempt wakes the radio for nothing): the client stays in
+     * [ConnectionState.ERROR] and [onNetworkAvailable] reconnects the moment Wi-Fi returns.
+     */
     private fun scheduleReconnect() {
         scope.launch {
             delay(RECONNECT_DELAY)
-            if (_connection.value == ConnectionState.ERROR) connect()
+            if (_connection.value != ConnectionState.ERROR) return@launch
+            if (runCatching { networkAvailable() }.getOrDefault(true)) {
+                connect()
+            } else {
+                Log.i(TAG, "No network — waiting for it to come back before reconnecting")
+            }
         }
     }
 

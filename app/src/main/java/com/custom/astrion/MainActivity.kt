@@ -73,6 +73,7 @@ import com.custom.astrion.ui.RingFoundOverlay
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.web.ConfigServer
+import java.util.concurrent.TimeUnit
 import kotlin.math.acos
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
@@ -100,6 +101,9 @@ class MainActivity : ComponentActivity() {
         const val MOTION_CONSECUTIVE_N = 3
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
+        const val MOTION_GAP_MS = 1000L
+        const val MOTION_SETTLE_MS = 400L
+        const val MOTION_SETTLE_MIN_SAMPLES = 3
         const val HOLD_SCREEN_INTERVAL_MS = 1000L
         const val KEEP_SCREEN_HOLD_MS = 10000L
         const val AMBIENT_WINDOW_MS = 5000L
@@ -167,13 +171,7 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 trackAmbientWindow(mag, now)
-                if (lastSampleMs == 0L || now - lastSampleMs > 1000) {
-                    gravX = x
-                    gravY = y
-                    gravZ = z
-                    overCount = 0
-                }
-                lastSampleMs = now
+                if (settleBaseline(x, y, z, now)) return
                 val gmag = sqrt(gravX * gravX + gravY * gravY + gravZ * gravZ)
                 val ax = x - gravX
                 val ay = y - gravY
@@ -215,6 +213,45 @@ class MainActivity : ComponentActivity() {
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
+
+    private var settleUntilMs = 0L
+    private var settleN = 0
+    private var settleX = 0f
+    private var settleY = 0f
+    private var settleZ = 0f
+
+    /**
+     * After a gap in the sensor stream (listener just registered, or the CPU slept and the
+     * accelerometer stalled), the first samples back are often off — and earlier versions took
+     * the very first one as the "at rest" baseline, so the next normal sample looked like a 30°+
+     * tilt and the screen woke up on its own, remote lying still on the table. Now the samples of
+     * the first [MOTION_SETTLE_MS] (at least [MOTION_SETTLE_MIN_SAMPLES]) are averaged into the baseline and never judged as motion.
+     * Returns true while the sample was used for settling (caller ignores it).
+     */
+    private fun settleBaseline(x: Float, y: Float, z: Float, now: Long): Boolean {
+        val gap = lastSampleMs == 0L || now - lastSampleMs > MOTION_GAP_MS
+        lastSampleMs = now
+        if (gap) {
+            settleUntilMs = now + MOTION_SETTLE_MS
+            settleN = 0
+            settleX = 0f
+            settleY = 0f
+            settleZ = 0f
+            overCount = 0
+        }
+        if (settleUntilMs == 0L) return false
+        settleN++
+        settleX += x
+        settleY += y
+        settleZ += z
+        if (now < settleUntilMs || settleN < MOTION_SETTLE_MIN_SAMPLES) return true
+        gravX = settleX / settleN
+        gravY = settleY / settleN
+        gravZ = settleZ / settleN
+        settleUntilMs = 0L
+        Log.i(MOTION_TAG, "baseline settled over $settleN samples: x=${f2(gravX)} y=${f2(gravY)} z=${f2(gravZ)}")
+        return true
+    }
 
     private fun f2(v: Float): String = "%.2f".format(v)
     private fun f1(v: Float): String = "%.1f".format(v)
@@ -297,12 +334,14 @@ class MainActivity : ComponentActivity() {
                                 )?.toLongOrNull()
                             }.getOrNull()
                         Log.i(SCREEN_TAG, "SCREEN_OFF — was on for ${onFor}ms, system timeout=${timeoutMs}ms")
+                        standby.onScreenOff()
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         screenOn = true
                         screenOnSinceMs = now
                         val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
                         Log.i(SCREEN_TAG, "SCREEN_ON — was off for ${offFor}ms")
+                        standby.onScreenOn()
                     }
                 }
             }
@@ -426,14 +465,30 @@ class MainActivity : ComponentActivity() {
      * dot, etc. Plays the system touch sound (AudioManager.FX_KEY_CLICK). */
     private var tapFeedbackEnabled by mutableStateOf(true)
 
-    /** The Settings page's "Dock screen" choice: "" follows dashboard.json's `dock.mode`,
-     * otherwise one of [DockConfig.MODES] — persisted, applied live. */
-    private var dockModeOverride by mutableStateOf("")
+    /** Standby policy (quiet HA, motion-wake window, screen timeout, network-aware reconnect) —
+     * see StandbyController.kt; driven by dashboard.json's `power` block. */
+    private val standby: StandbyController by lazy {
+        StandbyController(
+            activity = this,
+            client = { if (::client.isInitialized) client else null },
+            isDocked = { chargeDockMonitor.state.isDocked },
+            motion =
+            StandbyController.MotionHooks(
+                enabled = { wakeOnMotionEnabled },
+                register = ::registerMotionListener,
+                unregister = ::unregisterMotionListener
+            )
+        )
+    }
 
     private val storagePermission =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { reloadDashboard() }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -489,7 +544,9 @@ class MainActivity : ComponentActivity() {
             )
         configServerEnabled = prefs.getBoolean("config_server_enabled", true)
         tapFeedbackEnabled = prefs.getBoolean("tap_feedback_enabled", true)
-        dockModeOverride = prefs.getString("dock_mode", "").orEmpty().takeIf { it in DockConfig.MODES }.orEmpty()
+        migrateDockModePref()
+        standby.start()
+        applyPowerConfig()
         chargeDockMonitor.sunIsDown = { client.entities.value["sun.sun"]?.state?.let { it == "below_horizon" } }
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
@@ -552,6 +609,7 @@ class MainActivity : ComponentActivity() {
         appleTvRegistry.stop()
 
         initClientsAndServer()
+        standby.onClientReplaced()
         if (configServerEnabled) configServerSupervisor.start()
         client.connect()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
@@ -582,7 +640,7 @@ class MainActivity : ComponentActivity() {
             val connection = client.connection.collectAsState()
             val isDocked = chargeDockMonitor.state.isDocked
             val ringing by FindMyRemote.ringing.collectAsState()
-            val dock = effectiveDockConfig()
+            val dock = dashboard.config.dock
             SideEffect { chargeDockMonitor.dockConfig = dock }
             val dockOverlay = dockOverlayFor(isDocked, dock)
             Box {
@@ -623,8 +681,15 @@ class MainActivity : ComponentActivity() {
                             setConfigServerEnabled = { enabled -> updateConfigServerEnabled(enabled) },
                             tapFeedbackEnabled = tapFeedbackEnabled,
                             setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) },
-                            dockMode = dockModeOverride,
-                            setDockMode = { mode -> setDockMode(mode) }
+                            dockMode = dashboard.config.dock.mode,
+                            setDockMode = { mode -> setDockMode(mode) },
+                            screenTimeoutSeconds = dashboard.config.power.screenTimeoutSeconds,
+                            setScreenTimeout = { seconds -> setScreenTimeout(seconds) },
+                            appLanguage = AppLanguage.get(this@MainActivity),
+                            setAppLanguage = { tag -> setAppLanguage(tag) },
+                            reloadDashboard = { reloadFromSettings() },
+                            restartApp = { AppLanguage.restart(this@MainActivity) },
+                            testRing = { testRing() }
                         ),
                         // Heavy cards (camera/vacuum/...) pause while a dock screen covers them.
                         screenOn = screenOn && dockOverlay == null
@@ -727,6 +792,14 @@ class MainActivity : ComponentActivity() {
         dashboard = result
         currentPageIndex = currentPageIndex.coerceIn(0, result.config.pages.size - 1)
         rebindHotkeysForCurrentPage()
+        applyPowerConfig()
+    }
+
+    /** Hands dashboard.json's `power` block to the standby policy and the dock detector. */
+    private fun applyPowerConfig() {
+        val power = dashboard.config.power
+        standby.config = power
+        chargeDockMonitor.dockDebounceMs = TimeUnit.SECONDS.toMillis(power.dockDebounceSeconds.toLong())
     }
 
     /** Merge the global hotkeys with the current page's own hotkeys — a
@@ -1101,6 +1174,11 @@ class MainActivity : ComponentActivity() {
         if (wakeOnMotionEnabled) registerMotionListener()
     }
 
+    private fun unregisterMotionListener() {
+        sensorManager?.unregisterListener(motionListener)
+        Log.i(MOTION_TAG, "listener unregistered")
+    }
+
     private fun registerMotionListener() {
         val sm = sensorManager ?: return
         motionSensor?.let { sensor ->
@@ -1169,22 +1247,58 @@ class MainActivity : ComponentActivity() {
         if (enabled) configServerSupervisor.start() else configServerSupervisor.stop()
     }
 
+    /** The Settings page's "Dock screen" choice: written straight into this remote's dashboard.json
+     * (`dock.mode`, every other key kept) — the same value the builder's Dock screen section edits. */
+    private fun setDockMode(mode: String) {
+        if (mode !in DockConfig.MODES) return
+        if (DashboardLoader.updateDockMode(mode)) reloadDashboard()
+    }
+
+    /** The Settings page's "Screen timeout" choice, written into dashboard.json's `power` block
+     * (null = leave the system setting alone); StandbyController applies it on reload. */
+    private fun setScreenTimeout(seconds: Int?) {
+        if (DashboardLoader.updateScreenTimeout(seconds)) reloadDashboard()
+    }
+
+    /** Settings › Language: saved, then the app restarts so every screen picks it up. */
+    private fun setAppLanguage(tag: String) {
+        if (tag == AppLanguage.get(this)) return
+        AppLanguage.set(this, tag)
+        AppLanguage.restart(this)
+    }
+
+    /** Settings › About › Reload dashboard: re-reads dashboard.json (e.g. after copying one over by hand). */
+    private fun reloadFromSettings() {
+        reloadDashboard()
+        Toast.makeText(this, dashboard.notice ?: getString(R.string.dashboard_reloaded), Toast.LENGTH_SHORT).show()
+    }
+
+    /** Settings › Sound & touch › Test "Find my remote": rings exactly like `/ring` would. */
+    private fun testRing() {
+        val error = configServer.startRing()
+        if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+    }
+
+    /** 1.2.4 kept the Settings choice in a local pref that overrode dashboard.json; 1.2.5 moves it
+     * into the file once, so the two can't disagree any more. */
+    private fun migrateDockModePref() {
+        val old = prefs.getString("dock_mode", null) ?: return
+        val moved =
+            when {
+                old !in DockConfig.MODES -> true // "" = followed the file: nothing to move
+                old == DashboardLoader.load().config.dock.mode -> true
+                else -> DashboardLoader.updateDockMode(old)
+            }
+        // Not writable yet (storage permission pending): keep the pref and try again next launch.
+        if (!moved) return
+        Log.i("MainActivity", "dock_mode pref '$old' moved into dashboard.json")
+        prefs.edit { remove("dock_mode") }
+    }
+
     /** Called from the settings page switch — persists the choice, no
      * restart needed. Dashboard reads [tapFeedbackEnabled] and rebuilds the
      * feedback lambda it provides via LocalTapFeedback, so taps go silent
      * (or come back) on the next recomposition. */
-    /** The Settings page's dock-screen choice ("" = follow dashboard.json). */
-    private fun setDockMode(mode: String) {
-        dockModeOverride = mode.takeIf { it in DockConfig.MODES }.orEmpty()
-        prefs.edit { putString("dock_mode", dockModeOverride) }
-    }
-
-    /** dashboard.json's `dock` block with the Settings page's mode override applied. */
-    private fun effectiveDockConfig(): DockConfig {
-        val fromDashboard = dashboard.config.dock
-        return if (dockModeOverride.isBlank()) fromDashboard else fromDashboard.copy(mode = dockModeOverride)
-    }
-
     private fun setTapFeedback(enabled: Boolean) {
         tapFeedbackEnabled = enabled
         prefs.edit { putBoolean("tap_feedback_enabled", enabled) }
@@ -1213,6 +1327,10 @@ class MainActivity : ComponentActivity() {
 
     @Suppress("DEPRECATION")
     private fun wakeScreen(tiltDeg: Float, linAcc: Float, mag: Float) {
+        if (chargeDockMonitor.state.isDocked) {
+            Log.i(MOTION_TAG, "wakeScreen skipped: docked (tilt=${f1(tiltDeg)} lin=${f2(linAcc)})")
+            return
+        }
         val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
         if (pm.isInteractive) {
             Log.i(MOTION_TAG, "wakeScreen skipped: already interactive (tilt=${f1(tiltDeg)} lin=${f2(linAcc)})")
@@ -1246,9 +1364,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         Log.i("MainActivity", "onDestroy — activity instance ${this.hashCode()}")
-        sensorManager?.unregisterListener(motionListener)
-        Log.i(MOTION_TAG, "listener unregistered")
+        unregisterMotionListener()
         runCatching { unregisterReceiver(screenStateReceiver) }
+        standby.stop()
         chargeDockMonitor.stop()
         releaseWifiLock()
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
