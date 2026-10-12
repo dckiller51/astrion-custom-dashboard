@@ -1619,7 +1619,7 @@ class ConfigServer(
      */
     private fun handleCheckUpdate(): Response {
         val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
-        val result = if (isBeta) UpdateChecker.checkBetaUpdate() else UpdateChecker.checkForUpdate()
+        val result = if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
         lastResult = result
         val message =
             when (result) {
@@ -1639,7 +1639,7 @@ class ConfigServer(
         val result =
             lastResult ?: run {
                 val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
-                if (isBeta) UpdateChecker.checkBetaUpdate() else UpdateChecker.checkForUpdate()
+                if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
             }
         val info =
             (result as? UpdateChecker.CheckResult.Available)?.info

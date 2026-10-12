@@ -109,11 +109,12 @@ data class UpdateCheckState(
 @Composable
 fun rememberUpdateCheck(): UpdateCheckState {
     var state by remember { mutableStateOf(UpdateCheckState()) }
+    val context = LocalContext.current
     LaunchedEffect(Unit) {
         val isBeta = state.isBeta
         val result =
             withContext(Dispatchers.IO) {
-                if (isBeta) UpdateChecker.checkBetaUpdate() else UpdateChecker.checkForUpdate()
+                if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
             }
         state =
             when (result) {
@@ -507,12 +508,7 @@ private fun LanguageSection(ctx: CardContext) {
 private fun AboutSection(ctx: CardContext, update: UpdateCheckState) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val battery =
-        remember {
-            (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
-                ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-                ?.takeIf { it >= 0 }
-        }
+    val battery = remember<Int?>(context) { batteryPercent(context) }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         InfoRow(stringResource(R.string.about_version), "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         val channel = if (update.isBeta) R.string.channel_beta else R.string.channel_stable
@@ -544,6 +540,11 @@ private fun AboutSection(ctx: CardContext, update: UpdateCheckState) {
     SettingRow(icon = Icons.Filled.Refresh, label = stringResource(R.string.reload_dashboard)) { ctx.deviceSettings.reloadDashboard() }
     SettingRow(icon = Icons.Filled.RestartAlt, label = stringResource(R.string.restart_app)) { ctx.deviceSettings.restartApp() }
 }
+
+/** This remote's battery level in %, or null when Android doesn't report it. */
+private fun batteryPercent(context: Context): Int? = (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
+    ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+    ?.takeIf { it >= 0 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {

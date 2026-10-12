@@ -250,7 +250,7 @@ function renderHotkeysList() {
       const row = document.createElement('div');
       row.className = 'list-item';
       row.innerHTML = `
-        <span>[${label}] <b>${h.key}</b> ${describeHotkey(h)}</span>
+        <span>[${label}] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}</span>
         <span>
           <span class="remove" style="color:#00E5FF" onclick="editHotkey('${scope}','${listType}',${i})">✎</span>
           <span class="remove" onclick="removeHotkey('${scope}','${listType}',${i})">✕</span>
@@ -512,7 +512,19 @@ const HW_KEY_TITLES = {
 const uiLang = ((navigator.language || 'en').split('-')[0]).startsWith('fr') ? 'fr' : 'en';
 const t = (key) => RELEASE_STRINGS[uiLang][key];
 
+/** "Menu (MAIN)": the key's name as printed on the remote, then its id — or just the id when they match. */
+function hwKeyLabel(key) {
+  const title = (HW_KEY_TITLES[uiLang] || HW_KEY_TITLES.en)[key];
+  return title && title.toUpperCase() !== String(key).toUpperCase() ? `${title} (${key})` : key;
+}
+
 function applyUiI18n() {
+  // Physical-key dropdown: same names as the remote picture's tooltips (the value stays the key id).
+  document.querySelectorAll('#hkKey option').forEach(opt => {
+    const key = opt.value;
+    opt.value = key;
+    opt.textContent = hwKeyLabel(key);
+  });
   const betaLabel = document.getElementById('betaToggleLabel');
   if (betaLabel) betaLabel.textContent = t('alsoBeta');
   document.querySelectorAll('button[data-hwkey]').forEach(btn => {
