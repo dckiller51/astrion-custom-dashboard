@@ -208,6 +208,7 @@ object DashboardLoader {
         val openOverlay = obj["openOverlay"]?.jsonPrimitive?.content
         val openCurrentActivityRoom = obj["openCurrentActivityRoom"]?.jsonPrimitive?.content
         val stopActivity = obj["stopActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val event = obj["event"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotBlank() }
         return HotkeyConfig(
             key,
             page,
@@ -225,7 +226,8 @@ object DashboardLoader {
             devices,
             openOverlay,
             openCurrentActivityRoom,
-            stopActivity
+            stopActivity,
+            event
         )
     }
 

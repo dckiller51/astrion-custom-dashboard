@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -41,6 +43,8 @@ import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Vibration
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
@@ -62,8 +66,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -201,7 +207,7 @@ fun SettingsMenu(ctx: CardContext, update: UpdateCheckState, onOpen: (SettingsSe
         SectionItem(
             icon = Icons.Filled.Info,
             label = stringResource(R.string.settings_about),
-            summary = "v" + BuildConfig.VERSION_NAME
+            summary = listOf(settings.remoteName, "v" + BuildConfig.VERSION_NAME).filter { it.isNotBlank() }.joinToString(" · ")
         ) { onOpen(SettingsSection.ABOUT) }
 
         SettingRow(icon = Icons.Filled.SettingsSuggest, label = stringResource(R.string.android_system)) {
@@ -509,7 +515,9 @@ private fun AboutSection(ctx: CardContext, update: UpdateCheckState) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val battery = remember<Int?>(context) { batteryPercent(context) }
+    RemoteNameField(ctx)
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        InfoRow(stringResource(R.string.about_remote_id), ctx.deviceSettings.remoteId)
         InfoRow(stringResource(R.string.about_version), "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
         val channel = if (update.isBeta) R.string.channel_beta else R.string.channel_stable
         InfoRow(stringResource(R.string.about_channel), stringResource(channel))
@@ -541,6 +549,57 @@ private fun AboutSection(ctx: CardContext, update: UpdateCheckState) {
     SettingRow(icon = Icons.Filled.RestartAlt, label = stringResource(R.string.restart_app)) { ctx.deviceSettings.restartApp() }
 }
 
+/**
+ * "Name of this remote" — shown in Home Assistant and sent with every webhook push and event, so a
+ * home with several remotes can tell them apart. Saved with the keyboard's Done key or "OK".
+ */
+@Composable
+private fun RemoteNameField(ctx: CardContext) {
+    val theme = LocalTheme.current
+    val saved = ctx.deviceSettings.remoteName
+    var text by remember(saved) { mutableStateOf(saved) }
+    val focus = LocalFocusManager.current
+    val save = {
+        ctx.deviceSettings.setRemoteName(text)
+        focus.clearFocus()
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(stringResource(R.string.remote_name), color = theme.mutedText, fontSize = 13.sp)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it.take(REMOTE_NAME_MAX) },
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { save() }),
+                colors =
+                OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = theme.primaryText,
+                    unfocusedTextColor = theme.primaryText,
+                    focusedBorderColor = theme.accent,
+                    unfocusedBorderColor = theme.mutedText,
+                    cursorColor = theme.accent
+                )
+            )
+            if (text.trim() != saved) {
+                Text(
+                    stringResource(R.string.save_short),
+                    color = theme.background,
+                    fontSize = 14.sp,
+                    modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(theme.accent)
+                        .tapClickable { save() }
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                )
+            }
+        }
+        Hint(stringResource(R.string.remote_name_hint))
+    }
+}
+
 /** This remote's battery level in %, or null when Android doesn't report it. */
 private fun batteryPercent(context: Context): Int? = (context.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager)
     ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -561,6 +620,7 @@ private const val CHIPS_PER_ROW = 3
 private const val SECONDS_PER_MINUTE = 60L
 private const val MS_PER_SECOND = 1000L
 private const val NEVER_THRESHOLD_S = 24 * 60 * 60L
+private const val REMOTE_NAME_MAX = 40
 private const val PROJECT_REPO = "dckiller51/astrion-custom-dashboard"
 
 @Composable

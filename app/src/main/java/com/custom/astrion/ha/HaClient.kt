@@ -146,6 +146,9 @@ class HaClient(
     /** Whether the device has a usable network right now — set by the activity (ConnectivityManager). */
     @Volatile var networkAvailable: () -> Boolean = { true }
 
+    /** This remote's `{ "id", "name" }` (RemoteIdentity), added to every webhook push and HA event. */
+    @Volatile var remoteIdentity: () -> JsonObject? = { null }
+
     /** Outstanding request/response commands (e.g. browse_media), keyed by id. */
     private val pending = ConcurrentHashMap<Int, CompletableDeferred<JsonObject>>()
 
@@ -290,6 +293,40 @@ class HaClient(
         send(msg)
     }
 
+    /**
+     * Fires [eventType] on Home Assistant's event bus with [data] plus this remote's identity
+     * (`remote_id`, `remote_name`). Home Assistant only accepts `fire_event` from an
+     * **administrator**'s token; with another user's token it's refused (logged).
+     */
+    fun fireEvent(eventType: String, data: JsonObject) {
+        val identity = runCatching { remoteIdentity() }.getOrNull()
+        val eventData =
+            buildJsonObject {
+                identity?.get("id")?.let { put("remote_id", it) }
+                identity?.get("name")?.let { put("remote_name", it) }
+                data.forEach { (k, v) -> put(k, v) }
+            }
+        val id = idCounter.getAndIncrement()
+        val msg =
+            buildJsonObject {
+                put("id", id)
+                put("type", "fire_event")
+                put("event_type", eventType)
+                put("event_data", eventData)
+            }
+        Log.d(TAG, "fireEvent($eventType) $eventData")
+        val waiter = CompletableDeferred<JsonObject>()
+        pending[id] = waiter
+        send(msg)
+        scope.launch {
+            val reply = withTimeoutOrNull(RESPONSE_TIMEOUT) { waiter.await() }
+            pending.remove(id)
+            if (reply?.get("success")?.jsonPrimitive?.content == "false") {
+                Log.w(TAG, "fireEvent($eventType) refused: ${reply["error"]} — the token must belong to an HA administrator")
+            }
+        }
+    }
+
     /** Convenience helper mirroring the common toggle pattern. */
     fun toggle(entityId: String) {
         val domain = entityId.substringBefore('.')
@@ -395,9 +432,17 @@ class HaClient(
             Log.d(TAG, "pushWebhook skipped: webhookId blank=${webhookId.isBlank()}, baseUrl blank=${baseUrl.isBlank()}")
             return
         }
+        // Which remote sent it — for homes with several (see RemoteIdentity).
+        val identity = runCatching { remoteIdentity() }.getOrNull()
+        val withRemote =
+            if (identity == null || payload.containsKey("remote")) {
+                payload
+            } else {
+                JsonObject(payload + ("remote" to identity))
+            }
         scope.launch {
             try {
-                val body = payload.toString().toRequestBody("application/json".toMediaType())
+                val body = withRemote.toString().toRequestBody("application/json".toMediaType())
                 val req = Request.Builder().url("${baseUrl.trimEnd('/')}/api/webhook/$webhookId").post(body).build()
                 imageHttp.newCall(req).execute().use { resp ->
                     Log.d(TAG, "pushWebhook($webhookId) -> HTTP ${resp.code}")

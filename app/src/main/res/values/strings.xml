@@ -62,6 +62,10 @@
     <string name="about_battery">Battery</string>
     <string name="about_package">Package</string>
     <string name="about_project">Project</string>
+    <string name="remote_name">Name of this remote</string>
+    <string name="remote_name_hint">Shown in Home Assistant and sent with every event, so automations know which remote was used.</string>
+    <string name="about_remote_id">Remote ID</string>
+    <string name="save_short">OK</string>
     <string name="settings_language">Language</string>
     <string name="language_system">System</string>
     <string name="language_hint">The app restarts to apply it.</string>

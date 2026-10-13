@@ -81,7 +81,11 @@ data class DeviceSettingsState(
     /** Settings actions: re-read dashboard.json, restart the app, ring "Find my remote" once. */
     val reloadDashboard: () -> Unit = {},
     val restartApp: () -> Unit = {},
-    val testRing: () -> Unit = {}
+    val testRing: () -> Unit = {},
+    /** This remote's identity (com.custom.astrion.RemoteIdentity): stable id and friendly name. */
+    val remoteId: String = "",
+    val remoteName: String = "",
+    val setRemoteName: (String) -> Unit = {}
 )
 
 /**
