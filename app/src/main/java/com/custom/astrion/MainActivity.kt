@@ -77,6 +77,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.math.acos
 import kotlin.math.sqrt
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Single-activity host. Owns the HA client, the direct Harmony hub client,
@@ -101,6 +105,7 @@ class MainActivity : ComponentActivity() {
         const val MOTION_CONSECUTIVE_N = 3
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
+        const val BUTTON_EVENT = "astrion_button"
         const val MOTION_GAP_MS = 1000L
         const val MOTION_SETTLE_MS = 400L
         const val MOTION_SETTLE_MIN_SAMPLES = 3
@@ -481,6 +486,12 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /** This remote's friendly name (RemoteIdentity), shown in Settings › About. */
+    private var remoteName by mutableStateOf("")
+
+    /** Pushes the battery level to Home Assistant through the webhook — see BatteryReporter.kt. */
+    private val batteryReporter by lazy { BatteryReporter(this) { if (::client.isInitialized) client else null } }
+
     private val storagePermission =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -545,6 +556,8 @@ class MainActivity : ComponentActivity() {
         configServerEnabled = prefs.getBoolean("config_server_enabled", true)
         tapFeedbackEnabled = prefs.getBoolean("tap_feedback_enabled", true)
         migrateDockModePref()
+        remoteName = RemoteIdentity.name(this)
+        batteryReporter.start()
         standby.start()
         applyPowerConfig()
         chargeDockMonitor.sunIsDown = { client.entities.value["sun.sun"]?.state?.let { it == "below_horizon" } }
@@ -566,6 +579,7 @@ class MainActivity : ComponentActivity() {
      *  unreliable on Android 8.1 HOME launcher activities. */
     private fun initClientsAndServer() {
         client = HaClient(baseUrl = RemoteSettings.haUrl(this), token = RemoteSettings.haToken(this))
+        client.remoteIdentity = { RemoteIdentity.json(this) }
         harmonyRegistry =
             HarmonyHubRegistry(
                 hubs = RemoteSettings.harmonyHubs(this),
@@ -595,6 +609,7 @@ class MainActivity : ComponentActivity() {
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
         appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
+        configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -610,6 +625,7 @@ class MainActivity : ComponentActivity() {
 
         initClientsAndServer()
         standby.onClientReplaced()
+        batteryReporter.resend() // the webhook id may have changed
         if (configServerEnabled) configServerSupervisor.start()
         client.connect()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
@@ -689,7 +705,13 @@ class MainActivity : ComponentActivity() {
                             setAppLanguage = { tag -> setAppLanguage(tag) },
                             reloadDashboard = { reloadFromSettings() },
                             restartApp = { AppLanguage.restart(this@MainActivity) },
-                            testRing = { testRing() }
+                            testRing = { testRing() },
+                            remoteId = RemoteIdentity.id(this@MainActivity),
+                            remoteName = remoteName,
+                            setRemoteName = { name ->
+                                RemoteIdentity.setName(this@MainActivity, name)
+                                remoteName = RemoteIdentity.name(this@MainActivity)
+                            }
                         ),
                         // Heavy cards (camera/vacuum/...) pause while a dock screen covers them.
                         screenOn = screenOn && dockOverlay == null
@@ -846,7 +868,7 @@ class MainActivity : ComponentActivity() {
             val key =
                 runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
                     ?: return@forEach
-            keyRouter.onLong(key) { runHotkey(hk) }
+            keyRouter.onLong(key) { runHotkey(hk, long = true) }
         }
     }
 
@@ -867,11 +889,32 @@ class MainActivity : ComponentActivity() {
      * idle case. */
     /** The overlay / Activity-room / Off actions of a hotkey, or null when it has none of them —
      * split out of [runHotkey] to keep that function under detekt's complexity threshold. */
-    private fun runActivityHotkey(hk: HotkeyConfig): Boolean? = when {
+    private fun runActivityHotkey(hk: HotkeyConfig, long: Boolean): Boolean? = when {
+        hk.event != null -> fireEventHotkey(hk, hk.event, long)
         hk.openOverlay != null -> openOverlayHotkey(hk.openOverlay)
         hk.openCurrentActivityRoom != null -> openCurrentActivityHotkey(hk.openCurrentActivityRoom)
         hk.stopActivity != null -> stopActivityHotkey(hk.stopActivity)
         else -> null
+    }
+
+    /**
+     * `"event"`: fires `astrion_button` on Home Assistant's bus (needs an admin token) and, when a
+     * webhook is configured, pushes `{"type": "button", …}` too — both carry this remote's identity,
+     * so automations can tell which remote and which button.
+     */
+    private fun fireEventHotkey(hk: HotkeyConfig, name: String, long: Boolean): Boolean {
+        val page = dashboard.config.pages.getOrNull(currentPageIndex)?.name.orEmpty()
+        val data =
+            buildJsonObject {
+                put("event", name)
+                put("key", hk.key.uppercase())
+                put("long", long)
+                put("page", page)
+            }
+        client.fireEvent(BUTTON_EVENT, data)
+        val webhookId = RemoteSettings.haWebhookId(this)
+        if (webhookId.isNotBlank()) client.pushWebhook(webhookId, JsonObject(data + ("type" to JsonPrimitive("button"))))
+        return true
     }
 
     /** `"stopActivity"`: that room's Activity off, or every running one for `"*"`. */
@@ -951,8 +994,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun runHotkey(hk: HotkeyConfig): Boolean {
-        runActivityHotkey(hk)?.let { return it }
+    private fun runHotkey(hk: HotkeyConfig, long: Boolean = false): Boolean {
+        runActivityHotkey(hk, long)?.let { return it }
 
         hk.page?.let { pageName ->
             val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -1367,6 +1410,7 @@ class MainActivity : ComponentActivity() {
         unregisterMotionListener()
         runCatching { unregisterReceiver(screenStateReceiver) }
         standby.stop()
+        batteryReporter.stop()
         chargeDockMonitor.stop()
         releaseWifiLock()
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()

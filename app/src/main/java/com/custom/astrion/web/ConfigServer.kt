@@ -18,6 +18,7 @@ import com.custom.astrion.AppLogs
 import com.custom.astrion.BuildConfig
 import com.custom.astrion.FindMyRemote
 import com.custom.astrion.R
+import com.custom.astrion.RemoteIdentity
 import com.custom.astrion.appletv.AppleTvCredentials
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.AppleTvServiceKind
@@ -147,6 +148,8 @@ import org.json.JSONObject
  *                        app's own version, static per build.
  *  GET  /battery         { level, charging } — this device's own battery
  *  GET  /logs            this app's recent log lines, as a .txt download (bug reports without adb)
+ *  GET  /info            { id, name, manufacturer, model, android, version, versionCode, webhook } — who this remote is
+ *  POST /remote-name     name=… — renames this remote (blank = back to the default name)
  *                        status, for the companion HA integration
  *  GET  /activities        every trackable Activity (`"track": true` tile,
  *                        hotkey, or composed AppConfig.activities entry),
@@ -226,6 +229,10 @@ class ConfigServer(
     @Volatile
     var appleTvRegistry: AppleTvRegistry? = null
 
+    /** Called after POST /remote-name — the activity refreshes what shows the name. */
+    @Volatile
+    var onRemoteRenamed: () -> Unit = {}
+
     @Volatile
     private var lastResult: UpdateChecker.CheckResult? = null
 
@@ -289,6 +296,8 @@ class ConfigServer(
             "/version" -> if (method == Method.GET) serveVersion() else methodNotAllowed()
             "/battery" -> if (method == Method.GET) serveBattery() else methodNotAllowed()
             "/logs" -> if (method == Method.GET) serveLogs() else methodNotAllowed()
+            "/info" -> if (method == Method.GET) serveInfo() else methodNotAllowed()
+            "/remote-name" -> if (method == Method.POST) handleRemoteName(session) else methodNotAllowed()
             "/set-page" -> if (method == Method.POST) handleSetPage(session) else methodNotAllowed()
             "/activities" -> if (method == Method.GET) serveActivities() else methodNotAllowed()
             "/activities/active" -> if (method == Method.GET) serveActiveActivities() else methodNotAllowed()
@@ -538,6 +547,7 @@ class ConfigServer(
                     }
                 )
                 put("appleTvs", appleTvsJson())
+                put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
                     JSONArray().apply {
@@ -779,6 +789,18 @@ class ConfigServer(
     }
 
     // ---- version & battery --------------------------------------------------
+
+    /** Who this remote is — stable id, friendly name, device and app version (see [RemoteIdentity]). */
+    private fun serveInfo(): Response =
+        newFixedLengthResponse(Response.Status.OK, "application/json", RemoteIdentity.info(context).toString())
+
+    private fun handleRemoteName(session: IHTTPSession): Response {
+        val files = HashMap<String, String>()
+        session.parseBody(files)
+        RemoteIdentity.setName(context, session.parameters["name"]?.firstOrNull().orEmpty())
+        onRemoteRenamed()
+        return serveInfo()
+    }
 
     /** This app's recent log lines as a downloadable text file (see [AppLogs]) — bug reports without adb. */
     private fun serveLogs(): Response {

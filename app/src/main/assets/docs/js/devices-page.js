@@ -64,6 +64,7 @@ async function loadAll() {
     harmonyHubs = Array.isArray(data.harmonyHubs) ? data.harmonyHubs : [];
     extenders = Array.isArray(data.extenders) ? data.extenders : [];
     appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
+    showRemoteIdentity(data.remote);
   } catch (e) {
     showToast("Couldn't reach this device — check the connection, then reload this page.", 'error');
     console.error('Failed to load /devices-config', e);
@@ -306,6 +307,31 @@ function renderIrTargetOptions() {
   select.innerHTML = '<option value="">— this remote\'s own IR blaster —</option>' +
     extenders.map(ext => `<option value="${ext.localId}">${ext.name}</option>`).join('');
   if (extenders.some(ext => ext.localId === current)) select.value = current;
+}
+
+// ---- This remote --------------------------------------------------------------
+
+/** "This remote: Living room" under the title — the name Home Assistant and every event use. */
+function showRemoteIdentity(remote) {
+  const box = document.getElementById('remoteIdentity');
+  if (!box || !remote) return;
+  box.style.display = '';
+  document.getElementById('remoteNameLabel').textContent = remote.name || '';
+  box.title = 'ID: ' + (remote.id || '');
+}
+
+async function renameRemote() {
+  const current = document.getElementById('remoteNameLabel').textContent;
+  const name = prompt('Name of this remote (e.g. "Living room"). Leave empty for the default name.', current);
+  if (name === null) return;
+  try {
+    const res = await fetch('/remote-name', { method: 'POST', body: new URLSearchParams({ name }) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    showRemoteIdentity(await res.json());
+    showToast('Remote renamed.', 'success');
+  } catch (e) {
+    showToast("Couldn't rename the remote: " + e.message, 'error');
+  }
 }
 
 // ---- Home Assistant ----------------------------------------------------------

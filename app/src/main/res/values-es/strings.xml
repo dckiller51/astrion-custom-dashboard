@@ -62,6 +62,10 @@
     <string name="about_battery">Batería</string>
     <string name="about_package">Paquete</string>
     <string name="about_project">Proyecto</string>
+    <string name="remote_name">Nombre de este mando</string>
+    <string name="remote_name_hint">Se muestra en Home Assistant y se envía con cada evento, para que las automatizaciones sepan qué mando se usó.</string>
+    <string name="about_remote_id">ID del mando</string>
+    <string name="save_short">OK</string>
     <string name="settings_language">Idioma</string>
     <string name="language_system">Sistema</string>
     <string name="language_hint">La app se reinicia para aplicarlo.</string>

@@ -62,6 +62,10 @@
     <string name="about_battery">Batterie</string>
     <string name="about_package">Paquet</string>
     <string name="about_project">Projet</string>
+    <string name="remote_name">Nom de cette télécommande</string>
+    <string name="remote_name_hint">Affiché dans Home Assistant et envoyé avec chaque événement, pour que les automatisations sachent quelle télécommande a servi.</string>
+    <string name="about_remote_id">ID de la télécommande</string>
+    <string name="save_short">OK</string>
     <string name="settings_language">Langue</string>
     <string name="language_system">Système</string>
     <string name="language_hint">L\'app redémarre pour l\'appliquer.</string>

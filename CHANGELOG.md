@@ -3,9 +3,20 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.2.6-beta] - 2026-10-12
+## [1.2.7-beta] - 2026-10-13
 
 ### Added
+
+- **Several remotes in one home: each remote has an identity.** A stable id (`astrion-…`, from Android's ANDROID_ID: survives app updates, reinstalls and IP changes; only a factory reset gives a new one) and a friendly name ("Living room") — set in Settings › About › "Name of this remote", or with "Rename" on the remote's web page. New `GET /info` answers `{ id, name, manufacturer, model, android, version, versionCode, webhook }` (`webhook`: whether a push webhook id is set); `POST /remote-name` (`name=…`) renames it. Every webhook push now carries `"remote": { "id", "name" }`, so Home Assistant knows which remote sent it.
+- **Battery pushed to Home Assistant.** With a push webhook configured, the remote sends `{"type": "battery", "level": 57, "charging": false}` when the level crosses a 5 % step and when charging starts or stops — so the HA integration no longer needs to poll `/battery` every few seconds (each poll wakes the remote's Wi-Fi).
+- **Hotkey action "Home Assistant event".** `"event": "movie_scene"` on a hotkey fires `astrion_button` on Home Assistant's event bus with `event`, `key`, `long` (held or not), `page`, `remote_id` and `remote_name` — one automation can do a different thing per remote and per button. HA only accepts `fire_event` from an **administrator**'s token (refusals are logged). With a webhook configured it's also pushed as `{"type": "button", …}`, for the HA integration to turn into an event tied to the right device.
+
+  ```yaml
+  trigger:
+    - platform: event
+      event_type: astrion_button
+      event_data: { event: movie_scene, remote_name: Living room }
+  ```
 
 - **`power` block in `dashboard.json`** (builder: new "Standby & battery" section). Every key is optional:
 

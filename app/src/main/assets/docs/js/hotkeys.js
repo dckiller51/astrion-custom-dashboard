@@ -176,6 +176,15 @@ function updateHotkeyActionInputs(preselect) {
       <datalist id="hkStopRooms">${activityRoomOptionsHtml()}</datalist>
       <div class="hint" style="margin-top:4px">The Harmony-style "Off" (Harmony's -1): stops whatever Activity is running in that room — Harmony PowerOff for a Harmony Activity, devices off per their profile for a composed one. "*" turns off every room.</div>
     `;
+  } else if (action === 'haEvent') {
+    container.innerHTML = `
+      <label>Event name</label>
+      <input type="text" id="hkEventName" placeholder="e.g., movie_scene">
+      <div class="hint" style="margin-top:4px">Fires <code>astrion_button</code> on Home Assistant's event bus with
+        <code>event</code> (this name), <code>key</code>, <code>long</code>, <code>page</code>, <code>remote_id</code> and <code>remote_name</code>,
+        so one automation can react differently per remote. Home Assistant only accepts it from an <b>administrator</b>'s token.
+        With a push webhook configured it's also sent as <code>{"type": "button", …}</code>.</div>
+    `;
   } else if (action === 'service') {
     container.innerHTML = `
       <label>Service (domain.service)</label><input type="text" id="hkService" placeholder="e.g., light.toggle">
@@ -225,6 +234,7 @@ function describeHotkey(h) {
   if (h.openOverlay) return `→ open ${h.openOverlay === 'activities' ? 'Active Activities' : 'Settings'}`;
   if (h.openCurrentActivityRoom) return `→ current Activity in "${h.openCurrentActivityRoom}"`;
   if (h.stopActivity) return h.stopActivity === '*' ? '→ Off (every room)' : `→ Off ("${h.stopActivity}")`;
+  if (h.event) return `→ HA event "${h.event}"`;
   if (h.service === 'remote.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
     return `→ remote ${h.entityId || '?'} / ${cmd}`;
@@ -316,7 +326,7 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.event ? 'haEvent' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
   updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
 
@@ -328,6 +338,8 @@ async function editHotkey(scope, listType, i) {
     document.getElementById('hkActivityRoom').value = h.openCurrentActivityRoom || '';
   } else if (action === 'stopActivity') {
     document.getElementById('hkStopRoom').value = h.stopActivity || '';
+  } else if (action === 'haEvent') {
+    document.getElementById('hkEventName').value = h.event || '';
   } else if (action === 'service') {
     document.getElementById('hkService').value = h.service || '';
     document.getElementById('hkEntityId').value = h.entityId || '';
@@ -405,6 +417,10 @@ function addHotkey() {
     const room = document.getElementById('hkStopRoom').value.trim();
     if (!room) { alert('Enter a room name, or * for every room.'); return; }
     hkObj.stopActivity = room;
+  } else if (action === 'haEvent') {
+    const name = document.getElementById('hkEventName').value.trim();
+    if (!name) { alert('Enter an event name.'); return; }
+    hkObj.event = name;
   } else if (action === 'service') {
     hkObj.service = document.getElementById('hkService').value.trim();
     const entityId = document.getElementById('hkEntityId').value.trim();

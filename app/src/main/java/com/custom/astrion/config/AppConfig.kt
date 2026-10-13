@@ -341,7 +341,12 @@ data class HotkeyConfig(
     /** The Harmony-style "Off": stops the Activity running in this room (`"*"` = every room) —
      * Harmony PowerOff for a Harmony Activity, the composed stop (devices off per their profile)
      * otherwise. Checked with [openOverlay], before everything else. */
-    val stopActivity: String? = null
+    val stopActivity: String? = null,
+    /** Fires the `astrion_button` event on Home Assistant's bus with this name (plus the remote's
+     * id/name, the key, short/long and the page) instead of any other action — so one automation
+     * can tell which remote and which button. Checked with [openOverlay]. Also pushed through
+     * the webhook as `{"type": "button", …}` when one is configured. */
+    val event: String? = null
 ) {
     /** Helper flags to quickly check hotkey action type. */
     val isPageNavigation: Boolean get() = !page.isNullOrBlank()
