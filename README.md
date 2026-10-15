@@ -8,171 +8,146 @@
 </p>
 
 [![GH-release](https://img.shields.io/github/v/release/dckiller51/astrion-custom-dashboard.svg?style=flat-square)](https://github.com/dckiller51/astrion-custom-dashboard/releases)
+[![Wiki](https://img.shields.io/badge/Docs-Wiki-blue?style=flat-square)](https://github.com/dckiller51/astrion-custom-dashboard/wiki)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy_me_a_coffee-F16061?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/dckiller)
 
-A custom Android application for controlling [Home Assistant](https://www.home-assistant.io/) via a dedicated Sanytron Astrion HA100 remote control, developed using Kotlin and Jetpack Compose.
+A standalone Android app that turns the **Sanytron Astrion HA100** remote into a dedicated smart-home and AV remote. It replaces the stock HaRemote launcher with a swipeable, full-screen dashboard, built with Kotlin and Jetpack Compose.
 
-It features a swipe-navigable, full-screen dashboard driven entirely by a JSON configuration file; the display does not rely on the standard Lovelace/HA app, and the application replaces the original HaRemote launcher.
+The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven by one `dashboard.json` file that you build in your browser, and it can talk to Home Assistant, a Harmony Hub, its own IR blaster and an Apple TV directly.
 
-## How it works
+📖 **Documentation lives in the [Wiki](https://github.com/dckiller51/astrion-custom-dashboard/wiki)**. This page is the overview.
 
-- **Swipeable pages**: the dashboard is a series of pages (`dashboard.json`), each holding cards (lights, climate, media, scenes, cameras, vacuum, etc.). Navigate horizontally by touch or via the remote's physical keys.
-- **Settings panel**: reached only by swiping down from the top of the screen (like the Android notification shade). It's a full-screen overlay independent of the dashboard pages, so it never shows up in the horizontal swipe or the page-indicator dots. Dismissed by swiping up, the back button, or the close button. It groups: screen brightness, quick access to Wi-Fi and Android system settings, wake-on-motion, and connection status for Home Assistant / Harmony Hub — plus the local configuration address (see below).
-- **Cards (`cards/impl/`)**: each card type (light, climate, media...) is a `CardRenderer` registered in `CardRegistry` (see `AstrionApp.kt`) and instantiated dynamically from `dashboard.json` by its `type`.
-- **Live configuration**: `dashboard.json` is read from `/sdcard/astrion/dashboard.json` by `DashboardLoader`, editable directly (adb push, file manager, or the local web page — see below) without recompiling the app. Custom icons live in `/sdcard/astrion/icons`.
-- **Home Assistant connection**: WebSocket via `HaClient`.
-- **Harmony Hub integration** (optional) for IR remotes/activities.
-- **Physical keys**: `HardwareKeyRouter` maps the box's hardware keys to hotkeys defined in the config (page navigation, quick actions...).
+## Features
 
-### Local configuration & Web UI
+- **Swipeable pages of cards**: lights, covers, climate, media, cameras, vacuums, Plex, scenes, remotes… ([card reference](https://github.com/dckiller51/astrion-custom-dashboard/wiki)).
+- **Browser-based builder** at `http://<remote-ip>:8080/builder/`. You edit visually with a live preview of the remote, and no hand-written JSON is needed. Available in English, French, Italian and Spanish.
+- **Physical keys**: every hardware key, short or long press, can be bound to a page, a popup, a Home Assistant service or event, a Harmony or IR command, an Apple TV command, or an Activity. Bindings can be global or per page.
+- **Activities**: "Watch Apple TV", "Listen to music"… One tap powers on the right devices, switches inputs, binds the volume keys and opens the right page. Activities are tracked per room, and the "Off" button works like Harmony's.
+- **Many ways to control your devices**:
+  - Home Assistant entities (WebSocket, live state);
+  - Harmony Hub, local network, no cloud;
+  - the remote's own **IR blaster**, with a built-in IR database ([ir-sniffer](https://dckiller51.github.io/astrion-ir-sniffer/)), or network IR blasters ([astrion-ir-extender](https://github.com/dckiller51/astrion-ir-extender)) to reach a closed cabinet or another room;
+  - **Apple TV paired directly**: remote, now playing and app launching, without Home Assistant.
+- **Dock screen**: while charging, show the battery, a dim night-friendly clock (time, weather, what's playing in the room) or the dimmed dashboard.
+- **Battery-friendly standby**: quiet Home Assistant mode while the screen is off, a time-limited motion wake, and a screen timeout.
+- **Several remotes in one home**: each remote has its own identity and name, so Home Assistant knows which remote and which button sent an event.
+- **Home Assistant integration**: [ha-astrion-custom-dashboard](https://github.com/dckiller51/ha-astrion-custom-dashboard) adds each remote as a device in Home Assistant (battery, last seen, button events, "Find my remote").
+- **Find my remote**: rings the remote from its web page or from Home Assistant.
+- **Self-updating**: the remote's web page checks GitHub Releases and installs updates. No adb needed after the first install.
 
-The app ships with **no Home Assistant credentials baked in** — every install starts unconfigured on purpose, so a prebuilt APK can be shared publicly without exposing anyone's personal setup. The device runs a small local web server on **`http://<remote-ip>:8080`** (the address is also shown in the Settings panel). From any browser on the same network you can:
+## Cards
 
-- set the Home Assistant URL/token and Harmony Hub IP/ID,
-- upload or download your `dashboard.json` configuration file directly from the remote,
-- upload icon PNGs into `/sdcard/astrion/icons/`,
-- check for and install app updates.
-
-Saving connection settings restarts the app to reconnect; uploading `dashboard.json` reloads the dashboard live.
-
-## Available Cards & Compatibility
-
-Astrion provides various card types tailored for home automation and multimedia control. Depending on the card, compatibility ranges across Home Assistant entities, Harmony Hub, local IR emitters, and a directly-paired Apple TV:
-
-| Card Type | Description | Home Assistant | Harmony Hub | Local IR | Apple TV (Direct) |
+| Card | What it's for | Home Assistant | Harmony | Local IR | Apple TV (direct) |
 | :--- | :--- | :---: | :---: | :---: | :---: |
-| **`light`** | Controls lights (brightness, color, temp) | ✅ | ❌ | ❌ | ❌ |
-| **`cover`** | Controls roller shutters, blinds, and gates | ✅ | ❌ | ❌ | ❌ |
-| **`switch`** | Simple on/off toggle for switches or inputs | ✅ | ❌ | ❌ | ❌ |
-| **`climate`** | Thermostats and climate control units | ✅ | ❌ | ❌ | ❌ |
-| **`fan`** | Ventilation speed and preset modes | ✅ | ❌ | ❌ | ❌ |
-| **`media_player`** | Media playback and volume management | ✅ | ❌ | ❌ | ✅ |
-| **`speaker_group`** | Multiroom audio groups (e.g., Sonos) | ✅ | ❌ | ❌ | ❌ |
-| **`camera`** | Live camera streaming or snapshots | ✅ | ❌ | ❌ | ❌ |
-| **`vacuum`** | Robot vacuum cleaner controls and maps | ✅ | ❌ | ❌ | ❌ |
-| **`climate_weather`** | Weather forecast and time display | ✅ | ❌ | ❌ | ❌ |
-| **`monitor`** | Read-only sensor values list | ✅ | ❌ | ❌ | ❌ |
-| **`row`** | Horizontal container layout for sub-cards | ✅ | ✅ | ✅ | ✅ |
-| **`title`** | Section headers with optional click actions | ✅ | ✅ | ✅ | ✅ |
-| **`button_grid`** | Grid of custom action buttons | ✅ | ✅ | ✅ | ✅ |
-| **`scene_grid`** | Grid of scenes, scripts, or shortcuts | ✅ | ✅ | ✅ | ✅ |
-| **`tv_remote`** | Remote control layout for TVs/boxes | ✅ | ✅ | ✅ | ✅ |
-| **`apple_tv_remote`**| Dedicated Apple TV remote layout | ❌ | ✅ | ❌ | ✅ |
-| **`source_select`** | Media player source selection dropdown | ✅ | ❌ | ❌ | ✅ |
-| **`select`** | Input select helper dropdown | ✅ | ❌ | ❌ | ❌ |
-| **`plex`** | Plex media server on-deck browser | ✅ | ❌ | ❌ | ❌ |
-| **`picture_elements`**| Interactive floorplan and mmWave radar | ✅ | ❌ | ❌ | ❌ |
+| [`light`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Light) | Lights: brightness, colour, colour temperature | ✅ | | | |
+| [`cover`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Cover) | Shutters, blinds, gates | ✅ | | | |
+| `switch` | Simple on/off | ✅ | | | |
+| [`climate`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Climate) | Thermostats, AC | ✅ | | | |
+| [`fan`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Fan) | Speed, presets, oscillation | ✅ | | | |
+| [`media_player`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-MediaPlayer) | Playback, volume, now playing (compact or full) | ✅ | | | ✅ |
+| `speaker_group` | Multiroom groups (e.g. Sonos) | ✅ | | | |
+| `source_select` | A media player's input / app list | ✅ | | | ✅ |
+| `select` | `input_select` / `select` dropdown | ✅ | | | |
+| [`camera`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Camera) | Live stream or snapshots | ✅ | | | |
+| `vacuum` | Robot vacuum, rooms, map | ✅ | | | |
+| `clock_weather` | Time, weather, forecast, calendar | ✅ | | | |
+| `monitor` | Read-only sensor values (vertical / scrolling for long text) | ✅ | | | |
+| [`plex`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex) | On Deck / recently added browser | ✅ | | | |
+| `picture_elements` | Interactive floor plan, mmWave radar | ✅ | | | |
+| `title` | Section header, optionally tappable | ✅ | ✅ | ✅ | ✅ |
+| `row` | Puts several cards side by side | ✅ | ✅ | ✅ | ✅ |
+| [`button_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-ButtonGrid) | Grid of action buttons | ✅ | ✅ | ✅ | ✅ |
+| [`scene_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SceneGrid) | Grid of scenes, shortcuts and Activities | ✅ | ✅ | ✅ | ✅ |
+| [`tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | TV / box remote layout | ✅ | ✅ | ✅ | ✅ |
+| [`apple_tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | Apple TV remote: classic, compact or full | | ✅ | | ✅ |
 
-### Updates
+## Install
 
-The same local page can check this repository's [GitHub Releases](https://github.com/dckiller51/astrion-custom-dashboard/releases) for a newer build and download + launch the system installer for it — no adb required for updates either. Android requires manually approving "install unknown apps" for Astrion Custom the first time (the page will prompt for it and tell you to try again once granted); after that, updating is just two taps.
+You need USB debugging once, for the first install. Updates after that are done from the remote's web page.
 
-### Beta builds
+**Windows (recommended):** download [`initial-installation-v0.9.0`](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/initial-installation-v0.9.0), enable *Developer options* and *USB debugging* on the remote, then run `install.bat`.
 
-For testing fixes before they land in an official release, pushes to `dev` are also published as a rolling **pre-release** (tag `dev-latest`, overwritten by each new push — never picked up by the updater above, which explicitly skips pre-releases).
-
-The beta installs as a separate app (`com.custom.astrion.debug`) alongside the official release — no signature conflict, no need to uninstall either one to switch between them. Its Home Assistant/Harmony settings are configured independently the first time you install it (see Local configuration above), then kept per install from then on.
-
-### Translations
-
-Two separate mechanisms, designed so the community can add a language without touching Kotlin code:
-
-- **App's own text** ("Settings", "Wi-Fi network"...) → standard Android resources, `res/values/strings.xml` (English fallback) + `res/values-<lang>/strings.xml`. Follows the system language automatically, handled natively by Android.
-- **Values returned by Home Assistant** (`hvac_mode`, `fan_mode`, weather conditions, vacuum states...) → `assets/ha_labels/<lang>.json`, loaded by `HaLabels` (`ha/HaLabels.kt`). These come from the HA integration itself (raw English, sometimes with hyphens like `clear-night`), so they can't be plain `@string` resources.
-
-**Adding a language**: drop in `res/values-xx/strings.xml` (translation of `res/values/strings.xml`) and `assets/ha_labels/xx.json` (same shape as `en.json`/`fr.json`) — no code change needed. `en.json` is the mandatory fallback if the requested language has no file.
-
-## First install
-
-### Option A: Automatic Installer (Recommended for Windows)
-
-If you are on Windows, you can download the ready-to-use automatic installer package from the [**GitHub Releases**](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/initial-installation-v0.9.0) page:
-
-1. Download and extract **`initial-installation-v0.9.0`**.
-2. Enable **Developer options** and **USB debugging** on your remote.
-3. Double-click **`install.bat`** and follow the on-screen instructions.
-4. **Restart the remote.** Some permissions and the launcher registration only take full effect after a full reboot, not just relaunching the app.
-5. On reboot, a prompt appears to choose the home screen app — select **Astrion Custom**.
-6. **Grant storage access** when prompted (needed to read/write `dashboard.json` and icons on `/sdcard/astrion/`).
-7. Open the **Settings panel** (swipe down from the top of the screen). Above the brightness slider, tap **"Allow modification"**, then select **Astrion Custom** in the system screen that opens, and go back.
-8. Open **`http://<remote-ip>:8080`** from a browser on the same network to finish setup: Home Assistant URL/token, optional Harmony Hub, and your `dashboard.json`.
-
-### Option B: Manual via ADB
-
-1. Enable **Developer options** on the remote (usually: *Settings → About device*, tap the build number several times), then enable USB debugging.
-2. `adb install app-debug.apk`
-3. **Restart the remote.** Some permissions and the launcher registration only take full effect after a full reboot, not just relaunching the app.
-4. On reboot, a prompt appears to choose the home screen app — select **Astrion Custom**.
-5. **Grant storage access** when prompted (needed to read/write `dashboard.json` and icons on `/sdcard/astrion/`).
-6. Open the **Settings panel** (swipe down from the top of the screen). Above the brightness slider, tap **"Allow modification"**, then select **Astrion Custom** in the system screen that opens, and go back.
-7. Open **`http://<remote-ip>:8080`** from a browser on the same network to finish setup: Home Assistant URL/token, optional Harmony Hub, and your `dashboard.json`.
-
-For a detailed step-by-step setup guide, including ADB access,
-permissions, Home Assistant connection, and the first dashboard, see
-[Getting Started](docs/GETTING_STARTED.md).
-
-## Uninstalling
-
-### Option A: Automatic Uninstaller (Windows)
-
-If you are on Windows, you can download the ready-to-use automatic uninstaller package from the [**GitHub Releases**](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/uninstall) page:
-
-1. Double-click **`uninstall.bat`**.
-2. Follow the on-screen instructions. The remote will automatically fall back to the stock **HaRemote** launcher.
-
-### Option B: Manual via ADB
-
-If you prefer using the command line:
+**Any OS (adb):** download the APK from [Releases](https://github.com/dckiller51/astrion-custom-dashboard/releases), then:
 
 ```bash
-adb uninstall com.custom.astrion
+adb install <downloaded>.apk
 ```
 
-The remote falls back to the stock **HaRemote** launcher.
+Then:
+
+1. **Restart the remote** (permissions and the launcher only take effect after a reboot) and pick **Astrion Custom** as the home app.
+2. **Allow storage access** when asked (for `/sdcard/astrion/`).
+3. Open **`http://<remote-ip>:8080`** from a browser on the same network. Connect Home Assistant (URL + long-lived token), add your Harmony hub, IR devices or Apple TV, then build your dashboard in the builder.
+
+The app ships with **no credentials built in**: every install starts unconfigured. Step by step: [Getting Started](https://github.com/dckiller51/astrion-custom-dashboard/wiki) · [`dashboard.json` guide (EN)](https://github.com/dckiller51/astrion-custom-dashboard/wiki/GUIDE_dashboard_json_EN) · [FR](https://github.com/dckiller51/astrion-custom-dashboard/wiki/GUIDE_dashboard_json_FR) · [DE](https://github.com/dckiller51/astrion-custom-dashboard/wiki/ANLEITUNG_dashboard_json_DE) · [IT](https://github.com/dckiller51/astrion-custom-dashboard/wiki/GUIDA_dashboard_json_IT) · [ES](https://github.com/dckiller51/astrion-custom-dashboard/wiki/GUIA_dashboard_json_ES)
+
+### Updates and beta
+
+- **Updates**: the remote's web page checks [GitHub Releases](https://github.com/dckiller51/astrion-custom-dashboard/releases) and installs a new version in two taps. Android asks once to allow "install unknown apps" for Astrion Custom.
+- **Beta**: every push to `dev` is published as the rolling pre-release `dev-latest`. It installs **alongside** the official app (`com.custom.astrion.debug`, configured separately), and its "Also the beta" switch on the web page offers beta updates.
+
+### Uninstall
+
+Run [`uninstall.bat`](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/uninstall) (Windows) or `adb uninstall com.custom.astrion`. The remote goes back to the stock HaRemote launcher.
+
+## Translations
+
+Three sets of files. Adding a language needs no code change:
+
+| What | Files |
+| :--- | :--- |
+| App text (settings, labels…) | `src/main/res/values-xx/strings.xml` |
+| Home Assistant state values (`heat_cool`, `clear-night`…) | `src/main/assets/ha_labels/xx.json` |
+| Builder and the remote's web page | `src/main/assets/docs/i18n/xx.json` |
+
+English is the fallback for anything missing. Available today: English, French, Italian and Spanish (+ German in the Wiki guide).
 
 ## Building from source
 
 ```bash
 ./gradlew assembleDebug
-adb uninstall com.custom.astrion   # avoids signature conflicts with a previous install
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-No `secrets.properties` or any other pre-build configuration is needed — every instance is configured after install through the local `:8080` page above.
+No `secrets.properties` or other setup is needed. Every instance is configured after install from the `:8080` page.
 
-## Repository structure
+<details>
+<summary>Repository structure</summary>
 
 ```txt
 src/main/
-  assets/ha_labels/        Home Assistant state translations (JSON, per language)
+  assets/docs/              builder (/builder/) + the remote's web page, i18n/
+  assets/ha_labels/         Home Assistant state translations
   java/com/custom/astrion/
+    appletv/                direct Apple TV pairing and control
     cards/impl/             one card = one CardRenderer, registered in AstrionApp
-    config/                 dashboard.json loading/parsing, runtime connection settings
-    ha/                     HA WebSocket client, models, state translations
+    config/                 dashboard.json parsing, Activities runtime, settings
+    extender/               network IR extenders
+    ha/                     Home Assistant WebSocket client
     harmony/                Harmony Hub client
     input/                  physical key routing
-    ui/                     Dashboard (pager + settings overlay), screen components
-    update/                 GitHub Releases update checker
-    web/                    local :8080 configuration server
+    ui/                     dashboard, overlays, dock screen
+    update/                 GitHub Releases updater
+    web/                    local :8080 server
   res/values*/strings.xml   app text, per language
-  AndroidManifest.xml
 ```
 
-See [CHANGELOG.md](./CHANGELOG.md) for release notes.
+</details>
 
-## Contributing
+## Help and contributing
 
-For now, contributions are welcome specifically for **translations** — see the Translations section above. Drop the two files for your language (`res/values-xx/strings.xml` and `assets/ha_labels/xx.json`) and open a pull request.
+- Questions and bug reports: [open an issue](https://github.com/dckiller51/astrion-custom-dashboard/issues), or find me on Discord (`dckilller`).
+- Release notes: [CHANGELOG.md](./CHANGELOG.md).
+- Translations are the easiest way to contribute: add the files for your language (see above) and open a pull request.
 
 ## Credits
 
-Special thanks to [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard) for the original work this project is built on (MIT License — see [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md)).
+- [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard) for the original work this project is built on (MIT License, see [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md)).
+- Everyone on Discord and GitHub who tests betas and sends ideas.
 
 ## License
 
-**Astrion Custom Dashboard** is licensed under the [GNU GPLv3](./LICENSE).
-
-This project started as a fork of [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard)'s original work, released under the MIT License — that original notice is preserved in [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md), as its terms require.
+**Astrion Custom Dashboard** is licensed under the [GNU GPLv3](./LICENSE). It started as a fork of [@baes-cloud](https://github.com/baes-cloud/astrion-dashboard)'s MIT-licensed work, whose notice is kept in [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md).
 
 [![License: GPLv3](https://img.shields.io/badge/License-GPLv3-blue.svg?style=for-the-badge)](./LICENSE)
 
@@ -180,6 +155,6 @@ This project started as a fork of [**@baes-cloud**](https://github.com/baes-clou
 
 ## ☕ Support
 
-If you find **Astrion Custom Dashboard** useful and want to support its development, you can buy me a coffee!
+If **Astrion Custom Dashboard** is useful to you, you can buy me a coffee!
 
 [![Ko-fi](https://img.shields.io/badge/Buy_me_a_coffee-Ko--fi-F16061?style=for-the-badge&logo=ko-fi&logoColor=white)](https://ko-fi.com/dckiller)
