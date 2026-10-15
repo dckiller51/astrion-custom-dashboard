@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Astrion Custom — dashboard.json Editor</title>
+    <title data-i18n="web_ui_title">Astrion Custom — dashboard.json Editor</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<a href="/" class="back-link">← Accueil</a>
-<h1>Astrion Custom — dashboard.json Editor</h1>
-<div class="subtitle">Build your dashboard visually, no hand-written JSON required. Matches the exact schema the app reads.</div>
+<a href="/" class="back-link" data-i18n="web_ui_back_home">← Accueil</a>
+<h1 data-i18n="web_ui_title">Astrion Custom — dashboard.json Editor</h1>
+<div class="subtitle" data-i18n="web_ui_subtitle">Build your dashboard visually, no hand-written JSON required. Matches the exact schema the app reads.</div>
 <div id="deviceModeBanner" class="note" style="display:none"></div>
 
 <div class="release-info-row" style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
@@ -19,7 +19,7 @@
         <input type="checkbox" id="betaToggle" onchange="toggleBetaBadge()">
         <span class="beta-slider"></span>
     </label>
-    <span id="betaToggleLabel">Also the beta (dev)</span>
+    <span id="betaToggleLabel" data-i18n="web_release_also_beta">Also the beta (dev)</span>
     <span id="betaBadge" style="display:none"></span>
 </div>
 
@@ -27,36 +27,36 @@
     <!-- LEFT PANE -->
     <div class="editor-pane">
 
-        <h2>Load an existing dashboard.json (optional)</h2>
+        <h2 data-i18n="web_ui_load_heading">Load an existing dashboard.json (optional)</h2>
         <div class="section-box">
-            <textarea id="importBox" rows="4" placeholder="Paste your current dashboard.json here to edit it, or leave empty to start fresh."></textarea>
+            <textarea id="importBox" rows="4" data-i18n-attr="placeholder:web_ui_import_placeholder" placeholder="Paste your current dashboard.json here to edit it, or leave empty to start fresh."></textarea>
             <div class="btn-row">
-                <button onclick="importJson()">Load</button>
-                <button class="secondary" onclick="resetAll()">Start over</button>
+                <button data-i18n="web_ui_load_button" onclick="importJson()">Load</button>
+                <button class="secondary" data-i18n="web_ui_start_over" onclick="resetAll()">Start over</button>
             </div>
         </div>
 
-        <div class="hint" style="margin-bottom:20px">
+        <div class="hint" style="margin-bottom:20px" data-i18n-html="web_ui_devices_hint">
             Home Assistant, Harmony Hub(s), and IR Devices are configured once from
             this device's home page (<a href="/" style="color:#00E5FF">open it</a>) —
             everything below just references them by name.
         </div>
 
-        <h2>1. Hotkeys</h2>
+        <h2 data-i18n="web_ui_section_hotkeys">1. Hotkeys</h2>
         <div class="section-box">
-            <label>Scope</label>
+            <label data-i18n="web_ui_scope_label">Scope</label>
             <select id="hkScope">
-                <option value="page">This page only (overrides global while page is active)</option>
-                <option value="global">Global (every page)</option>
+                <option value="page" data-i18n="web_ui_scope_page">This page only (overrides global while page is active)</option>
+                <option value="global" data-i18n="web_ui_scope_global">Global (every page)</option>
             </select>
 
-            <label>Press type</label>
+            <label data-i18n="web_ui_press_type_label">Press type</label>
             <select id="hkType">
-                <option value="hotkeys">Single press</option>
-                <option value="longHotkeys">Long press (~500ms hold)</option>
+                <option value="hotkeys" data-i18n="web_ui_press_single">Single press</option>
+                <option value="longHotkeys" data-i18n="web_ui_press_long">Long press (~500ms hold)</option>
             </select>
 
-            <label>Physical key</label>
+            <label data-i18n="web_ui_physical_key_label">Physical key</label>
             <select id="hkKey">
                 <option>BACK</option><option>HOME</option><option>POWER</option>
                 <option>VOLUME_UP</option><option>VOLUME_DOWN</option><option>MUTE</option>
@@ -67,31 +67,31 @@
                 <option>RED_BUTTON</option><option>GREEN_BUTTON</option><option>BLUE_BUTTON</option><option>YELLOW_BUTTON</option>
             </select>
 
-            <label>Action</label>
+            <label data-i18n="web_ui_action_label">Action</label>
             <select id="hkAction" onchange="updateHotkeyActionInputs()">
-                <option value="page">Go to page</option>
-                <option value="openOverlay">Open overlay (Settings / Active Activities)</option>
-                <option value="openCurrentActivity">Return to current Activity (for one room)</option>
-                <option value="stopActivity">Turn off a room's Activity ("Off", like Harmony's -1)</option>
-                <option value="haEvent">Home Assistant event (tells HA which remote &amp; button)</option>
-                <option value="service">Home Assistant service call</option>
-                <option value="remoteCommand">Home Assistant remote command</option>
-                <option value="appleTvCommand">Apple TV command (direct — no Home Assistant needed)</option>
-                <option value="harmonyCommand">Harmony IR command (direct to hub)</option>
-                <option value="harmonyActivity">Harmony activity (direct to hub)</option>
+                <option value="page" data-i18n="web_ui_action_page">Go to page</option>
+                <option value="openOverlay" data-i18n="web_ui_action_open_overlay">Open overlay (Settings / Active Activities)</option>
+                <option value="openCurrentActivity" data-i18n="web_ui_action_return_activity">Return to current Activity (for one room)</option>
+                <option value="stopActivity" data-i18n="web_ui_turn_off_a_room_s_activity">Turn off a room's Activity ("Off", like Harmony's -1)</option>
+                <option value="haEvent" data-i18n="web_ui_home_assistant_event_tells_ha_which">Home Assistant event (tells HA which remote &amp; button)</option>
+                <option value="service" data-i18n="web_ui_action_service">Home Assistant service call</option>
+                <option value="remoteCommand" data-i18n="web_ui_action_remote_command">Home Assistant remote command</option>
+                <option value="appleTvCommand" data-i18n="web_ui_apple_tv_command_direct_no_home">Apple TV command (direct — no Home Assistant needed)</option>
+                <option value="harmonyCommand" data-i18n="web_ui_action_harmony_command">Harmony IR command (direct to hub)</option>
+                <option value="harmonyActivity" data-i18n="web_ui_action_harmony_activity">Harmony activity (direct to hub)</option>
             </select>
 
             <div id="dynamicHotkeyInputs"></div>
             <div class="btn-row">
-                <button id="addHotkeyBtn" onclick="addHotkey()">Add hotkey</button>
-                <button id="cancelHotkeyEditBtn" class="secondary" style="display:none" onclick="cancelHotkeyEdit()">Cancel edit</button>
+                <button id="addHotkeyBtn" data-i18n="web_ui_add_hotkey" onclick="addHotkey()">Add hotkey</button>
+                <button id="cancelHotkeyEditBtn" class="secondary" style="display:none" data-i18n="web_cancel_edit" onclick="cancelHotkeyEdit()">Cancel edit</button>
             </div>
             <div id="hotkeysList" style="margin-top:12px"></div>
         </div>
 
-        <h2>2. Activities</h2>
+        <h2 data-i18n="web_ui_2_activities">2. Activities</h2>
         <div class="section-box">
-            <div class="hint">
+            <div class="hint" data-i18n="web_ui_activities_hint">
                 A composed AV Activity ("Watch Apple TV", "Listen to Music"...) that
                 orchestrates more than one device, mixing IR/Harmony/HA freely. Scoped
                 to one room — at runtime, only one Activity is active per room at a
@@ -100,35 +100,35 @@
                 "Track as Activity" on a scene_grid tile instead.
             </div>
             <div class="btn-row">
-                <button onclick="startActivityWizard()">+ New Activity</button>
+                <button data-i18n="web_ui_new_activity_button" onclick="startActivityWizard()">+ New Activity</button>
             </div>
             <div id="activitiesList" style="margin-top:12px"></div>
         </div>
 
-        <h2>3. Theme &amp; Colors</h2>
+        <h2 data-i18n="web_ui_3_theme_amp_colors">3. Theme &amp; Colors</h2>
         <div class="section-box" id="themeBox"></div>
 
-        <h2>4. Dock screen</h2>
+        <h2 data-i18n="web_ui_4_dock_screen">4. Dock screen</h2>
         <div class="section-box" id="dockBox"></div>
 
-        <h2>5. Standby &amp; battery</h2>
+        <h2 data-i18n="web_ui_5_standby_amp_battery">5. Standby &amp; battery</h2>
         <div class="section-box" id="powerBox"></div>
 
-        <h2>6. Generated JSON</h2>
+        <h2 data-i18n="web_ui_6_generated_json">6. Generated JSON</h2>
         <textarea id="jsonOutput" readonly></textarea>
         <div class="btn-row">
-            <button onclick="copyJson()">Copy JSON</button>
-            <button class="secondary" onclick="downloadJson()">Download dashboard.json</button>
-            <button id="saveToDeviceBtn" style="display:none" onclick="saveDashboardToDevice()">Save to device</button>
+            <button data-i18n="web_ui_copy_json" onclick="copyJson()">Copy JSON</button>
+            <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
+            <button id="saveToDeviceBtn" style="display:none" data-i18n="web_ui_save_to_device" onclick="saveDashboardToDevice()">Save to device</button>
         </div>
     </div>
 
     <!-- RIGHT PANE -->
     <div class="preview-pane">
-        <h2 style="margin-top:0">Preview</h2>
+        <h2 style="margin-top:0" data-i18n="web_ui_preview">Preview</h2>
         <div class="ha-toolbar">
             <div id="tabs" class="tabs"></div>
-            <button type="button" class="ha-icon-btn" title="Add page" onclick="openPageDialog(null)">+</button>
+            <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
         </div>
         <div class="remote-frame-scale-wrap">
             <div class="remote-frame">
@@ -142,7 +142,7 @@
                                 <span class="sb-battery">🔋</span>
                             </div>
                             <div id="content" class="remote-screen-content"></div>
-                            <button type="button" class="preview-add-fab" title="Add card" onclick="event.stopPropagation(); openCardDialog(null)">+</button>
+                            <button type="button" class="preview-add-fab" data-i18n-attr="title:web_modal_add_card" title="Add card" onclick="event.stopPropagation(); openCardDialog(null)">+</button>
                         </div>
                     </div>
                 </div>
@@ -187,10 +187,10 @@
                         </button>
                     </div>
                     <div class="hw-dpad">
-                        <button class="dpad-btn dpad-top" title="Haut" data-hwkey="UP"></button>
-                        <button class="dpad-btn dpad-right" title="Droite" data-hwkey="RIGHT"></button>
-                        <button class="dpad-btn dpad-left" title="Gauche" data-hwkey="LEFT"></button>
-                        <button class="dpad-btn dpad-bottom" title="Bas" data-hwkey="DOWN"></button>
+                        <button class="dpad-btn dpad-top" title="Up" data-hwkey="UP"></button>
+                        <button class="dpad-btn dpad-right" title="Right" data-hwkey="RIGHT"></button>
+                        <button class="dpad-btn dpad-left" title="Left" data-hwkey="LEFT"></button>
+                        <button class="dpad-btn dpad-bottom" title="Down" data-hwkey="DOWN"></button>
                         <button class="dpad-ok" data-hwkey="CENTER">OK</button>
                     </div>
                 </div>
@@ -246,61 +246,61 @@
 
             </div>
         </div>
-        <div class="remote-tap-hint">🔍 Tap the screen to edit at full size</div>
+        <div class="remote-tap-hint" data-i18n="web_ui_tap_hint">🔍 Tap the screen to edit at full size</div>
         <div id="hotkeysInfo"></div>
     </div>
 </div>
 
 <div id="previewModal" class="preview-modal" >
     <div class="preview-modal-inner">
-        <button class="preview-modal-close" onclick="closePreviewModal()">✕ Close</button>
+        <button class="preview-modal-close" data-i18n="web_modal_close" onclick="closePreviewModal()">✕ Close</button>
         <div id="modalScreenSlot"></div>
     </div>
 </div>
 
 <div id="cardEditorModal" class="preview-modal" >
     <div class="preview-modal-inner ha-dialog">
-        <button class="preview-modal-close" onclick="cancelCardEdit()">✕ Close</button>
-        <h2 style="margin-top:0" id="cardEditorTitle">Add card</h2>
+        <button class="preview-modal-close" data-i18n="web_modal_close" onclick="cancelCardEdit()">✕ Close</button>
+        <h2 style="margin-top:0" id="cardEditorTitle" data-i18n="web_modal_add_card">Add card</h2>
         <div class="section-box">
-            <label>Card type</label>
+            <label data-i18n="web_modal_card_type">Card type</label>
             <select id="cardTypeSelect" onchange="updateCardFormInputs()">
-                <optgroup label="Common">
-                    <option value="title">Title (title)</option>
-                    <option value="light">Light (light)</option>
-                    <option value="switch">Switch (switch)</option>
-                    <option value="cover">Cover / Shutter (cover)</option>
-                    <option value="fan">Fan (fan)</option>
-                    <option value="climate">Climate (climate)</option>
-                    <option value="source_select">Source selector (source_select)</option>
-                    <option value="select">Select / dropdown (select)</option>
+                <optgroup data-i18n-attr="label:web_modal_optgroup_common" label="Common">
+                    <option value="title" data-i18n="web_modal_type_title">Title (title)</option>
+                    <option value="light" data-i18n="web_modal_type_light">Light (light)</option>
+                    <option value="switch" data-i18n="web_modal_type_switch">Switch (switch)</option>
+                    <option value="cover" data-i18n="web_modal_type_cover">Cover / Shutter (cover)</option>
+                    <option value="fan" data-i18n="web_modal_type_fan">Fan (fan)</option>
+                    <option value="climate" data-i18n="web_modal_type_climate">Climate (climate)</option>
+                    <option value="source_select" data-i18n="web_modal_type_source_select">Source selector (source_select)</option>
+                    <option value="select" data-i18n="web_modal_type_select">Select / dropdown (select)</option>
+                    <option value="monitor" data-i18n="web_modal_type_monitor">System monitor (monitor)</option>
                 </optgroup>
-                <optgroup label="Grids">
-                    <option value="button_grid">Button grid (button_grid)</option>
-                    <option value="scene_grid">Scene grid (scene_grid)</option>
+                <optgroup data-i18n-attr="label:web_modal_optgroup_grids" label="Grids">
+                    <option value="button_grid" data-i18n="web_modal_type_button_grid">Button grid (button_grid)</option>
+                    <option value="scene_grid" data-i18n="web_modal_type_scene_grid">Scene grid (scene_grid)</option>
                 </optgroup>
-                <optgroup label="Remotes">
-                    <option value="apple_tv_remote">Apple TV remote (apple_tv_remote)</option>
-                    <option value="tv_remote">TV / media remote (tv_remote)</option>
+                <optgroup data-i18n-attr="label:web_modal_optgroup_remotes" label="Remotes">
+                    <option value="apple_tv_remote" data-i18n="web_modal_type_apple_tv_remote">Apple TV remote (apple_tv_remote)</option>
+                    <option value="tv_remote" data-i18n="web_modal_type_tv_remote">TV / media remote (tv_remote)</option>
                 </optgroup>
-                <optgroup label="Advanced (raw options)">
-                    <option value="clock_weather">Clock &amp; weather (clock_weather)</option>
-                    <option value="media_player">Media player (media_player)</option>
-                    <option value="camera">Camera (camera)</option>
-                    <option value="speaker_group">Speaker group (speaker_group)</option>
-                    <option value="monitor">System monitor (monitor)</option>
-                    <option value="picture_elements">Picture elements (picture_elements)</option>
-                    <option value="plex">Plex (plex)</option>
-                    <option value="row">Row layout (row)</option>
-                    <option value="vacuum">Vacuum (vacuum)</option>
-                    <option value="custom">Other / custom type…</option>
+                <optgroup data-i18n-attr="label:web_modal_optgroup_advanced" label="Advanced (raw options)">
+                    <option value="clock_weather" data-i18n="web_modal_type_clock_weather">Clock &amp; weather (clock_weather)</option>
+                    <option value="media_player" data-i18n="web_modal_type_media_player">Media player (media_player)</option>
+                    <option value="camera" data-i18n="web_modal_type_camera">Camera (camera)</option>
+                    <option value="speaker_group" data-i18n="web_modal_type_speaker_group">Speaker group (speaker_group)</option>
+                    <option value="picture_elements" data-i18n="web_modal_type_picture_elements">Picture elements (picture_elements)</option>
+                    <option value="plex" data-i18n="web_modal_type_plex">Plex (plex)</option>
+                    <option value="row" data-i18n="web_modal_type_row">Row layout (row)</option>
+                    <option value="vacuum" data-i18n="web_modal_type_vacuum">Vacuum (vacuum)</option>
+                    <option value="custom" data-i18n="web_modal_type_custom">Other / custom type…</option>
                 </optgroup>
             </select>
 
             <div id="dynamicCardInputs"></div>
             <div class="btn-row">
-                <button id="addCardBtn" onclick="addCardToPage()">Add card to page</button>
-                <button id="cancelCardEditBtn" class="secondary" onclick="cancelCardEdit()">Cancel</button>
+                <button id="addCardBtn" data-i18n="web_modal_add_card_to_page" onclick="addCardToPage()">Add card to page</button>
+                <button id="cancelCardEditBtn" class="secondary" data-i18n="web_cancel" onclick="cancelCardEdit()">Cancel</button>
             </div>
         </div>
     </div>
@@ -308,17 +308,17 @@
 
 <div id="pageDialogModal" class="preview-modal" >
     <div class="preview-modal-inner ha-dialog">
-        <button class="preview-modal-close" onclick="closePageDialog()">✕ Close</button>
-        <h2 style="margin-top:0" id="pageDialogTitle">Add page</h2>
+        <button class="preview-modal-close" data-i18n="web_modal_close" onclick="closePageDialog()">✕ Close</button>
+        <h2 style="margin-top:0" id="pageDialogTitle" data-i18n="web_modal_add_page">Add page</h2>
         <div class="section-box">
-            <label>Page name</label>
-            <input type="text" id="pageDialogName" placeholder="e.g., Living Room, Apple TV...">
-            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogStart"> Start page (shown on launch)</label>
-            <label style="margin-top:10px">Parent page (optional)</label>
+            <label data-i18n="web_modal_page_name">Page name</label>
+            <input type="text" id="pageDialogName" placeholder="e.g., Living Room, Apple TV..." data-i18n-attr="placeholder:web_modal_page_name_placeholder">
+            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogStart"> <span data-i18n="web_modal_start_page">Start page (shown on launch)</span></label>
+            <label style="margin-top:10px" data-i18n="web_modal_parent_page_label">Parent page (optional)</label>
             <select id="pageDialogParent" onchange="onPageDialogParentChange()"></select>
-            <div class="hint" style="margin-top:4px">Makes this a child page — navigate to it via a card's own "Page to open" (e.g. a scene_grid tile), and a physical button jumps back to the parent automatically.</div>
+            <div class="hint" style="margin-top:4px" data-i18n="web_modal_parent_hint">Makes this a child page — navigate to it via a card's own "Page to open" (e.g. a scene_grid tile), and a physical button jumps back to the parent automatically.</div>
             <div id="pageDialogParentKeyRow" style="display:none">
-                <label style="margin-top:10px">Return-to-parent button</label>
+                <label style="margin-top:10px" data-i18n="web_modal_parent_key_label">Return-to-parent button</label>
                 <select id="pageDialogParentKey">
                     <option>BACK</option><option>HOME</option><option>POWER</option>
                     <option>VOLUME_UP</option><option>VOLUME_DOWN</option><option>MUTE</option>
@@ -328,67 +328,67 @@
                     <option>REWIND</option><option>PLAY</option><option>STOP</option><option>FASTFORWARD</option>
                     <option>RED_BUTTON</option><option>GREEN_BUTTON</option><option>BLUE_BUTTON</option><option>YELLOW_BUTTON</option>
                 </select>
-                <div class="hint" style="margin-top:4px">Defaults to BACK. Pick a different button if BACK is already used for something else on this page, or if you'd rather reserve BACK entirely. If this page also binds its own hotkey on the chosen button, that hotkey wins and the parent-jump is skipped.</div>
+                <div class="hint" style="margin-top:4px" data-i18n="web_modal_parent_key_hint">Defaults to BACK. Pick a different button if BACK is already used for something else on this page, or if you'd rather reserve BACK entirely. If this page also binds its own hotkey on the chosen button, that hotkey wins and the parent-jump is skipped.</div>
             </div>
-            <label style="margin-top:10px">Linked page (optional)</label>
+            <label style="margin-top:10px" data-i18n="web_ui_linked_page_optional">Linked page (optional)</label>
             <select id="pageDialogLinkedPage" onchange="onPageDialogLinkedPageChange()"></select>
-            <div class="hint" style="margin-top:4px">Swiping UP from this page's dots jumps straight to the linked page — handy for a "more options" page under a card (e.g. extra Apple TV controls). Several different pages can all link to the <em>same</em> shared page (e.g. a "TV Remote" page with HDMI/amp controls, linked from both "Apple TV" and "Xbox"): leave that shared page's own "Parent page" empty and it'll automatically return to whichever page you actually swiped up from, rather than always jumping back to one fixed page. Only set a "Parent page" on the linked page if it should always return to one specific place regardless of how you got there.</div>
+            <div class="hint" style="margin-top:4px" data-i18n-html="web_ui_linked_page_hint">Swiping UP from this page's dots jumps straight to the linked page — handy for a "more options" page under a card (e.g. extra Apple TV controls). Several different pages can all link to the <em>same</em> shared page (e.g. a "TV Remote" page with HDMI/amp controls, linked from both "Apple TV" and "Xbox"): leave that shared page's own "Parent page" empty and it'll automatically return to whichever page you actually swiped up from, rather than always jumping back to one fixed page. Only set a "Parent page" on the linked page if it should always return to one specific place regardless of how you got there.</div>
             <div id="pageDialogLinkedPageModeRow" style="display:none">
-                <label style="margin-top:10px">How it opens</label>
+                <label style="margin-top:10px" data-i18n="web_ui_how_it_opens">How it opens</label>
                 <select id="pageDialogLinkedPageMode" onchange="onPageDialogLinkedPageModeChange()">
-                    <option value="page">Full page (swipe there, same as today)</option>
-                    <option value="popup">Popup (floats over the current page)</option>
+                    <option value="page" data-i18n="web_ui_full_page_swipe_there_same_as">Full page (swipe there, same as today)</option>
+                    <option value="popup" data-i18n="web_ui_popup_floats_over_the_current_page">Popup (floats over the current page)</option>
                 </select>
-                <div id="pageDialogLinkedPopupHint" style="display:none" class="hint">The popup shows the linked page's own cards floating over whatever page you're on — the page itself doesn't change. Closed by tapping outside it or its ✕. Width/height/position are set below.</div>
+                <div id="pageDialogLinkedPopupHint" style="display:none" class="hint" data-i18n="web_ui_the_popup_shows_the_linked_page">The popup shows the linked page's own cards floating over whatever page you're on — the page itself doesn't change. Closed by tapping outside it or its ✕. Width/height/position are set below.</div>
             </div>
-            <label style="margin-top:10px">Hide unless this Activity is running (optional)</label>
+            <label style="margin-top:10px" data-i18n="web_ui_hide_unless_this_activity_is_running">Hide unless this Activity is running (optional)</label>
             <select id="pageDialogHiddenUnlessActivity" onchange="onPageDialogHiddenChange()"></select>
-            <label class="inline-check" id="pageDialogHideFullRow" style="display:none; margin-top:6px"><input type="checkbox" id="pageDialogHideFull"> Hide completely — swiping skips this page while the Activity is off, and the remote leaves it when the Activity stops (tiles, hotkeys and Home Assistant can still open it)</label>
-            <div class="hint" style="margin-top:4px">Leaves this page's dot out of the indicator until the chosen Activity is actually running, then shows it automatically — handy for decluttering a page tied to a device that isn't always in use. Lists both composed Activities (the "Activities" tab) and "track": true scene_grid tiles/hotkeys, Harmony ones included — same set ActivityRuntime tracks at runtime. Doesn't affect swiping to the page directly (a scene_grid tile's own "page" field, a hardware button, etc. — see the field's own note in AppConfig.kt for why), just its dot.</div>
-            <label style="margin-top:10px">Auto-open when this entity's state is (optional)</label>
+            <label class="inline-check" id="pageDialogHideFullRow" style="display:none; margin-top:6px"><input type="checkbox" id="pageDialogHideFull"> <span data-i18n="web_ui_hide_completely_swiping_skips_this_page">Hide completely — swiping skips this page while the Activity is off, and the remote leaves it when the Activity stops (tiles, hotkeys and Home Assistant can still open it)</span></label>
+            <div class="hint" style="margin-top:4px" data-i18n="web_ui_leaves_this_page_s_dot_out">Leaves this page's dot out of the indicator until the chosen Activity is actually running, then shows it automatically — handy for decluttering a page tied to a device that isn't always in use. Lists both composed Activities (the "Activities" tab) and "track": true scene_grid tiles/hotkeys, Harmony ones included — same set ActivityRuntime tracks at runtime. Doesn't affect swiping to the page directly (a scene_grid tile's own "page" field, a hardware button, etc. — see the field's own note in AppConfig.kt for why), just its dot.</div>
+            <label style="margin-top:10px" data-i18n="web_ui_auto_open_when_this_entity_s">Auto-open when this entity's state is (optional)</label>
             <div style="display:flex; gap:8px;">
-                <input type="text" id="pageDialogOpenWhenEntity" placeholder="e.g., switch.doorbell" style="flex:2" oninput="onPageDialogOpenWhenEntityChange()">
+                <input type="text" id="pageDialogOpenWhenEntity" placeholder="e.g., switch.doorbell" style="flex:2" oninput="onPageDialogOpenWhenEntityChange()" data-i18n-attr="placeholder:web_ui_e_g_switch_doorbell">
                 <input type="text" id="pageDialogOpenWhenState" placeholder="on" style="flex:1">
             </div>
-            <label style="margin-top:10px">...and auto-close when its state is (optional)</label>
-            <input type="text" id="pageDialogCloseWhenState" placeholder="leave blank for &quot;anything else&quot;">
-            <div class="hint" style="margin-top:4px">Automatically jumps to this page the moment the entity's state matches the "open" one above (e.g. a doorbell switch turning on) — remembering wherever you were, so BACK/the chevron return there. Leave "close when" blank for the simple on/off case: closes on any state other than the open one. Set it explicitly for anything with more than two meaningful states — a cover's open/opening/closing/closed, a lock's locked/unlocked — so a transitional state doesn't force the page shut mid-way (e.g. open="open", close="closed" ignores "opening"/"closing" entirely). You can always close it yourself too, the same way as tapping "‹ back". For BACK on the remote itself to also close it, also set a "Parent page" above — the hardware BACK button only knows about that static field, not this dynamic close.</div>
+            <label style="margin-top:10px" data-i18n="web_ui_and_auto_close_when_its_state">...and auto-close when its state is (optional)</label>
+            <input type="text" id="pageDialogCloseWhenState" placeholder="leave blank for &quot;anything else&quot;" data-i18n-attr="placeholder:web_ui_leave_blank_for_anything_else">
+            <div class="hint" style="margin-top:4px" data-i18n="web_ui_automatically_jumps_to_this_page_the">Automatically jumps to this page the moment the entity's state matches the "open" one above (e.g. a doorbell switch turning on) — remembering wherever you were, so BACK/the chevron return there. Leave "close when" blank for the simple on/off case: closes on any state other than the open one. Set it explicitly for anything with more than two meaningful states — a cover's open/opening/closing/closed, a lock's locked/unlocked — so a transitional state doesn't force the page shut mid-way (e.g. open="open", close="closed" ignores "opening"/"closing" entirely). You can always close it yourself too, the same way as tapping "‹ back". For BACK on the remote itself to also close it, also set a "Parent page" above — the hardware BACK button only knows about that static field, not this dynamic close.</div>
             <div id="pageDialogOpenModeRow" style="display:none">
-                <label style="margin-top:10px">How it opens</label>
+                <label style="margin-top:10px" data-i18n="web_ui_how_it_opens">How it opens</label>
                 <select id="pageDialogOpenMode" onchange="onPageDialogOpenModeChange()">
-                    <option value="page">Full page (jump there, same as today)</option>
-                    <option value="popup">Popup (floats over whatever page you're on)</option>
+                    <option value="page" data-i18n="web_ui_full_page_jump_there_same_as">Full page (jump there, same as today)</option>
+                    <option value="popup" data-i18n="web_ui_popup_floats_over_whatever_page_you">Popup (floats over whatever page you're on)</option>
                 </select>
-                <div id="pageDialogOpenPopupHint" style="display:none" class="hint">Uses the same width/height/position settings as "Linked page" above (a page's popup shape is one setting, however it gets opened). Ideal for something like an intercom/doorbell call: it shows over whatever you're doing without losing your place, and closes itself the same way full-page mode would — the entity leaving the "open" state above.</div>
+                <div id="pageDialogOpenPopupHint" style="display:none" class="hint" data-i18n="web_ui_uses_the_same_width_height_position">Uses the same width/height/position settings as "Linked page" above (a page's popup shape is one setting, however it gets opened). Ideal for something like an intercom/doorbell call: it shows over whatever you're doing without losing your place, and closes itself the same way full-page mode would — the entity leaving the "open" state above.</div>
             </div>
-            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogTilePopup" onchange="onPageDialogTilePopupChange()"> Opened as a popup from a tile elsewhere on the dashboard</label>
-            <div class="hint" style="margin-top:4px">Check this if some tile's own "Page to open" (a scene_grid item's "pageMode": "popup", or a title's "..._pageMode": "popup") points at THIS page — the page dialog otherwise has no way to know a tile somewhere else opens it, so it wouldn't show or save the size below. Not needed when "Linked page"/"Auto-open" above are already set to popup — this page's popup shape is one setting shared by all three, however it gets opened.</div>
+            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogTilePopup" onchange="onPageDialogTilePopupChange()"> <span data-i18n="web_ui_opened_as_a_popup_from_a">Opened as a popup from a tile elsewhere on the dashboard</span></label>
+            <div class="hint" style="margin-top:4px" data-i18n="web_ui_check_this_if_some_tile_s">Check this if some tile's own "Page to open" (a scene_grid item's "pageMode": "popup", or a title's "..._pageMode": "popup") points at THIS page — the page dialog otherwise has no way to know a tile somewhere else opens it, so it wouldn't show or save the size below. Not needed when "Linked page"/"Auto-open" above are already set to popup — this page's popup shape is one setting shared by all three, however it gets opened.</div>
             <div id="pageDialogPopupRow" style="display:none">
-                <label style="margin-top:10px">Popup size &amp; position</label>
+                <label style="margin-top:10px" data-i18n="web_ui_popup_size_amp_position">Popup size &amp; position</label>
                 <div style="display:flex; gap:8px;">
                     <div style="flex:1">
-                        <label>Width (% of screen)</label>
+                        <label data-i18n="web_ui_width_of_screen">Width (% of screen)</label>
                         <input type="number" id="pageDialogPopupWidth" min="10" max="100" value="70">
                     </div>
                     <div style="flex:1">
-                        <label>Height (% of screen)</label>
+                        <label data-i18n="web_ui_height_of_screen">Height (% of screen)</label>
                         <input type="number" id="pageDialogPopupHeight" min="10" max="100" value="50">
                     </div>
                 </div>
-                <label style="margin-top:10px">Position</label>
+                <label style="margin-top:10px" data-i18n="web_ui_position">Position</label>
                 <select id="pageDialogPopupPosition">
-                    <option value="center">Center</option>
-                    <option value="top">Top</option>
-                    <option value="bottom">Bottom</option>
-                    <option value="left">Left</option>
-                    <option value="right">Right</option>
+                    <option value="center" data-i18n="web_card_align_center">Center</option>
+                    <option value="top" data-i18n="web_ui_top">Top</option>
+                    <option value="bottom" data-i18n="web_ui_bottom">Bottom</option>
+                    <option value="left" data-i18n="web_hwkey_left">Left</option>
+                    <option value="right" data-i18n="web_hwkey_right">Right</option>
                 </select>
-                <div class="hint" style="margin-top:4px">Shared by "Linked page", "Auto-open", and "Opened as a popup from a tile elsewhere" above, whichever of the three is set to popup/checked — a page's popup shape is one setting, however it gets opened.</div>
+                <div class="hint" style="margin-top:4px" data-i18n="web_ui_shared_by_linked_page_auto_open">Shared by "Linked page", "Auto-open", and "Opened as a popup from a tile elsewhere" above, whichever of the three is set to popup/checked — a page's popup shape is one setting, however it gets opened.</div>
             </div>
             <div class="btn-row" style="margin-top:12px">
-                <button onclick="savePageDialog()">Save</button>
-                <button class="secondary" onclick="closePageDialog()">Cancel</button>
-                <button id="pageDialogDeleteBtn" class="danger" style="display:none" onclick="deletePageFromDialog()">Delete page</button>
+                <button data-i18n="web_save" onclick="savePageDialog()">Save</button>
+                <button class="secondary" data-i18n="web_cancel" onclick="closePageDialog()">Cancel</button>
+                <button id="pageDialogDeleteBtn" class="danger" style="display:none" data-i18n="web_delete_page" onclick="deletePageFromDialog()">Delete page</button>
             </div>
         </div>
     </div>
@@ -396,15 +396,15 @@
 
 <div id="activityWizardModal" class="preview-modal" >
     <div class="preview-modal-inner ha-dialog">
-        <button class="preview-modal-close" onclick="closeActivityWizard()">✕ Close</button>
-        <h2 style="margin-top:0" id="activityWizardTitle">New Activity</h2>
+        <button class="preview-modal-close" data-i18n="web_modal_close" onclick="closeActivityWizard()">✕ Close</button>
+        <h2 style="margin-top:0" id="activityWizardTitle" data-i18n="web_modal_new_activity">New Activity</h2>
         <div id="wizStepLabel" class="hint" style="margin-bottom:10px"></div>
         <div class="section-box">
             <div id="wizBody"></div>
             <div class="btn-row" style="margin-top:14px">
-                <button id="wizBackBtn" class="secondary" onclick="wizardBack()">Back</button>
-                <button id="wizNextBtn" onclick="wizardNext()">Next</button>
-                <button id="wizSaveBtn" style="display:none" onclick="saveActivityWizard()">Save Activity</button>
+                <button id="wizBackBtn" class="secondary" data-i18n="web_back" onclick="wizardBack()">Back</button>
+                <button id="wizNextBtn" data-i18n="web_next" onclick="wizardNext()">Next</button>
+                <button id="wizSaveBtn" style="display:none" data-i18n="web_modal_save_activity" onclick="saveActivityWizard()">Save Activity</button>
             </div>
         </div>
     </div>
@@ -412,15 +412,16 @@
 
 <div id="iconPickerModal" class="preview-modal" >
     <div class="preview-modal-inner icon-picker-inner">
-        <button class="preview-modal-close" onclick="closeIconPicker()">✕ Close</button>
-        <h2 style="margin-top:0">Choose an icon</h2>
-        <div class="hint">Icons already uploaded via the "Icons" section on the device's home page (<code>/</code>).</div>
+        <button class="preview-modal-close" data-i18n="web_modal_close" onclick="closeIconPicker()">✕ Close</button>
+        <h2 style="margin-top:0" data-i18n="web_modal_choose_icon">Choose an icon</h2>
+        <div class="hint"><span data-i18n="web_modal_icon_hint_1">Icons already uploaded via the "Icons" section on the device's home page (</span><code>/</code>).</div>
         <div id="iconPickerGrid" class="icon-picker-grid"></div>
     </div>
 </div>
 
 <div id="toast" class="toast"></div>
 
+<script src="js/i18n.js"></script>
 <script src="js/mocks.js"></script>
 <script src="js/pages.js"></script>
 <script src="js/cards.js"></script>
@@ -433,6 +434,6 @@
 <script src="js/export.js"></script>
 <script src="js/preview.js"></script>
 <script src="js/device.js"></script>
-<script>applyUiI18n(); initEditor(); loadStableBadge();</script>
+<script>I18N.ready.then(() => { initEditor(); loadStableBadge(); applyUiI18n(); });</script>
 </body>
 </html>

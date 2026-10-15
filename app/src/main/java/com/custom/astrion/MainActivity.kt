@@ -76,6 +76,7 @@ import com.custom.astrion.web.ConfigServer
 import java.util.concurrent.TimeUnit
 import kotlin.math.acos
 import kotlin.math.sqrt
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -408,7 +409,8 @@ class MainActivity : ComponentActivity() {
      * lambda so it always sees the current instance, including across a
      * dashboard.json reload. Null only for the brief window before the
      * first composition runs. */
-    private var activityRuntime: ActivityRuntime? = null
+    // State, so the dock clock (ScreenOverlays) recomposes once the dashboard hands it over.
+    private var activityRuntime by mutableStateOf<ActivityRuntime?>(null)
 
     /** Live start/stop-activity functions handed up from Dashboard.kt the
      * same way — they close over Compose-scoped state (activitiesById,
@@ -419,6 +421,7 @@ class MainActivity : ComponentActivity() {
     private val keyRouter = HardwareKeyRouter()
     private var dashboard by mutableStateOf(DashboardLoader.Result(DashboardConfig.default, null))
     private var navTarget by mutableStateOf<Int?>(null)
+    private var popupTarget by mutableStateOf<String?>(null)
     private var overlayTarget by mutableStateOf<String?>(null)
 
     /** See DashboardNavigation.volumeHotkeyTrigger — set fresh (never
@@ -678,6 +681,8 @@ class MainActivity : ComponentActivity() {
                         onNavHandled = { navTarget = null },
                         overlayTarget = overlayTarget,
                         onOverlayHandled = { overlayTarget = null },
+                        popupTarget = popupTarget,
+                        onPopupHandled = { popupTarget = null },
                         onPageChanged = { pageIndex ->
                             currentPageIndex = pageIndex
                             rebindHotkeysForCurrentPage()
@@ -736,6 +741,14 @@ class MainActivity : ComponentActivity() {
         else -> null
     }
 
+    /** The active Activity's `nowPlayingEntity` for the dock clock — live, follows Activity changes. */
+    @Composable
+    private fun rememberActivityPlayer(room: String?): String? {
+        val runtime = activityRuntime
+        val activeByRoom by (runtime?.activeByRoom ?: noActiveActivities).collectAsState()
+        return runtime?.nowPlayingEntity(room, activeByRoom)
+    }
+
     /** The full-screen layers drawn over the dashboard: the dock screen, then "Find my remote". */
     @Composable
     private fun ScreenOverlays(dockOverlay: String?, dock: DockConfig, entities: EntityMap, ringing: Boolean) {
@@ -748,7 +761,8 @@ class MainActivity : ComponentActivity() {
                     entities = entities,
                     client = client,
                     isNight = chargeDockMonitor::isNight,
-                    onTouch = { chargeDockMonitor.onUserInteraction() }
+                    onTouch = { chargeDockMonitor.onUserInteraction() },
+                    activityPlayer = rememberActivityPlayer(dock.room)
                 )
         }
         if (ringing) ProvideTheme(theme) { RingFoundOverlay(onStop = { FindMyRemote.stop() }) }
@@ -930,6 +944,15 @@ class MainActivity : ComponentActivity() {
         return true
     }
 
+    /** `"page"`: jumps to that page, or with `"pageMode": "popup"` opens it as a popup (closing it
+     * again if it's already the open one — see Dashboard's HotkeyPopupEffect). */
+    private fun openPageHotkey(pageName: String, popup: Boolean): Boolean {
+        val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
+        if (idx < 0) return false
+        if (popup) popupTarget = dashboard.config.pages[idx].name else navTarget = idx
+        return true
+    }
+
     private fun openCurrentActivityHotkey(room: String): Boolean {
         val pageName = activityRuntime?.activeActivity(room)?.page ?: return false
         val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -997,12 +1020,7 @@ class MainActivity : ComponentActivity() {
     private fun runHotkey(hk: HotkeyConfig, long: Boolean = false): Boolean {
         runActivityHotkey(hk, long)?.let { return it }
 
-        hk.page?.let { pageName ->
-            val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
-            if (idx < 0) return false
-            navTarget = idx
-            return true
-        }
+        hk.page?.let { pageName -> return openPageHotkey(pageName, popup = hk.opensPopup) }
 
         hk.harmonyActivity?.let { activityId ->
             harmonyRegistry.client(hk.hub)?.startActivity(activityId)
@@ -1420,3 +1438,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+/** Stand-in for ActivityRuntime.activeByRoom before the dashboard has created its runtime. */
+private val noActiveActivities = MutableStateFlow<Map<String, String?>>(emptyMap())

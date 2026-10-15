@@ -174,9 +174,9 @@ function importJson() {
     dashboardData = normalizeDashboardData(parsed);
     currentActivePage = 0;
     initEditor();
-    alert('dashboard.json loaded — you can now edit it below.');
+    alert(I18N.t('web_page_imported'));
   } catch (e) {
-    alert('Invalid JSON: ' + e.message);
+    alert(I18N.t('web_page_invalid_json', e.message));
   }
 }
 
@@ -212,7 +212,7 @@ function onPageChange(index) {
 function openPageDialog(index) {
   editingPage = index; // null = adding a new page
   const isNew = index === null;
-  document.getElementById('pageDialogTitle').textContent = isNew ? 'Add page' : 'Page settings';
+  document.getElementById('pageDialogTitle').textContent = isNew ? I18N.t('web_modal_add_page') : I18N.t('web_modal_page_settings');
   document.getElementById('pageDialogName').value = isNew ? '' : dashboardData.pages[index].name;
   populatePageParentSelect(index);
   document.getElementById('pageDialogParent').value = isNew ? '' : (dashboardData.pages[index].parent || '');
@@ -325,7 +325,7 @@ function pagesUnavailableAsParentOf(excludeIndex) {
 function populatePageParentSelect(excludeIndex) {
   const select = document.getElementById('pageDialogParent');
   const unavailable = pagesUnavailableAsParentOf(excludeIndex);
-  select.innerHTML = '<option value="">— None (top-level page) —</option>' +
+  select.innerHTML = '<option value="">' + I18N.t('web_page_parent_none') + '</option>' +
     dashboardData.pages
       .filter(p => !unavailable.has(p.name))
       .map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`)
@@ -339,7 +339,7 @@ function populatePageParentSelect(excludeIndex) {
 function populatePageLinkedPageSelect(excludeIndex) {
   const select = document.getElementById('pageDialogLinkedPage');
   const selfName = excludeIndex === null ? null : dashboardData.pages[excludeIndex].name;
-  select.innerHTML = '<option value="">— None —</option>' +
+  select.innerHTML = `<option value="">${I18N.t('web_page_linked_none')}</option>` +
     dashboardData.pages
       .filter(p => p.name !== selfName)
       .map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`)
@@ -352,10 +352,10 @@ function populatePageLinkedPageSelect(excludeIndex) {
 function populatePageHiddenUnlessActivitySelect() {
   const select = document.getElementById('pageDialogHiddenUnlessActivity');
   const options = collectTrackableActivities();
-  select.innerHTML = '<option value="">— Always shown —</option>' +
+  select.innerHTML = `<option value="">${I18N.t('web_page_hidden_always')}</option>` +
     options.map(o => `<option value="${o.id.replace(/"/g, '&quot;')}">${o.label}</option>`).join('');
   if (options.length === 0) {
-    select.innerHTML += '<option value="" disabled>(no trackable Activities yet — add one in the Activities tab, or a "track": true scene_grid tile)</option>';
+    select.innerHTML += `<option value="" disabled>${I18N.t('web_page_hidden_no_activities')}</option>`;
   }
 }
 
@@ -366,7 +366,7 @@ function closePageDialog() {
 
 function savePageDialog() {
   const name = document.getElementById('pageDialogName').value.trim();
-  if (!name) { alert('Give the page a name.'); return; }
+  if (!name) { alert(I18N.t('web_page_need_name')); return; }
   const parent = document.getElementById('pageDialogParent').value || undefined;
   const parentKey = document.getElementById('pageDialogParentKey').value || 'BACK';
   const linkedPage = document.getElementById('pageDialogLinkedPage').value || undefined;
@@ -471,13 +471,13 @@ function savePageDialog() {
 function deletePageFromDialog() {
   const i = editingPage;
   if (i === null) return;
-  if (dashboardData.pages.length <= 1) { alert('You need at least one page.'); return; }
+  if (dashboardData.pages.length <= 1) { alert(I18N.t('web_page_need_one')); return; }
   const deletedName = dashboardData.pages[i].name;
   const children = dashboardData.pages.filter(p => p.parent === deletedName);
   const childWarning = children.length
-    ? ` ${children.length} child page(s) (${children.map(c => c.name).join(', ')}) will become top-level pages instead of being deleted.`
+    ? ' ' + I18N.t('web_page_delete_child_warning', children.length, children.map(c => c.name).join(', '))
     : '';
-  if (!confirm(`Delete page "${deletedName}" and everything on it (cards, page hotkeys)?${childWarning}`)) return;
+  if (!confirm(I18N.t('web_page_delete_confirm', deletedName) + childWarning)) return;
   children.forEach(c => delete c.parent);
   // Any page linking up to the one being deleted loses that link too —
   // otherwise its swipe-up would silently point at a page that no longer

@@ -209,6 +209,8 @@ object DashboardLoader {
         val openCurrentActivityRoom = obj["openCurrentActivityRoom"]?.jsonPrimitive?.content
         val stopActivity = obj["stopActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val event = obj["event"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotBlank() }
+        val pageMode = obj["pageMode"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val nowPlayingEntity = obj["nowPlayingEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         return HotkeyConfig(
             key,
             page,
@@ -227,7 +229,9 @@ object DashboardLoader {
             openOverlay,
             openCurrentActivityRoom,
             stopActivity,
-            event
+            event,
+            pageMode,
+            nowPlayingEntity
         )
     }
 
@@ -302,7 +306,20 @@ object DashboardLoader {
         val volumeUpCommand = obj["volumeUpCommand"]?.jsonPrimitive?.content
         val volumeDownCommand = obj["volumeDownCommand"]?.jsonPrimitive?.content
         val muteCommand = obj["muteCommand"]?.jsonPrimitive?.content
-        return ActivityConfig(id, name, room, icon, page, devices, volumeDeviceId, volumeUpCommand, volumeDownCommand, muteCommand)
+        val nowPlayingEntity = obj["nowPlayingEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        return ActivityConfig(
+            id,
+            name,
+            room,
+            icon,
+            page,
+            devices,
+            volumeDeviceId,
+            volumeUpCommand,
+            volumeDownCommand,
+            muteCommand,
+            nowPlayingEntity
+        )
     }
 
     private fun parseActivityDevice(obj: JsonObject, activityId: String): ActivityDeviceConfig {
@@ -350,7 +367,8 @@ object DashboardLoader {
             (obj["media_entities"] as? JsonArray)
                 ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> c.isNotBlank() } }
                 .orEmpty(),
-            showBattery = (obj["show_battery"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true
+            showBattery = (obj["show_battery"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true,
+            room = str("room")
         )
     }
 
@@ -547,6 +565,7 @@ object DashboardLoader {
                                 act.volumeUpCommand?.let { put("volumeUpCommand", it) }
                                 act.volumeDownCommand?.let { put("volumeDownCommand", it) }
                                 act.muteCommand?.let { put("muteCommand", it) }
+                                act.nowPlayingEntity?.let { put("nowPlayingEntity", it) }
                                 put(
                                     "devices",
                                     buildJsonArray {
@@ -581,6 +600,7 @@ object DashboardLoader {
                 buildJsonObject {
                     put("key", hk.key)
                     hk.page?.let { put("page", it) }
+                    hk.pageMode?.let { put("pageMode", it) }
                     hk.service?.let { put("service", it) }
                     hk.entityId?.let { put("entityId", it) }
                     if (hk.data.isNotEmpty()) put("data", JsonPlain.toJson(hk.data))

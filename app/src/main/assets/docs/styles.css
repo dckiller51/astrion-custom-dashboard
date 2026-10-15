@@ -638,3 +638,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
     --accent: #6EA8FE; --accent2: #4C6EF5; --amber: #FFC24B;
     --danger: #E06767; --success: #4CAF50;
   }
+/* monitor card "marquee": one line, scrolls when the value overflows (MonitorCard.kt basicMarquee). */
+.mon-marquee { overflow: hidden; white-space: nowrap; min-width: 0; font-weight: 500; }
+.mon-marquee span { display: inline-block; padding-left: 0; animation: mon-marquee 8s linear infinite; }
+@keyframes mon-marquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(min(0px, calc(-100% + 120px))); } }

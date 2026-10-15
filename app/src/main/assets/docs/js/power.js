@@ -6,8 +6,8 @@
 // from the defaults.
 
 const POWER_DEFAULTS = { motion_wake_minutes: 5, screen_off_filter_seconds: 30, dock_debounce_seconds: 5 };
-const POWER_MOTION_CHOICES = [[0, 'Off — only the buttons wake the screen'], [1, '1 minute'], [2, '2 minutes'],
-  [5, '5 minutes (default)'], [10, '10 minutes'], [30, '30 minutes'], [-1, 'Always (uses the most battery)']];
+const POWER_MOTION_CHOICES = [[0, 'web_power_motion_off'], [1, 'web_power_motion_1'], [2, 'web_power_motion_n'],
+  [5, 'web_power_motion_default'], [10, 'web_power_motion_n'], [30, 'web_power_motion_n'], [-1, 'web_power_motion_always']];
 const POWER_TIMEOUT_CHOICES = [[10, '10 s'], [15, '15 s'], [30, '30 s'], [60, '1 min'], [120, '2 min'], [300, '5 min']];
 
 function powerValues() {
@@ -32,48 +32,46 @@ function renderPowerForm() {
   const p = powerValues();
   const kept = p.screen_off_entities || [];
   const motion = POWER_MOTION_CHOICES.some(([v]) => v === p.motion_wake_minutes)
-    ? POWER_MOTION_CHOICES : POWER_MOTION_CHOICES.concat([[p.motion_wake_minutes, p.motion_wake_minutes + ' minutes']]);
+    ? POWER_MOTION_CHOICES : POWER_MOTION_CHOICES.concat([[p.motion_wake_minutes, 'web_power_motion_n']]);
   const timeout = p.screen_timeout_seconds && !POWER_TIMEOUT_CHOICES.some(([v]) => v === p.screen_timeout_seconds)
     ? POWER_TIMEOUT_CHOICES.concat([[p.screen_timeout_seconds, p.screen_timeout_seconds + ' s']]) : POWER_TIMEOUT_CHOICES;
   box.innerHTML = `
-    <div class="hint" style="margin-bottom:10px">How this remote saves battery while its screen is off. The defaults suit most setups.</div>
-    <label for="powerMotion">Wake the screen when picked up — for how long after it goes off</label>
+    <div class="hint" style="margin-bottom:10px">${I18N.t('web_power_how_this_remote_saves_battery_while')}</div>
+    <label for="powerMotion">${I18N.t('web_power_wake_the_screen_when_picked_up')}</label>
     <select id="powerMotion" onchange="onPowerInput()">
-      ${motion.map(([v, l]) => `<option value="${v}" ${v === p.motion_wake_minutes ? 'selected' : ''}>${powerEsc(l)}</option>`).join('')}
+      ${motion.map(([v, l]) => `<option value="${v}" ${v === p.motion_wake_minutes ? 'selected' : ''}>${powerEsc(I18N.t(l, v))}</option>`).join('')}
     </select>
-    <div class="hint">After that the motion sensor sleeps until a button turns the screen on. Never wakes on the dock.</div>
+    <div class="hint">${I18N.t('web_power_after_that_the_motion_sensor_sleeps')}</div>
 
-    <label for="powerFilter">Go quiet with Home Assistant after the screen is off for (seconds)</label>
+    <label for="powerFilter">${I18N.t('web_power_go_quiet_with_home_assistant_after')}</label>
     <input type="number" id="powerFilter" min="-1" max="3600" placeholder="${POWER_DEFAULTS.screen_off_filter_seconds}"
       value="${p.screen_off_filter_seconds !== POWER_DEFAULTS.screen_off_filter_seconds ? p.screen_off_filter_seconds : ''}" onchange="onPowerInput()">
-    <div class="hint">Quiet = the remote stops receiving every state change (the main battery drain on a busy Home Assistant)
-      and catches up the moment the screen comes on. -1 = never go quiet. Not applied while docked.</div>
+    <div class="hint">${I18N.t('web_power_quiet_the_remote_stops_receiving_every')}</div>
 
-    <label>Entities kept live while quiet (optional)</label>
+    <label>${I18N.t('web_power_entities_kept_live_while_quiet_optional')}</label>
     <div id="powerKeptList" class="power-chips">
       ${kept.length ? kept.map((id, i) => `<span class="power-chip">${powerEsc(id)}
-        <button class="secondary" title="Remove" onclick="removePowerEntity(${i})">×</button></span>`).join('')
-        : '<div class="hint">None — nothing is received while quiet.</div>'}
+        <button class="secondary" title="${I18N.t('web_config_harmony_remove_button')}" onclick="removePowerEntity(${i})">×</button></span>`).join('')
+        : `<div class="hint">${I18N.t('web_power_none_nothing_is_received_while_quiet')}</div>`}
     </div>
     <div class="power-add-row">
-      <input type="text" id="powerEntityInput" list="powerEntityList" placeholder="e.g. input_boolean.find_remote">
+      <input type="text" id="powerEntityInput" list="powerEntityList" placeholder="${I18N.t('web_power_e_g_input_boolean_find_remote')}">
       <datalist id="powerEntityList">${powerEntityIds().map(id => `<option value="${powerEsc(id)}">`).join('')}</datalist>
-      <button class="secondary" onclick="addPowerEntity()">+ Add</button>
+      <button class="secondary" onclick="addPowerEntity()">${I18N.t('web_power_add')}</button>
     </div>
-    <div class="hint">Only for something the remote must react to with its screen off. "Find my remote" doesn't need it.</div>
+    <div class="hint">${I18N.t('web_power_only_for_something_the_remote_must')}</div>
 
-    <label for="powerDebounce">Dock detection delay (seconds)</label>
+    <label for="powerDebounce">${I18N.t('web_power_dock_detection_delay_seconds')}</label>
     <input type="number" id="powerDebounce" min="0" max="60" placeholder="${POWER_DEFAULTS.dock_debounce_seconds}"
       value="${p.dock_debounce_seconds !== POWER_DEFAULTS.dock_debounce_seconds ? p.dock_debounce_seconds : ''}" onchange="onPowerInput()">
-    <div class="hint">Charging must hold this long before the dock screen shows — a remote set down crooked doesn't flicker it on and off.</div>
+    <div class="hint">${I18N.t('web_power_charging_must_hold_this_long_before')}</div>
 
-    <label for="powerTimeout">Screen timeout</label>
+    <label for="powerTimeout">${I18N.t('web_power_screen_timeout')}</label>
     <select id="powerTimeout" onchange="onPowerInput()">
-      <option value="" ${!p.screen_timeout_seconds ? 'selected' : ''}>Leave the remote's system setting</option>
+      <option value="" ${!p.screen_timeout_seconds ? 'selected' : ''}>${I18N.t('web_power_leave_the_remote_s_system_setting')}</option>
       ${timeout.map(([v, l]) => `<option value="${v}" ${v === p.screen_timeout_seconds ? 'selected' : ''}>${l}</option>`).join('')}
     </select>
-    <div class="hint">Also settable on the remote (Settings › Display › Screen timeout). The remote needs
-      "Modify system settings" — the same permission as its brightness slider; it asks for it there the first time.</div>`;
+    <div class="hint">${I18N.t('web_power_also_settable_on_the_remote_settings')}</div>`;
 }
 
 /** Reads the form back into dashboardData.power, keeping only what differs from the defaults. */
