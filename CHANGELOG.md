@@ -3,10 +3,20 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.2.7-beta] - 2026-10-13
+## [1.2.8-beta] - 2026-10-15
 
 ### Added
 
+- **A hotkey can open a page as a popup.** `"pageMode": "popup"` next to `"page"` floats that page over the current one, sized by its own popup settings — the same popup a tile's `"pageMode": "popup"` opens. Pressing the key again while it's open closes it. Builder: "Open as a popup" under the hotkey's target page. No more helper `input_boolean` just to pop up an AV page from a long press.
+
+  ```json
+  { "key": "MAIN", "page": "AV", "pageMode": "popup" }
+  ```
+
+- **Monitor card: long values.** `"layout": "vertical"` puts each value on its own full-width line under its name; `"marquee": true` keeps a value on one line and scrolls it when it doesn't fit (for sensors such as an AVR's audio/video info). Both optional; without them a row looks as before. The builder now has a real form for this card (moved from "Advanced (raw options)" to the common cards): title, layout, scrolling, and a list of sensors — entity picked with Home Assistant autocomplete, optional name, reorder with ↑/↓ — instead of raw JSON. Options set by hand in dashboard.json are kept when the card is edited.
+- **Dock clock: "Now playing" follows the room's Activity.** A composed Activity, a tracked tile or a tracked hotkey can name its content source with `"nowPlayingEntity"` (the Apple TV, not the TV or AVR); a composed Activity with a network Apple TV uses it automatically. New `dock.room` ("Room of this remote" in the builder): while an Activity runs in that room, the clock shows only its player — never another room's. Without a room, the only running Activity is used when there is just one. Otherwise `media_entities` as before, except that a playing player now wins over a paused one listed earlier (an old paused source no longer takes the spot).
+
+- **The dashboard builder and the device page speak French, Italian and Spanish.** `/` and `/builder/` follow the browser's language (English otherwise): every label, hint, placeholder, card form, hotkey form, Activity wizard, preview caption and error message comes from `i18n/<lang>.json` (en, fr, it, es), and a string missing from a language falls back to English. Home Assistant state values in the preview (HVAC modes, vacuum states…) reuse the app's own `ha_labels`. Nothing written into `dashboard.json` changes — only what the editor shows. Built on Rob Johnston's (ClemsonJeeper) i18n work from his `feat/i18n-dashboard` branch: his string table, keys and French translation, ported onto the current builder and extended to the newer sections (Apple TV, dock screen, standby & battery, HA event hotkeys, page popups). The device page at the remote's address (`/`: Home Assistant, Harmony, IR devices and extenders, Apple TV pairing, backup, IR database, icons, Find my remote) is translated the same way.
 - **Several remotes in one home: each remote has an identity.** A stable id (`astrion-…`, from Android's ANDROID_ID: survives app updates, reinstalls and IP changes; only a factory reset gives a new one) and a friendly name ("Living room") — set in Settings › About › "Name of this remote", or with "Rename" on the remote's web page. New `GET /info` answers `{ id, name, manufacturer, model, android, version, versionCode, webhook }` (`webhook`: whether a push webhook id is set); `POST /remote-name` (`name=…`) renames it. Every webhook push now carries `"remote": { "id", "name" }`, so Home Assistant knows which remote sent it.
 - **Battery pushed to Home Assistant.** With a push webhook configured, the remote sends `{"type": "battery", "level": 57, "charging": false}` when the level crosses a 5 % step and when charging starts or stops — so the HA integration no longer needs to poll `/battery` every few seconds (each poll wakes the remote's Wi-Fi).
 - **Hotkey action "Home Assistant event".** `"event": "movie_scene"` on a hotkey fires `astrion_button` on Home Assistant's event bus with `event`, `key`, `long` (held or not), `page`, `remote_id` and `remote_name` — one automation can do a different thing per remote and per button. HA only accepts `fire_event` from an **administrator**'s token (refusals are logged). With a webhook configured it's also pushed as `{"type": "button", …}`, for the HA integration to turn into an event tied to the right device.
@@ -77,6 +87,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Activities whose devices have no profile keep the original order (power → input → delay, per device); the only difference is that "already on" now comes from the persisted device state when it's known.
 
 ### Fixed
+
+- **Builder: deleting a card asks first.** The ✕ sits right next to ✎ on every card, so a slip deleted the card outright; it now asks "Delete the card “…” from this page?", naming the card. Deleting a card above the one being edited no longer leaves the editor pointing at the wrong card.
+
+- **Builder: the Apple TV remote card preview now looks like the chosen layout.** It drew the classic remote for every layout with a fixed Menu/Home row and ignored most options. Classic, compact and full now follow the app: the buttons you ticked (or each layout's default row), round buttons and the now-playing strip in compact, the header, ±10 s transport row, labelled apps and side button columns in full, ±10 s only for a directly paired Apple TV, and the same app limits (5, or 6 in compact) with icons or initials.
+
+- **Harmony Activity tile stayed outlined after turning it off.** With a single hub (tiles and hotkeys without a `"hub"` field), the remote never matched the hub's live Activity to those tiles: the outline came only from the tap, so the hub's PowerOff (the tile's "Off" button, a long-press Power hotkey, the Harmony remote, Home Assistant) never cleared it. The default hub is now bound like an explicitly named one, so the outline follows the hub in both directions — including an Activity started from outside Astrion.
 
 - **WebBuilder: the remote's MENU key was listed as "MAIN" in the hotkeys** while the remote picture called it "Menu". The physical-key dropdown and the hotkey lists now show the key's name as on the remote, with its id: "Menu (MAIN)", "Fast-forward (FASTFORWARD)"… Nothing changes in `dashboard.json` (still `"key": "MAIN"`).
 - **Beta updates: "Beta available" showed even when the latest beta was already installed.** The rolling `dev-latest` pre-release keeps the same tag, so nothing was compared. The beta is now offered only when its APK was uploaded after the app was installed or last updated, and it's shown under the release's title (e.g. "1.2.6-beta") instead of "dev-latest". The web page's explicit "install the beta" button still always offers it.

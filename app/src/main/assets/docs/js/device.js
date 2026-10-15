@@ -24,6 +24,7 @@ function showToast(msg, type) {
 }
 
 async function loadDashboardFromDevice() {
+  await I18N.ready; // the preview's mock/state labels render during init, so strings must be in first
   try {
     const res = await fetch('/dashboard.json');
     deviceModeAvailable = true; // reaching this line at all means the app answered — even a 404 (no dashboard.json saved yet) still confirms device mode
@@ -40,7 +41,7 @@ async function loadDashboardFromDevice() {
     }
   } catch (e) {
     deviceModeAvailable = false;
-    showToast("Couldn't reach this device — check the connection, then reload this page.", 'error');
+    showToast(I18N.t('web_device_unreachable'), 'error');
     console.error('Failed to load dashboard.json from this device.', e);
   }
   updateDeviceModeUi();
@@ -83,21 +84,21 @@ async function saveDashboardToDevice() {
   try {
     JSON.parse(jsonText); // fail fast with a clear message rather than let the app reject a bad upload silently
   } catch (e) {
-    showToast('Invalid JSON: ' + e.message, 'error');
+    showToast(I18N.t('web_page_invalid_json', e.message), 'error');
     return;
   }
   const btn = document.getElementById('saveToDeviceBtn');
   const originalText = btn.textContent;
-  btn.textContent = 'Saving…';
+  btn.textContent = I18N.t('web_device_saving');
   btn.disabled = true;
   try {
     const form = new FormData();
     form.append('file', new Blob([jsonText], { type: 'application/json' }), 'dashboard.json');
     const res = await fetch('/dashboard.json', { method: 'POST', body: form });
     if (!res.ok) throw new Error('HTTP ' + res.status);
-    showToast('Saved — the dashboard reloads automatically.');
+    showToast(I18N.t('web_device_saved'));
   } catch (e) {
-    showToast('Save failed: ' + e, 'error');
+    showToast(I18N.t('web_device_save_failed', e), 'error');
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
@@ -110,8 +111,8 @@ function updateDeviceModeUi() {
   if (banner) {
     banner.style.display = 'block';
     banner.textContent = deviceModeAvailable
-      ? '✓ Connected to this device — dashboard.json was loaded automatically, and "Save to device" applies changes live.'
-      : 'Connecting to this device…';
+      ? I18N.t('web_device_connected_banner')
+      : I18N.t('web_device_connecting');
   }
   if (saveBtn) saveBtn.style.display = deviceModeAvailable ? 'inline-block' : 'none';
 }

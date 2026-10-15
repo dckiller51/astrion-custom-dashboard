@@ -39,39 +39,43 @@ function renderDockForm() {
   selectedMedia.filter(id => !mediaOptions.some(([m]) => m === id)).forEach(id => mediaOptions.unshift([id, id]));
   const clock = d.mode === 'clock';
   box.innerHTML = `
-    <div class="hint" style="margin-bottom:10px">What the remote shows while it sits on its charging dock. The mode is also switchable on the remote (Settings › Dock screen) — it writes this same value.</div>
-    <label for="dockMode">Mode</label>
+    <div class="hint" style="margin-bottom:10px">${I18N.t('web_dock_what_the_remote_shows_while_it')}</div>
+    <label for="dockMode">${I18N.t('climate_hvac_caption')}</label>
     <select id="dockMode" onchange="onDockInput()">
-      <option value="charging" ${d.mode === 'charging' ? 'selected' : ''}>Charging — battery screen (as before)</option>
-      <option value="clock" ${clock ? 'selected' : ''}>Clock — dashboard, then a dim clock when idle</option>
-      <option value="dashboard" ${d.mode === 'dashboard' ? 'selected' : ''}>Dashboard — just dims when idle</option>
+      <option value="charging" ${d.mode === 'charging' ? 'selected' : ''}>${I18N.t('web_dock_charging_battery_screen_as_before')}</option>
+      <option value="clock" ${clock ? 'selected' : ''}>${I18N.t('web_dock_clock_dashboard_then_a_dim_clock')}</option>
+      <option value="dashboard" ${d.mode === 'dashboard' ? 'selected' : ''}>${I18N.t('web_dock_dashboard_just_dims_when_idle')}</option>
     </select>
-    <label for="dockIdle">Idle time before dimming / clock (seconds)</label>
+    <label for="dockIdle">${I18N.t('web_dock_idle_time_before_dimming_clock_seconds')}</label>
     <input type="number" id="dockIdle" min="5" max="3600" placeholder="${DOCK_IDLE_DEFAULTS[d.mode] || 15}" value="${d.idle_seconds != null ? d.idle_seconds : ''}" onchange="onDockInput()">
     <div id="dockClockFields" style="display:${d.mode === 'charging' ? 'none' : ''}">
-      <label for="dockBrightness">Brightness when idle — day: <span id="dockBrightnessVal">${Math.round(d.brightness * 100)}%</span></label>
+      <label for="dockBrightness">${I18N.t('web_dock_brightness_when_idle_day')} <span id="dockBrightnessVal">${Math.round(d.brightness * 100)}%</span></label>
       <input type="range" id="dockBrightness" min="1" max="100" value="${Math.round(d.brightness * 100)}" oninput="onDockInput(true)" onchange="onDockInput()">
-      <label for="dockNightBrightness">Night (sun below the horizon, else 21:00–07:00): <span id="dockNightBrightnessVal">${Math.round(d.night_brightness * 100)}%</span></label>
+      <label for="dockNightBrightness">${I18N.t('web_dock_night_sun_below_the_horizon_else')} <span id="dockNightBrightnessVal">${Math.round(d.night_brightness * 100)}%</span></label>
       <input type="range" id="dockNightBrightness" min="1" max="100" value="${Math.round(d.night_brightness * 100)}" oninput="onDockInput(true)" onchange="onDockInput()">
     </div>
     <div id="dockClockOnly" style="display:${clock ? '' : 'none'}">
-      <label for="dockTimeFormat">Time format</label>
+      <label for="dockTimeFormat">${I18N.t('web_card_time_format')}</label>
       <select id="dockTimeFormat" onchange="onDockInput()">
-        <option value="" ${!d.time_format ? 'selected' : ''}>Like the remote's system setting</option>
-        <option value="24" ${d.time_format === 24 ? 'selected' : ''}>24-hour (21:41)</option>
-        <option value="12" ${d.time_format === 12 ? 'selected' : ''}>12-hour (9:41 pm)</option>
+        <option value="" ${!d.time_format ? 'selected' : ''}>${I18N.t('web_dock_like_the_remote_s_system_setting')}</option>
+        <option value="24" ${d.time_format === 24 ? 'selected' : ''}>${I18N.t('web_dock_24_hour_21_41')}</option>
+        <option value="12" ${d.time_format === 12 ? 'selected' : ''}>${I18N.t('web_dock_12_hour_9_41_pm')}</option>
       </select>
-      <label for="dockWeather">Weather (optional)</label>
+      <label for="dockWeather">${I18N.t('web_dock_weather_optional')}</label>
       <select id="dockWeather" onchange="onDockInput()">
-        <option value="">— none —</option>
+        <option value="">${I18N.t('web_none')}</option>
         ${weatherOptions.map(([id, name]) => `<option value="${dockEsc(id)}" ${id === d.weather_entity ? 'selected' : ''}>${dockEsc(name)} (${dockEsc(id)})</option>`).join('')}
       </select>
-      <label class="inline-check"><input type="checkbox" id="dockBattery" ${d.show_battery !== false ? 'checked' : ''} onchange="onDockInput()"> Show the battery level</label>
-      <label>Now playing from (none ticked = any media player that is playing)</label>
+      <label class="inline-check"><input type="checkbox" id="dockBattery" ${d.show_battery !== false ? 'checked' : ''} onchange="onDockInput()"> ${I18N.t('web_dock_show_the_battery_level')}</label>
+      <label for="dockRoom">${I18N.t('web_dock_room_label')}</label>
+      <input type="text" id="dockRoom" list="dockRoomList" value="${dockEsc(d.room || '')}" onchange="onDockInput()">
+      <datalist id="dockRoomList">${typeof activityRoomOptionsHtml === 'function' ? activityRoomOptionsHtml() : ''}</datalist>
+      <div class="hint">${I18N.t('web_dock_room_hint')}</div>
+      <label>${I18N.t('web_dock_now_playing_from_none_ticked_any')}</label>
       <div id="dockMediaBox">
         ${mediaOptions.length ? mediaOptions.map(([id, name]) => `
           <label class="inline-check"><input type="checkbox" class="dock-media-check" value="${dockEsc(id)}" ${selectedMedia.includes(id) ? 'checked' : ''} onchange="onDockInput()"> ${dockEsc(name)}</label>`).join('')
-          : '<div class="hint">No media_player found — open the builder from the remote to list them.</div>'}
+          : `<div class="hint">${I18N.t('web_dock_no_media_player_found_open_the')}</div>`}
       </div>
     </div>`;
 }
@@ -97,6 +101,8 @@ function onDockInput(live) {
   if (!document.getElementById('dockBattery').checked) dock.show_battery = false;
   const media = [...document.querySelectorAll('.dock-media-check:checked')].map(el => el.value);
   if (media.length) dock.media_entities = media;
+  const room = document.getElementById('dockRoom').value.trim();
+  if (room) dock.room = room;
   if (Object.keys(dock).length) dashboardData.dock = dock; else delete dashboardData.dock;
   // Mode changes show/hide the clock fields, so re-render; other edits keep focus where it is.
   const shownMode = document.getElementById('dockClockOnly').style.display !== 'none' ? 'clock' : null;

@@ -83,6 +83,10 @@ data class DockConfig(
     val weatherEntity: String? = null,
     /** `media_player`s whose now-playing the clock shows; empty = any that is playing. */
     val mediaEntities: List<String> = emptyList(),
+    /** The room this remote sits in. The clock's "Now playing" first follows the Activity active in
+     * this room (its `nowPlayingEntity`); without a room, the only active Activity if there is
+     * exactly one. Falls back to [mediaEntities] when no such Activity names a player. */
+    val room: String? = null,
     val showBattery: Boolean = true
 ) {
     val idleMs: Long
@@ -346,8 +350,17 @@ data class HotkeyConfig(
      * id/name, the key, short/long and the page) instead of any other action — so one automation
      * can tell which remote and which button. Checked with [openOverlay]. Also pushed through
      * the webhook as `{"type": "button", …}` when one is configured. */
-    val event: String? = null
+    val event: String? = null,
+    /** `"popup"`: [page] opens as a floating popup over the current page (sized by that page's own
+     * popup settings, same as a tile's `"pageMode": "popup"`) instead of navigating to it. Pressing
+     * the key again while that popup is open closes it. */
+    val pageMode: String? = null,
+    /** For a `"track": true` hotkey: the `media_player` the dock clock's "Now playing" follows while
+     * this Activity is active — see ActivityConfig.nowPlayingEntity. */
+    val nowPlayingEntity: String? = null
 ) {
+    val opensPopup: Boolean get() = pageMode.equals("popup", ignoreCase = true)
+
     /** Helper flags to quickly check hotkey action type. */
     val isPageNavigation: Boolean get() = !page.isNullOrBlank()
     val isServiceCall: Boolean get() = !service.isNullOrBlank()
@@ -500,8 +513,18 @@ data class ActivityConfig(
     val volumeDeviceId: String? = null,
     val volumeUpCommand: String? = null,
     val volumeDownCommand: String? = null,
-    val muteCommand: String? = null
-)
+    val muteCommand: String? = null,
+    /** The `media_player` the dock clock's "Now playing" follows while this Activity is the active
+     * one (see DockConfig.room) — the content source among the Activity's devices (Apple TV, not
+     * the TV or AVR). Null: a network Apple TV among [devices] if there is one, else the dock's own
+     * `media_entities` logic. */
+    val nowPlayingEntity: String? = null
+) {
+    /** [nowPlayingEntity], or the first Apple TV paired directly with Astrion among [devices]. */
+    val effectiveNowPlayingEntity: String?
+        get() =
+            nowPlayingEntity ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.appletv_") }?.deviceId
+}
 
 /**
  * One device's role within an [ActivityConfig].

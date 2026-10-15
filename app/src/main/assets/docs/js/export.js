@@ -6,7 +6,7 @@ function updateJsonOutput() {
 
 function copyJson() {
   navigator.clipboard.writeText(document.getElementById('jsonOutput').value);
-  alert('JSON copied!');
+  alert(I18N.t('web_export_copied'));
 }
 
 function downloadJson() {

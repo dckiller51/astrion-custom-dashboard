@@ -52,33 +52,33 @@ const ANDROID_TV_COMMANDS = [
 // and Select/Play-Pause/volume/power that the apple_tv_remote card's fixed
 // controls already send, plus every id from ATV_EXTRA_BUTTONS below.
 const ATV_ALL_COMMANDS = [
-  { id: 'Up', label: 'Up' },
-  { id: 'Down', label: 'Down' },
-  { id: 'Left', label: 'Left' },
-  { id: 'Right', label: 'Right' },
-  { id: 'Select', label: 'Select' },
-  { id: 'SelectHold', label: 'Select (held — context menu)' },
-  { id: 'SeekBackward', label: 'Back 10 s' },
-  { id: 'SeekForward', label: 'Forward 10 s' },
-  { id: 'Rewind', label: 'Rewind (press again to resume)' },
-  { id: 'FastForward', label: 'Fast forward (press again to resume)' },
-  { id: 'PlayPause', label: 'Play / Pause' },
-  { id: 'Play', label: 'Play' },
-  { id: 'Pause', label: 'Pause' },
-  { id: 'Next', label: 'Next track' },
-  { id: 'Previous', label: 'Previous track' },
-  { id: 'Wake', label: 'Wake' },
-  { id: 'Sleep', label: 'Sleep' },
-  { id: 'Menu', label: 'Menu' },
-  { id: 'Home', label: 'Home' },
-  { id: 'Siri', label: 'Siri' },
-  { id: 'Screensaver', label: 'Screensaver' },
-  { id: 'Guide', label: 'Guide' },
-  { id: 'VolumeUp', label: 'Volume +' },
-  { id: 'VolumeDown', label: 'Volume −' },
-  { id: 'ControlCenter', label: 'Control Center' },
-  { id: 'ChannelUp', label: 'Channel +' },
-  { id: 'ChannelDown', label: 'Channel −' }
+  { id: 'Up', labelKey: 'web_atv_cmd_up' },
+  { id: 'Down', labelKey: 'web_atv_cmd_down' },
+  { id: 'Left', labelKey: 'web_atv_cmd_left' },
+  { id: 'Right', labelKey: 'web_atv_cmd_right' },
+  { id: 'Select', labelKey: 'web_atv_cmd_select' },
+  { id: 'SelectHold', labelKey: 'web_atv_cmd_select_hold' },
+  { id: 'SeekBackward', labelKey: 'web_atv_cmd_seek_backward' },
+  { id: 'SeekForward', labelKey: 'web_atv_cmd_seek_forward' },
+  { id: 'Rewind', labelKey: 'web_atv_cmd_rewind' },
+  { id: 'FastForward', labelKey: 'web_atv_cmd_fast_forward' },
+  { id: 'PlayPause', labelKey: 'web_atv_cmd_play_pause' },
+  { id: 'Play', labelKey: 'web_atv_cmd_play' },
+  { id: 'Pause', labelKey: 'web_atv_cmd_pause' },
+  { id: 'Next', labelKey: 'web_atv_cmd_next' },
+  { id: 'Previous', labelKey: 'web_atv_cmd_previous' },
+  { id: 'Wake', labelKey: 'web_atv_cmd_wake' },
+  { id: 'Sleep', labelKey: 'web_atv_cmd_sleep' },
+  { id: 'Menu', labelKey: 'web_atv_cmd_menu' },
+  { id: 'Home', labelKey: 'web_atv_cmd_home' },
+  { id: 'Siri', labelKey: 'web_atv_cmd_siri' },
+  { id: 'Screensaver', labelKey: 'web_atv_cmd_screensaver' },
+  { id: 'Guide', labelKey: 'web_atv_cmd_guide' },
+  { id: 'VolumeUp', labelKey: 'web_atv_cmd_volume_up' },
+  { id: 'VolumeDown', labelKey: 'web_atv_cmd_volume_down' },
+  { id: 'ControlCenter', labelKey: 'web_atv_cmd_control_center' },
+  { id: 'ChannelUp', labelKey: 'web_atv_cmd_channel_up' },
+  { id: 'ChannelDown', labelKey: 'web_atv_cmd_channel_down' }
 ];
 
 /** Populates the Apple TV picker for the hotkey form with every paired Apple TV, selecting [selectedEntityId] if given. */
@@ -88,12 +88,12 @@ async function populateHkAppleTvSelect(selectedEntityId) {
   const tvs = await loadNativeAppleTvs();
   select.innerHTML = tvs.length
     ? tvs.map(tv => `<option value="${tv.entityId}">${tv.name} (${tv.entityId})</option>`).join('')
-    : '<option value="">— no Apple TV paired yet —</option>';
+    : `<option value="">${I18N.t('web_atv_none_paired')}</option>`;
   if (selectedEntityId) {
     if (![...select.options].some(opt => opt.value === selectedEntityId)) {
       const missing = document.createElement('option');
       missing.value = selectedEntityId;
-      missing.textContent = selectedEntityId + ' (not paired)';
+      missing.textContent = I18N.t('web_atv_not_paired', selectedEntityId);
       select.appendChild(missing);
     }
     select.value = selectedEntityId;
@@ -133,8 +133,8 @@ function refreshRemoteCommandDatalist() {
 // (an openOverlay hotkey routes to the openOverlay action branch instead,
 // see editHotkey) — they're an input-only convenience.
 const HK_PAGE_OVERLAY_SHORTCUTS = [
-  { value: '__overlay_settings__', label: 'Settings', overlay: 'settings' },
-  { value: '__overlay_activities__', label: 'Active Activities', overlay: 'activities' }
+  { value: '__overlay_settings__', labelKey: 'web_settings', overlay: 'settings' },
+  { value: '__overlay_activities__', labelKey: 'web_active_activities', overlay: 'activities' }
 ];
 
 function populateHkPageSelect() {
@@ -143,71 +143,70 @@ function populateHkPageSelect() {
     .map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`)
     .join('');
   const shortcutOptions = HK_PAGE_OVERLAY_SHORTCUTS
-    .map(s => `<option value="${s.value}">${s.label}</option>`)
+    .map(s => `<option value="${s.value}">${I18N.t(s.labelKey)}</option>`)
     .join('');
   select.innerHTML =
-    `<optgroup label="Pages">${pageOptions}</optgroup>` +
-    `<optgroup label="Shortcuts">${shortcutOptions}</optgroup>`;
+    `<optgroup label="${I18N.t('web_hotkey_optgroup_pages')}">${pageOptions}</optgroup>` +
+    `<optgroup label="${I18N.t('web_hotkey_optgroup_shortcuts')}">${shortcutOptions}</optgroup>`;
 }
 
 function updateHotkeyActionInputs(preselect) {
   const action = document.getElementById('hkAction').value;
   const container = document.getElementById('dynamicHotkeyInputs');
   if (action === 'page') {
-    container.innerHTML = `<label>Target page name</label><select id="hkPage"></select>`;
+    container.innerHTML = `<label>${I18N.t('web_hotkey_target_page_label')}</label><select id="hkPage"></select>
+      <label class="inline-check"><input type="checkbox" id="hkPagePopup"> ${I18N.t('web_hotkey_page_popup')}</label>
+      <div class="hint">${I18N.t('web_hotkey_page_popup_hint')}</div>`;
     populateHkPageSelect();
   } else if (action === 'openOverlay') {
     container.innerHTML = `
-      <label>Overlay</label>
+      <label>${I18N.t('web_hotkey_overlay_label')}</label>
       <select id="hkOverlay">
-        <option value="settings">Settings</option>
-        <option value="activities">Active Activities (same as swipe down from the top bar)</option>
+        <option value="settings">${I18N.t('web_settings')}</option>
+        <option value="activities">${I18N.t('web_hotkey_overlay_activities_top')}</option>
       </select>
     `;
   } else if (action === 'openCurrentActivity') {
     container.innerHTML = `
-      <label>Room</label><input type="text" id="hkActivityRoom" placeholder="e.g., Living Room">
-      <div class="hint" style="margin-top:4px">Jumps straight to the page of whichever Activity is currently active in this room — no picker. Does nothing if that room has nothing active right now. Must match a room name used by a tracked Activity (a composed Activity, or a scene_grid tile / hotkey with "track": true) exactly.</div>
+      <label>${I18N.t('web_hotkey_room_label')}</label><input type="text" id="hkActivityRoom" placeholder="${I18N.t('web_hotkey_room_ph')}">
+      <div class="hint" style="margin-top:4px">${I18N.t('web_hotkey_room_hint')}</div>
     `;
   } else if (action === 'stopActivity') {
     container.innerHTML = `
-      <label>Room</label>
-      <input type="text" id="hkStopRoom" list="hkStopRooms" placeholder="room name, or * for every room">
+      <label>${I18N.t('web_hotkey_room_label')}</label>
+      <input type="text" id="hkStopRoom" list="hkStopRooms" placeholder="${I18N.t('web_hotkey_stop_room_ph')}">
       <datalist id="hkStopRooms">${activityRoomOptionsHtml()}</datalist>
-      <div class="hint" style="margin-top:4px">The Harmony-style "Off" (Harmony's -1): stops whatever Activity is running in that room — Harmony PowerOff for a Harmony Activity, devices off per their profile for a composed one. "*" turns off every room.</div>
+      <div class="hint" style="margin-top:4px">${I18N.t('web_hotkey_stop_hint')}</div>
     `;
   } else if (action === 'haEvent') {
     container.innerHTML = `
-      <label>Event name</label>
-      <input type="text" id="hkEventName" placeholder="e.g., movie_scene">
-      <div class="hint" style="margin-top:4px">Fires <code>astrion_button</code> on Home Assistant's event bus with
-        <code>event</code> (this name), <code>key</code>, <code>long</code>, <code>page</code>, <code>remote_id</code> and <code>remote_name</code>,
-        so one automation can react differently per remote. Home Assistant only accepts it from an <b>administrator</b>'s token.
-        With a push webhook configured it's also sent as <code>{"type": "button", …}</code>.</div>
+      <label>${I18N.t('web_hotkey_event_label')}</label>
+      <input type="text" id="hkEventName" placeholder="${I18N.t('web_hotkey_event_ph')}">
+      <div class="hint" style="margin-top:4px">${I18N.t('web_hotkey_event_hint')}</div>
     `;
   } else if (action === 'service') {
     container.innerHTML = `
-      <label>Service (domain.service)</label><input type="text" id="hkService" placeholder="e.g., light.toggle">
-      <label>Entity ID (optional)</label><input type="text" id="hkEntityId" placeholder="e.g., light.living_room">
-      <label>Extra data (optional, JSON)</label><input type="text" id="hkData" placeholder='{"brightness": 255}'>
+      <label>${I18N.t('web_hotkey_service_label')}</label><input type="text" id="hkService" placeholder="${I18N.t('web_hotkey_service_ph')}">
+      <label>${I18N.t('web_hotkey_entity_label')}</label><input type="text" id="hkEntityId" placeholder="${I18N.t('web_hotkey_entity_ph')}">
+      <label>${I18N.t('web_hotkey_data_label')}</label><input type="text" id="hkData" placeholder='{"brightness": 255}'>
     `;
   } else if (action === 'remoteCommand') {
     container.innerHTML = `
-      <label>Remote entity</label><input type="text" id="hkEntityId" placeholder="e.g., remote.family_room" oninput="refreshRemoteCommandDatalist()">
-      <label>Command</label>
-      <input type="text" id="hkCommand" placeholder="e.g., VOLUME_UP" list="hkCommandList">
+      <label>${I18N.t('web_hotkey_remote_entity_label')}</label><input type="text" id="hkEntityId" placeholder="${I18N.t('web_hotkey_remote_entity_ph')}" oninput="refreshRemoteCommandDatalist()">
+      <label>${I18N.t('web_hotkey_command_label')}</label>
+      <input type="text" id="hkCommand" placeholder="${I18N.t('web_hotkey_command_ph')}" list="hkCommandList">
       <datalist id="hkCommandList"></datalist>
-      <div class="hint">Pick a <code>remote.*</code> entity. Command suggestions come from the entity's <code>commands_list</code> attribute when present, otherwise from the built-in Android TV keymap.</div>
+      <div class="hint">${I18N.t('web_hotkey_remote_hint')}</div>
     `;
     attachEntityAutocomplete(document.getElementById('hkEntityId'), 'remote');
     refreshRemoteCommandDatalist();
   } else if (action === 'appleTvCommand') {
     container.innerHTML = `
-      <label>Apple TV</label>
+      <label>${I18N.t('web_atv_label')}</label>
       <select id="hkAppleTv"></select>
-      <label>Command</label>
+      <label>${I18N.t('web_hotkey_command_label')}</label>
       <select id="hkAppleTvCommand">
-        ${ATV_ALL_COMMANDS.map(c => `<option value="${c.id}">${c.label}</option>`).join('')}
+        ${ATV_ALL_COMMANDS.map(c => `<option value="${c.id}">${I18N.t(c.labelKey)}</option>`).join('')}
       </select>
     `;
     populateHkAppleTvSelect(preselect && preselect.appleTvEntityId);
@@ -216,36 +215,36 @@ function updateHotkeyActionInputs(preselect) {
       renderHarmonyHubSelect(container, 'command', 'hk');
     } else {
       container.innerHTML = `
-        <label>Harmony device ID</label><input type="text" id="hkDevice" placeholder="e.g., 62845789">
-        <label>Harmony command</label><input type="text" id="hkCommand" placeholder="e.g., VolumeUp">
+        <label>${I18N.t('web_hotkey_harmony_device_label')}</label><input type="text" id="hkDevice" placeholder="${I18N.t('web_hotkey_harmony_device_ph')}">
+        <label>${I18N.t('web_hotkey_harmony_command_label')}</label><input type="text" id="hkCommand" placeholder="${I18N.t('web_hotkey_harmony_command_ph')}">
       `;
     }
   } else if (action === 'harmonyActivity') {
     if (harmonyAvailable) {
       renderHarmonyHubSelect(container, 'activity', 'hk');
     } else {
-      container.innerHTML = `<label>Harmony activity ID</label><input type="text" id="hkActivityId" placeholder="e.g., 12345678 (or -1 for Power Off)">`;
+      container.innerHTML = `<label>${I18N.t('web_hotkey_harmony_activity_label')}</label><input type="text" id="hkActivityId" placeholder="${I18N.t('web_hotkey_harmony_activity_ph')}">`;
     }
   }
 }
 
 function describeHotkey(h) {
-  if (h.page) return `→ page "${h.page}"`;
-  if (h.openOverlay) return `→ open ${h.openOverlay === 'activities' ? 'Active Activities' : 'Settings'}`;
-  if (h.openCurrentActivityRoom) return `→ current Activity in "${h.openCurrentActivityRoom}"`;
-  if (h.stopActivity) return h.stopActivity === '*' ? '→ Off (every room)' : `→ Off ("${h.stopActivity}")`;
-  if (h.event) return `→ HA event "${h.event}"`;
+  if (h.page) return I18N.t(h.pageMode === 'popup' ? 'web_hotkey_desc_page_popup' : 'web_hotkey_desc_page', h.page);
+  if (h.openOverlay) return I18N.t(h.openOverlay === 'activities' ? 'web_hotkey_desc_overlay_activities' : 'web_hotkey_desc_overlay_settings');
+  if (h.openCurrentActivityRoom) return I18N.t('web_hotkey_desc_current_activity', h.openCurrentActivityRoom);
+  if (h.stopActivity) return h.stopActivity === '*' ? I18N.t('web_hotkey_desc_off_all') : I18N.t('web_hotkey_desc_off_room', h.stopActivity);
+  if (h.event) return I18N.t('web_hotkey_desc_event', h.event);
   if (h.service === 'remote.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
-    return `→ remote ${h.entityId || '?'} / ${cmd}`;
+    return I18N.t('web_hotkey_desc_remote', h.entityId || '?', cmd);
   }
   if (h.service === 'astrion_appletv.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
-    return `→ Apple TV ${h.entityId || '?'} / ${cmd}`;
+    return I18N.t('web_hotkey_desc_atv', h.entityId || '?', cmd);
   }
-  if (h.service) return `→ ${h.service}${h.entityId ? ' (' + h.entityId + ')' : ''}`;
-  if (h.harmonyCommand) return `→ Harmony ${h.harmonyDevice || '?'} / ${h.harmonyCommand}`;
-  if (h.harmonyActivity) return `→ Harmony activity ${h.harmonyActivity}`;
+  if (h.service) return h.entityId ? I18N.t('web_hotkey_desc_service', h.service, h.entityId) : I18N.t('web_hotkey_desc_service_plain', h.service);
+  if (h.harmonyCommand) return I18N.t('web_hotkey_desc_harmony', h.harmonyDevice || '?', h.harmonyCommand);
+  if (h.harmonyActivity) return I18N.t('web_hotkey_desc_harmony_activity', h.harmonyActivity);
   return '';
 }
 
@@ -270,12 +269,12 @@ function renderHotkeysList() {
     });
   };
 
-  addRows(dashboardData.hotkeys, 'global', 'hotkeys', 'Global');
-  addRows(dashboardData.longHotkeys, 'global', 'longHotkeys', 'Global, long');
-  addRows(page.hotkeys, 'page', 'hotkeys', 'Page');
-  addRows(page.longHotkeys, 'page', 'longHotkeys', 'Page, long');
+  addRows(dashboardData.hotkeys, 'global', 'hotkeys', I18N.t('web_hotkey_scope_global'));
+  addRows(dashboardData.longHotkeys, 'global', 'longHotkeys', I18N.t('web_hotkey_scope_global_long'));
+  addRows(page.hotkeys, 'page', 'hotkeys', I18N.t('web_hotkey_scope_page'));
+  addRows(page.longHotkeys, 'page', 'longHotkeys', I18N.t('web_hotkey_scope_page_long'));
 
-  if (!container.innerHTML.trim()) container.innerHTML = '<div class="hint">No hotkeys yet.</div>';
+  if (!container.innerHTML.trim()) container.innerHTML = `<div class="hint">${I18N.t('web_hotkey_none')}</div>`;
 
   updateHardwareKeyHighlights();
 }
@@ -332,6 +331,7 @@ async function editHotkey(scope, listType, i) {
 
   if (action === 'page') {
     document.getElementById('hkPage').value = h.page || '';
+    document.getElementById('hkPagePopup').checked = h.pageMode === 'popup';
   } else if (action === 'openOverlay') {
     document.getElementById('hkOverlay').value = h.openOverlay || 'settings';
   } else if (action === 'openCurrentActivity') {
@@ -373,7 +373,7 @@ async function editHotkey(scope, listType, i) {
     }
   }
 
-  document.getElementById('addHotkeyBtn').innerText = 'Save changes';
+  document.getElementById('addHotkeyBtn').innerText = I18N.t('web_save_changes');
   document.getElementById('cancelHotkeyEditBtn').style.display = 'inline-block';
 }
 
@@ -388,7 +388,7 @@ function removeHotkey(scope, listType, i) {
 
 function cancelHotkeyEdit() {
   editingHotkey = null;
-  document.getElementById('addHotkeyBtn').innerText = 'Add hotkey';
+  document.getElementById('addHotkeyBtn').innerText = I18N.t('web_hotkey_add');
   document.getElementById('cancelHotkeyEditBtn').style.display = 'none';
 }
 
@@ -406,20 +406,21 @@ function addHotkey() {
       hkObj.openOverlay = shortcut.overlay;
     } else {
       hkObj.page = selected;
+      if (document.getElementById('hkPagePopup')?.checked) hkObj.pageMode = 'popup';
     }
   } else if (action === 'openOverlay') {
     hkObj.openOverlay = document.getElementById('hkOverlay').value;
   } else if (action === 'openCurrentActivity') {
     const room = document.getElementById('hkActivityRoom').value.trim();
-    if (!room) { alert('Enter a room name.'); return; }
+    if (!room) { alert(I18N.t('web_hotkey_err_room')); return; }
     hkObj.openCurrentActivityRoom = room;
   } else if (action === 'stopActivity') {
     const room = document.getElementById('hkStopRoom').value.trim();
-    if (!room) { alert('Enter a room name, or * for every room.'); return; }
+    if (!room) { alert(I18N.t('web_hotkey_err_room_or_all')); return; }
     hkObj.stopActivity = room;
   } else if (action === 'haEvent') {
     const name = document.getElementById('hkEventName').value.trim();
-    if (!name) { alert('Enter an event name.'); return; }
+    if (!name) { alert(I18N.t('web_hotkey_err_event')); return; }
     hkObj.event = name;
   } else if (action === 'service') {
     hkObj.service = document.getElementById('hkService').value.trim();
@@ -427,19 +428,19 @@ function addHotkey() {
     if (entityId) hkObj.entityId = entityId;
     const rawData = document.getElementById('hkData').value.trim();
     if (rawData) {
-      try { hkObj.data = JSON.parse(rawData); } catch (e) { alert('Extra data must be valid JSON'); return; }
+      try { hkObj.data = JSON.parse(rawData); } catch (e) { alert(I18N.t('web_hotkey_err_json')); return; }
     }
   } else if (action === 'remoteCommand') {
     const entityId = document.getElementById('hkEntityId').value.trim();
     const command = document.getElementById('hkCommand').value.trim();
-    if (!entityId || !command) { alert('Pick a remote entity and a command.'); return; }
+    if (!entityId || !command) { alert(I18N.t('web_hotkey_err_remote')); return; }
     hkObj.service = 'remote.send_command';
     hkObj.entityId = entityId;
     hkObj.data = { command };
   } else if (action === 'appleTvCommand') {
     const appleTv = document.getElementById('hkAppleTv').value.trim();
     const command = document.getElementById('hkAppleTvCommand').value.trim();
-    if (!appleTv || !command) { alert('Pick an Apple TV and a command.'); return; }
+    if (!appleTv || !command) { alert(I18N.t('web_hotkey_err_atv')); return; }
     hkObj.service = 'astrion_appletv.send_command';
     hkObj.entityId = appleTv;
     hkObj.data = { command };
@@ -448,7 +449,7 @@ function addHotkey() {
       const hub = document.getElementById('hkHub').value.trim();
       const device = document.getElementById('hkDeviceSelect').value.trim();
       const command = document.getElementById('hkCommandSelect').value.trim();
-      if (!hub || !device || !command) { alert('Pick a hub, a device, and a command.'); return; }
+      if (!hub || !device || !command) { alert(I18N.t('web_hotkey_err_harmony_command')); return; }
       hkObj.hub = hub;
       hkObj.harmonyDevice = device;
       hkObj.harmonyCommand = command;
@@ -460,7 +461,7 @@ function addHotkey() {
     if (harmonyAvailable) {
       const hub = document.getElementById('hkHub').value.trim();
       const activityId = document.getElementById('hkActivitySelect').value.trim();
-      if (!hub || !activityId) { alert('Pick a hub and an activity.'); return; }
+      if (!hub || !activityId) { alert(I18N.t('web_hotkey_err_harmony_activity')); return; }
       hkObj.hub = hub;
       hkObj.harmonyActivity = activityId;
     } else {
@@ -483,70 +484,25 @@ function addHotkey() {
 
 // ---- Release badges (official + beta) --------------------------------------
 
-const RELEASE_STRINGS = {
-  en: {
-    loading: 'Loading…',
-    stableUnavailable: 'Official release unavailable',
-    betaUnavailable: 'Beta unavailable',
-    downloadApk: 'download the APK',
-    installOfficial: 'Install this official update',
-    installBeta: 'Install this beta update',
-    installing: 'Installing…',
-    installStarted: 'Install launched on the remote.',
-    installFailed: 'Install failed: ',
-    alsoBeta: 'Also the beta (dev)'
-  },
-  fr: {
-    loading: 'Chargement…',
-    stableUnavailable: 'Version officielle indisponible',
-    betaUnavailable: 'Bêta indisponible',
-    downloadApk: "télécharger l'APK",
-    installOfficial: 'Installer cette version officielle',
-    installBeta: 'Installer cette bêta',
-    installing: 'Installation…',
-    installStarted: 'Installation lancée sur la télécommande.',
-    installFailed: "Échec de l'installation : ",
-    alsoBeta: 'Aussi la bêta (dev)'
-  }
+// Release-badge and physical-key strings live in the shared i18n tables
+// (keys web_release_* / web_hwkey_* — see js/i18n.js); applyUiI18n() lives
+// in js/i18n.js too.
+const RELEASE_KEYS = {
+  stableUnavailable: 'web_release_stable_unavailable',
+  installOfficial: 'web_release_install_official',
+  installBeta: 'web_release_install_beta',
+  installing: 'web_release_installing',
+  installStarted: 'web_release_install_started',
+  installFailed: 'web_release_install_failed',
+  alsoBeta: 'web_release_also_beta'
 };
-
-const HW_KEY_TITLES = {
-  en: {
-    BACK: 'Back', HOME: 'Home', POWER: 'Power', VOLUME_UP: 'Volume +',
-    PAGE_UP: 'Previous page', VOLUME_DOWN: 'Volume -', PAGE_DOWN: 'Next page',
-    MUTE: 'Mute', VOICE: 'Microphone', MAIN: 'Menu', REWIND: 'Rewind',
-    PLAY: 'Play / Pause', STOP: 'Stop', FASTFORWARD: 'Fast-forward'
-  },
-  fr: {
-    BACK: 'Retour', HOME: 'Accueil', POWER: 'Alimentation', VOLUME_UP: 'Volume +',
-    PAGE_UP: 'Page précédente', VOLUME_DOWN: 'Volume -', PAGE_DOWN: 'Page suivante',
-    MUTE: 'Muet', VOICE: 'Microphone', MAIN: 'Menu', REWIND: 'Retour rapide',
-    PLAY: 'Lecture / Pause', STOP: 'Arrêt', FASTFORWARD: 'Avance rapide'
-  }
-};
-
-const uiLang = ((navigator.language || 'en').split('-')[0]).startsWith('fr') ? 'fr' : 'en';
-const t = (key) => RELEASE_STRINGS[uiLang][key];
+const t = (key) => I18N.t(RELEASE_KEYS[key] || key);
 
 /** "Menu (MAIN)": the key's name as printed on the remote, then its id — or just the id when they match. */
 function hwKeyLabel(key) {
-  const title = (HW_KEY_TITLES[uiLang] || HW_KEY_TITLES.en)[key];
+  const id = 'web_hwkey_' + String(key).toLowerCase();
+  const title = I18N.strings[id] !== undefined ? I18N.t(id) : '';
   return title && title.toUpperCase() !== String(key).toUpperCase() ? `${title} (${key})` : key;
-}
-
-function applyUiI18n() {
-  // Physical-key dropdown: same names as the remote picture's tooltips (the value stays the key id).
-  document.querySelectorAll('#hkKey option').forEach(opt => {
-    const key = opt.value;
-    opt.value = key;
-    opt.textContent = hwKeyLabel(key);
-  });
-  const betaLabel = document.getElementById('betaToggleLabel');
-  if (betaLabel) betaLabel.textContent = t('alsoBeta');
-  document.querySelectorAll('button[data-hwkey]').forEach(btn => {
-    const title = HW_KEY_TITLES[uiLang][btn.dataset.hwkey];
-    if (title) btn.title = title;
-  });
 }
 
 async function fetchReleaseBadge(url, icon) {
@@ -556,7 +512,7 @@ async function fetchReleaseBadge(url, icon) {
     const data = await res.json();
     const asset = (data.assets || []).find(a => a.name.endsWith('.apk'));
     return `${icon} ${data.name || data.tag_name}` +
-      (asset ? ` — <a href="${asset.browser_download_url}">${t('downloadApk')}</a>` : '');
+      (asset ? ` — <a href="${asset.browser_download_url}">${I18N.t('web_release_download_apk')}</a>` : '');
   } catch (e) {
     console.log('Release fetch failed', e);
     return null;
@@ -564,9 +520,10 @@ async function fetchReleaseBadge(url, icon) {
 }
 
 async function loadStableBadge() {
+  await I18N.ready;
   const badge = document.getElementById('stableBadge');
   if (!badge) return;
-  badge.textContent = t('loading');
+  badge.textContent = I18N.t('web_release_loading');
   const html = await fetchReleaseBadge(
     'https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/latest', '✅'
   );
@@ -583,16 +540,17 @@ async function loadStableBadge() {
 }
 
 async function toggleBetaBadge() {
+  await I18N.ready;
   const on = document.getElementById('betaToggle').checked;
   const badge = document.getElementById('betaBadge');
   if (!on) { badge.style.display = 'none'; return; }
-  badge.textContent = t('loading');
+  badge.textContent = I18N.t('web_release_loading');
   badge.style.display = 'inline-block';
   const html = await fetchReleaseBadge(
     'https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/tags/dev-latest', '🧪'
   );
   if (!html) {
-    badge.innerHTML = t('betaUnavailable');
+    badge.innerHTML = I18N.t('web_release_beta_unavailable');
     return;
   }
   if (typeof deviceModeAvailable !== 'undefined' && deviceModeAvailable) {
@@ -620,16 +578,17 @@ async function installStableUpdate(btn) {
 }
 
 async function installBetaUpdate(btn) {
+  await I18N.ready;
   const original = btn.textContent;
-  btn.textContent = t('installing');
+  btn.textContent = I18N.t('web_release_installing');
   btn.disabled = true;
   try {
     const res = await fetch('/install-beta-update', { method: 'POST' });
     const text = await res.text();
     if (!res.ok) throw new Error(text || ('HTTP ' + res.status));
-    showToast(t('installStarted'));
+    showToast(I18N.t('web_release_install_started'));
   } catch (e) {
-    showToast(t('installFailed') + e.message, 'error');
+    showToast(I18N.t('web_release_install_failed') + e.message, 'error');
     btn.textContent = original;
     btn.disabled = false;
   }
@@ -653,5 +612,5 @@ function activityRoomOptionsHtml() {
     });
   });
   const esc = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-  return '<option value="*">Every room</option>' + [...rooms].sort().map(r => `<option value="${esc(r)}">`).join('');
+  return `<option value="*">${I18N.t('web_every_room')}</option>` + [...rooms].sort().map(r => `<option value="${esc(r)}">`).join('');
 }

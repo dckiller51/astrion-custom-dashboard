@@ -124,6 +124,10 @@ data class DashboardNavigation(
      * as [navTarget]/[onNavHandled], via [onOverlayHandled]. */
     val overlayTarget: String? = null,
     val onOverlayHandled: () -> Unit = {},
+    /** Page name a hardware hotkey with `"pageMode": "popup"` wants opened as a popup (or closed,
+     * when that same page's popup is already open) — consumed via [onPopupHandled], like [navTarget]. */
+    val popupTarget: String? = null,
+    val onPopupHandled: () -> Unit = {},
     /** Called whenever the visible page changes (swipe, dot, hardware nav, or
      * a card's navigateToPage) — MainActivity uses this to rebind hardware
      * hotkeys to the newly-visible page's own bindings. */
@@ -262,7 +266,12 @@ private fun DashboardActivityRuntimeEffects(
             launch {
                 hubClient.connected.first { it }
                 hubClient.getCurrentActivity()
-                activityRuntime.bind(hubClient, localId)
+                // isDefaultHub: tiles/hotkeys with no "hub" field (the usual
+                // single-hub setup) belong to the hub client(null) resolves to.
+                // Without it their Activity was never matched to the hub's
+                // live state, so its PowerOff (-1) never cleared the room and
+                // the tile's border stayed lit.
+                activityRuntime.bind(hubClient, localId, isDefaultHub = hubClient === harmonyRegistry.client(null))
             }
         }
     }
@@ -554,6 +563,8 @@ fun Dashboard(
     val onNavHandled = navigation.onNavHandled
     val overlayTarget = navigation.overlayTarget
     val onOverlayHandled = navigation.onOverlayHandled
+    val popupTarget = navigation.popupTarget
+    val onPopupHandled = navigation.onPopupHandled
     val onPageChanged = navigation.onPageChanged
     val volumeHotkeyTrigger = navigation.volumeHotkeyTrigger
     val onActivityRuntimeReady = activityCallbacks.onActivityRuntimeReady
@@ -681,6 +692,13 @@ fun Dashboard(
                 popupOpenedByEntityId = null
                 linkedPopupPage = null
             }
+            HotkeyPopupEffect(
+                popupTarget = popupTarget,
+                openPageName = linkedPopupPage?.targetPage?.name,
+                open = openPagePopup,
+                close = closePopup,
+                onHandled = onPopupHandled
+            )
 
             val ctx =
                 buildCardContext(
@@ -1751,5 +1769,22 @@ private fun UnknownCard(type: String) {
             .padding(14.dp)
     ) {
         Text(text = stringResource(R.string.unknown_card_type, type), color = LocalTheme.current.danger, fontSize = 13.sp)
+    }
+}
+
+/** A hardware hotkey's `"pageMode": "popup"`: opens [popupTarget] as a popup, or closes it when that
+ * page's popup is already the one on screen (so the same key toggles it), then consumes it. */
+@Composable
+private fun HotkeyPopupEffect(
+    popupTarget: String?,
+    openPageName: String?,
+    open: (String) -> Unit,
+    close: () -> Unit,
+    onHandled: () -> Unit
+) {
+    LaunchedEffect(popupTarget) {
+        val target = popupTarget ?: return@LaunchedEffect
+        if (openPageName.equals(target, ignoreCase = true)) close() else open(target)
+        onHandled()
     }
 }

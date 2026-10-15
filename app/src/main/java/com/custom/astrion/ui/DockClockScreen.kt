@@ -63,7 +63,14 @@ import kotlinx.coroutines.delay
  * reported through [onTouch]; MainActivity's dock monitor then brings the dashboard back.
  */
 @Composable
-fun DockClockScreen(config: DockConfig, entities: EntityMap, client: HaClient, isNight: () -> Boolean, onTouch: () -> Unit) {
+fun DockClockScreen(
+    config: DockConfig,
+    entities: EntityMap,
+    client: HaClient,
+    isNight: () -> Boolean,
+    onTouch: () -> Unit,
+    activityPlayer: String? = null
+) {
     val context = LocalContext.current
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -107,7 +114,7 @@ fun DockClockScreen(config: DockConfig, entities: EntityMap, client: HaClient, i
             Spacer(Modifier.height(18.dp))
             InfoLine(now, config, entities, battery, palette)
             Spacer(Modifier.weight(1f))
-            nowPlayingEntity(config, entities)?.let { NowPlaying(it, client, palette) }
+            nowPlayingEntity(config, entities, activityPlayer)?.let { NowPlaying(it, client, palette) }
         }
     }
 }
@@ -193,13 +200,24 @@ private fun weatherSymbol(condition: String): String? = when (condition) {
     else -> null
 }
 
-/** The first configured `media_player` that is playing (or paused), else any that is playing. */
-private fun nowPlayingEntity(config: DockConfig, entities: EntityMap): EntityState? {
-    val active = setOf("playing", "paused")
-    if (config.mediaEntities.isNotEmpty()) {
-        return config.mediaEntities.mapNotNull { entities[it] }.firstOrNull { it.state in active && it.hasTitle() }
-    }
+/**
+ * What the clock's "Now playing" shows:
+ *  1. [activityPlayer] — the active Activity's own `nowPlayingEntity` (see ActivityRuntime.nowPlayingEntity):
+ *     shown while it is playing or paused, and nothing else is shown when it isn't, so another
+ *     room's player never takes its place;
+ *  2. otherwise the configured `media_entities`, a playing one before a paused one (an old paused
+ *     source no longer wins just by being listed first);
+ *  3. otherwise any `media_player` that is playing.
+ */
+private fun nowPlayingEntity(config: DockConfig, entities: EntityMap, activityPlayer: String?): EntityState? {
+    if (activityPlayer != null) return firstActive(listOf(activityPlayer), entities)
+    if (config.mediaEntities.isNotEmpty()) return firstActive(config.mediaEntities, entities)
     return entities.values.firstOrNull { it.entityId.startsWith("media_player.") && it.state == "playing" && it.hasTitle() }
+}
+
+private fun firstActive(ids: List<String>, entities: EntityMap): EntityState? {
+    val withTitle = ids.mapNotNull { entities[it] }.filter { it.hasTitle() }
+    return withTitle.firstOrNull { it.state == "playing" } ?: withTitle.firstOrNull { it.state == "paused" }
 }
 
 private fun EntityState.hasTitle(): Boolean = !attrString("media_title").isNullOrBlank()

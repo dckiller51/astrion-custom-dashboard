@@ -30,7 +30,9 @@ data class TrackedActivity(
      * useful for a Harmony-backed one, since the hub's own devices are
      * otherwise invisible to Astrion). Used purely for [Dashboard.kt]'s
      * switchActivity diff — never dispatched to directly. */
-    val devices: List<String> = emptyList()
+    val devices: List<String> = emptyList(),
+    /** The `media_player` the dock clock's "Now playing" follows while this Activity is active. */
+    val nowPlayingEntity: String? = null
 )
 
 /**
@@ -89,6 +91,23 @@ class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore
      * speculatively before the stop action itself has been dispatched. */
     fun clear(room: String) {
         _activeByRoom.value = (_activeByRoom.value + (room to null)).also(memory::save)
+    }
+
+    /**
+     * The `nowPlayingEntity` of the Activity the dock clock should follow: the one active in [room]
+     * (case-insensitive), or — with no room — the only active Activity when exactly one is. Null
+     * when there's no such Activity or it names no player; the dock then uses its own list.
+     */
+    fun nowPlayingEntity(room: String?, activeByRoom: Map<String, String?>): String? {
+        val active =
+            activeByRoom.mapNotNull { (r, id) -> id?.let { activeId -> byRoom[r]?.firstOrNull { it.id == activeId } } }
+        val activity =
+            if (room.isNullOrBlank()) {
+                active.singleOrNull()
+            } else {
+                active.firstOrNull { it.room.equals(room.trim(), ignoreCase = true) }
+            }
+        return activity?.nowPlayingEntity
     }
 
     /** Same as [markActive], by id — for callers (like a composed Activity's
@@ -193,7 +212,8 @@ class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore
             page = (scene["page"] as? String) ?: fallbackPage,
             harmonyActivityId = harmonyActivityId,
             harmonyHub = scene["hub"] as? String,
-            devices = devices
+            devices = devices,
+            nowPlayingEntity = (scene["nowPlayingEntity"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -213,7 +233,8 @@ class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore
                     page = hk.page ?: fallbackPage,
                     harmonyActivityId = hk.harmonyActivity,
                     harmonyHub = hk.hub,
-                    devices = hk.devices
+                    devices = hk.devices,
+                    nowPlayingEntity = hk.nowPlayingEntity
                 )
         }
 
@@ -241,7 +262,8 @@ class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore
                     room = act.room,
                     icon = act.icon,
                     page = act.page,
-                    devices = act.devices.map { it.deviceId }
+                    devices = act.devices.map { it.deviceId },
+                    nowPlayingEntity = act.effectiveNowPlayingEntity
                 )
         }
         return found

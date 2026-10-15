@@ -52,21 +52,21 @@ function resetHarmonySelect(sel, placeholder) {
 function renderHarmonyHubSelect(container, mode, idPrefix) {
   const hubOptions = harmonyHubsList.map(h => `<option value="${h.localId}">${h.name}</option>`).join('');
   const deviceSelect = `
-    <label>Device</label>
-    <select id="${idPrefix}DeviceSelect" disabled${mode === 'command' ? ` onchange="onHarmonyDeviceChange('${idPrefix}')"` : ''}><option value="">— select a hub first —</option></select>
+    <label>${I18N.t('web_harmony_label_device')}</label>
+    <select id="${idPrefix}DeviceSelect" disabled${mode === 'command' ? ` onchange="onHarmonyDeviceChange('${idPrefix}')"` : ''}><option value="">${I18N.t('web_harmony_select_hub_first')}</option></select>
   `;
   const commandSelect = `
-    <label>Command</label>
-    <select id="${idPrefix}CommandSelect" disabled><option value="">— select a device first —</option></select>
+    <label>${I18N.t('web_harmony_label_command')}</label>
+    <select id="${idPrefix}CommandSelect" disabled><option value="">${I18N.t('web_harmony_select_device_first')}</option></select>
   `;
   const activitySelect = `
-    <label>Activity</label>
-    <select id="${idPrefix}ActivitySelect" disabled><option value="">— select a hub first —</option></select>
+    <label>${I18N.t('web_harmony_label_activity')}</label>
+    <select id="${idPrefix}ActivitySelect" disabled><option value="">${I18N.t('web_harmony_select_hub_first')}</option></select>
   `;
   container.innerHTML = `
-    <label>Harmony hub</label>
+    <label>${I18N.t('web_harmony_label_hub')}</label>
     <select id="${idPrefix}Hub" onchange="onHarmonyHubChange('${mode}', '${idPrefix}')">
-      <option value="">— select a hub —</option>
+      <option value="">${I18N.t('web_harmony_select_hub')}</option>
       ${hubOptions}
     </select>
     ${mode === 'command' ? deviceSelect + commandSelect : mode === 'device' ? deviceSelect : activitySelect}
@@ -78,29 +78,29 @@ async function onHarmonyHubChange(mode, idPrefix) {
   if (mode === 'command' || mode === 'device') {
     const deviceSel = document.getElementById(idPrefix + 'DeviceSelect');
     const cmdSel = mode === 'command' ? document.getElementById(idPrefix + 'CommandSelect') : null;
-    if (cmdSel) resetHarmonySelect(cmdSel, '— select a device first —');
-    if (!hubId) { resetHarmonySelect(deviceSel, '— select a hub first —'); return; }
-    deviceSel.innerHTML = '<option value="">Loading…</option>';
+    if (cmdSel) resetHarmonySelect(cmdSel, I18N.t('web_harmony_select_device_first'));
+    if (!hubId) { resetHarmonySelect(deviceSel, I18N.t('web_harmony_select_hub_first')); return; }
+    deviceSel.innerHTML = `<option value="">${I18N.t('media_loading')}</option>`;
     try {
       const data = await loadHarmonyConfig(hubId);
-      deviceSel.innerHTML = '<option value="">— select a device —</option>' +
+      deviceSel.innerHTML = `<option value="">${I18N.t('web_harmony_select_device')}</option>` +
         (data.devices || []).map(d => `<option value="${d.id}">${d.label}</option>`).join('');
       deviceSel.disabled = false;
     } catch (e) {
-      deviceSel.innerHTML = '<option value="">(failed to load — is the hub connected?)</option>';
+      deviceSel.innerHTML = `<option value="">${I18N.t('web_harmony_load_failed')}</option>`;
       console.error('Failed to load Harmony config for hub ' + hubId, e);
     }
   } else {
     const actSel = document.getElementById(idPrefix + 'ActivitySelect');
-    if (!hubId) { resetHarmonySelect(actSel, '— select a hub first —'); return; }
-    actSel.innerHTML = '<option value="">Loading…</option>';
+    if (!hubId) { resetHarmonySelect(actSel, I18N.t('web_harmony_select_hub_first')); return; }
+    actSel.innerHTML = `<option value="">${I18N.t('media_loading')}</option>`;
     try {
       const data = await loadHarmonyConfig(hubId);
-      actSel.innerHTML = '<option value="">— select an activity —</option>' +
+      actSel.innerHTML = `<option value="">${I18N.t('web_harmony_select_activity')}</option>` +
         (data.activities || []).map(a => `<option value="${a.id}">${a.label}</option>`).join('');
       actSel.disabled = false;
     } catch (e) {
-      actSel.innerHTML = '<option value="">(failed to load — is the hub connected?)</option>';
+      actSel.innerHTML = `<option value="">${I18N.t('web_harmony_load_failed')}</option>`;
       console.error('Failed to load Harmony activities for hub ' + hubId, e);
     }
   }
@@ -110,11 +110,11 @@ function onHarmonyDeviceChange(idPrefix) {
   const hubId = document.getElementById(idPrefix + 'Hub').value;
   const deviceId = document.getElementById(idPrefix + 'DeviceSelect').value;
   const cmdSel = document.getElementById(idPrefix + 'CommandSelect');
-  if (!deviceId) { resetHarmonySelect(cmdSel, '— select a device first —'); return; }
+  if (!deviceId) { resetHarmonySelect(cmdSel, I18N.t('web_harmony_select_device_first')); return; }
   const data = harmonyConfigCache[hubId];
   const device = (data && data.devices || []).find(d => d.id === deviceId);
   const commands = (device && device.commands) || [];
-  cmdSel.innerHTML = '<option value="">— select a command —</option>' +
+  cmdSel.innerHTML = `<option value="">${I18N.t('web_harmony_select_command')}</option>` +
     commands.map(c => {
       const alias = dashboardData.harmonyAliases?.[hubId]?.[deviceId]?.[c.name];
       return `<option value="${c.name}">${alias || c.label}</option>`;
