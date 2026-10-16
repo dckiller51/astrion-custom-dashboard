@@ -236,4 +236,11 @@
     <string name="dock_mode_dashboard">Dashboard</string>
     <string name="ring_found_title">Retrouvée !</string>
     <string name="ring_found_hint">Touchez l\'écran ou appuyez sur un bouton pour arrêter</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Enceintes</string>
+    <string name="speaker_muted">Muet</string>
+    <string name="speaker_group">Grouper</string>
+    <string name="speaker_ungroup">Dégrouper</string>
+    <string name="setup_banner_title">Configurez cette télécommande depuis un navigateur</string>
+    <string name="connection_web_page_hint">Page web de la télécommande : %1$s</string>
 </resources>

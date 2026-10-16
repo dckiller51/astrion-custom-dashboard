@@ -41,24 +41,24 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | :--- | :--- | :---: | :---: | :---: | :---: |
 | [`light`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Light) | Lights: brightness, colour, colour temperature | ✅ | | | |
 | [`cover`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Cover) | Shutters, blinds, gates | ✅ | | | |
-| `switch` | Simple on/off | ✅ | | | |
+| [`switch`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Switch) | Simple on/off | ✅ | | | |
 | [`climate`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Climate) | Thermostats, AC | ✅ | | | |
 | [`fan`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Fan) | Speed, presets, oscillation | ✅ | | | |
 | [`media_player`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-MediaPlayer) | Playback, volume, now playing (compact or full) | ✅ | | | ✅ |
-| `speaker_group` | Multiroom groups (e.g. Sonos) | ✅ | | | |
-| `source_select` | A media player's input / app list | ✅ | | | ✅ |
-| `select` | `input_select` / `select` dropdown | ✅ | | | |
+| [`speaker_group`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SpeakerGroup) | Multiroom groups (e.g. Sonos) | ✅ | | | |
+| [`source_select`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SourceSelect) | A media player's input / app list | ✅ | | | ✅ |
+| [`select`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Select) | `input_select` / `select` dropdown | ✅ | | | |
 | [`camera`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Camera) | Live stream or snapshots | ✅ | | | |
-| `vacuum` | Robot vacuum, rooms, map | ✅ | | | |
-| `clock_weather` | Time, weather, forecast, calendar | ✅ | | | |
-| `monitor` | Read-only sensor values (vertical / scrolling for long text) | ✅ | | | |
+| [`vacuum`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Vacuum) | Robot vacuum, rooms, map | ✅ | | | |
+| [`clock_weather`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-ClockWeather) | Time, weather, forecast, calendar | ✅ | | | |
+| [`monitor](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Monitor) | Read-only sensor values (vertical / scrolling for long text) | ✅ | | | |
 | [`plex`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex) | On Deck / recently added browser | ✅ | | | |
-| `picture_elements` | Interactive floor plan, mmWave radar | ✅ | | | |
-| `title` | Section header, optionally tappable | ✅ | ✅ | ✅ | ✅ |
-| `row` | Puts several cards side by side | ✅ | ✅ | ✅ | ✅ |
+| [`picture_elements`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-PictureElements) | Interactive floor plan, mmWave radar | ✅ | | | |
+| [`title`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Title) | Section header, optionally tappable | ✅ | ✅ | ✅ | ✅ |
+| [`row`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Row) | Puts several cards side by side | ✅ | ✅ | ✅ | ✅ |
 | [`button_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-ButtonGrid) | Grid of action buttons | ✅ | ✅ | ✅ | ✅ |
 | [`scene_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SceneGrid) | Grid of scenes, shortcuts and Activities | ✅ | ✅ | ✅ | ✅ |
-| [`tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | TV / box remote layout | ✅ | ✅ | ✅ | ✅ |
+| [`tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | TV / box remote layout (via a Home Assistant `remote` entity) | ✅ | | | |
 | [`apple_tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | Apple TV remote: classic, compact or full | | ✅ | | ✅ |
 
 ## Install
@@ -92,7 +92,7 @@ Run [`uninstall.bat`](https://github.com/dckiller51/astrion-custom-dashboard/rel
 
 ## Translations
 
-Three sets of files. Adding a language needs no code change:
+Three sets of files. Translating needs no programming: you translate text files, and the maintainer adds the new language code to the builder and the in-app language picker ([how to translate](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Translations)):
 
 | What | Files |
 | :--- | :--- |
@@ -143,7 +143,7 @@ src/main/
 ## Credits
 
 - [**@baes-cloud**](https://github.com/baes-cloud/astrion-dashboard) for the original work this project is built on (MIT License, see [`THIRD_PARTY_LICENSES.md`](./THIRD_PARTY_LICENSES.md)).
-- Everyone on Discord and GitHub who tests betas and sends ideas.
+- Everyone on Discord and GitHub who reports bugs, tests betas and sends ideas.
 
 ## License
 

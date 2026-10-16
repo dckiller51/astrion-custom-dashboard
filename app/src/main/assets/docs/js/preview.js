@@ -388,11 +388,22 @@ function renderPreview() {
   page.cards.forEach((card, idx) => {
     const cardEl = document.createElement('div');
 
-    if (card.type === 'apple_tv_remote' || card.type === 'tv_remote') {
+    const extraPreview = {
+      tv_remote: typeof tvRemotePreviewHtml === 'function' ? tvRemotePreviewHtml : null,
+      row: typeof rowPreviewHtml === 'function' ? rowPreviewHtml : null,
+      speaker_group: typeof speakerGroupPreviewHtml === 'function' ? speakerGroupPreviewHtml : null,
+      picture_elements: typeof pictureElementsPreviewHtml === 'function' ? pictureElementsPreviewHtml : null
+    }[card.type];
+    if (extraPreview) {
+      cardEl.className = 'card';
+      cardEl.innerHTML = `
+        <div class="card-title"><span>${card.type}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+        ${extraPreview(card.options || {})}`;
+    } else if (card.type === 'apple_tv_remote') {
       cardEl.innerHTML = `
         <div class="card">
-          <div class="card-title"><span>${card.type}${card.type === 'apple_tv_remote' && ['compact', 'full'].includes((card.options || {}).layout) ? ' · ' + card.options.layout : ''}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
-          ${appleTvRemotePreviewHtml(card.type === 'apple_tv_remote' ? (card.options || {}) : {})}
+          <div class="card-title"><span>${card.type}${['compact', 'full'].includes((card.options || {}).layout) ? ' · ' + card.options.layout : ''}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+          ${appleTvRemotePreviewHtml(card.options || {})}
         </div>`;
     } else if (card.type === 'clock_weather') {
       const o = card.options || {};
@@ -666,7 +677,8 @@ function renderPreview() {
       const options = SELECT_MOCK.options;
       const current = SELECT_MOCK.state;
       const stateLabel = current || (options.length ? I18N.t('select_choose') : I18N.t('select_no_options'));
-      const layout = (o.layout === 'horizontal' || o.layout === 'vertical') ? o.layout : 'default';
+      const layout = ['horizontal', 'vertical', 'dropdown'].includes(o.layout) ? o.layout : 'default';
+      const fontPx = o.font_size ? Number(o.font_size) : (layout === 'dropdown' ? 16 : 13);
       const iconColor = parseHexColorCss(o.icon_color);
       const iconBg = iconColor ? `${iconColor}33` : '#2A4954';
       const iconTint = iconColor || '#B6C9CE';
@@ -682,12 +694,14 @@ function renderPreview() {
       // pill shape (no fill bar though, this control has no "amount").
       const controlHtml = `
         <div class="pc-slider" style="background:#152B33; justify-content:space-between; padding:0 12px; box-sizing:border-box;">
-          <span class="pc-slider-label" style="position:static;">${current || '—'}</span>
+          <span class="pc-slider-label" style="position:static; font-size:${fontPx}px;">${current || '—'}</span>
           <span class="pc-slider-label" style="position:static; opacity:0.7;">▾</span>
         </div>`;
 
       let bodyHtml;
-      if (layout === 'horizontal') {
+      if (layout === 'dropdown') {
+        bodyHtml = `<div style="height:${Math.max(52, fontPx * 2.6)}px">${controlHtml.replace('background:#152B33;', 'background:#1E3841; height:100%;')}</div>`;
+      } else if (layout === 'horizontal') {
         bodyHtml = `
           <div class="preview-cover layout-horizontal">
             ${iconHtml(false)}

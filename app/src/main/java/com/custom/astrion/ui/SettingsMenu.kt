@@ -879,7 +879,7 @@ private fun SettingRow(icon: ImageVector?, label: String, onClick: () -> Unit) {
     }
 }
 
-private fun localIpAddress(): String? = runCatching {
+internal fun localIpAddress(): String? = runCatching {
     NetworkInterface
         .getNetworkInterfaces()
         .asSequence()

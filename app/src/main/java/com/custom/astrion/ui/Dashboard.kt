@@ -65,6 +65,7 @@ import com.custom.astrion.cards.DeviceSettingsState
 import com.custom.astrion.config.ActivityConfig
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.AppConfig
+import com.custom.astrion.config.DashboardConfig
 import com.custom.astrion.config.IrDeviceConfig
 import com.custom.astrion.config.PageConfig
 import com.custom.astrion.config.RemoteSettings
@@ -1026,7 +1027,13 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             // now just a regular assignable hotkey (openOverlay: "settings"),
             // see the Hotkeys tab.
             TopStatusBar(onSwipeDown = { overlayState.onShowActivitiesChange(true) })
-            ConnectionBanner(connection, onRetry = client::reconnectNow)
+            ConnectionBanner(
+                connection,
+                webPageEnabled = ctx.deviceSettings.configServerEnabled,
+                haConfigured = RemoteSettings.isConfigured(webhookContext),
+                starterDashboard = DashboardConfig.isStarter(config),
+                onRetry = client::reconnectNow
+            )
             if (configNotice != null) ConfigNoticeBanner(configNotice)
 
             HorizontalPager(
@@ -1720,19 +1727,35 @@ private fun EdgeEllipsis() {
     Text("…", color = LocalTheme.current.mutedText, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 2.dp))
 }
 
+/**
+ * Shown while Home Assistant isn't connected — but only when it is set up: a remote used
+ * without Home Assistant (Harmony, IR, Apple TV only) gets no banner at all (1.2.9; it used to
+ * say "Disconnected" forever). While the remote still runs the built-in starter dashboard, it
+ * instead invites to set the remote up and gives its web page address. Connection errors also
+ * show that address, where the Home Assistant settings are fixed.
+ */
 @Composable
-private fun ConnectionBanner(connection: ConnectionState, onRetry: () -> Unit) {
+private fun ConnectionBanner(
+    connection: ConnectionState,
+    webPageEnabled: Boolean,
+    haConfigured: Boolean,
+    starterDashboard: Boolean,
+    onRetry: () -> Unit
+) {
     if (connection == ConnectionState.CONNECTED) return
-    val (label, color) =
-        when (connection) {
-            ConnectionState.CONNECTING,
-            ConnectionState.AUTHENTICATING
-            -> stringResource(R.string.connection_connecting) to LocalTheme.current.accentSecondary
-            ConnectionState.AUTH_FAILED -> stringResource(R.string.connection_auth_failed) to LocalTheme.current.danger
-            ConnectionState.ERROR -> stringResource(R.string.connection_error_retrying) to LocalTheme.current.danger
-            else -> stringResource(R.string.disconnected) to LocalTheme.current.controlBackground
+    if (!haConfigured && !starterDashboard) return
+    val (label, color) = connectionBannerLabel(connection, haConfigured)
+    // Re-read when the state changes (Wi-Fi back, new DHCP lease…), not on every recomposition.
+    val ip = remember(connection) { localIpAddress() }
+    val address = if (webPageEnabled && ip != null) "http://$ip:8080" else null
+    val connecting = connection == ConnectionState.CONNECTING || connection == ConnectionState.AUTHENTICATING
+    val hint =
+        when {
+            !haConfigured -> address
+            connecting || address == null -> null
+            else -> stringResource(R.string.connection_web_page_hint, address)
         }
-    Box(
+    Column(
         modifier =
         Modifier
             .fillMaxWidth()
@@ -1740,9 +1763,24 @@ private fun ConnectionBanner(connection: ConnectionState, onRetry: () -> Unit) {
             // Tap to retry right away instead of waiting for the next attempt.
             .tapClickable(onClick = onRetry)
             .padding(12.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(text = label, color = Color.White, fontSize = 14.sp)
+        if (hint != null) Text(text = hint, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+    }
+}
+
+/** The banner's text and colour — split out of [ConnectionBanner] to keep its complexity down. */
+@Composable
+private fun connectionBannerLabel(connection: ConnectionState, haConfigured: Boolean): Pair<String, Color> {
+    val theme = LocalTheme.current
+    return when {
+        !haConfigured -> stringResource(R.string.setup_banner_title) to theme.controlBackground
+        connection == ConnectionState.CONNECTING || connection == ConnectionState.AUTHENTICATING ->
+            stringResource(R.string.connection_connecting) to theme.accentSecondary
+        connection == ConnectionState.AUTH_FAILED -> stringResource(R.string.connection_auth_failed) to theme.danger
+        connection == ConnectionState.ERROR -> stringResource(R.string.connection_error_retrying) to theme.danger
+        else -> stringResource(R.string.disconnected) to theme.controlBackground
     }
 }
 

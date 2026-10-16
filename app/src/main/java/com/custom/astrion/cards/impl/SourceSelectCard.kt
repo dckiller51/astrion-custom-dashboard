@@ -1,11 +1,15 @@
 package com.custom.astrion.cards.impl
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -22,6 +26,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,6 +36,7 @@ import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.ServiceCall
+import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
 
 /**
@@ -44,7 +50,8 @@ import com.custom.astrion.ui.tapClickable
  * Config shape:
  *   { "type": "source_select", "options": {
  *       "entity_id": "media_player.living_room_tv",
- *       "name": "TV source"
+ *       "name": "TV source",
+ *       "icon": "/sdcard/astrion/icons/tv.png"   // optional (1.2.9+)
  *   } }
  */
 class SourceSelectCard : CardRenderer {
@@ -59,6 +66,9 @@ class SourceSelectCard : CardRenderer {
         val current = e?.attrString("source")
 
         var expanded by remember { mutableStateOf(false) }
+        val iconPath = config.string("icon")
+        val iconPx = with(LocalDensity.current) { ICON_DP.dp.toPx() }.toInt()
+        val icon = remember(iconPath, iconPx) { iconPath?.let { decodeIconSampled(it, iconPx) } }
 
         Box {
             Row(
@@ -71,6 +81,10 @@ class SourceSelectCard : CardRenderer {
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (icon != null) {
+                    Image(bitmap = icon, contentDescription = null, modifier = Modifier.size(ICON_DP.dp))
+                    Spacer(Modifier.width(12.dp))
+                }
                 Column(Modifier.weight(1f)) {
                     Text(name, color = ctx.theme.mutedText, fontSize = 11.sp)
                     Text(
@@ -121,5 +135,9 @@ class SourceSelectCard : CardRenderer {
                 }
             }
         }
+    }
+
+    private companion object {
+        const val ICON_DP = 28
     }
 }
