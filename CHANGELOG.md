@@ -13,7 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - **Picture elements**: pick the floor plan among your icons; add buttons that toggle an entity or call a service (with targets), choose bulb / power / PNG icon and an "on" colour. Opened from the remote, the plan shows in the form: click it to place the selected button. The vacuum and radar blocks stay as JSON, under "Advanced".
   - **TV remote**: app buttons picked from a list of common Android TV apps (or any package), the entity the volume keys go to, a volume row on/off, and renamed commands for TVs whose remote entity doesn't use the Android TV names.
   Options written by hand in dashboard.json are kept when such a card is edited.
-- **Select card: "dropdown" layout and text size** (#93). `"layout": "dropdown"` is just the menu, full width — no icon, no name; `"font_size"` sets the size of the current option and of the menu's options.
+- **Select card: "dropdown" layout and text size** ([#93](../../issues/93) by [@dpdonovan-cyber](https://github.com/dpdonovan-cyber)). `"layout": "dropdown"` is just the menu, full width — no icon, no name; `"font_size"` sets the size of the current option and of the menu's options.
 - **TV remote card: volume row.** − / mute / + under Back/Home/Menu, sent to `mute_entity` when set (a soundbar's `remote.*`), else to the TV. `"show_volume": false` hides it.
 - **Picture elements: PNG icons** (`"icon": "/sdcard/astrion/icons/lamp.png"`) and `"on_color"` per button.
 - **Switch card: PNG icons.** `icon` takes a PNG path as well as `heater`, `fan`, `bulb` — the builder's icon picker always wrote a path, which the card ignored.
