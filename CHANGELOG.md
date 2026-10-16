@@ -3,6 +3,40 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.2.9-beta] - 2026-10-16
+
+### Added
+
+- **Builder forms instead of raw JSON** for the last cards that only had one:
+  - **Speaker group**: pick the main speaker and the others from the Devices catalog, rename and reorder them.
+  - **Row**: the row's cards are edited with the normal card form ("+ Add a card to the row", ✎ on each), then saved back into the row.
+  - **Picture elements**: pick the floor plan among your icons; add buttons that toggle an entity or call a service (with targets), choose bulb / power / PNG icon and an "on" colour. Opened from the remote, the plan shows in the form: click it to place the selected button. The vacuum and radar blocks stay as JSON, under "Advanced".
+  - **TV remote**: app buttons picked from a list of common Android TV apps (or any package), the entity the volume keys go to, a volume row on/off, and renamed commands for TVs whose remote entity doesn't use the Android TV names.
+  Options written by hand in dashboard.json are kept when such a card is edited.
+- **Select card: "dropdown" layout and text size** (#93). `"layout": "dropdown"` is just the menu, full width — no icon, no name; `"font_size"` sets the size of the current option and of the menu's options.
+- **TV remote card: volume row.** − / mute / + under Back/Home/Menu, sent to `mute_entity` when set (a soundbar's `remote.*`), else to the TV. `"show_volume": false` hides it.
+- **Picture elements: PNG icons** (`"icon": "/sdcard/astrion/icons/lamp.png"`) and `"on_color"` per button.
+- **Switch card: PNG icons.** `icon` takes a PNG path as well as `heater`, `fan`, `bulb` — the builder's icon picker always wrote a path, which the card ignored.
+
+### Changed
+
+- **Settings can always be reached from the remote.** A long press on MAIN (the Menu key) opens Settings whenever no hotkey of the dashboard opens it, and MAIN's long press isn't used for something else. Swiping down opens Activities, so a dashboard without a Settings hotkey used to lock you out of it.
+- **A fresh install starts with a minimal dashboard**: one page saying where to build yours, and the MAIN long press above — instead of the original author's own four pages, full of entities that exist nowhere else. It's also what shows when dashboard.json can't be read.
+- **Connection banner.** Without Home Assistant set up (no URL or token), there is no banner any more: a remote used only with Harmony, IR or Apple TV used to show "Disconnected" forever. On the starter dashboard of a new remote, it shows "Set up this remote from a browser" and the remote's address (`http://<ip>:8080`) instead. When Home Assistant is set up but unreachable, the banner also gives that address, where the connection settings are.
+- **Builder: card types regrouped** — Common, Media, Grids, Remotes, Home & layout; "Advanced" only holds custom types now (clock & weather, media player, camera, Plex and vacuum have had forms for a while).
+- **Select card follows the dashboard theme** (it had fixed dark colours, unreadable with a light theme). Its icon colour uses the colour picker in the builder.
+- **TV remote card defaults**: without `media_entity`, the app buttons use `media_player.<same name as remote_entity>` (what the Android TV Remote integration creates) instead of one fixed entity; default apps are Netflix, YouTube, Prime Video and Plex.
+
+### Fixed
+
+- Switch card: `on_color` written as `#RRGGBB` (6 digits) made the tile transparent; the icon no longer turns red when on, whatever the colour.
+- Source select card: the icon set in the builder is now shown.
+- Speaker group card: "Speakers", "Muted", "Group" / "Ungroup" are translated.
+- Clock & weather card: today's calendar event follows the 12 h / 24 h setting (it was always 12 h).
+- Climate card: a device without fan modes (heating-only thermostat) no longer shows a dead low / medium / high / auto row.
+- Fan card: in the `step` layout, the `step` option is used (`percentage_step`); it was ignored.
+- Plex card: the builder warns that the Plex token is saved in dashboard.json, so in backups too.
+
 ## [1.2.8-beta] - 2026-10-15
 
 ### Added
@@ -14,77 +48,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ```
 
 - **Monitor card: long values.** `"layout": "vertical"` puts each value on its own full-width line under its name; `"marquee": true` keeps a value on one line and scrolls it when it doesn't fit (for sensors such as an AVR's audio/video info). Both optional; without them a row looks as before. The builder now has a real form for this card (moved from "Advanced (raw options)" to the common cards): title, layout, scrolling, and a list of sensors — entity picked with Home Assistant autocomplete, optional name, reorder with ↑/↓ — instead of raw JSON. Options set by hand in dashboard.json are kept when the card is edited.
+
 - **Dock clock: "Now playing" follows the room's Activity.** A composed Activity, a tracked tile or a tracked hotkey can name its content source with `"nowPlayingEntity"` (the Apple TV, not the TV or AVR); a composed Activity with a network Apple TV uses it automatically. New `dock.room` ("Room of this remote" in the builder): while an Activity runs in that room, the clock shows only its player — never another room's. Without a room, the only running Activity is used when there is just one. Otherwise `media_entities` as before, except that a playing player now wins over a paused one listed earlier (an old paused source no longer takes the spot).
 
 - **The dashboard builder and the device page speak French, Italian and Spanish.** `/` and `/builder/` follow the browser's language (English otherwise): every label, hint, placeholder, card form, hotkey form, Activity wizard, preview caption and error message comes from `i18n/<lang>.json` (en, fr, it, es), and a string missing from a language falls back to English. Home Assistant state values in the preview (HVAC modes, vacuum states…) reuse the app's own `ha_labels`. Nothing written into `dashboard.json` changes — only what the editor shows. Built on Rob Johnston's (ClemsonJeeper) i18n work from his `feat/i18n-dashboard` branch: his string table, keys and French translation, ported onto the current builder and extended to the newer sections (Apple TV, dock screen, standby & battery, HA event hotkeys, page popups). The device page at the remote's address (`/`: Home Assistant, Harmony, IR devices and extenders, Apple TV pairing, backup, IR database, icons, Find my remote) is translated the same way.
-- **Several remotes in one home: each remote has an identity.** A stable id (`astrion-…`, from Android's ANDROID_ID: survives app updates, reinstalls and IP changes; only a factory reset gives a new one) and a friendly name ("Living room") — set in Settings › About › "Name of this remote", or with "Rename" on the remote's web page. New `GET /info` answers `{ id, name, manufacturer, model, android, version, versionCode, webhook }` (`webhook`: whether a push webhook id is set); `POST /remote-name` (`name=…`) renames it. Every webhook push now carries `"remote": { "id", "name" }`, so Home Assistant knows which remote sent it.
-- **Battery pushed to Home Assistant.** With a push webhook configured, the remote sends `{"type": "battery", "level": 57, "charging": false}` when the level crosses a 5 % step and when charging starts or stops — so the HA integration no longer needs to poll `/battery` every few seconds (each poll wakes the remote's Wi-Fi).
-- **Hotkey action "Home Assistant event".** `"event": "movie_scene"` on a hotkey fires `astrion_button` on Home Assistant's event bus with `event`, `key`, `long` (held or not), `page`, `remote_id` and `remote_name` — one automation can do a different thing per remote and per button. HA only accepts `fire_event` from an **administrator**'s token (refusals are logged). With a webhook configured it's also pushed as `{"type": "button", …}`, for the HA integration to turn into an event tied to the right device.
-
-  ```yaml
-  trigger:
-    - platform: event
-      event_type: astrion_button
-      event_data: { event: movie_scene, remote_name: Living room }
-  ```
-
-- **`power` block in `dashboard.json`** (builder: new "Standby & battery" section). Every key is optional:
-
-  ```json
-  "power": { "motion_wake_minutes": 5, "screen_off_filter_seconds": 30,
-             "screen_off_entities": [], "dock_debounce_seconds": 5, "screen_timeout_seconds": 30 }
-  ```
-
-- **Quiet Home Assistant while the screen is off.** `screen_off_filter_seconds` (30 by default) after the screen goes off, and when the remote isn't docked, it stops receiving every state change from Home Assistant: on a busy HA this was the main thing waking the Wi-Fi radio and CPU all night. Only the entities listed in `screen_off_entities` stay live (through a state trigger). When the screen comes on, every state is re-read, so the dashboard is current right away. `-1` turns this off. "Find my remote", page jumps and other calls to the remote's own server are not affected.
-- **Motion-wake for a limited time.** The accelerometer listens for `motion_wake_minutes` (5 by default) after the screen goes off, to catch a pick-up shortly after the remote was put down. After that it sleeps until a button turns the screen on. `0` = buttons only, `-1` = always (the old behaviour).
-- **Screen timeout held by the app.** `screen_timeout_seconds` keeps the system screen timeout at that value. Some setups leave it at "never", which keeps an undocked remote lit until its battery is flat. Also set from the remote (Settings › Display › Screen timeout: System / 15 s / 30 s / 1 min / 2 min / 5 min). It needs Android's "Modify system settings" permission — the same one as the brightness slider: choosing a value opens Android's page for it when it's missing. Without it, the system setting is left alone.
-- **Settings page reorganized.** The long list is now six groups — Display (brightness, screen timeout, wake on motion, dock screen), Connections (Home Assistant / Harmony status, "Reconnect now", Wi-Fi, IP address, keep Wi-Fi awake), Web configuration, Sound & touch, Language, About — each opening as a popup with a one-line summary on the list. Android system and an available update stay on the list.
-- **About.** Installed version and build number, channel (stable / beta), update status, device, Android version, battery level, IP address, package name, project page and the logs address, plus **Reload dashboard** (re-reads `dashboard.json`) and **Restart the app**.
-- **Language.** Settings › Language: System / English / Français / Italiano / Español, independent of Android's language (the app restarts to apply it).
-- **Test "Find my remote".** Settings › Sound & touch rings exactly like `/ring` from Home Assistant (default sound, 80 %, 15 s) — works even with the web server switched off. Touch or a button stops it.
-- **Logs without adb.** `GET /logs` on the remote's server (`http://<remote>:8080/logs`) downloads this app's recent log lines (its own process only, up to 5000 lines) with the version and device in the first line — enough for a bug report from a tester without adb.
-- **"Disconnected" banner: tap to retry.** Tapping the banner reconnects to Home Assistant right away.
-- **Dock screen: charging, clock or dashboard.** New `dock` block in `dashboard.json` (and a "Dock screen" section in the builder): `"mode": "charging"` keeps today's battery screen; `"clock"` leaves the dashboard usable and, after `idle_seconds` untouched (30 by default), shows a dim night-friendly clock — big time, date, weather (`weather_entity`), battery and, only while something plays, the artwork and title (`media_entities`, or any playing media player). It turns amber and darker at night (`sun.sun`, else 21:00–07:00) and drifts a few pixels each minute; a touch or button brings the dashboard back. `"dashboard"` just dims after `idle_seconds`. `brightness` / `night_brightness` set the backlight while idle, `time_format` forces 12 or 24 h. The mode can also be switched on the remote itself (Settings › Display › Dock screen: Charging / Clock / Dashboard), which writes it into that remote's `dashboard.json` — the same value as the builder's section. Docking is confirmed after `dock_debounce_seconds` (`power` block, 5 by default), so a remote set down crooked or bounced on its contacts doesn't flicker the dock screen; undocking is immediate. Inspired by baes-cloud's astrion-dashboard docked screensaver (MIT).
-
-  ```json
-  "dock": { "mode": "clock", "idle_seconds": 30, "brightness": 0.2, "night_brightness": 0.05,
-            "weather_entity": "weather.home", "media_entities": ["media_player.appletv_salon"] }
-  ```
-
-- **Find my remote: stop it from the remote.** While `/ring` rings, the remote wakes its screen and shows "Found me!"; the first touch or button press stops the sound (and does nothing else). Stopping from Home Assistant or the web page still works.
-- **Hide a page completely while its Activity is off.** New page option `"hideMode": "full"` (builder: "Hide completely" under "Hide unless this Activity is running"): while the Activity is off the page is simply not there for a swipe — its place shows the page the swipe ends up on, so it never appears, and the page dots, hotkeys and Home Assistant's page push ignore it — and the remote leaves the page (to its parent, else the nearest visible page) when the Activity stops while it's on screen. Jumps from a tile, hotkey or Home Assistant still land on it, so "start Activity + open its page" keeps working. Without it, only the dot is hidden, as before.
-- **"Off" button for Activities.** Tiles (`scene_grid`, `button_grid`, `long_press`) and hotkeys accept `"stopActivity": "<room>"` — Harmony PowerOff for a Harmony Activity, devices off per their profile for a composed one — or `"*"` for every room (Harmony's -1 for the whole house). In the builder: the tile form's "Turn off a room's Activity" field and the hotkey action "Turn off a room's Activity".
-- Spanish localization support. Thanks to [@enigmat14](https://github.com/enigmat14) for the contribution! 🙏
-- **`apple_tv_remote`: compact and full layouts.** New `"layout"` option. `"compact"` keeps the remote first: a one-line now-playing strip (artwork, title, app, thin progress, Play/Pause) above the trackpad, the button row, then up to 6 app icons. `"full"` adds large artwork, title/series, a draggable progress bar (seeks the Apple TV), −10 s / Play-Pause / +10 s, a scrollable row of labelled apps, then the trackpad and buttons. Both size the trackpad from the screen height so the card fits on one page between the top status bar and the page dots. Without `layout` the card is unchanged. `showArtwork` / `showProgress` / `showSkip` toggle the parts (compact with both artwork and progress off is the classic card plus apps). Now-playing info comes from the directly paired Apple TV, or from `entity` (e.g. Home Assistant's Apple TV media_player when the card goes through a Harmony hub).
-- **App shortcuts on the Apple TV card.** `"apps": [{ "source": "Netflix", "label": "Netflix", "icon": "/sdcard/astrion/icons/netflix.png", "color": "#B3261E" }]`, launched with `media_player.select_source`. The icon is an uploaded PNG or an image URL; without one the app's initials are drawn on its color. The builder suggests app names from the entity's `source_list`, has an icon picker, and lets you reorder.
-- **Long press on the Apple TV trackpad (direct Apple TV).** Holding the centre sends a held Select, which opens tvOS's context menu (e.g. remove an item from the Apple TV app's Up Next / watchlist) — what HA's Apple TV integration does with `hold_secs`. Holding ◀ / ▶ jumps 10 s back / forward.
-- **Apple TV commands `SelectHold`, `SeekBackward`, `SeekForward` and `hold_secs`.** `astrion_appletv.send_command` now accepts any button as `<Button>Hold` (`SelectHold`, `long_select`…) or with `"hold_secs": 0.8` (same meaning as `remote.send_command`), plus ±10 s jumps (Companion `SkipBy`, falling back to Left/Right when an app refuses it). All three are in the hotkey form and the card's button catalog, so a held hardware CENTER can be mapped to `SelectHold`.
-- **Classic fast-forward / rewind on a directly paired Apple TV.** New `FastForward` / `Rewind` commands (hotkey form and card buttons): the first press starts scanning (MRP `BeginFastForward` / `BeginRewind`, the app's player speeds up on further presses), pressing the same key again resumes normal playback. Without MRP, or in an app that refuses it, they fall back to a 10 s jump. `Next` / `Previous` (track) are now also available as card buttons.
-- **`media_player.media_seek` on a directly paired Apple TV.** Sent first as MRP `SeekToPlaybackPosition` (an absolute position handled by the app's own player — what the iPhone remote uses, and what Prime Video, Plex and other third-party players honour when they ignore Companion's relative jump), falling back to a Companion `SkipBy` from the position MRP last reported. MRP's per-app supported commands are now read: `supported_features` advertises SEEK only when the item has a length and the app doesn't declare seeking unsupported, and the card's progress bar is draggable only then. Some apps (Canal+) report the absolute seek as accepted but restart from the beginning: after each MRP seek the next position report is checked, and if playback landed more than 15 s away the card corrects with a relative `SkipBy` and uses only that for this app from then on. Each seek is logged (accepted / refused / corrected, which app).
-- **Harmony-style Activities.** Composed Activities now run the way a Logitech Harmony hub did, as soon as their IR devices come with a **profile** — the `profile` block the IR sniffer's new "Import from Harmony…" adds to an `ir-database` model entry, from the Logitech Harmony IR archive (power type, power-on delay, inter-key/inter-device/input delays, repeats, named input sequences). Start order: power off the room's devices this Activity doesn't use → power on the ones that are off, one after the other → wait until each is ready (power-on delays overlap instead of adding up) → select inputs, only when they change. A named input (`"inputCommand": "HDMI 1"`) runs the device's whole input key sequence. New `ActivityPlanner` (pure, unit-tested) decides; `ActivityDispatcher` sends.
-- **Persistent device state.** Astrion remembers, per device, whether it's on and which input it's on (`DeviceStateStore`, saved across restarts). A toggle-only device is only toggled when it's known (or, unknown, assumed) to be off — no more TV switching *off* on the first Activity start after an app restart. A discrete power-on is still resent as a harmless safety net.
-- **The active Activity is remembered too.** Which Activity is running in each room is now saved with the device states (`ActiveActivityStore`), so after an app restart, an APK update or a dashboard reload the Active Activities list, its Stop/Help buttons and the active tile highlight come back as they were — no need to relaunch the Activity. Only the belief is restored, nothing is sent; an Activity that no longer exists is dropped, and a Harmony hub's live state still wins.
-- **IR repeats.** Each key of a profiled device is sent the number of times its remote does (Harmony's `pressMinRepeats`), using the separate repeat burst (`pronto_repeat`) when there is one so a repeat is never read as a second press. Applies everywhere — Activities, tiles, hotkeys — locally and through an IR Extender. Malformed or truncated repeat bursts are ignored.
-- **"Help" in Active Activities.** Each composed Activity gets a Help button listing its devices with what Astrion believes (on / off / unknown, last input). Tapping a device only corrects that belief; **Fix** then replays the Activity: devices marked off are powered on (with their power-on wait), inputs not known to be set are re-selected.
-- **Config page:** the Activity wizard reads a reference device's real command list from the remote, offers the profile's named inputs first for the input field, and summarizes the profile.
-- **IR diagnostics (`adb logcat -s AstrionIR IrDatabaseRuntime`).** Every IR send is now logged (device, command, carrier, length, built-in blaster or extender) — sends used to be silent unless they threw. A send skipped because Android reports no IR emitter, or because an extender isn't registered, is now logged instead of silently dropped; an unusual carrier is flagged as a likely damaged code. Loading an `ir-database` file logs its models, commands, Harmony profiles and how many damaged codes were repaired.
-- **Activity wizard: network Apple TV and Home Assistant picker.** A network-paired Apple TV now has its own "Apple TV (network)" section in the wizard's Devices step (one checkbox each): woken when the Activity starts, put to sleep when it ends, and on the next screen an app to launch can be picked from its installed apps. Home Assistant entities can now be chosen from a list grouped by domain (Devices-page HA devices plus, when the builder is opened from the remote, every live `media_player`/`switch`/`light`/`remote`/`input_boolean`/`fan`/`climate` entity) or still typed by hand; a typed id wins and is checked for the `domain.object_id` shape. The source field of an HA device suggests its `source_list`.
-- **Delete icons from the web UI.** Devices page → Icons now shows each icon's thumbnail with a delete button (`DELETE /icons/<file>` on the remote's server). Before deleting, it warns if `dashboard.json` still uses the icon.
-- **See and delete IR database files from the web UI.** Devices page → IR database now lists the category files on the remote with their brands and models, each with a delete button (`DELETE /ir-database/<category>.json`). Before deleting, it names the IR devices of `dashboard.json` that still use that file.
-- **Long-press on `button_grid` and `scene_grid` tiles.** A tile can now carry a separate `"long_press"` block, fired when the tile is held (touch long-press, or a held D-pad OK/CENTER key) instead of tapped. The tile's own top-level fields still drive the normal tap, so e.g. a tile can open its page on tap and switch every device off on hold:
-
-  ```json
-  { "name": "Lights", "page": "Lights",
-    "long_press": { "service": "script.astrion_bed_lights_off" } }
-  ```
-
-  The block accepts the same action fields as a tile: `service` (+ `entity_id`, `data`), `entity_id` alone (`turn_on`), `harmonyDevice`+`harmonyCommand`, `activityId`, `hub` (falls back to the tile's own), `irDevice`+`irCommand`, `activity`, `page` (+ `pageMode: "popup"`), `closePopup`. A tile without `long_press` behaves exactly as before (a hold is just a tap). The web config editor has a matching "Long-press action (JSON)" field, so the block is kept when a tile is edited there.
-
-### Changed
-
-- **"Send to my remote" from the IR sniffer now merges** the received models into the remote's `ir-database/<category>.json` instead of replacing the file (it only exports the models checked in the browser, often a single imported device). The upload form on the remote's own config page still replaces the whole file.
-- **Home Assistant connection, lighter.** Entity updates are published when they arrive (coalesced over 120 ms) instead of by a loop ticking every 120 ms forever; one heartbeat instead of two (the WebSocket ping every 30 s, the extra app-level `ping` is gone); reconnects follow the network — no retry every 3 s while Wi-Fi is down, an immediate reconnect when it comes back.
-- Activities whose devices have no profile keep the original order (power → input → delay, per device); the only difference is that "already on" now comes from the persisted device state when it's known.
 
 ### Fixed
 
@@ -94,23 +61,171 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Harmony Activity tile stayed outlined after turning it off.** With a single hub (tiles and hotkeys without a `"hub"` field), the remote never matched the hub's live Activity to those tiles: the outline came only from the tap, so the hub's PowerOff (the tile's "Off" button, a long-press Power hotkey, the Harmony remote, Home Assistant) never cleared it. The default hub is now bound like an explicitly named one, so the outline follows the hub in both directions — including an Activity started from outside Astrion.
 
+## [1.2.7-beta] - 2026-10-13
+
+### Added
+
+- **Several remotes in one home: each remote has an identity.** A stable id (`astrion-…`, from Android's ANDROID_ID: survives app updates, reinstalls and IP changes; only a factory reset gives a new one) and a friendly name ("Living room") — set in Settings › About › "Name of this remote", or with "Rename" on the remote's web page. New `GET /info` answers `{ id, name, manufacturer, model, android, version, versionCode, webhook }` (`webhook`: whether a push webhook id is set); `POST /remote-name` (`name=…`) renames it. Every webhook push now carries `"remote": { "id", "name" }`, so Home Assistant knows which remote sent it.
+
+- **Battery pushed to Home Assistant.** With a push webhook configured, the remote sends `{"type": "battery", "level": 57, "charging": false}` when the level crosses a 5 % step and when charging starts or stops — so the HA integration no longer needs to poll `/battery` every few seconds (each poll wakes the remote's Wi-Fi).
+
+- **Hotkey action "Home Assistant event".** `"event": "movie_scene"` on a hotkey fires `astrion_button` on Home Assistant's event bus with `event`, `key`, `long` (held or not), `page`, `remote_id` and `remote_name` — one automation can do a different thing per remote and per button. HA only accepts `fire_event` from an **administrator**'s token (refusals are logged). With a webhook configured it's also pushed as `{"type": "button", …}`, for the HA integration to turn into an event tied to the right device.
+
+  ```yaml
+  trigger:
+    - platform: event
+      event_type: astrion_button
+      event_data: { event: movie_scene, remote_name: Living room }
+  ```
+
+## [1.2.6-beta] - 2026-10-12
+
+### Changed
+
+- **Home Assistant connection, lighter.** Entity updates are published when they arrive (coalesced over 120 ms) instead of by a loop ticking every 120 ms forever; one heartbeat instead of two (the WebSocket ping every 30 s, the extra app-level `ping` is gone); reconnects follow the network — no retry every 3 s while Wi-Fi is down, an immediate reconnect when it comes back.
+
+### Fixed
+
 - **WebBuilder: the remote's MENU key was listed as "MAIN" in the hotkeys** while the remote picture called it "Menu". The physical-key dropdown and the hotkey lists now show the key's name as on the remote, with its id: "Menu (MAIN)", "Fast-forward (FASTFORWARD)"… Nothing changes in `dashboard.json` (still `"key": "MAIN"`).
+
 - **Beta updates: "Beta available" showed even when the latest beta was already installed.** The rolling `dev-latest` pre-release keeps the same tag, so nothing was compared. The beta is now offered only when its APK was uploaded after the app was installed or last updated, and it's shown under the release's title (e.g. "1.2.6-beta") instead of "dev-latest". The web page's explicit "install the beta" button still always offers it.
+
 - **The screen sometimes came on by itself, with the remote lying still on a table.** After a gap in the accelerometer stream (CPU asleep, sensor just restarted), the first sample back was taken as the "at rest" reference; those first samples are often off, so the next normal sample looked like a 30°+ tilt and woke the screen. The samples of the first 400 ms (at least 3) are now averaged into the reference and never judged as motion. Motion also never wakes the screen while docked.
+
 - Home Assistant: a state event for a removed entity (`new_state: null`) no longer drops the whole message with a parse error.
-- **Apple TV (AirPlay 2 / tvOS): the remote-control session dropped about every 30 seconds** ("MRP connection lost: connection closed mid-frame", then a reconnect ~3 s later — playback info, artwork and commands briefly unavailable each time). The session's *event* channel was opened but never read, on the mistaken belief that pyatv doesn't read it either; tvOS sends requests on it and, left unanswered, tears the session down. Every request now gets the empty `200 OK` pyatv sends (`AirPlayEventChannel`).
-- **IR devices imported from the Harmony archive didn't respond in Activities.** Four causes, all handled without regenerating anything: the sniffer's import renamed a model already in its database to `"<model> (Harmony)"`, so `dashboard.json` (referencing the plain name) found no command at all — the plain name now also matches that entry; command ids are matched ignoring case/`_`/`-` (`volume_up` finds `VolumeUp`); an Activity's explicit power command the device doesn't have (an Apple TV has no IR `PowerOn`, a Samsung soundbar only `PowerToggle`) now falls back to the profile's own; and an input written as a command id (`InputHdmi2`) also matches the profile input "HDMI 2".
-- **Apple TV: title and artwork flickered to empty every few seconds on live streams.** tvOS re-sends the playback queue with the same item but without its metadata, then fills it back in; the queue replaced the known item as-is. An item keeping the same identifier now keeps what was known (new fields merged over it); a genuinely new item still starts empty.
-- **WebBuilder: importing a dashboard lost `"openMode": "popup"` on auto-opened popup pages.** The import's page normalizer didn't list `openMode`, so the page settings showed "full page" and saving/exporting dropped it (popup size and open/close entity survived, which hid the problem). It's now kept, and any page field the normalizer doesn't know is carried over untouched instead of silently dropped.
-- **Storage: the downloaded update APK stayed in the app cache forever** (a full copy of the app, after it was installed). It's now deleted at startup, along with upload temp files the local web server left behind on an interrupted request. The download is also streamed to disk instead of being read whole into RAM first.
-- An extender batch no longer lets the next local IR/Harmony/HA step start before the batch's own delays have played out.
-- A step skipped because its command is missing keeps its delay, so later steps don't fire early.
-- **IR codes captured with the IR sniffer before its 0.4.1 didn't work.** Its capture parser split many codes in two at their own `0000` repeat-length field: `pronto` lost its header (read as a ~12 kHz carrier with a wrong length) and `pronto_repeat` held the cut-off header (`0000 006D 0022`). `ir-database` files are now repaired on load (`repairSplitPronto`) when rejoining the two gives a complete, plausible code — files already on the remote work without being regenerated.
-- **D-pad focus outline staying visible when an arrow key is bound to a hotkey.** The command was sent correctly, but a card/tile kept showing its accent focus outline. Clearing Compose focus alone couldn't fix it: the key press takes the window out of touch mode before the app sees it (which hands focus to a tile), and clearing focus outside touch mode makes Android hand it straight back. The outline is now hidden instead, from the moment a directional key is consumed by a hotkey, and comes back as soon as an unbound arrow key is used to navigate. While hidden, a press on OK/CENTER only brings the outline back rather than activating a tile the user can't see.
 
 ### Internal
 
 - **Build: Android Gradle Plugin 8.13.2, Gradle 9.5.1** (were 8.5.2 / 9.6.1). AGP 8.5's lint analysed the code with Kotlin 2.0 and misread the project's Kotlin 2.2 libraries (false `RememberReturnType` error in CI). AGP 8.x can't run on Gradle 9.6 or later (it relies on an internal API Gradle removed), hence Gradle 9.5.1 until the move to AGP 9.
+
+## [1.2.5-beta] - 2026-10-12
+
+### Added
+
+- **`power` block in `dashboard.json`** (builder: new "Standby & battery" section). Every key is optional:
+
+  ```json
+  "power": { "motion_wake_minutes": 5, "screen_off_filter_seconds": 30,
+             "screen_off_entities": [], "dock_debounce_seconds": 5, "screen_timeout_seconds": 30 }
+  ```
+
+- **Quiet Home Assistant while the screen is off.** `screen_off_filter_seconds` (30 by default) after the screen goes off, and when the remote isn't docked, it stops receiving every state change from Home Assistant: on a busy HA this was the main thing waking the Wi-Fi radio and CPU all night. Only the entities listed in `screen_off_entities` stay live (through a state trigger). When the screen comes on, every state is re-read, so the dashboard is current right away. `-1` turns this off. "Find my remote", page jumps and other calls to the remote's own server are not affected.
+
+- **Motion-wake for a limited time.** The accelerometer listens for `motion_wake_minutes` (5 by default) after the screen goes off, to catch a pick-up shortly after the remote was put down. After that it sleeps until a button turns the screen on. `0` = buttons only, `-1` = always (the old behaviour).
+
+- **Screen timeout held by the app.** `screen_timeout_seconds` keeps the system screen timeout at that value. Some setups leave it at "never", which keeps an undocked remote lit until its battery is flat. Also set from the remote (Settings › Display › Screen timeout: System / 15 s / 30 s / 1 min / 2 min / 5 min). It needs Android's "Modify system settings" permission — the same one as the brightness slider: choosing a value opens Android's page for it when it's missing. Without it, the system setting is left alone.
+
+- **Settings page reorganized.** The long list is now six groups — Display (brightness, screen timeout, wake on motion, dock screen), Connections (Home Assistant / Harmony status, "Reconnect now", Wi-Fi, IP address, keep Wi-Fi awake), Web configuration, Sound & touch, Language, About — each opening as a popup with a one-line summary on the list. Android system and an available update stay on the list.
+
+- **About.** Installed version and build number, channel (stable / beta), update status, device, Android version, battery level, IP address, package name, project page and the logs address, plus **Reload dashboard** (re-reads `dashboard.json`) and **Restart the app**.
+
+- **Language.** Settings › Language: System / English / Français / Italiano / Español, independent of Android's language (the app restarts to apply it).
+
+- **Test "Find my remote".** Settings › Sound & touch rings exactly like `/ring` from Home Assistant (default sound, 80 %, 15 s) — works even with the web server switched off. Touch or a button stops it.
+
+- **Logs without adb.** `GET /logs` on the remote's server (`http://<remote>:8080/logs`) downloads this app's recent log lines (its own process only, up to 5000 lines) with the version and device in the first line — enough for a bug report from a tester without adb.
+
+- **"Disconnected" banner: tap to retry.** Tapping the banner reconnects to Home Assistant right away.
+
+## [1.2.4-beta] - 2026-10-12
+
+### Added
+
+- **Dock screen: charging, clock or dashboard.** New `dock` block in `dashboard.json` (and a "Dock screen" section in the builder): `"mode": "charging"` keeps today's battery screen; `"clock"` leaves the dashboard usable and, after `idle_seconds` untouched (30 by default), shows a dim night-friendly clock — big time, date, weather (`weather_entity`), battery and, only while something plays, the artwork and title (`media_entities`, or any playing media player). It turns amber and darker at night (`sun.sun`, else 21:00–07:00) and drifts a few pixels each minute; a touch or button brings the dashboard back. `"dashboard"` just dims after `idle_seconds`. `brightness` / `night_brightness` set the backlight while idle, `time_format` forces 12 or 24 h. The mode can also be switched on the remote itself (Settings › Display › Dock screen: Charging / Clock / Dashboard), which writes it into that remote's `dashboard.json` — the same value as the builder's section. Docking is confirmed after `dock_debounce_seconds` (`power` block, 5 by default), so a remote set down crooked or bounced on its contacts doesn't flicker the dock screen; undocking is immediate. Inspired by baes-cloud's astrion-dashboard docked screensaver (MIT).
+
+  ```json
+  "dock": { "mode": "clock", "idle_seconds": 30, "brightness": 0.2, "night_brightness": 0.05,
+            "weather_entity": "weather.home", "media_entities": ["media_player.appletv_salon"] }
+  ```
+
+- **Find my remote: stop it from the remote.** While `/ring` rings, the remote wakes its screen and shows "Found me!"; the first touch or button press stops the sound (and does nothing else). Stopping from Home Assistant or the web page still works.
+
+- **Hide a page completely while its Activity is off.** New page option `"hideMode": "full"` (builder: "Hide completely" under "Hide unless this Activity is running"): while the Activity is off the page is simply not there for a swipe — its place shows the page the swipe ends up on, so it never appears, and the page dots, hotkeys and Home Assistant's page push ignore it — and the remote leaves the page (to its parent, else the nearest visible page) when the Activity stops while it's on screen. Jumps from a tile, hotkey or Home Assistant still land on it, so "start Activity + open its page" keeps working. Without it, only the dot is hidden, as before.
+
+- **"Off" button for Activities.** Tiles (`scene_grid`, `button_grid`, `long_press`) and hotkeys accept `"stopActivity": "<room>"` — Harmony PowerOff for a Harmony Activity, devices off per their profile for a composed one — or `"*"` for every room (Harmony's -1 for the whole house). In the builder: the tile form's "Turn off a room's Activity" field and the hotkey action "Turn off a room's Activity".
+
+- Spanish localization support. Thanks to [@enigmat14](https://github.com/enigmat14) for the contribution! 🙏
+
+## [1.2.3-beta] - 2026-10-10
+
+### Added
+
+- **`apple_tv_remote`: compact and full layouts.** New `"layout"` option. `"compact"` keeps the remote first: a one-line now-playing strip (artwork, title, app, thin progress, Play/Pause) above the trackpad, the button row, then up to 6 app icons. `"full"` adds large artwork, title/series, a draggable progress bar (seeks the Apple TV), −10 s / Play-Pause / +10 s, a scrollable row of labelled apps, then the trackpad and buttons. Both size the trackpad from the screen height so the card fits on one page between the top status bar and the page dots. Without `layout` the card is unchanged. `showArtwork` / `showProgress` / `showSkip` toggle the parts (compact with both artwork and progress off is the classic card plus apps). Now-playing info comes from the directly paired Apple TV, or from `entity` (e.g. Home Assistant's Apple TV media_player when the card goes through a Harmony hub).
+
+- **App shortcuts on the Apple TV card.** `"apps": [{ "source": "Netflix", "label": "Netflix", "icon": "/sdcard/astrion/icons/netflix.png", "color": "#B3261E" }]`, launched with `media_player.select_source`. The icon is an uploaded PNG or an image URL; without one the app's initials are drawn on its color. The builder suggests app names from the entity's `source_list`, has an icon picker, and lets you reorder.
+
+- **Long press on the Apple TV trackpad (direct Apple TV).** Holding the centre sends a held Select, which opens tvOS's context menu (e.g. remove an item from the Apple TV app's Up Next / watchlist) — what HA's Apple TV integration does with `hold_secs`. Holding ◀ / ▶ jumps 10 s back / forward.
+
+- **Apple TV commands `SelectHold`, `SeekBackward`, `SeekForward` and `hold_secs`.** `astrion_appletv.send_command` now accepts any button as `<Button>Hold` (`SelectHold`, `long_select`…) or with `"hold_secs": 0.8` (same meaning as `remote.send_command`), plus ±10 s jumps (Companion `SkipBy`, falling back to Left/Right when an app refuses it). All three are in the hotkey form and the card's button catalog, so a held hardware CENTER can be mapped to `SelectHold`.
+
+- **Classic fast-forward / rewind on a directly paired Apple TV.** New `FastForward` / `Rewind` commands (hotkey form and card buttons): the first press starts scanning (MRP `BeginFastForward` / `BeginRewind`, the app's player speeds up on further presses), pressing the same key again resumes normal playback. Without MRP, or in an app that refuses it, they fall back to a 10 s jump. `Next` / `Previous` (track) are now also available as card buttons.
+
+- **`media_player.media_seek` on a directly paired Apple TV.** Sent first as MRP `SeekToPlaybackPosition` (an absolute position handled by the app's own player — what the iPhone remote uses, and what Prime Video, Plex and other third-party players honour when they ignore Companion's relative jump), falling back to a Companion `SkipBy` from the position MRP last reported. MRP's per-app supported commands are now read: `supported_features` advertises SEEK only when the item has a length and the app doesn't declare seeking unsupported, and the card's progress bar is draggable only then. Some apps (Canal+) report the absolute seek as accepted but restart from the beginning: after each MRP seek the next position report is checked, and if playback landed more than 15 s away the card corrects with a relative `SkipBy` and uses only that for this app from then on. Each seek is logged (accepted / refused / corrected, which app).
+
+## [1.2.2-beta] - 2026-10-09
+
+### Added
+
+- **Harmony-style Activities.** Composed Activities now run the way a Logitech Harmony hub did, as soon as their IR devices come with a **profile** — the `profile` block the IR sniffer's new "Import from Harmony…" adds to an `ir-database` model entry, from the Logitech Harmony IR archive (power type, power-on delay, inter-key/inter-device/input delays, repeats, named input sequences). Start order: power off the room's devices this Activity doesn't use → power on the ones that are off, one after the other → wait until each is ready (power-on delays overlap instead of adding up) → select inputs, only when they change. A named input (`"inputCommand": "HDMI 1"`) runs the device's whole input key sequence. New `ActivityPlanner` (pure, unit-tested) decides; `ActivityDispatcher` sends.
+
+- **Persistent device state.** Astrion remembers, per device, whether it's on and which input it's on (`DeviceStateStore`, saved across restarts). A toggle-only device is only toggled when it's known (or, unknown, assumed) to be off — no more TV switching *off* on the first Activity start after an app restart. A discrete power-on is still resent as a harmless safety net.
+
+- **The active Activity is remembered too.** Which Activity is running in each room is now saved with the device states (`ActiveActivityStore`), so after an app restart, an APK update or a dashboard reload the Active Activities list, its Stop/Help buttons and the active tile highlight come back as they were — no need to relaunch the Activity. Only the belief is restored, nothing is sent; an Activity that no longer exists is dropped, and a Harmony hub's live state still wins.
+
+- **IR repeats.** Each key of a profiled device is sent the number of times its remote does (Harmony's `pressMinRepeats`), using the separate repeat burst (`pronto_repeat`) when there is one so a repeat is never read as a second press. Applies everywhere — Activities, tiles, hotkeys — locally and through an IR Extender. Malformed or truncated repeat bursts are ignored.
+
+- **"Help" in Active Activities.** Each composed Activity gets a Help button listing its devices with what Astrion believes (on / off / unknown, last input). Tapping a device only corrects that belief; **Fix** then replays the Activity: devices marked off are powered on (with their power-on wait), inputs not known to be set are re-selected.
+
+- **Config page:** the Activity wizard reads a reference device's real command list from the remote, offers the profile's named inputs first for the input field, and summarizes the profile.
+
+- **IR diagnostics (`adb logcat -s AstrionIR IrDatabaseRuntime`).** Every IR send is now logged (device, command, carrier, length, built-in blaster or extender) — sends used to be silent unless they threw. A send skipped because Android reports no IR emitter, or because an extender isn't registered, is now logged instead of silently dropped; an unusual carrier is flagged as a likely damaged code. Loading an `ir-database` file logs its models, commands, Harmony profiles and how many damaged codes were repaired.
+
+- **Activity wizard: network Apple TV and Home Assistant picker.** A network-paired Apple TV now has its own "Apple TV (network)" section in the wizard's Devices step (one checkbox each): woken when the Activity starts, put to sleep when it ends, and on the next screen an app to launch can be picked from its installed apps. Home Assistant entities can now be chosen from a list grouped by domain (Devices-page HA devices plus, when the builder is opened from the remote, every live `media_player`/`switch`/`light`/`remote`/`input_boolean`/`fan`/`climate` entity) or still typed by hand; a typed id wins and is checked for the `domain.object_id` shape. The source field of an HA device suggests its `source_list`.
+
+- **Delete icons from the web UI.** Devices page → Icons now shows each icon's thumbnail with a delete button (`DELETE /icons/<file>` on the remote's server). Before deleting, it warns if `dashboard.json` still uses the icon.
+
+- **See and delete IR database files from the web UI.** Devices page → IR database now lists the category files on the remote with their brands and models, each with a delete button (`DELETE /ir-database/<category>.json`). Before deleting, it names the IR devices of `dashboard.json` that still use that file.
+
+### Changed
+
+- **"Send to my remote" from the IR sniffer now merges** the received models into the remote's `ir-database/<category>.json` instead of replacing the file (it only exports the models checked in the browser, often a single imported device). The upload form on the remote's own config page still replaces the whole file.
+
+- Activities whose devices have no profile keep the original order (power → input → delay, per device); the only difference is that "already on" now comes from the persisted device state when it's known.
+
+### Fixed
+
+- **Apple TV (AirPlay 2 / tvOS): the remote-control session dropped about every 30 seconds** ("MRP connection lost: connection closed mid-frame", then a reconnect ~3 s later — playback info, artwork and commands briefly unavailable each time). The session's *event* channel was opened but never read, on the mistaken belief that pyatv doesn't read it either; tvOS sends requests on it and, left unanswered, tears the session down. Every request now gets the empty `200 OK` pyatv sends (`AirPlayEventChannel`).
+
+- **IR devices imported from the Harmony archive didn't respond in Activities.** Four causes, all handled without regenerating anything: the sniffer's import renamed a model already in its database to `"<model> (Harmony)"`, so `dashboard.json` (referencing the plain name) found no command at all — the plain name now also matches that entry; command ids are matched ignoring case/`_`/`-` (`volume_up` finds `VolumeUp`); an Activity's explicit power command the device doesn't have (an Apple TV has no IR `PowerOn`, a Samsung soundbar only `PowerToggle`) now falls back to the profile's own; and an input written as a command id (`InputHdmi2`) also matches the profile input "HDMI 2".
+
+- **Apple TV: title and artwork flickered to empty every few seconds on live streams.** tvOS re-sends the playback queue with the same item but without its metadata, then fills it back in; the queue replaced the known item as-is. An item keeping the same identifier now keeps what was known (new fields merged over it); a genuinely new item still starts empty.
+
+- **WebBuilder: importing a dashboard lost `"openMode": "popup"` on auto-opened popup pages.** The import's page normalizer didn't list `openMode`, so the page settings showed "full page" and saving/exporting dropped it (popup size and open/close entity survived, which hid the problem). It's now kept, and any page field the normalizer doesn't know is carried over untouched instead of silently dropped.
+
+- **Storage: the downloaded update APK stayed in the app cache forever** (a full copy of the app, after it was installed). It's now deleted at startup, along with upload temp files the local web server left behind on an interrupted request. The download is also streamed to disk instead of being read whole into RAM first.
+
+- An extender batch no longer lets the next local IR/Harmony/HA step start before the batch's own delays have played out.
+
+- A step skipped because its command is missing keeps its delay, so later steps don't fire early.
+
+- **IR codes captured with the IR sniffer before its 0.4.1 didn't work.** Its capture parser split many codes in two at their own `0000` repeat-length field: `pronto` lost its header (read as a ~12 kHz carrier with a wrong length) and `pronto_repeat` held the cut-off header (`0000 006D 0022`). `ir-database` files are now repaired on load (`repairSplitPronto`) when rejoining the two gives a complete, plausible code — files already on the remote work without being regenerated.
+
+## [1.2.1-beta] - 2026-10-08
+
+### Added
+
+- **Long-press on `button_grid` and `scene_grid` tiles.** A tile can now carry a separate `"long_press"` block, fired when the tile is held (touch long-press, or a held D-pad OK/CENTER key) instead of tapped. The tile's own top-level fields still drive the normal tap, so e.g. a tile can open its page on tap and switch every device off on hold:
+
+  ```json
+  { "name": "Lights", "page": "Lights",
+    "long_press": { "service": "script.astrion_bed_lights_off" } }
+  ```
+
+  The block accepts the same action fields as a tile: `service` (+ `entity_id`, `data`), `entity_id` alone (`turn_on`), `harmonyDevice`+`harmonyCommand`, `activityId`, `hub` (falls back to the tile's own), `irDevice`+`irCommand`, `activity`, `page` (+ `pageMode: "popup"`), `closePopup`. A tile without `long_press` behaves exactly as before (a hold is just a tap). The web config editor has a matching "Long-press action (JSON)" field, so the block is kept when a tile is edited there.
+
+### Fixed
+
+- **D-pad focus outline staying visible when an arrow key is bound to a hotkey.** The command was sent correctly, but a card/tile kept showing its accent focus outline. Clearing Compose focus alone couldn't fix it: the key press takes the window out of touch mode before the app sees it (which hands focus to a tile), and clearing focus outside touch mode makes Android hand it straight back. The outline is now hidden instead, from the moment a directional key is consumed by a hotkey, and comes back as soon as an unbound arrow key is used to navigate. While hidden, a press on OK/CENTER only brings the outline back rather than activating a tile the user can't see.
 
 ## [1.2.0] - 2026-10-07
 

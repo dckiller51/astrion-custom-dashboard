@@ -852,6 +852,7 @@ class MainActivity : ComponentActivity() {
         val mergedShort = mergeHotkeys(dashboard.config.hotkeys, page?.hotkeys.orEmpty())
         val mergedLong = mergeHotkeys(dashboard.config.longHotkeys, page?.longHotkeys.orEmpty())
         bindHotkeys(mergedShort, mergedLong)
+        bindSettingsFallback()
 
         if (page?.parent != null) {
             val key = runCatching { HardwareKey.valueOf(page.parentKey.uppercase()) }.getOrNull()
@@ -859,6 +860,21 @@ class MainActivity : ComponentActivity() {
                 keyRouter.on(key) { goToParent() }
             }
         }
+    }
+
+    /** Settings must always be reachable from the remote itself (1.2.9): when
+     * no hotkey anywhere in the dashboard opens it — global or page, short or
+     * long — a long press on MAIN does, unless MAIN's long press is already
+     * taken. Swiping down from the top opens Activities, not Settings, so a
+     * dashboard without such a hotkey used to lock the user out of Settings. */
+    private fun bindSettingsFallback() {
+        val cfg = dashboard.config
+        val all =
+            cfg.hotkeys + cfg.longHotkeys +
+                cfg.pages.flatMap { it.hotkeys + it.longHotkeys }
+        if (all.any { it.openOverlay.equals("settings", ignoreCase = true) }) return
+        if (keyRouter.isLongBound(HardwareKey.MAIN)) return
+        keyRouter.onLong(HardwareKey.MAIN) { openOverlayHotkey("settings") }
     }
 
     private fun mergeHotkeys(global: List<HotkeyConfig>, pageSpecific: List<HotkeyConfig>): List<HotkeyConfig> {

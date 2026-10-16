@@ -236,4 +236,11 @@
     <string name="dock_mode_dashboard">Dashboard</string>
     <string name="ring_found_title">Found me!</string>
     <string name="ring_found_hint">Tap anywhere or press any button to stop</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Speakers</string>
+    <string name="speaker_muted">Muted</string>
+    <string name="speaker_group">Group</string>
+    <string name="speaker_ungroup">Ungroup</string>
+    <string name="setup_banner_title">Set up this remote from a browser</string>
+    <string name="connection_web_page_hint">Remote\'s web page: %1$s</string>
 </resources>

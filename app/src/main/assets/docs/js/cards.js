@@ -64,7 +64,15 @@ function updateCardFormInputs() {
       <label>${I18N.t('web_config_harmony_name_label')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_name_room')}">
       ${haEntityFieldHtml('switch', 'optEntityId', haDomainLabel('switch'))}
       <label>${I18N.t('web_card_switch_on_color')}</label>${colorFieldHtml('optOnColor', '', '#FF2E5A46')}
-      ${iconFieldHtml('optIcon')}
+      <label>${I18N.t('web_card_switch_icon')}</label>
+      <select id="optSwitchIconKind" onchange="onSwitchIconKindChange()">
+        <option value="power">${I18N.t('web_card_switch_icon_power')}</option>
+        <option value="heater">${I18N.t('web_card_switch_icon_heater')}</option>
+        <option value="fan">${I18N.t('web_card_switch_icon_fan')}</option>
+        <option value="bulb">${I18N.t('web_card_switch_icon_bulb')}</option>
+        <option value="png">${I18N.t('web_card_switch_icon_png')}</option>
+      </select>
+      <div id="switchPngIcon" style="display:none">${iconFieldHtml('optIcon')}</div>
     `;
   } else if (type === 'cover') {
     container.innerHTML = `
@@ -89,12 +97,18 @@ function updateCardFormInputs() {
     container.innerHTML = `
       <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_select_name')}">
       ${haEntityFieldHtml('select', 'optEntityId', haDomainLabel('select'))}
-      <label>${I18N.t('web_card_select_icon_color')}</label><input type="text" id="optSelectIconColor" placeholder="#6EA8FE">
       <label>${I18N.t('web_card_layout')}</label>
-      <select id="optSelectLayout">
+      <select id="optSelectLayout" onchange="onSelectLayoutChange()">
         <option value="default">${I18N.t('web_card_select_layout_default')}</option>
         <option value="horizontal">${I18N.t('web_card_select_layout_horizontal')}</option>
         <option value="vertical">${I18N.t('web_card_select_layout_vertical')}</option>
+        <option value="dropdown">${I18N.t('web_card_select_layout_dropdown')}</option>
+      </select>
+      <div id="selectIconColorRow"><label>${I18N.t('web_card_select_icon_color')}</label>${colorFieldHtml('optSelectIconColor', '', '#6EA8FE')}</div>
+      <label>${I18N.t('web_card_select_font_size')}</label>
+      <select id="optSelectFontSize">
+        <option value="">${I18N.t('web_card_select_font_auto')}</option>
+        ${[12, 14, 16, 18, 20, 24, 28].map(n => `<option value="${n}">${n}</option>`).join('')}
       </select>
       <div class="hint">${I18N.t('web_card_select_hint')}</div>
     `;
@@ -392,12 +406,19 @@ function updateCardFormInputs() {
     renderAppleTvHarmonyFields();
     initAtvSource();
   } else if (type === 'tv_remote') {
-    container.innerHTML = `
-      <label>${I18N.t('web_card_name')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_tv_name')}">
-      <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" placeholder="${I18N.t('web_card_ph_remote')}">
-      <label>${I18N.t('web_card_media_entity_id_opt')}</label><input type="text" id="optMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
-      <label>${I18N.t('web_card_mute_entity_id_opt')}</label><input type="text" id="optMuteEntity" placeholder="${I18N.t('web_card_ph_soundbar')}">
-    `;
+    container.innerHTML = tvRemoteFormHtml();
+    initTvRemoteForm();
+  } else if (type === 'speaker_group') {
+    container.innerHTML = speakerGroupFormHtml();
+    window._pendingSpeakers = [];
+    window._sgExtra = {};
+    renderSgSpeakers();
+  } else if (type === 'picture_elements') {
+    container.innerHTML = pictureElementsFormHtml();
+    initPictureElementsForm();
+  } else if (type === 'row') {
+    container.innerHTML = rowFormHtml();
+    initRowForm();
   } else if (type === 'clock_weather') {
     container.innerHTML = `
       ${haEntityFieldHtml('weather', 'optEntityId', haDomainLabel('weather'))}
@@ -453,6 +474,7 @@ function updateCardFormInputs() {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">
       <label>${I18N.t('web_card_plex_token')}</label><input type="text" id="optPlexToken" placeholder="${I18N.t('web_card_ph_plex_token')}">
+      <div class="hint">${I18N.t('web_card_plex_token_hint')}</div>
       <label>${I18N.t('web_card_plex_media_entity')}</label><input type="text" id="optPlexMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
       <label>${I18N.t('web_card_plex_source')}</label><input type="text" id="optPlexSource" value="Plex" placeholder="${I18N.t('web_card_plex')}">
       <label>${I18N.t('web_card_plex_play_entity')}</label><input type="text" id="optPlexPlayEntity" placeholder="${I18N.t('web_card_ph_plex_play_entity')}">
@@ -493,7 +515,7 @@ function updateCardFormInputs() {
     if (!el) return;
     const dom = id === 'optRemoteEntity' ? 'remote'
       : id === 'optMediaEntity' ? 'media_player'
-      : id === 'optMuteEntity' ? 'media_player'
+      : id === 'optMuteEntity' ? 'remote'
       : id === 'optCalendarEntity' ? 'calendar'
       : id === 'optMapImage' ? 'image'
       : id === 'optPlexMediaEntity' ? 'media_player'
@@ -1239,6 +1261,8 @@ function removeVacuumRoom(i) {
 // a card's own edit action in the Home Assistant dashboard editor.
 function openCardDialog(idx) {
   editingCard = idx;
+  window._rowCtx = null;
+  setRowOptionEnabled(true);
   const isNew = idx === null;
   document.getElementById('cardEditorTitle').textContent = isNew ? I18N.t('web_modal_add_card') : I18N.t('web_modal_edit_card');
   document.getElementById('addCardBtn').innerText = isNew ? I18N.t('web_modal_add_card_to_page') : I18N.t('web_save_changes');
@@ -1301,8 +1325,15 @@ function fillCardForm(card) {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
     setColorFieldValue('optOnColor', o.on_color || '');
-    document.getElementById('optIcon').value = o.icon || '';
+    const swIcon = o.icon || '';
+    const swKind = swIcon.includes('/') ? 'png'
+      : ['heater', 'heat'].includes(swIcon) ? 'heater'
+      : swIcon === 'fan' ? 'fan'
+      : ['bulb', 'light'].includes(swIcon) ? 'bulb' : 'power';
+    document.getElementById('optSwitchIconKind').value = swKind;
+    document.getElementById('optIcon').value = swKind === 'png' ? swIcon : '';
     updateIconThumb('optIcon');
+    onSwitchIconKindChange();
   } else if (type === 'cover') {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
@@ -1318,8 +1349,14 @@ function fillCardForm(card) {
   } else if (type === 'select') {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
-    document.getElementById('optSelectIconColor').value = o.icon_color || '';
-    document.getElementById('optSelectLayout').value = ['horizontal', 'vertical'].includes(o.layout) ? o.layout : 'default';
+    setColorFieldValue('optSelectIconColor', o.icon_color || '');
+    document.getElementById('optSelectLayout').value = ['horizontal', 'vertical', 'dropdown'].includes(o.layout) ? o.layout : 'default';
+    const fsSel = document.getElementById('optSelectFontSize');
+    if (o.font_size != null && !Array.from(fsSel.options).some(op => op.value === String(o.font_size))) {
+      fsSel.insertAdjacentHTML('beforeend', `<option value="${o.font_size}">${o.font_size}</option>`);
+    }
+    fsSel.value = o.font_size != null ? String(o.font_size) : '';
+    onSelectLayoutChange();
   } else if (type === 'light') {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
@@ -1397,10 +1434,13 @@ function fillCardForm(card) {
   } else if (type === 'apple_tv_remote') {
     fillAppleTvHarmonyFields(o);
   } else if (type === 'tv_remote') {
-    document.getElementById('optName').value = o.name || '';
-    document.getElementById('optRemoteEntity').value = o.remote_entity || '';
-    document.getElementById('optMediaEntity').value = o.media_entity || '';
-    document.getElementById('optMuteEntity').value = o.mute_entity || '';
+    fillTvRemoteForm(o);
+  } else if (type === 'speaker_group') {
+    fillSpeakerGroupForm(o);
+  } else if (type === 'picture_elements') {
+    fillPictureElementsForm(o);
+  } else if (type === 'row') {
+    fillRowForm(o);
   } else if (type === 'clock_weather') {
     setEntitySelectValue('optEntityId', o.entity_id);
     document.getElementById('optTimeFormat').value = (o.time_format === 24) ? '24' : '12';
@@ -1445,11 +1485,12 @@ function fillCardForm(card) {
 }
 
 function cancelCardEdit() {
+  // Closing a row's child card goes back to the row instead.
+  if (window._rowCtx && window._rowCtx.active) { returnToRowForm(); return; }
   editingCard = null;
-  window._pendingGridItems = [];
-  window._pendingVacuumRooms = [];
-  window._pendingMonitorRows = [];
-  window._monitorExtraOptions = {};
+  resetPendingCardForms();
+  window._rowCtx = null;
+  setRowOptionEnabled(true);
   document.getElementById('addCardBtn').innerText = I18N.t('web_modal_add_card_to_page');
   document.getElementById('cardEditorModal').classList.remove('open');
 }
@@ -1500,7 +1541,8 @@ function addCardToPage() {
     newCard.options.entity_id = document.getElementById('optEntityId').value || 'switch.entity';
     const onColor = colorFieldValue('optOnColor');
     if (onColor) newCard.options.on_color = onColor;
-    const icon = document.getElementById('optIcon').value.trim();
+    const swKind = document.getElementById('optSwitchIconKind').value;
+    const icon = swKind === 'png' ? document.getElementById('optIcon').value.trim() : (swKind === 'power' ? '' : swKind);
     if (icon) newCard.options.icon = icon;
   } else if (type === 'cover') {
     const coverName = document.getElementById('optName').value.trim();
@@ -1520,10 +1562,12 @@ function addCardToPage() {
     const selectName = document.getElementById('optName').value.trim();
     if (selectName) newCard.options.name = selectName;
     newCard.options.entity_id = document.getElementById('optEntityId').value || 'input_select.entity';
-    const selectIconColor = document.getElementById('optSelectIconColor').value.trim();
-    if (selectIconColor) newCard.options.icon_color = selectIconColor;
     const selectLayout = document.getElementById('optSelectLayout').value;
     if (selectLayout !== 'default') newCard.options.layout = selectLayout;
+    const selectIconColor = colorFieldValue('optSelectIconColor');
+    if (selectIconColor && selectLayout !== 'dropdown') newCard.options.icon_color = selectIconColor;
+    const selectFont = parseInt(document.getElementById('optSelectFontSize').value, 10);
+    if (!isNaN(selectFont)) newCard.options.font_size = selectFont;
   } else if (type === 'light') {
     const lightName = document.getElementById('optName').value.trim();
     if (lightName) newCard.options.name = lightName;
@@ -1646,13 +1690,12 @@ function addCardToPage() {
     const atvApps = collectAtvApps();
     if (atvApps.length) newCard.options.apps = atvApps;
     window._pendingAtvApps = [];
-  } else if (type === 'tv_remote') {
-    newCard.options.name = document.getElementById('optName').value || 'TV';
-    newCard.options.remote_entity = document.getElementById('optRemoteEntity').value || '';
-    const mediaEntity = document.getElementById('optMediaEntity').value.trim();
-    const muteEntity = document.getElementById('optMuteEntity').value.trim();
-    if (mediaEntity) newCard.options.media_entity = mediaEntity;
-    if (muteEntity) newCard.options.mute_entity = muteEntity;
+  } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row') {
+    const collect = { tv_remote: collectTvRemoteOptions, speaker_group: collectSpeakerGroupOptions,
+      picture_elements: collectPictureElementsOptions, row: collectRowOptions }[type];
+    const opts = collect();
+    if (!opts) return;
+    newCard.options = opts;
   } else if (type === 'clock_weather') {
     newCard.options.entity_id = document.getElementById('optEntityId').value.trim() || 'weather.forecast_home';
     newCard.options.time_format = parseInt(document.getElementById('optTimeFormat').value, 10) || 12;
@@ -1731,6 +1774,12 @@ function addCardToPage() {
     try {
       newCard.options = JSON.parse(document.getElementById('optRawJson').value || '{}');
     } catch (e) { alert(I18N.t('web_card_alert_options_json')); return; }
+  }
+
+  // Editing a card inside a row: it goes back into the row, not onto the page.
+  if (window._rowCtx && window._rowCtx.active) {
+    rowChildSaved(newCard);
+    return;
   }
 
   if (editingCard !== null) {
@@ -1955,4 +2004,18 @@ function moveMonitorRow(i, delta) {
   if (j < 0 || j >= rows.length) return;
   [rows[i], rows[j]] = [rows[j], rows[i]];
   renderMonitorRows();
+}
+
+// switch card: the PNG icon field only shows for "PNG icon".
+function onSwitchIconKindChange() {
+  const kind = document.getElementById('optSwitchIconKind');
+  const box = document.getElementById('switchPngIcon');
+  if (kind && box) box.style.display = kind.value === 'png' ? '' : 'none';
+}
+
+// select card: the "dropdown" layout has no icon, so no icon colour either.
+function onSelectLayoutChange() {
+  const layout = document.getElementById('optSelectLayout');
+  const row = document.getElementById('selectIconColorRow');
+  if (layout && row) row.style.display = layout.value === 'dropdown' ? 'none' : '';
 }

@@ -119,13 +119,13 @@ class ClimateCard : CardRenderer {
         val fanMode = e?.attrString("fan_mode")
         val swingMode = e?.attrString("swing_mode")
         // Prefer what the entity actually reports it supports (like hvac_modes
-        // above); a config override lets you reorder/restrict; the hardcoded
-        // list is only a last resort for integrations that don't report it.
+        // above); a config override lets you reorder/restrict. No hard-coded
+        // fallback any more (1.2.9): a device without fan modes (a heating-only
+        // thermostat) used to get a dead low/medium/high/auto row.
         val fanModes =
             config
                 .stringList("fan_modes")
                 .ifEmpty { e?.attrStringList("fan_modes").orEmpty() }
-                .ifEmpty { listOf("low", "medium", "high", "auto") }
         val swingModes =
             config
                 .stringList("swing_modes")

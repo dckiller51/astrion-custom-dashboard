@@ -33,9 +33,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.custom.astrion.R
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
@@ -93,7 +95,7 @@ class SpeakerGroupCard : CardRenderer {
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Text(
-                "Speakers",
+                stringResource(R.string.speaker_group_title),
                 color = ctx.theme.mutedText,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -150,7 +152,7 @@ class SpeakerGroupCard : CardRenderer {
                 } else {
                     Icon(
                         if (grouped) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                        contentDescription = if (grouped) "Ungroup" else "Group",
+                        contentDescription = stringResource(if (grouped) R.string.speaker_ungroup else R.string.speaker_group),
                         tint = if (grouped) ctx.theme.accent else ctx.theme.mutedText,
                         modifier =
                         Modifier
@@ -168,7 +170,7 @@ class SpeakerGroupCard : CardRenderer {
                 )
                 Text(
                     when {
-                        muted -> "Muted"
+                        muted -> stringResource(R.string.speaker_muted)
                         vol != null -> "${(vol * 100).roundToInt()}%"
                         else -> "—"
                     },

@@ -104,7 +104,7 @@ class ClockWeatherCard : CardRenderer {
         // Today's calendar event, if the entity's next/current event happens
         // to fall today — cheap to compute (no extra HTTP call), and kept to
         // one thin line so it barely adds height.
-        val todayEvent = calendarEntity?.let { todaysEvent(ctx.entities[it], now) }
+        val todayEvent = calendarEntity?.let { todaysEvent(ctx.entities[it], now, is24) }
 
         Column(
             modifier =
@@ -252,7 +252,7 @@ class ClockWeatherCard : CardRenderer {
      * over the WebSocket state, only this one. Show it only if that event's
      * date is today, so a distant next event doesn't sit here for days.
      */
-    private fun todaysEvent(e: com.custom.astrion.ha.EntityState?, nowMs: Long): String? {
+    private fun todaysEvent(e: com.custom.astrion.ha.EntityState?, nowMs: Long, is24: Boolean): String? {
         e ?: return null
         val message = e.attrString("message") ?: return null
         val startStr = e.attrString("start_time") ?: return null
@@ -264,7 +264,8 @@ class ClockWeatherCard : CardRenderer {
         if (dayFmt.format(start) != dayFmt.format(Date(nowMs))) return null
 
         if (allDay) return message
-        val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault())
+        // Same 12/24 h choice as the clock above (it used to be always 12 h).
+        val timeFmt = SimpleDateFormat(if (is24) "HH:mm" else "h:mm a", Locale.getDefault())
         val endStr = e.attrString("end_time")
         val end = endStr?.let { runCatching { fmt.parse(it) }.getOrNull() }
         val range = if (end != null) "${timeFmt.format(start)}–${timeFmt.format(end)}" else timeFmt.format(start)

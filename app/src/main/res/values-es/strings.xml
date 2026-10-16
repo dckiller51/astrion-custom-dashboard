@@ -236,4 +236,11 @@
     <string name="dock_mode_dashboard">Dashboard</string>
     <string name="ring_found_title">¡Encontrado!</string>
     <string name="ring_found_hint">Toca la pantalla o pulsa un botón para detener</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Altavoces</string>
+    <string name="speaker_muted">Silenciado</string>
+    <string name="speaker_group">Agrupar</string>
+    <string name="speaker_ungroup">Desagrupar</string>
+    <string name="setup_banner_title">Configura este mando desde un navegador</string>
+    <string name="connection_web_page_hint">Página web del mando: %1$s</string>
 </resources>

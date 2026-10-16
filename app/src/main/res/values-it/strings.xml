@@ -236,4 +236,11 @@
     <string name="dock_mode_dashboard">Dashboard</string>
     <string name="ring_found_title">Trovato!</string>
     <string name="ring_found_hint">Tocca lo schermo o premi un tasto per fermare</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Altoparlanti</string>
+    <string name="speaker_muted">Muto</string>
+    <string name="speaker_group">Raggruppa</string>
+    <string name="speaker_ungroup">Separa</string>
+    <string name="setup_banner_title">Configura questo telecomando da un browser</string>
+    <string name="connection_web_page_hint">Pagina web del telecomando: %1$s</string>
 </resources>
