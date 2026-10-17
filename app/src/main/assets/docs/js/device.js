@@ -33,6 +33,7 @@ async function loadDashboardFromDevice() {
       const parsed = await res.json();
       applyParsedDashboard(parsed);
       initEditor();
+      if (typeof resetUndo === 'function') { resetUndo(); recordUndo(document.getElementById('jsonOutput').value); }
       console.log('Loaded dashboard.json from this device.');
     } else {
       // No dashboard.json yet — the inline initEditor() already ran with the
@@ -45,6 +46,7 @@ async function loadDashboardFromDevice() {
     console.error('Failed to load dashboard.json from this device.', e);
   }
   updateDeviceModeUi();
+  if (typeof openHistoryFromHash === 'function') openHistoryFromHash();
 }
 
 /**
@@ -94,9 +96,14 @@ async function saveDashboardToDevice() {
   try {
     const form = new FormData();
     form.append('file', new Blob([jsonText], { type: 'application/json' }), 'dashboard.json');
+    // Optional note for this version in the remote's history (1.3.0).
+    const noteEl = document.getElementById('saveNote');
+    if (noteEl && noteEl.value.trim()) form.append('note', noteEl.value.trim());
     const res = await fetch('/dashboard.json', { method: 'POST', body: form });
     if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (noteEl) noteEl.value = '';
     showToast(I18N.t('web_device_saved'));
+    if (document.getElementById('historyModal')?.classList.contains('open')) refreshHistory();
   } catch (e) {
     showToast(I18N.t('web_device_save_failed', e), 'error');
   } finally {
@@ -115,6 +122,10 @@ function updateDeviceModeUi() {
       : I18N.t('web_device_connecting');
   }
   if (saveBtn) saveBtn.style.display = deviceModeAvailable ? 'inline-block' : 'none';
+  const noteEl = document.getElementById('saveNote');
+  if (noteEl) noteEl.style.display = deviceModeAvailable ? '' : 'none';
+  const histBtn = document.getElementById('historyBtn');
+  if (histBtn) histBtn.style.display = deviceModeAvailable ? '' : 'none';
 }
 
 loadDashboardFromDevice();

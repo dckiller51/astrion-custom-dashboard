@@ -24,6 +24,7 @@ import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.AppleTvServiceKind
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.AppleTvConfig
+import com.custom.astrion.config.DashboardHistory
 import com.custom.astrion.config.DashboardLoader
 import com.custom.astrion.config.ExtenderConfig
 import com.custom.astrion.config.HarmonyHubConfig
@@ -305,8 +306,10 @@ class ConfigServer(
             "/activities/stop" -> if (method == Method.POST) handleStopActivity(session) else methodNotAllowed()
             "/ring" -> if (method == Method.POST) handleRing(session) else methodNotAllowed()
             "/ring/stop" -> if (method == Method.POST) handleStopRing() else methodNotAllowed()
+            "/history" -> if (method == Method.GET) serveHistoryList() else methodNotAllowed()
             else ->
                 when {
+                    uri.startsWith("/history/") -> handleHistory(session, uri.removePrefix("/history/"))
                     uri.startsWith("/builder/") ->
                         if (method == Method.GET) serveBuilderAsset(uri) else methodNotAllowed()
                     uri.startsWith("/icons/") ->
@@ -1396,9 +1399,49 @@ class ConfigServer(
                     "text/plain",
                     "Missing file"
                 )
+        // Version history (1.3.0): the new content is kept, with the optional note sent along.
+        val note = session.parameters["note"]?.firstOrNull()
+        runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }
         File(tmpPath).copyTo(DashboardLoader.configFile, overwrite = true)
         onDashboardUpdated()
         return redirectHome(context.getString(R.string.web_config_dashboard_updated))
+    }
+
+    /**
+     * dashboard.json version history (1.3.0), see [DashboardHistory]:
+     *  GET  /history/<id>      that version's content (download / open in the builder)
+     *  POST /history/restore   id → writes it back to dashboard.json and reloads the dashboard
+     *  POST /history/pin       id, pinned=true|false → never deleted automatically while pinned
+     *  POST /history/note      id, note
+     *  POST /history/delete    id
+     */
+    private fun serveHistoryList(): Response = jsonResponse(Response.Status.OK, JSONObject().put("versions", DashboardHistory.list()))
+
+    private fun handleHistory(session: IHTTPSession, action: String): Response {
+        if (session.method == Method.GET) {
+            val content =
+                DashboardHistory.read(action)
+                    ?: return jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+            return newFixedLengthResponse(Response.Status.OK, "application/json", content)
+                .apply { addHeader("Content-Disposition", "attachment; filename=\"dashboard-$action.json\"") }
+        }
+        if (session.method != Method.POST) return methodNotAllowed()
+        session.parseBody(HashMap())
+        val id = session.parameters["id"]?.firstOrNull()?.trim().orEmpty()
+        if (!DashboardHistory.isValidId(id)) return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "bad id"))
+        val ok =
+            when (action) {
+                "restore" -> DashboardHistory.restore(id).also { if (it) onDashboardUpdated() }
+                "pin" -> DashboardHistory.setPinned(id, session.parameters["pinned"]?.firstOrNull() == "true")
+                "note" -> DashboardHistory.setNote(id, session.parameters["note"]?.firstOrNull().orEmpty())
+                "delete" -> DashboardHistory.delete(id)
+                else -> return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
+            }
+        return if (ok) {
+            jsonResponse(Response.Status.OK, JSONObject().put("ok", true))
+        } else {
+            jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+        }
     }
 
     private fun handleIconUpload(session: IHTTPSession): Response {
