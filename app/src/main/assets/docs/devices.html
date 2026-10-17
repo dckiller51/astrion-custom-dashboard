@@ -15,190 +15,195 @@
         <div id="viewHome">
             <div class="hub-hero">
                 <img src="logo@2x.png" alt="">
-                <h1>Astrion Custom Dashboard</h1>
-                <div class="subtitle">Configure each device once — cards reference them by name.</div>
+                <h1 data-i18n="web_dev_astrion_custom_dashboard">Astrion Custom Dashboard</h1>
+                <div class="subtitle" data-i18n="web_dev_configure_each_device_once_cards_reference">Configure each device once — cards reference them by name.</div>
+                <div class="subtitle" id="remoteIdentity" style="margin-top:6px;display:none">
+                    <span data-i18n="web_dev_this_remote">This remote:</span> <b id="remoteNameLabel"></b>
+                    <button type="button" class="secondary" style="margin:0 0 0 6px;padding:2px 10px" onclick="renameRemote()" data-i18n="web_dev_rename">Rename</button>
+                </div>
             </div>
 
             <div class="tile-grid">
                 <button type="button" class="tile tile-ha" onclick="showView('viewHa')">
                     <span class="tile-icon">🏠</span>
-                    <span class="tile-name">Home Assistant</span>
-                    <span class="tile-count" id="tileHaCount">Not connected</span>
+                    <span class="tile-name" data-i18n="web_config_ha_heading">Home Assistant</span>
+                    <span class="tile-count" id="tileHaCount" data-i18n="web_dev_not_connected">Not connected</span>
                 </button>
                 <button type="button" class="tile tile-harmony" onclick="showView('viewHarmony')">
                     <span class="tile-icon">📡</span>
-                    <span class="tile-name">Harmony</span>
-                    <span class="tile-count" id="tileHarmonyCount">No hub yet</span>
+                    <span class="tile-name" data-i18n="web_dev_harmony">Harmony</span>
+                    <span class="tile-count" id="tileHarmonyCount" data-i18n="web_dev_no_hub_yet">No hub yet</span>
                 </button>
                 <button type="button" class="tile tile-ir" onclick="showView('viewIr')">
                     <span class="tile-icon">📺</span>
-                    <span class="tile-name">IR Devices</span>
-                    <span class="tile-count" id="tileIrCount">No devices yet</span>
+                    <span class="tile-name" data-i18n="web_dev_ir_devices">IR Devices</span>
+                    <span class="tile-count" id="tileIrCount" data-i18n="web_dev_no_devices_yet">No devices yet</span>
                 </button>
                 <button type="button" class="tile tile-extender" onclick="showView('viewExtender')">
                     <span class="tile-icon">📡</span>
-                    <span class="tile-name">IR Extenders</span>
-                    <span class="tile-count" id="tileExtenderCount">No extender yet</span>
+                    <span class="tile-name" data-i18n="web_dev_ir_extenders">IR Extenders</span>
+                    <span class="tile-count" id="tileExtenderCount" data-i18n="web_dev_no_extender_yet">No extender yet</span>
                 </button>
                 <button type="button" class="tile tile-appletv" onclick="showView('viewAppleTv')">
                     <span class="tile-icon">📱</span>
-                    <span class="tile-name">Apple TV</span>
-                    <span class="tile-count" id="tileAppleTvCount">No Apple TV yet</span>
+                    <span class="tile-name" data-i18n="web_dev_apple_tv">Apple TV</span>
+                    <span class="tile-count" id="tileAppleTvCount" data-i18n="web_dev_no_apple_tv_yet">No Apple TV yet</span>
                 </button>
             </div>
 
             <div class="utility-row">
-                <a href="/dashboard.json" download="dashboard.json">Download backup</a>
-                <button type="button" class="link-btn" onclick="showView('viewBackup')">Restore backup</button>
-                <button type="button" class="link-btn" onclick="showView('viewIrDatabase')">IR database</button>
-                <button type="button" class="link-btn" onclick="showView('viewIcons')">Icons</button>
-                <button type="button" class="link-btn" onclick="showView('viewRing')">Find my remote</button>
-                <a href="/builder/">Dashboard builder</a>
+                <a href="/dashboard.json" download="dashboard.json" data-i18n="web_dev_download_backup">Download backup</a>
+                <button type="button" class="link-btn" onclick="showView('viewBackup')" data-i18n="web_dev_restore_backup">Restore backup</button>
+                <a href="/builder/#history" data-i18n="web_history_title">Version history</a>
+                <button type="button" class="link-btn" onclick="showView('viewIrDatabase')" data-i18n="web_dev_ir_database">IR database</button>
+                <button type="button" class="link-btn" onclick="showView('viewIcons')" data-i18n="web_config_icons_heading">Icons</button>
+                <button type="button" class="link-btn" onclick="showView('viewRing')" data-i18n="web_config_ring_heading">Find my remote</button>
+                <a href="/builder/" data-i18n="web_dev_dashboard_builder">Dashboard builder</a>
             </div>
         </div>
 
         <!-- ---- Home Assistant ------------------------------------------ -->
         <div id="viewHa" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">Home Assistant</h2>
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_config_ha_heading">Home Assistant</h2>
 
             <div class="section-box">
-                <div id="haConnectionSummary" class="hint">Not connected.</div>
+                <div id="haConnectionSummary" class="hint" data-i18n="web_dev_not_connected_2">Not connected.</div>
                 <div class="btn-row" style="margin-top:10px">
-                    <button type="button" class="secondary" onclick="openDeviceForm('ha')">Connection settings</button>
+                    <button type="button" class="secondary" onclick="openDeviceForm('ha')" data-i18n="web_dev_connection_settings">Connection settings</button>
                 </div>
             </div>
 
             <div id="haDevicesList" style="margin:14px 0"></div>
             <div class="btn-row">
-                <button type="button" onclick="openDeviceForm('haEntity')">+ Add device</button>
+                <button type="button" onclick="openDeviceForm('haEntity')" data-i18n="web_dev_add_device">+ Add device</button>
             </div>
 
             <div id="haForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0">Connection</h3>
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_connection">Connection</h3>
                 <label>URL</label>
-                <input type="text" id="haUrl" placeholder="http://192.168.1.50:8123">
-                <label>Long-lived access token</label>
+                <input type="text" id="haUrl" placeholder="http://192.168.1.50:8123" data-i18n-attr="placeholder:web_dev_http_192_168_1_50_8123">
+                <label data-i18n="web_dev_long_lived_access_token">Long-lived access token</label>
                 <input type="password" id="haToken">
-                <label>Webhook id (optional — instant push instead of polling)</label>
-                <input type="text" id="haWebhookId" placeholder="astrion_push">
+                <label data-i18n="web_dev_webhook_id_optional_instant_push_instead">Webhook id (optional — instant push instead of polling)</label>
+                <input type="text" id="haWebhookId" placeholder="astrion_push" data-i18n-attr="placeholder:web_dev_astrion_push">
                 <div class="btn-row" style="margin-top:10px">
-                    <button id="saveHaBtn" onclick="saveHa()">Save</button>
-                    <button class="secondary" onclick="closeDeviceForms()">Cancel</button>
-                    <button id="removeHaBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeHa()">Remove</button>
+                    <button id="saveHaBtn" onclick="saveHa()" data-i18n="web_save">Save</button>
+                    <button class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    <button id="removeHaBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeHa()" data-i18n="web_config_harmony_remove_button">Remove</button>
                 </div>
             </div>
 
             <div id="haEntityForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0">Add device</h3>
-                <div class="hint">
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_add_device_2">Add device</h3>
+                <div class="hint" data-i18n="web_dev_pick_one_entity_from_home_assistant">
                     Pick one entity from Home Assistant and give it a name — it'll show up
                     under that name in the matching card type in the dashboard builder,
                     instead of typing/guessing its raw entity id there.
                 </div>
-                <label>Type</label>
+                <label data-i18n="web_dev_type">Type</label>
                 <select id="haEntityDomain" onchange="onHaEntityDomainChange()">
-                    <option value="light">Light</option>
-                    <option value="switch">Switch</option>
-                    <option value="cover">Cover</option>
-                    <option value="climate">Climate</option>
-                    <option value="media_player">Media Player</option>
-                    <option value="camera">Camera</option>
-                    <option value="fan">Fan</option>
-                    <option value="vacuum">Vacuum</option>
-                    <option value="weather">Weather</option>
-                    <option value="select">Select (input_select / select)</option>
+                    <option value="light" data-i18n="web_dev_light">Light</option>
+                    <option value="switch" data-i18n="web_dev_switch">Switch</option>
+                    <option value="cover" data-i18n="web_dev_cover">Cover</option>
+                    <option value="climate" data-i18n="web_preview_climate_name">Climate</option>
+                    <option value="media_player" data-i18n="web_dev_media_player">Media Player</option>
+                    <option value="camera" data-i18n="web_preview_camera_name">Camera</option>
+                    <option value="fan" data-i18n="climate_fan_caption">Fan</option>
+                    <option value="vacuum" data-i18n="vacuum_default_name">Vacuum</option>
+                    <option value="weather" data-i18n="web_dev_weather">Weather</option>
+                    <option value="select" data-i18n="web_dev_select_input_select_select">Select (input_select / select)</option>
                 </select>
-                <label>Entity</label>
+                <label data-i18n="web_dev_entity">Entity</label>
                 <select id="haEntityId" onchange="onHaEntityPicked()"></select>
-                <div id="haEntityUnavailableHint" class="hint" style="display:none;color:#e0a000">
+                <div id="haEntityUnavailableHint" class="hint" style="display:none;color:#e0a000" data-i18n="web_dev_not_connected_to_home_assistant_or">
                     Not connected to Home Assistant, or no entities of this type were found.
                 </div>
-                <label>Name</label>
-                <input type="text" id="haEntityName" placeholder="e.g., Salon TV">
+                <label data-i18n="web_config_harmony_name_label">Name</label>
+                <input type="text" id="haEntityName" placeholder="e.g., Salon TV" data-i18n-attr="placeholder:web_dev_e_g_salon_tv">
                 <div class="btn-row" style="margin-top:10px">
-                    <button id="saveHaEntityBtn" onclick="saveHaEntity()">Save</button>
-                    <button class="secondary" onclick="closeDeviceForms()">Cancel</button>
-                    <button id="removeHaEntityBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeHaEntityFromForm()">Remove</button>
+                    <button id="saveHaEntityBtn" onclick="saveHaEntity()" data-i18n="web_save">Save</button>
+                    <button class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    <button id="removeHaEntityBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeHaEntityFromForm()" data-i18n="web_config_harmony_remove_button">Remove</button>
                 </div>
             </div>
         </div>
 
         <!-- ---- Harmony --------------------------------------------------- -->
         <div id="viewHarmony" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">Harmony</h2>
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_harmony">Harmony</h2>
 
             <div id="harmonyHubsList" style="margin-bottom:14px"></div>
             <div class="btn-row">
-                <button type="button" onclick="openDeviceForm('harmony')">+ Add hub</button>
+                <button type="button" onclick="openDeviceForm('harmony')" data-i18n="web_dev_add_hub">+ Add hub</button>
             </div>
 
             <div id="harmonyForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0">Hub</h3>
-                <label>Name</label>
-                <input type="text" id="hubName" placeholder="e.g., Living Room Hub">
-                <label>IP address</label>
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_hub">Hub</h3>
+                <label data-i18n="web_config_harmony_name_label">Name</label>
+                <input type="text" id="hubName" placeholder="e.g., Living Room Hub" data-i18n-attr="placeholder:web_dev_e_g_living_room_hub">
+                <label data-i18n="web_config_harmony_ip_label">IP address</label>
                 <input type="text" id="hubIp" placeholder="192.168.1.60">
-                <label>Hub id</label>
+                <label data-i18n="web_dev_hub_id">Hub id</label>
                 <div class="btn-row">
-                    <input type="text" id="hubHubId" placeholder="auto-detected from the IP" style="flex:1">
-                    <button type="button" id="discoverHubIdBtn" class="secondary" onclick="discoverHarmonyHubId()">Auto-detect ID</button>
+                    <input type="text" id="hubHubId" placeholder="auto-detected from the IP" style="flex:1" data-i18n-attr="placeholder:web_dev_auto_detected_from_the_ip">
+                    <button type="button" id="discoverHubIdBtn" class="secondary" onclick="discoverHarmonyHubId()" data-i18n="web_config_harmony_discover_button">Auto-detect ID</button>
                 </div>
                 <div class="btn-row" style="margin-top:10px">
-                    <button id="saveHarmonyHubBtn" onclick="saveHarmonyHub()">Save</button>
-                    <button class="secondary" onclick="closeDeviceForms()">Cancel</button>
-                    <button id="removeHarmonyHubBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeHarmonyHubFromForm()">Remove</button>
+                    <button id="saveHarmonyHubBtn" onclick="saveHarmonyHub()" data-i18n="web_save">Save</button>
+                    <button class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    <button id="removeHarmonyHubBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeHarmonyHubFromForm()" data-i18n="web_config_harmony_remove_button">Remove</button>
                 </div>
             </div>
         </div>
 
         <!-- ---- IR Extenders ------------------------------------------------ -->
         <div id="viewExtender" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">IR Extenders</h2>
-            <div class="hint" style="margin-bottom:14px">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_ir_extenders">IR Extenders</h2>
+            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_extenders_hint">
                 Network-connected WiFi IR blasters — point an IR device at one instead of this remote's own built-in IR when it needs to reach a closed cabinet or another room. No Home Assistant required.
                 See <a href="https://github.com/dckiller51/astrion-ir-extender" target="_blank" rel="noopener">astrion-ir-extender</a> for the firmware.
             </div>
 
             <div id="extendersList" style="margin-bottom:14px"></div>
             <div class="btn-row">
-                <button type="button" onclick="openDeviceForm('extender')">+ Add extender</button>
+                <button type="button" onclick="openDeviceForm('extender')" data-i18n="web_dev_add_extender">+ Add extender</button>
             </div>
 
             <div id="extenderForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0">Extender</h3>
-                <label>Name</label>
-                <input type="text" id="extenderName" placeholder="e.g., Living Room Cabinet">
-                <label>IP address or hostname</label>
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_extender">Extender</h3>
+                <label data-i18n="web_config_harmony_name_label">Name</label>
+                <input type="text" id="extenderName" placeholder="e.g., Living Room Cabinet" data-i18n-attr="placeholder:web_dev_e_g_living_room_cabinet">
+                <label data-i18n="web_dev_ip_address_or_hostname">IP address or hostname</label>
                 <input type="text" id="extenderHost" placeholder="192.168.1.80">
-                <label>MAC address</label>
+                <label data-i18n="web_dev_mac_address">MAC address</label>
                 <input type="text" id="extenderMac" placeholder="2C:B4:71:FF:C7:98">
-                <div class="hint">
+                <div class="hint" data-i18n-html="web_dev_extender_mac_hint">
                     Both are on the extender's own web page — open <code>http://&lt;its-ip&gt;/</code> in a browser and look for "Mac Address".
                     The MAC is what keeps this extender's identity stable: IR devices point at it by an id derived from the MAC, so you can rename it,
                     move it to a new IP, or even remove and re-add it later without breaking every device that uses it.
                 </div>
                 <div class="btn-row" style="margin-top:10px">
-                    <button id="saveExtenderBtn" onclick="saveExtender()">Save</button>
-                    <button class="secondary" onclick="closeDeviceForms()">Cancel</button>
-                    <button id="removeExtenderBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeExtenderFromForm()">Remove</button>
+                    <button id="saveExtenderBtn" onclick="saveExtender()" data-i18n="web_save">Save</button>
+                    <button class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    <button id="removeExtenderBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeExtenderFromForm()" data-i18n="web_config_harmony_remove_button">Remove</button>
                 </div>
             </div>
         </div>
 
         <!-- ---- Harmony devices / commands (browse + alias) ------------------ -->
         <div id="viewHarmonyDevices" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHarmony')">← Harmony</button>
-            <h2 id="harmonyDevicesHubName" style="margin-top:0">Devices</h2>
+            <button type="button" class="back-link" onclick="showView('viewHarmony')" data-i18n="web_dev_harmony_2">← Harmony</button>
+            <h2 id="harmonyDevicesHubName" style="margin-top:0" data-i18n="web_activity_step_devices">Devices</h2>
             <div id="harmonyDevicesList"></div>
         </div>
 
         <div id="viewHarmonyCommands" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHarmonyDevices')">← Devices</button>
-            <h2 id="harmonyCommandsDeviceName" style="margin-top:0">Commands</h2>
-            <div class="hint">
+            <button type="button" class="back-link" onclick="showView('viewHarmonyDevices')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 id="harmonyCommandsDeviceName" style="margin-top:0" data-i18n="web_dev_commands">Commands</h2>
+            <div class="hint" data-i18n="web_dev_harmony_s_own_name_for_each">
                 Harmony's own name for each button, and an optional alias — when set,
                 shown instead everywhere you pick a command elsewhere in this app
                 (scene tiles, hotkeys, Activities).
@@ -208,9 +213,9 @@
 
         <!-- ---- IR Devices -------------------------------------------------- -->
         <div id="viewIr" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">IR Devices</h2>
-            <div class="hint">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_ir_devices">IR Devices</h2>
+            <div class="hint" data-i18n="web_dev_a_registry_of_named_ir_commands">
                 A registry of named IR commands per physical device — works fully offline,
                 no Harmony hub, no Home Assistant, no cloud. Referenced by scene_grid tiles
                 and by Activities in the dashboard builder.
@@ -218,82 +223,78 @@
 
             <div id="irDevicesList" style="margin:14px 0"></div>
             <div class="btn-row">
-                <button type="button" onclick="openDeviceForm('ir')">+ Add device</button>
+                <button type="button" onclick="openDeviceForm('ir')" data-i18n="web_dev_add_device">+ Add device</button>
             </div>
 
             <div id="irForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0">Device</h3>
-                <label>Device name</label>
-                <input type="text" id="irDevName" placeholder="e.g., TV Salon">
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_harmony_label_device">Device</h3>
+                <label data-i18n="web_ui_device_name_label">Device name</label>
+                <input type="text" id="irDevName" placeholder="e.g., TV Salon" data-i18n-attr="placeholder:web_ui_device_name_placeholder">
 
-                <label style="margin-top:10px">Where do this device's commands come from?</label>
+                <label style="margin-top:10px" data-i18n="web_ui_ir_source_question">Where do this device's commands come from?</label>
                 <label class="inline-check">
-                    <input type="radio" name="irSourceMode" value="inline" checked onchange="onIrSourceModeChange()">
-                    Paste Pronto codes by hand — for a one-off button, or something you learned yourself
-                </label>
+                    <input type="radio" name="irSourceMode" value="inline" checked onchange="onIrSourceModeChange()"> <span data-i18n="web_ui_ir_source_inline">Paste Pronto codes by hand — for a one-off button, or something you learned yourself</span></label>
                 <label class="inline-check">
-                    <input type="radio" name="irSourceMode" value="reference" onchange="onIrSourceModeChange()">
-                    Reference the ir-database — for a device you picked with the ir-database picker and copied onto the remote
-                </label>
+                    <input type="radio" name="irSourceMode" value="reference" onchange="onIrSourceModeChange()"> <span data-i18n="web_ui_ir_source_reference">Reference the ir-database — for a device you picked with the ir-database picker and copied onto the remote</span></label>
 
                 <div id="irInlineForm">
-                    <label style="margin-top:10px">Paste a Pronto Hex code</label>
+                    <label style="margin-top:10px" data-i18n="web_ui_pronto_label">Paste a Pronto Hex code</label>
                     <input type="text" id="irManualPronto" placeholder="0000 006D 0022 0000 00AC 00AC 0016 0016 ...">
-                    <input type="text" id="irManualLabel" placeholder='Label (optional, e.g. "Power")' style="margin-top:6px">
+                    <input type="text" id="irManualLabel" placeholder='Label (optional, e.g. "Power")' style="margin-top:6px" data-i18n-attr="placeholder:web_ui_command_label_placeholder">
 
-                    <label style="margin-top:10px">Save this command as</label>
-                    <input type="text" id="irCommandId" placeholder="e.g., power, hdmi1, volume_up">
+                    <label style="margin-top:10px" data-i18n="web_ui_save_command_as">Save this command as</label>
+                    <input type="text" id="irCommandId" placeholder="e.g., power, hdmi1, volume_up" data-i18n-attr="placeholder:web_ui_command_id_placeholder">
                     <div class="btn-row">
-                        <button type="button" class="secondary" onclick="addIrCommand()">+ Add command</button>
+                        <button type="button" class="secondary" onclick="addIrCommand()" data-i18n="web_ui_add_command">+ Add command</button>
                     </div>
 
                     <div id="irCommandsList" style="margin-top:12px"></div>
                 </div>
 
                 <div id="irRefForm" style="display:none">
-                    <div class="hint" style="margin-top:10px" id="irRefHint">
+                    <div class="hint" style="margin-top:10px" id="irRefHint" data-i18n-html="web_dev_ir_ref_hint">
                         Must match exactly what you copied into <code>/sdcard/astrion/ir-database/</code> on the
                         remote — the app resolves the actual commands from that file at runtime, this page
                         never touches ir-database/ itself.
                     </div>
 
                     <div id="irOnDeviceQuickPick" style="display:none">
-                        <label style="margin-top:10px">Already on this remote — pick one</label>
-                        <select id="irOnDeviceCategory" onchange="onIrOnDeviceCategoryChange()"><option value="">— category —</option></select>
-                        <select id="irOnDeviceBrand" onchange="onIrOnDeviceBrandChange()" disabled><option value="">— select a category first —</option></select>
-                        <select id="irOnDeviceModel" onchange="onIrOnDeviceModelChange()" disabled><option value="">— select a brand first —</option></select>
+                        <label style="margin-top:10px" data-i18n="web_ui_ir_ondevice_label">Already on this remote — pick one</label>
+                        <select id="irOnDeviceCategory" onchange="onIrOnDeviceCategoryChange()"><option value="" data-i18n="web_ui_pick_category">— category —</option></select>
+                        <select id="irOnDeviceBrand" onchange="onIrOnDeviceBrandChange()" disabled><option value="" data-i18n="web_ui_pick_brand_disabled">— select a category first —</option></select>
+                        <select id="irOnDeviceModel" onchange="onIrOnDeviceModelChange()" disabled><option value="" data-i18n="web_ui_pick_model_disabled">— select a brand first —</option></select>
                     </div>
 
-                    <label style="margin-top:10px">Category</label>
+                    <label style="margin-top:10px" data-i18n="web_ui_category_label">Category</label>
                     <select id="irRefCategory"></select>
-                    <label>Brand</label>
-                    <input type="text" id="irRefBrand" placeholder="e.g., LG">
-                    <label>Model</label>
-                    <input type="text" id="irRefModel" placeholder="e.g., OLED65B8">
-                    <label style="margin-top:10px">Known command ids (optional, comma-separated — just for autocomplete above and in scene_grid tiles)</label>
-                    <input type="text" id="irRefKnownCommands" placeholder="power, hdmi1, volume_up, mute">
+                    <label data-i18n="web_ui_brand_label">Brand</label>
+                    <input type="text" id="irRefBrand" placeholder="e.g., LG" data-i18n-attr="placeholder:web_ui_brand_placeholder">
+                    <label data-i18n="web_ui_model_label">Model</label>
+                    <input type="text" id="irRefModel" placeholder="e.g., OLED65B8" data-i18n-attr="placeholder:web_ui_model_placeholder">
+                    <label style="margin-top:10px" data-i18n="web_dev_known_command_ids_optional_comma_separated">Known command ids (optional, comma-separated — just for autocomplete above and in scene_grid tiles)</label>
+                    <input type="text" id="irRefKnownCommands" placeholder="power, hdmi1, volume_up, mute" data-i18n-attr="placeholder:web_dev_power_hdmi1_volume_up_mute">
                 </div>
 
-                <label style="margin-top:10px">Where should this device's commands actually get sent from?</label>
-                <select id="irTargetSelect"><option value="">— this remote's own IR blaster —</option></select>
-                <div class="hint">
+                <label style="margin-top:10px" data-i18n="web_dev_where_should_this_device_s_commands">Where should this device's commands actually get sent from?</label>
+                <select id="irTargetSelect"><option value="" data-i18n="web_dev_this_remote_s_own_ir_blaster">— this remote's own IR blaster —</option></select>
+                <div class="hint" data-i18n-html="web_dev_ir_target_hint">
                     Same for every card/hotkey that references this device — set it once here, not per-card. Only IR-database-referenced devices (not hand-pasted commands) can target an extender right now.
                     Need one added? Go to <a href="javascript:void(0)" onclick="showView('viewExtender')">IR Extenders</a>.
                 </div>
 
                 <div class="btn-row">
-                    <button id="saveIrDeviceBtn" onclick="saveIrDevice()">Save</button>
-                    <button class="secondary" onclick="closeDeviceForms()">Cancel</button>
-                    <button id="removeIrDeviceBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeIrDeviceFromForm()">Remove</button>
+                    <button id="saveIrDeviceBtn" onclick="saveIrDevice()" data-i18n="web_save">Save</button>
+                    <button class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    <button id="removeIrDeviceBtn" class="secondary" style="display:none;color:#ff8a8a" onclick="removeIrDeviceFromForm()" data-i18n="web_config_harmony_remove_button">Remove</button>
                 </div>
             </div>
         </div>
 
         <!-- ---- Apple TV ----------------------------------------------------- -->
         <div id="viewAppleTv" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">Apple TV</h2>
-            <div class="hint" style="margin-bottom:14px">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_apple_tv">Apple TV</h2>
+            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_atv_hint">
                 Control an Apple TV directly over your network — no Home Assistant and no Harmony hub needed.
                 Each paired Apple TV shows up as a <code>media_player</code> entity (for example <code>media_player.appletv_salon</code>)
                 that any media player / source card, button or hotkey can use, and the Apple TV remote card can target it too.
@@ -302,60 +303,60 @@
 
             <div id="appleTvsList" style="margin-bottom:14px"></div>
             <div class="btn-row">
-                <button type="button" onclick="openDeviceForm('appleTv')">+ Add Apple TV</button>
+                <button type="button" onclick="openDeviceForm('appleTv')" data-i18n="web_dev_add_apple_tv">+ Add Apple TV</button>
             </div>
 
             <div id="appleTvForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0">Add an Apple TV</h3>
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_add_an_apple_tv">Add an Apple TV</h3>
                 <div id="appleTvScanBox">
-                    <div id="appleTvScanStatus" class="hint">Searching your network…</div>
+                    <div id="appleTvScanStatus" class="hint" data-i18n="web_dev_searching_your_network">Searching your network…</div>
                     <div id="appleTvScanResults" style="margin-top:8px"></div>
                     <div class="btn-row" style="margin-top:10px">
-                        <button type="button" class="secondary" onclick="scanAppleTvs()">Search again</button>
-                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                        <button type="button" class="secondary" onclick="scanAppleTvs()" data-i18n="web_dev_search_again">Search again</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
                     </div>
                 </div>
                 <div id="appleTvPinBox" style="display:none">
-                    <div class="hint" style="margin-bottom:10px">
+                    <div class="hint" style="margin-bottom:10px" data-i18n="web_dev_a_4_digit_code_is_now">
                         A 4-digit code is now showing on your TV screen. Enter it below to finish pairing.
                     </div>
-                    <label>Code shown on the TV</label>
+                    <label data-i18n="web_dev_code_shown_on_the_tv">Code shown on the TV</label>
                     <input type="text" id="appleTvPin" inputmode="numeric" maxlength="4" placeholder="1234" autocomplete="off">
-                    <label>Name</label>
-                    <input type="text" id="appleTvName" placeholder="e.g., Living Room">
+                    <label data-i18n="web_config_harmony_name_label">Name</label>
+                    <input type="text" id="appleTvName" placeholder="e.g., Living Room" data-i18n-attr="placeholder:web_card_ph_name_room">
                     <div class="btn-row" style="margin-top:10px">
-                        <button id="appleTvFinishBtn" type="button" onclick="finishAppleTvPairing()">Pair</button>
-                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                        <button id="appleTvFinishBtn" type="button" onclick="finishAppleTvPairing()" data-i18n="web_dev_pair">Pair</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
                     </div>
                 </div>
                 <div id="appleTvMrpOfferBox" style="display:none">
-                    <div class="hint" style="margin-bottom:10px">
+                    <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_atv_mrp_offer_hint">
                         Paired. You can also pair for <strong>Now Playing info</strong> (title, artist, artwork,
                         position) — this is a separate, optional pairing; your TV will show a second code. Skip it
                         any time and add it later from the list.
                     </div>
                     <div class="btn-row">
-                        <button type="button" onclick="scanAppleTvMrp()">Also get Now Playing info</button>
-                        <button type="button" class="secondary" onclick="closeDeviceForms()">Skip for now</button>
+                        <button type="button" onclick="scanAppleTvMrp()" data-i18n="web_dev_also_get_now_playing_info">Also get Now Playing info</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_dev_skip_for_now">Skip for now</button>
                     </div>
                 </div>
                 <div id="appleTvMrpScanBox" style="display:none">
-                    <div id="appleTvMrpScanStatus" class="hint">Searching for the Now Playing service…</div>
+                    <div id="appleTvMrpScanStatus" class="hint" data-i18n="web_dev_searching_for_the_now_playing_service">Searching for the Now Playing service…</div>
                     <div id="appleTvMrpScanResults" style="margin-top:8px"></div>
                     <div class="btn-row" style="margin-top:10px">
-                        <button type="button" class="secondary" onclick="scanAppleTvMrp()">Search again</button>
-                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                        <button type="button" class="secondary" onclick="scanAppleTvMrp()" data-i18n="web_dev_search_again">Search again</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
                     </div>
                 </div>
                 <div id="appleTvMrpPinBox" style="display:none">
-                    <div class="hint" style="margin-bottom:10px">
+                    <div class="hint" style="margin-bottom:10px" data-i18n="web_dev_a_second_4_digit_code_is">
                         A second 4-digit code is now showing on your TV. Enter it below to finish.
                     </div>
-                    <label>Code shown on the TV</label>
+                    <label data-i18n="web_dev_code_shown_on_the_tv">Code shown on the TV</label>
                     <input type="text" id="appleTvMrpPin" inputmode="numeric" maxlength="4" placeholder="1234" autocomplete="off">
                     <div class="btn-row" style="margin-top:10px">
-                        <button id="appleTvMrpFinishBtn" type="button" onclick="finishAppleTvMrpPairing()">Pair</button>
-                        <button type="button" class="secondary" onclick="closeDeviceForms()">Cancel</button>
+                        <button id="appleTvMrpFinishBtn" type="button" onclick="finishAppleTvMrpPairing()" data-i18n="web_dev_pair">Pair</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
                     </div>
                 </div>
             </div>
@@ -363,71 +364,73 @@
 
         <!-- ---- Utilities: backup / ir-database / icons / ring ---------------- -->
         <div id="viewBackup" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">Restore a backup</h2>
-            <div class="hint">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_restore_a_backup">Restore a backup</h2>
+            <div class="hint" data-i18n-html="web_dev_backup_hint">
                 dashboard.json holds everything built in the
                 <a href="/builder/" style="color:#00E5FF">dashboard builder</a> — pages, cards,
                 hotkeys, Activities, theme, and this catalog's IR/Home Assistant devices.
             </div>
-            <label style="margin-top:14px">Choose a backup file</label>
+            <label style="margin-top:14px" data-i18n="web_dev_choose_a_backup_file">Choose a backup file</label>
             <input type="file" id="dashboardFile" accept="application/json,.json">
-            <div class="hint" style="color:#e0a000">Replaces everything currently on this device — pages, cards, hotkeys, Activities, theme, and this catalog.</div>
+            <div class="hint" style="color:#e0a000" data-i18n="web_dev_replaces_everything_currently_on_this_device">Replaces everything currently on this device — pages, cards, hotkeys, Activities, theme, and this catalog.</div>
             <div class="btn-row" style="margin-top:10px">
-                <button id="restoreDashboardBtn" onclick="restoreDashboard()">Restore</button>
+                <button id="restoreDashboardBtn" onclick="restoreDashboard()" data-i18n="web_dev_restore">Restore</button>
             </div>
         </div>
 
         <div id="viewIrDatabase" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">IR database</h2>
-            <div class="hint">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_ir_database">IR database</h2>
+            <div class="hint" data-i18n="web_dev_category_brand_model_files_for_the">
                 Category/brand/model files for the on-device picker shown when adding an
                 IR Device (Category → Brand → Model). Pick your device on the external
                 ir-sniffer tool, then send the resulting file here.
             </div>
             <a href="https://dckiller51.github.io/astrion-ir-sniffer/" target="_blank" rel="noopener"
-               style="display:inline-block;margin:8px 0;color:#00E5FF">Open the ir-database picker ↗</a>
+               style="display:inline-block;margin:8px 0;color:#00E5FF" data-i18n="web_dev_open_the_ir_database_picker">Open the ir-database picker ↗</a>
             <input type="file" id="irDatabaseFile" accept="application/json,.json">
             <div class="btn-row" style="margin-top:10px">
-                <button id="uploadIrDatabaseBtn" onclick="uploadIrDatabase()">Upload</button>
+                <button id="uploadIrDatabaseBtn" onclick="uploadIrDatabase()" data-i18n="web_dev_upload">Upload</button>
             </div>
+            <h3 style="margin:18px 0 6px" data-i18n="web_dev_files_on_this_remote">Files on this remote</h3>
+            <div id="irDatabaseFilesList"></div>
         </div>
 
         <div id="viewIcons" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">Icons</h2>
-            <div class="hint">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_config_icons_heading">Icons</h2>
+            <div class="hint" data-i18n="web_dev_upload_pngs_here_to_use_as">
                 Upload PNGs here to use as custom icons on scene_grid / button_grid
                 cards in the dashboard builder — pick "Choose…" on an icon field there.
             </div>
             <input type="file" id="iconFile" accept="image/png,image/jpeg,image/webp">
             <div class="btn-row" style="margin-top:10px">
-                <button id="uploadIconBtn" onclick="uploadIcon()">Upload</button>
+                <button id="uploadIconBtn" onclick="uploadIcon()" data-i18n="web_dev_upload">Upload</button>
             </div>
             <div id="iconsList" style="margin-top:12px"></div>
         </div>
 
         <div id="viewRing" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')">← Devices</button>
-            <h2 style="margin-top:0">Find my remote</h2>
-            <div class="hint">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_config_ring_heading">Find my remote</h2>
+            <div class="hint" data-i18n="web_dev_plays_this_device_s_own_ringtone">
                 Plays this device's own ringtone/alarm/notification sound on loop for a
                 bit, so a misplaced tablet or remote can be found by ear.
             </div>
-            <label>Sound</label>
+            <label data-i18n="web_config_ring_sound_label">Sound</label>
             <select id="ringSound">
-                <option value="ringtone">Ringtone</option>
-                <option value="alarm">Alarm</option>
-                <option value="notification">Notification</option>
+                <option value="ringtone" data-i18n="web_config_ring_sound_ringtone">Ringtone</option>
+                <option value="alarm" data-i18n="web_config_ring_sound_alarm">Alarm</option>
+                <option value="notification" data-i18n="web_config_ring_sound_notification">Notification</option>
             </select>
-            <label>Volume (%)</label>
+            <label data-i18n="web_dev_volume">Volume (%)</label>
             <input type="number" id="ringVolume" value="80" min="1" max="100">
-            <label>Duration (seconds)</label>
+            <label data-i18n="web_config_ring_duration_label">Duration (seconds)</label>
             <input type="number" id="ringDuration" value="15" min="1" max="60">
             <div class="btn-row" style="margin-top:10px">
-                <button id="ringBtn" onclick="ringDevice()">Ring</button>
-                <button class="secondary" onclick="stopRingDevice()">Stop</button>
+                <button id="ringBtn" onclick="ringDevice()" data-i18n="web_config_ring_button">Ring</button>
+                <button class="secondary" onclick="stopRingDevice()" data-i18n="stop_activity">Stop</button>
             </div>
         </div>
 
@@ -436,6 +439,7 @@
 
 <div id="toast" class="toast"></div>
 
+<script src="js/i18n.js"></script>
 <script src="js/devices-page.js"></script>
 </body>
 </html>

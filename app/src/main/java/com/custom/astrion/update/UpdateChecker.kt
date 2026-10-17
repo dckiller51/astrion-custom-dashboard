@@ -6,6 +6,7 @@ import androidx.core.content.FileProvider
 import com.custom.astrion.BuildConfig
 import java.io.File
 import java.io.IOException
+import java.time.Instant
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -61,21 +62,38 @@ object UpdateChecker {
 
     /**
      * Same idea as [checkForUpdate], but against the rolling `dev-latest`
-     * pre-release instead of the official `/releases/latest` — always
-     * reports it as installable regardless of [isNewer], since a beta build
-     * has no meaningful "already up to date" comparison against a tag that
-     * gets overwritten on every push to dev.
+     * pre-release instead of the official `/releases/latest`. Its tag never
+     * changes, so version numbers can't be compared; instead, with
+     * [installedAtMs] (see [installedAt]), the build counts as new only if its
+     * APK was uploaded after this app was installed or last updated — so a
+     * remote already running the latest beta reads "up to date" instead of
+     * always offering it again. Without [installedAtMs] (the web page's
+     * explicit "install the beta" button) it is always offered.
      */
-    fun checkBetaUpdate(): CheckResult {
+    fun checkBetaUpdate(installedAtMs: Long? = null): CheckResult {
         val release =
             when (val fetch = fetchRelease(BETA_API_URL)) {
                 is FetchResult.Err -> return fetch.failed
                 is FetchResult.Ok -> fetch.release
             }
-        return releaseToResult(release, release.tag)
+        val uploadedAt = release.apkUploadedAt?.let { runCatching { Instant.parse(it).toEpochMilli() }.getOrNull() }
+        if (installedAtMs != null && uploadedAt != null && uploadedAt <= installedAtMs) return CheckResult.UpToDate
+        // The release's own title ("1.2.6-beta") reads better than its fixed tag ("dev-latest").
+        return releaseToResult(release, release.name.ifBlank { release.tag })
     }
 
-    private data class RawRelease(val tag: String, val body: String, val apkUrl: String?)
+    /** When this app was installed or last updated (ms) — what [checkBetaUpdate] compares against. */
+    fun installedAt(context: Context): Long? =
+        runCatching { context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime }.getOrNull()
+
+    private data class RawRelease(
+        val tag: String,
+        val name: String,
+        val body: String,
+        val apkUrl: String?,
+        /** ISO-8601 time the .apk asset was last uploaded (GitHub's `updated_at`). */
+        val apkUploadedAt: String?
+    )
 
     private sealed class FetchResult {
         data class Ok(val release: RawRelease) : FetchResult()
@@ -121,16 +139,16 @@ object UpdateChecker {
             val tag =
                 root["tag_name"]?.jsonPrimitive?.content
                     ?: return FetchResult.Err(CheckResult.Failed("Release has no tag_name"))
-            val apkUrl =
+            val apk =
                 root["assets"]
                     ?.jsonArray
                     ?.map { it.jsonObject }
                     ?.firstOrNull { it["name"]?.jsonPrimitive?.content?.endsWith(".apk") == true }
-                    ?.get("browser_download_url")
-                    ?.jsonPrimitive
-                    ?.content
+            val apkUrl = apk?.get("browser_download_url")?.jsonPrimitive?.content
+            val apkUploadedAt = apk?.get("updated_at")?.jsonPrimitive?.content
             val body = root["body"]?.jsonPrimitive?.content.orEmpty()
-            return FetchResult.Ok(RawRelease(tag = tag, body = body, apkUrl = apkUrl))
+            val name = root["name"]?.jsonPrimitive?.content.orEmpty()
+            return FetchResult.Ok(RawRelease(tag = tag, name = name, body = body, apkUrl = apkUrl, apkUploadedAt = apkUploadedAt))
         }
     }
 
@@ -156,18 +174,47 @@ object UpdateChecker {
         return false
     }
 
-    /** Downloads the APK into the app cache dir. Blocking — invoke off the main thread. */
+    /** Downloads the APK into the app cache dir. Blocking — invoke off the main thread.
+     * Streamed straight to the file: reading the whole APK into memory first
+     * (as this used to) briefly held tens of MB of RAM on a small device. */
     fun download(context: Context, apkUrl: String): File? {
         val request = Request.Builder().url(apkUrl).build()
-        val bytes =
+        val file = File(context.cacheDir, UPDATE_APK_NAME)
+        val ok =
             http.newCall(request).execute().use { resp ->
-                if (!resp.isSuccessful) return null
-                resp.body?.bytes() ?: return null
+                val body = resp.body
+                if (resp.isSuccessful && body != null) {
+                    file.outputStream().use { out -> body.byteStream().copyTo(out) }
+                    true
+                } else {
+                    false
+                }
             }
-        val file = File(context.cacheDir, "astrion-update.apk")
-        file.writeBytes(bytes)
-        return file
+        return if (ok) file else null
     }
+
+    /**
+     * Frees storage the app no longer needs — called once at startup:
+     *  - the update APK downloaded by [download]: once the new version runs,
+     *    it's a dead copy of the whole app that used to stay in the cache
+     *    forever;
+     *  - upload temp files the local web server (NanoHTTPD) left behind when
+     *    a request was interrupted.
+     * Only files older than [STALE_AFTER_MS] go, so an install still on
+     * screen keeps its APK.
+     */
+    fun cleanupStaleDownloads(context: Context) {
+        val cutoff = System.currentTimeMillis() - STALE_AFTER_MS
+        context.cacheDir
+            .listFiles()
+            ?.filter { it.isFile && isDisposable(it.name) && it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
+    }
+
+    private fun isDisposable(name: String): Boolean = name == UPDATE_APK_NAME || name.startsWith("NanoHTTPD-")
+
+    private const val UPDATE_APK_NAME = "astrion-update.apk"
+    private const val STALE_AFTER_MS = 10 * 60 * 1000L
 
     /**
      * Launches the system installer UI for the given APK file.

@@ -7,28 +7,32 @@
 // updateJsonOutput() serializes dashboardData.theme into dashboard.json
 // automatically — no separate save step.
 
-// Token definitions: key (JSON/CSS), label, default hex (matches the app's
-// compiled-in ThemeConfig defaults so an untouched theme renders identically).
+// Token definitions: key (JSON/CSS), labelKey (i18n key for the display
+// label — resolved via I18N.t() at render time, never at script top level),
+// default hex (matches the app's compiled-in ThemeConfig defaults so an
+// untouched theme renders identically). `key` is the technical identifier
+// used in dashboard.json and CSS variables; only labelKey/groupKey are
+// user-facing.
 const THEME_TOKENS = [
-  { group: 'Backgrounds', items: [
-    { key: 'background',       label: 'Window background',  default: '#0E2229' },
-    { key: 'cardSurface',      label: 'Card surface',       default: '#1B343D' },
-    { key: 'insetSurface',     label: 'Inset / recessed',   default: '#152B33' },
-    { key: 'controlBackground',label: 'Control / button',   default: '#2C4C58' },
+  { groupKey: 'web_theme_group_backgrounds', items: [
+    { key: 'background',       labelKey: 'web_theme_label_window_background', default: '#0E2229' },
+    { key: 'cardSurface',      labelKey: 'web_theme_label_card_surface',      default: '#1B343D' },
+    { key: 'insetSurface',     labelKey: 'web_theme_label_inset',             default: '#152B33' },
+    { key: 'controlBackground',labelKey: 'web_theme_label_control',           default: '#2C4C58' },
   ]},
-  { group: 'Text & Icons', items: [
-    { key: 'primaryText',      label: 'Primary text',       default: '#E6F0F1' },
-    { key: 'mutedText',        label: 'Muted text',         default: '#93AFB6' },
-    { key: 'iconTint',         label: 'Icon tint',          default: '#CBDCE0' },
+  { groupKey: 'web_theme_group_text_icons', items: [
+    { key: 'primaryText',      labelKey: 'web_theme_label_primary_text',      default: '#E6F0F1' },
+    { key: 'mutedText',        labelKey: 'web_theme_label_muted_text',        default: '#93AFB6' },
+    { key: 'iconTint',         labelKey: 'web_theme_label_icon_tint',         default: '#CBDCE0' },
   ]},
-  { group: 'Accents', items: [
-    { key: 'accent',           label: 'Accent (blue)',      default: '#6EA8FE' },
-    { key: 'accentSecondary',  label: 'Accent 2 (indigo)',  default: '#4C6EF5' },
-    { key: 'amber',            label: 'Amber / light',      default: '#FFC24B' },
+  { groupKey: 'web_theme_group_accents', items: [
+    { key: 'accent',           labelKey: 'web_theme_label_accent_blue',       default: '#6EA8FE' },
+    { key: 'accentSecondary',  labelKey: 'web_theme_label_accent_2',          default: '#4C6EF5' },
+    { key: 'amber',            labelKey: 'web_theme_label_amber',             default: '#FFC24B' },
   ]},
-  { group: 'Status', items: [
-    { key: 'danger',           label: 'Danger / off',       default: '#E06767' },
-    { key: 'success',          label: 'Success / on',       default: '#4CAF50' },
+  { groupKey: 'web_theme_group_status', items: [
+    { key: 'danger',           labelKey: 'web_theme_label_danger',            default: '#E06767' },
+    { key: 'success',          labelKey: 'web_theme_label_success',           default: '#4CAF50' },
   ]},
 ];
 
@@ -54,9 +58,9 @@ function renderThemeForm() {
   if (!box) return;
   const vals = themeValues();
   let html = '';
-  html += `<div class="hint" style="margin-bottom:10px">Colors used across every card and the dashboard shell. Defaults match the built-in look — change any to customize. The preview updates live.</div>`;
+  html += `<div class="hint" style="margin-bottom:10px">${I18N.t('web_theme_hint')}</div>`;
   THEME_TOKENS.forEach(group => {
-    html += `<div class="theme-group-label">${group.group}</div>`;
+    html += `<div class="theme-group-label">${I18N.t(group.groupKey)}</div>`;
     group.items.forEach(tok => {
       const v = vals[tok.key];
       const isDefault = v.toLowerCase() === tok.default.toLowerCase();
@@ -64,12 +68,12 @@ function renderThemeForm() {
         <div class="theme-row">
           <input type="color" class="theme-swatch" id="themeSwatch_${tok.key}" value="${v}" onchange="onThemeInput('${tok.key}', this.value)" oninput="onThemeInput('${tok.key}', this.value, true)">
           <input type="text" class="theme-hex" id="themeHex_${tok.key}" value="${v}" placeholder="${tok.default}" onchange="onThemeHexInput('${tok.key}', this.value)" oninput="onThemeHexInput('${tok.key}', this.value, true)">
-          <label class="theme-token-label" for="themeHex_${tok.key}">${tok.label}</label>
-          <button type="button" class="theme-reset-btn${isDefault ? ' is-default' : ''}" title="Reset to default (${tok.default})" onclick="resetThemeToken('${tok.key}')">↺</button>
+          <label class="theme-token-label" for="themeHex_${tok.key}">${I18N.t(tok.labelKey)}</label>
+          <button type="button" class="theme-reset-btn${isDefault ? ' is-default' : ''}" title="${I18N.t('web_theme_reset_to_default', tok.default)}" onclick="resetThemeToken('${tok.key}')">↺</button>
         </div>`;
     });
   });
-  html += `<div class="btn-row" style="margin-top:10px"><button class="secondary" onclick="resetTheme()">Reset to defaults</button></div>`;
+  html += `<div class="btn-row" style="margin-top:10px"><button class="secondary" onclick="resetTheme()">${I18N.t('web_theme_reset_all')}</button></div>`;
   box.innerHTML = html;
 }
 
@@ -212,7 +216,7 @@ function colorFieldHtml(id, currentValue, placeholder) {
     <div class="theme-row theme-row-card">
       <input type="color" class="theme-swatch" id="${id}Swatch" value="${swatchVal}" onchange="onColorFieldInput('${id}', this.value, '${def}')" oninput="onColorFieldInput('${id}', this.value, '${def}', true)">
       <input type="text" class="theme-hex" id="${id}Hex" value="${v}" placeholder="${def}" onchange="onColorFieldHexInput('${id}', this.value, '${def}')" oninput="onColorFieldHexInput('${id}', this.value, '${def}', true)">
-      <button type="button" class="theme-reset-btn${isEmpty ? ' is-default' : ''}" id="${id}Reset" title="Reset to default" onclick="resetColorField('${id}', '${def}')">↺</button>
+      <button type="button" class="theme-reset-btn${isEmpty ? ' is-default' : ''}" id="${id}Reset" title="${I18N.t('web_theme_reset_default')}" onclick="resetColorField('${id}', '${def}')">↺</button>
     </div>`;
 }
 
@@ -277,4 +281,3 @@ function setColorFieldValue(id, value) {
   if (swatch) swatch.value = v ? rgbPartOf(v) : (def ? rgbPartOf(def) : '#000000');
   updateColorFieldResetBtn(id, v);
 }
-

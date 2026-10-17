@@ -122,8 +122,16 @@ class FanCard : CardRenderer {
             val pct = percentage ?: 0
             val explicitName = config.string("name")
 
+            // `step` set in the card → sent as `percentage_step` (it used to be
+            // ignored here, 1.2.9); otherwise the fan's own step, as before.
+            val stepOpt = (config.options["step"] as? Number)?.toInt()?.coerceIn(1, 100)
+
             fun changeSpeed(direction: String) = ctx.client.callService(
-                ServiceCall.of("fan", direction, entityId)
+                if (stepOpt != null) {
+                    ServiceCall.of("fan", direction, entityId, "percentage_step" to stepOpt)
+                } else {
+                    ServiceCall.of("fan", direction, entityId)
+                }
             )
             Column(
                 modifier =

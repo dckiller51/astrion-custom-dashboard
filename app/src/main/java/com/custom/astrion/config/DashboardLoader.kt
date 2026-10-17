@@ -77,6 +77,7 @@ import kotlinx.serialization.json.put
  */
 object DashboardLoader {
     private const val TAG = "DashboardLoader"
+    private const val MAX_DOCK_DEBOUNCE_S = 60
 
     val configFile: File
         get() = File(Environment.getExternalStorageDirectory(), "astrion/dashboard.json")
@@ -132,6 +133,7 @@ object DashboardLoader {
                     val popupPositionRaw = obj["popupPosition"]?.jsonPrimitive?.content
                     val popupPosition = if (popupPositionRaw in setOf("top", "bottom", "left", "right")) popupPositionRaw!! else "center"
                     val hiddenUnlessActivity = obj["hiddenUnlessActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+                    val hideMode = if (obj["hideMode"]?.jsonPrimitive?.content == "full") "full" else "dots"
                     val openWhenEntity = obj["openWhenEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     val openWhenState = obj["openWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "on"
                     val closeWhenState = obj["closeWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
@@ -149,6 +151,7 @@ object DashboardLoader {
                         popupHeightFraction = popupHeightFraction,
                         popupPosition = popupPosition,
                         hiddenUnlessActivity = hiddenUnlessActivity,
+                        hideMode = hideMode,
                         openWhenEntity = openWhenEntity,
                         openWhenState = openWhenState,
                         closeWhenState = closeWhenState,
@@ -162,7 +165,9 @@ object DashboardLoader {
             val irDevices = root["irDevices"]?.jsonArray?.map { parseIrDevice(it.jsonObject) } ?: emptyList()
             val activities = root["activities"]?.jsonArray?.map { parseActivity(it.jsonObject) } ?: emptyList()
             val theme = root["theme"]?.jsonObject?.let { parseTheme(it) } ?: ThemeConfig()
-            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme)
+            val dock = (root["dock"] as? JsonObject)?.let { parseDock(it) } ?: DockConfig()
+            val power = (root["power"] as? JsonObject)?.let { parsePower(it) } ?: PowerConfig()
+            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme, dock, power)
         }
         else -> error("top level must be an object or array")
     }
@@ -202,6 +207,10 @@ object DashboardLoader {
         val devices = obj["devices"]?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
         val openOverlay = obj["openOverlay"]?.jsonPrimitive?.content
         val openCurrentActivityRoom = obj["openCurrentActivityRoom"]?.jsonPrimitive?.content
+        val stopActivity = obj["stopActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val event = obj["event"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotBlank() }
+        val pageMode = obj["pageMode"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val nowPlayingEntity = obj["nowPlayingEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         return HotkeyConfig(
             key,
             page,
@@ -218,7 +227,11 @@ object DashboardLoader {
             room,
             devices,
             openOverlay,
-            openCurrentActivityRoom
+            openCurrentActivityRoom,
+            stopActivity,
+            event,
+            pageMode,
+            nowPlayingEntity
         )
     }
 
@@ -293,7 +306,20 @@ object DashboardLoader {
         val volumeUpCommand = obj["volumeUpCommand"]?.jsonPrimitive?.content
         val volumeDownCommand = obj["volumeDownCommand"]?.jsonPrimitive?.content
         val muteCommand = obj["muteCommand"]?.jsonPrimitive?.content
-        return ActivityConfig(id, name, room, icon, page, devices, volumeDeviceId, volumeUpCommand, volumeDownCommand, muteCommand)
+        val nowPlayingEntity = obj["nowPlayingEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        return ActivityConfig(
+            id,
+            name,
+            room,
+            icon,
+            page,
+            devices,
+            volumeDeviceId,
+            volumeUpCommand,
+            volumeDownCommand,
+            muteCommand,
+            nowPlayingEntity
+        )
     }
 
     private fun parseActivityDevice(obj: JsonObject, activityId: String): ActivityDeviceConfig {
@@ -323,6 +349,73 @@ object DashboardLoader {
             powerOffOnExit,
             delayAfterMs
         )
+    }
+
+    /** The `dock` block — every key optional, anything unparsable falls back to its default. */
+    private fun parseDock(obj: JsonObject): DockConfig {
+        fun str(key: String) = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
+        fun num(key: String) = (obj[key] as? JsonPrimitive)?.floatOrNull
+        val defaults = DockConfig()
+        return DockConfig(
+            mode = str("mode")?.lowercase()?.takeIf { it in DockConfig.MODES } ?: DockConfig.MODE_CHARGING,
+            idleSeconds = (obj["idle_seconds"] as? JsonPrimitive)?.intOrNull,
+            brightness = num("brightness")?.coerceIn(0.01f, 1f) ?: defaults.brightness,
+            nightBrightness = num("night_brightness")?.coerceIn(0.01f, 1f) ?: defaults.nightBrightness,
+            timeFormat = (obj["time_format"] as? JsonPrimitive)?.intOrNull?.takeIf { it == 12 || it == 24 },
+            weatherEntity = str("weather_entity"),
+            mediaEntities =
+            (obj["media_entities"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> c.isNotBlank() } }
+                .orEmpty(),
+            showBattery = (obj["show_battery"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true,
+            room = str("room")
+        )
+    }
+
+    /** The `power` block — every key optional, anything unparsable falls back to its default. */
+    private fun parsePower(obj: JsonObject): PowerConfig {
+        fun int(key: String) = (obj[key] as? JsonPrimitive)?.intOrNull
+        val defaults = PowerConfig()
+        return PowerConfig(
+            motionWakeMinutes = int("motion_wake_minutes")?.coerceAtLeast(-1) ?: defaults.motionWakeMinutes,
+            screenOffFilterSeconds = int("screen_off_filter_seconds")?.coerceAtLeast(-1) ?: defaults.screenOffFilterSeconds,
+            screenOffEntities =
+            (obj["screen_off_entities"] as? JsonArray)
+                ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> c.isNotBlank() } }
+                .orEmpty(),
+            dockDebounceSeconds = int("dock_debounce_seconds")?.coerceIn(0, MAX_DOCK_DEBOUNCE_S) ?: defaults.dockDebounceSeconds,
+            screenTimeoutSeconds = int("screen_timeout_seconds")?.takeIf { it > 0 }
+        )
+    }
+
+    /**
+     * Sets `dock.mode` in dashboard.json, keeping everything else in the file exactly as it is —
+     * what the remote's Settings page "Dock screen" choice writes. Returns false if the file can't
+     * be read or written (the caller then leaves things as they were).
+     */
+    fun updateDockMode(mode: String): Boolean = updateBlockKey("dock", "mode", JsonPrimitive(mode))
+
+    /** Sets (or, with null, removes) `power.screen_timeout_seconds` — the Settings page's "Screen timeout". */
+    fun updateScreenTimeout(seconds: Int?): Boolean = updateBlockKey("power", "screen_timeout_seconds", seconds?.let { JsonPrimitive(it) })
+
+    /**
+     * Sets `[block].[key]` to [value] in dashboard.json (null removes the key, and the block when it
+     * ends up empty), keeping every other key in the file as it is.
+     */
+    private fun updateBlockKey(block: String, key: String, value: JsonElement?): Boolean = try {
+        val file = configFile
+        // No dashboard.json yet: write the built-in one first, so the file never ends up holding only this block.
+        if (!file.exists()) writeDefaults()
+        val root = json.parseToJsonElement(file.readText()).jsonObject.toMutableMap()
+        val fields = (root[block] as? JsonObject).orEmpty().toMutableMap()
+        if (value == null) fields.remove(key) else fields[key] = value
+        if (fields.isEmpty()) root.remove(block) else root[block] = JsonObject(fields)
+        file.parentFile?.mkdirs()
+        file.writeText(json.encodeToString(JsonObject.serializer(), JsonObject(root)))
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "Couldn't update $block.$key", e)
+        false
     }
 
     private fun parseTheme(obj: JsonObject): ThemeConfig {
@@ -374,7 +467,10 @@ object DashboardLoader {
                             }
                             page.linkedPage?.let { put("linkedPage", it) }
                             if (page.linkedPageMode == "popup") put("linkedPageMode", "popup")
-                            page.hiddenUnlessActivity?.let { put("hiddenUnlessActivity", it) }
+                            page.hiddenUnlessActivity?.let {
+                                put("hiddenUnlessActivity", it)
+                                if (page.hideMode == "full") put("hideMode", "full")
+                            }
                             page.openWhenEntity?.let {
                                 put("openWhenEntity", it)
                                 if (page.openWhenState != "on") put("openWhenState", page.openWhenState)
@@ -469,6 +565,7 @@ object DashboardLoader {
                                 act.volumeUpCommand?.let { put("volumeUpCommand", it) }
                                 act.volumeDownCommand?.let { put("volumeDownCommand", it) }
                                 act.muteCommand?.let { put("muteCommand", it) }
+                                act.nowPlayingEntity?.let { put("nowPlayingEntity", it) }
                                 put(
                                     "devices",
                                     buildJsonArray {
@@ -503,6 +600,7 @@ object DashboardLoader {
                 buildJsonObject {
                     put("key", hk.key)
                     hk.page?.let { put("page", it) }
+                    hk.pageMode?.let { put("pageMode", it) }
                     hk.service?.let { put("service", it) }
                     hk.entityId?.let { put("entityId", it) }
                     if (hk.data.isNotEmpty()) put("data", JsonPlain.toJson(hk.data))

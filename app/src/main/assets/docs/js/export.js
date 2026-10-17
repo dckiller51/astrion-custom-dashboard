@@ -1,12 +1,14 @@
 // ---- JSON output ------------------------------------------------------------
 
 function updateJsonOutput() {
-  document.getElementById('jsonOutput').value = JSON.stringify(dashboardData, null, 2);
+  const json = JSON.stringify(dashboardData, null, 2);
+  document.getElementById('jsonOutput').value = json;
+  if (typeof recordUndo === 'function') recordUndo(json); // js/history.js
 }
 
 function copyJson() {
   navigator.clipboard.writeText(document.getElementById('jsonOutput').value);
-  alert('JSON copied!');
+  alert(I18N.t('web_export_copied'));
 }
 
 function downloadJson() {

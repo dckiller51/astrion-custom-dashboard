@@ -30,7 +30,9 @@ data class TrackedActivity(
      * useful for a Harmony-backed one, since the hub's own devices are
      * otherwise invisible to Astrion). Used purely for [Dashboard.kt]'s
      * switchActivity diff — never dispatched to directly. */
-    val devices: List<String> = emptyList()
+    val devices: List<String> = emptyList(),
+    /** The `media_player` the dock clock's "Now playing" follows while this Activity is active. */
+    val nowPlayingEntity: String? = null
 )
 
 /**
@@ -48,13 +50,18 @@ data class TrackedActivity(
  *     the physical Harmony remote) is reflected here too, not just the ones
  *     Astrion itself triggered.
  */
-class ActivityRuntime(config: AppConfig) {
+class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore = ActiveActivityStore.shared) {
     /** Every trackable Activity found in the config, in declaration order. */
     val all: List<TrackedActivity> = scan(config)
 
     private val byRoom: Map<String, List<TrackedActivity>> = all.groupBy { it.room }
 
-    private val _activeByRoom = MutableStateFlow<Map<String, String?>>(emptyMap())
+    /** Restored from [memory] (only ids still trackable in their room), so
+     * the active Activity survives a restart, an update or a config reload.
+     * Every write below also hands the new map to [memory] (`also(memory::save)`). */
+    private val _activeByRoom = MutableStateFlow<Map<String, String?>>(
+        memory.active.filter { (room, id) -> byRoom[room].orEmpty().any { it.id == id } }
+    )
 
     /** room -> id of the currently active TrackedActivity in that room (or null). */
     val activeByRoom: StateFlow<Map<String, String?>> = _activeByRoom.asStateFlow()
@@ -74,7 +81,7 @@ class ActivityRuntime(config: AppConfig) {
 
     /** Call right after firing a tracked item's own action (HA/Harmony/IR). */
     fun markActive(activity: TrackedActivity) {
-        _activeByRoom.value = _activeByRoom.value + (activity.room to activity.id)
+        _activeByRoom.value = (_activeByRoom.value + (activity.room to activity.id)).also(memory::save)
     }
 
     /** Marks [room] as having no active Activity — the counterpart of
@@ -83,7 +90,24 @@ class ActivityRuntime(config: AppConfig) {
      * confirmed PowerOff via [bind]'s own "-1" handling); never call this
      * speculatively before the stop action itself has been dispatched. */
     fun clear(room: String) {
-        _activeByRoom.value = _activeByRoom.value + (room to null)
+        _activeByRoom.value = (_activeByRoom.value + (room to null)).also(memory::save)
+    }
+
+    /**
+     * The `nowPlayingEntity` of the Activity the dock clock should follow: the one active in [room]
+     * (case-insensitive), or — with no room — the only active Activity when exactly one is. Null
+     * when there's no such Activity or it names no player; the dock then uses its own list.
+     */
+    fun nowPlayingEntity(room: String?, activeByRoom: Map<String, String?>): String? {
+        val active =
+            activeByRoom.mapNotNull { (r, id) -> id?.let { activeId -> byRoom[r]?.firstOrNull { it.id == activeId } } }
+        val activity =
+            if (room.isNullOrBlank()) {
+                active.singleOrNull()
+            } else {
+                active.firstOrNull { it.room.equals(room.trim(), ignoreCase = true) }
+            }
+        return activity?.nowPlayingEntity
     }
 
     /** Same as [markActive], by id — for callers (like a composed Activity's
@@ -142,7 +166,8 @@ class ActivityRuntime(config: AppConfig) {
             if (activityId == "-1") {
                 // PowerOff: clear every room this hub could have been driving.
                 val roomsForHub = all.filter(::targetsThisHub).map { it.room }.toSet()
-                _activeByRoom.value = _activeByRoom.value.filterKeys { it !in roomsForHub }
+                val remaining = _activeByRoom.value.filterKeys { it !in roomsForHub }
+                _activeByRoom.value = remaining.also(memory::save)
             }
         }
     }
@@ -187,7 +212,8 @@ class ActivityRuntime(config: AppConfig) {
             page = (scene["page"] as? String) ?: fallbackPage,
             harmonyActivityId = harmonyActivityId,
             harmonyHub = scene["hub"] as? String,
-            devices = devices
+            devices = devices,
+            nowPlayingEntity = (scene["nowPlayingEntity"] as? String)?.takeIf { it.isNotBlank() }
         )
     }
 
@@ -207,7 +233,8 @@ class ActivityRuntime(config: AppConfig) {
                     page = hk.page ?: fallbackPage,
                     harmonyActivityId = hk.harmonyActivity,
                     harmonyHub = hk.hub,
-                    devices = hk.devices
+                    devices = hk.devices,
+                    nowPlayingEntity = hk.nowPlayingEntity
                 )
         }
 
@@ -235,7 +262,8 @@ class ActivityRuntime(config: AppConfig) {
                     room = act.room,
                     icon = act.icon,
                     page = act.page,
-                    devices = act.devices.map { it.deviceId }
+                    devices = act.devices.map { it.deviceId },
+                    nowPlayingEntity = act.effectiveNowPlayingEntity
                 )
         }
         return found

@@ -119,7 +119,7 @@ function attachEntityAutocomplete(inputEl, domain) {
     if (matches.length > maxShow) {
       const more = document.createElement('div');
       more.className = 'ea-more';
-      more.textContent = (matches.length - maxShow) + ' more — keep typing to narrow';
+      more.textContent = I18N.t('web_preview_autocomplete_more', matches.length - maxShow);
       dd.appendChild(more);
     }
 
@@ -218,7 +218,7 @@ function renderTabs() {
 
     const label = document.createElement('span');
     label.textContent = (page.parent ? '↳ ' : '') + page.name + (index === dashboardData.startPage ? ' 🏠' : '');
-    if (page.parent) label.title = `Child of "${page.parent}"`;
+    if (page.parent) label.title = I18N.t('web_preview_child_of', page.parent);
     tab.appendChild(label);
     tab.onclick = () => onPageChange(index);
 
@@ -245,7 +245,7 @@ function renderTabs() {
     if (isActive) {
       const gear = document.createElement('span');
       gear.className = 'tab-settings';
-      gear.title = 'Page settings';
+      gear.title = I18N.t('web_modal_page_settings');
       gear.textContent = '⚙';
       gear.onclick = (e) => { e.stopPropagation(); openPageDialog(index); };
       tab.appendChild(gear);
@@ -367,11 +367,12 @@ function renderPreview() {
   const hkInfo = document.getElementById('hotkeysInfo');
   if (hkInfo) {
     if (globalKeys + pageKeys > 0) {
-      let hkHtml = `<div class="hotkeys-badge"><strong>⚡ Hotkeys active on this page:</strong><br>`;
-      (dashboardData.hotkeys || []).forEach(h => hkHtml += `• [Global] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
-      (dashboardData.longHotkeys || []).forEach(h => hkHtml += `• [Global, long] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
-      (page.hotkeys || []).forEach(h => hkHtml += `• [Page] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
-      (page.longHotkeys || []).forEach(h => hkHtml += `• [Page, long] <b>${h.key}</b> ${describeHotkey(h)}<br>`);
+      let hkHtml = `<div class="hotkeys-badge"><strong>${I18N.t('web_preview_hotkeys_active')}</strong><br>`;
+      const hkRow = (scopeKey, h) => `• [${I18N.t(scopeKey)}] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`;
+      (dashboardData.hotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_global', h));
+      (dashboardData.longHotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_global_long', h));
+      (page.hotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page', h));
+      (page.longHotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page_long', h));
       hkHtml += `</div>`;
       hkInfo.innerHTML = hkHtml;
     } else {
@@ -380,26 +381,29 @@ function renderPreview() {
   }
 
   if (!page.cards || page.cards.length === 0) {
-    contentContainer.innerHTML += `<p style="color:#666; font-style:italic;">No cards on this page yet.</p>`;
+    contentContainer.innerHTML += `<p style="color:#666; font-style:italic;">${I18N.t('web_preview_no_cards')}</p>`;
     return;
   }
 
   page.cards.forEach((card, idx) => {
     const cardEl = document.createElement('div');
 
-    if (card.type === 'apple_tv_remote' || card.type === 'tv_remote') {
+    const extraPreview = {
+      tv_remote: typeof tvRemotePreviewHtml === 'function' ? tvRemotePreviewHtml : null,
+      row: typeof rowPreviewHtml === 'function' ? rowPreviewHtml : null,
+      speaker_group: typeof speakerGroupPreviewHtml === 'function' ? speakerGroupPreviewHtml : null,
+      picture_elements: typeof pictureElementsPreviewHtml === 'function' ? pictureElementsPreviewHtml : null
+    }[card.type];
+    if (extraPreview) {
+      cardEl.className = 'card';
+      cardEl.innerHTML = `
+        <div class="card-title"><span>${card.type}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+        ${extraPreview(card.options || {})}`;
+    } else if (card.type === 'apple_tv_remote') {
       cardEl.innerHTML = `
         <div class="card">
-          <div class="card-title"><span>${card.type}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
-          <div class="preview-apple-remote">
-            <div class="preview-trackpad">
-              <div style="position:absolute; top:10px;">▲</div><div style="position:absolute; bottom:10px;">▼</div>
-              <div style="position:absolute; left:10px;">◀</div><div style="position:absolute; right:10px;">▶</div>
-              <div class="preview-inner-select"></div>
-            </div>
-            <div class="preview-row-buttons"><div class="preview-pill">☰ Menu</div><div class="preview-pill">Home</div></div>
-            <div class="preview-play-btn">⏯</div>
-          </div>
+          <div class="card-title"><span>${card.type}${['compact', 'full'].includes((card.options || {}).layout) ? ' · ' + card.options.layout : ''}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+          ${appleTvRemotePreviewHtml(card.options || {})}
         </div>`;
     } else if (card.type === 'clock_weather') {
       const o = card.options || {};
@@ -417,9 +421,13 @@ function renderPreview() {
       const forecastHtml = shown.map(f => {
         const lowPct = Math.min(Math.max((f.low - weekMin) / span, 0), 1) * 100;
         const highPct = Math.min(Math.max((f.high - weekMin) / span, 0), 1) * 100;
+        // f.date is an ISO date (WEATHER_MOCK) — render the weekday in the
+        // viewer's own locale, like ClockWeatherCard's SimpleDateFormat does.
+        const dayName = new Date(f.date + 'T12:00:00')
+          .toLocaleDateString(undefined, { weekday: 'short' });
         return `
           <div class="cw-forecast-row">
-            <span class="cw-fday">${f.day}</span>
+            <span class="cw-fday">${dayName}</span>
             <span class="cw-femoji">${weatherEmoji(f.condition)}</span>
             <span class="cw-flow">${weatherTrim(f.low)}°</span>
             <div class="cw-fbar"><div class="cw-fbar-fill" style="left:${lowPct}%; right:${100 - highPct}%"></div></div>
@@ -443,7 +451,7 @@ function renderPreview() {
             </div>
             ${forecastHtml}
           </div>
-          <div class="hint" style="margin-top:8px">Entity: ${o.entity_id || 'weather.forecast_home'} · ${forecastRows} forecast row(s)${o.calendar_entity ? ' · Calendar: ' + o.calendar_entity : ''} · example data (${WEATHER_MOCK.friendly_name})</div>
+          <div class="hint" style="margin-top:8px">${I18N.t('web_preview_entity', o.entity_id || 'weather.forecast_home')} · ${I18N.t('web_preview_forecast_rows', forecastRows)}${o.calendar_entity ? ' · ' + I18N.t('web_preview_calendar', o.calendar_entity) : ''} · ${I18N.t('web_preview_example_data')} (${WEATHER_MOCK.friendly_name})</div>
         </div>`;
     } else if (card.type === 'fan') {
       const o = card.options || {};
@@ -461,7 +469,7 @@ function renderPreview() {
             ${stepName}
             <div class="fs-step-row">
               <div class="fs-step-btn">−</div>
-              <div class="fs-step-pct">${mock.state === 'on' ? mock.percentage + '%' : 'Off'}</div>
+              <div class="fs-step-pct">${mock.state === 'on' ? mock.percentage + '%' : I18N.t('astrion_state_off')}</div>
               <div class="fs-step-btn">+</div>
             </div>
           </div>`;
@@ -470,7 +478,7 @@ function renderPreview() {
           <div class="preview-fan-simple">
             <div>
               <div class="fs-name">${o.name || haFriendlyName(o.entity_id) || mock.friendly_name}</div>
-              <div class="fs-state">${mock.state === 'on' ? mock.percentage + '%' : 'Off'}</div>
+              <div class="fs-state">${mock.state === 'on' ? mock.percentage + '%' : I18N.t('astrion_state_off')}</div>
             </div>
             <div style="display:flex; gap:8px;">
               <div class="fx-pct-btn">−</div>
@@ -489,13 +497,13 @@ function renderPreview() {
               <span class="fx-name">${o.name || haFriendlyName(o.entity_id) || mock.friendly_name}</span>
               <div class="fx-power ${mock.state === 'off' ? 'is-off' : ''}">${mdiSvg(MDI.power)}</div>
             </div>
-            ${presetModes.length ? `${showCaptions ? '<div class="fx-caption">Preset</div>' : ''}${presetRows}` : `
+            ${presetModes.length ? `${showCaptions ? `<div class="fx-caption">${I18N.t('fan_preset_caption')}</div>` : ''}${presetRows}` : `
               <div class="fx-pct-row">
                 <div class="fx-pct-btn">−</div>
                 <div class="fx-pct">${mock.percentage}%</div>
                 <div class="fx-pct-btn">+</div>
               </div>`}
-            ${showCaptions ? '<div class="fx-caption">Oscillate</div>' : ''}
+            ${showCaptions ? `<div class="fx-caption">${I18N.t('fan_oscillate_caption')}</div>` : ''}
             <div class="fx-row"><div class="fx-chip ${mock.oscillating ? 'fx-chip-selected' : ''}" style="flex:1">${fanOscillateLabel(mock.oscillating)}</div></div>
           </div>`;
       }
@@ -503,7 +511,7 @@ function renderPreview() {
         <div class="card">
           <div class="card-title"><span>fan</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${bodyHtml}
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'fan.entity'} · Layout: ${style}${usingExample ? ' · example data (' + mock.friendly_name + ')' : (haEntity(o.entity_id) ? ' · live HA data' : '')}</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'fan.entity')} · ${I18N.t('web_preview_layout', style)}${usingExample ? ' · ' + I18N.t('web_preview_example_data') + ' (' + mock.friendly_name + ')' : (haEntity(o.entity_id) ? ' · ' + I18N.t('web_preview_live_data') : '')}</div>
         </div>`;
     } else if (card.type === 'vacuum') {
       const o = card.options || {};
@@ -517,10 +525,10 @@ function renderPreview() {
               <span class="vc-name">${o.name || haFriendlyName(o.entity_id) || mock.friendly_name}</span>
               <span>${vacuumStateLabel(mock.state)}</span>
             </div>
-            <div class="hint" style="margin-top:4px">Cleaning mode: ${vacuumPrettyLabel(mock.fan_speed)} (of ${(mock.fan_speed_list || []).map(vacuumPrettyLabel).join(', ')})</div>
-            <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'vacuum.entity'}${o.map_image ? ' · Map: ' + o.map_image : ' · No map image'}${o.map_rotation ? ' · Rotated ' + o.map_rotation + '°' : ''} · ${o.map_height ?? 200}px</div>
-            ${rooms.length ? `<div class="vc-rooms">${rooms.map(r => `<div class="vc-room">${r.name} (${r.id})</div>`).join('')}</div>` : '<div class="hint" style="margin-top:6px">No rooms configured — start/pause/dock/locate controls only.</div>'}
-            <div class="hint" style="margin-top:4px">${haEntity(o.entity_id) ? 'live HA data' : 'example data'} (${mock.friendly_name})</div>
+            <div class="hint" style="margin-top:4px">${I18N.t('vacuum_fan_speed_caption')}${I18N.t('web_preview_label_colon')}${vacuumPrettyLabel(mock.fan_speed)} (${I18N.t('web_preview_of', (mock.fan_speed_list || []).map(vacuumPrettyLabel).join(', '))})</div>
+            <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'vacuum.entity')}${o.map_image ? ' · ' + I18N.t('web_preview_map', o.map_image) : ' · ' + I18N.t('vacuum_map_label')}${o.map_rotation ? ' · ' + I18N.t('web_preview_rotated', o.map_rotation) : ''} · ${o.map_height ?? 200}px</div>
+            ${rooms.length ? `<div class="vc-rooms">${rooms.map(r => `<div class="vc-room">${r.name} (${r.id})</div>`).join('')}</div>` : `<div class="hint" style="margin-top:6px">${I18N.t('web_preview_no_rooms')}</div>`}
+            <div class="hint" style="margin-top:4px">${I18N.t(haEntity(o.entity_id) ? 'web_preview_live_data' : 'web_preview_example_data')} (${mock.friendly_name})</div>
           </div>
         </div>`;
     } else if (card.type === 'climate') {
@@ -550,22 +558,22 @@ function renderPreview() {
           <div class="card-title"><span>climate</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           <div class="preview-climate">
             <div class="cc-header">
-              <span class="cc-name">${o.name || haFriendlyName(o.entity_id) || 'Climate'}</span>
+              <span class="cc-name">${o.name || haFriendlyName(o.entity_id) || I18N.t('web_preview_climate_name')}</span>
               <div class="cc-power ${mock.state === 'off' ? 'is-off' : ''}">${mdiSvg(MDI.power)}</div>
             </div>
             <div class="cc-temp-row">
               <div class="cc-stepper">−</div>
               <div class="cc-temp-col">
                 <div class="${tempClass}">${tempDisplay}</div>
-                <div class="cc-current">Now ${mock.current_temperature != null ? mock.current_temperature + '°' : ''}</div>
+                <div class="cc-current">${mock.current_temperature != null ? I18N.t('climate_current_temp', mock.current_temperature) : ''}</div>
               </div>
               <div class="cc-stepper">+</div>
             </div>
-            ${hvacModes.length ? `${showCaptions ? '<div class="cc-caption">Mode</div>' : ''}${climateChipRowsHtml(hvacModes, mock.state, hvacStyle, hvacStyle === 'icons' ? 5 : 3, climateHvacLabel, climateHvacIcon)}` : ''}
-            ${fanModes.length ? `${showCaptions ? '<div class="cc-caption">Fan</div>' : ''}${climateChipRowsHtml(fanModes, mock.fan_mode, fanStyle, fanStyle === 'icons' ? 5 : 3, climateFanLabel, climateFanIcon)}` : ''}
-            ${swingModes.length ? `${showCaptions ? '<div class="cc-caption">Swing</div>' : ''}${climateChipRowsHtml(swingModes, mock.swing_mode, swingStyle, swingStyle === 'icons' ? 5 : 3, climateSwingLabel, climateSwingIcon)}` : ''}
+            ${hvacModes.length ? `${showCaptions ? `<div class="cc-caption">${I18N.t('climate_hvac_caption')}</div>` : ''}${climateChipRowsHtml(hvacModes, mock.state, hvacStyle, hvacStyle === 'icons' ? 5 : 3, climateHvacLabel, climateHvacIcon)}` : ''}
+            ${fanModes.length ? `${showCaptions ? `<div class="cc-caption">${I18N.t('climate_fan_caption')}</div>` : ''}${climateChipRowsHtml(fanModes, mock.fan_mode, fanStyle, fanStyle === 'icons' ? 5 : 3, climateFanLabel, climateFanIcon)}` : ''}
+            ${swingModes.length ? `${showCaptions ? `<div class="cc-caption">${I18N.t('climate_swing_caption')}</div>` : ''}${climateChipRowsHtml(swingModes, mock.swing_mode, swingStyle, swingStyle === 'icons' ? 5 : 3, climateSwingLabel, climateSwingIcon)}` : ''}
           </div>
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'climate.entity'}${haEntity(o.entity_id) ? ' · live HA data' : (usingExample ? ' · no overrides set — showing example modes (your real device\'s modes render live in the app)' : '')}</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'climate.entity')}${haEntity(o.entity_id) ? ' · ' + I18N.t('web_preview_live_data') : (usingExample ? ' · ' + I18N.t('web_preview_no_overrides') : '')}</div>
         </div>`;
     } else if (card.type === 'cover') {
       const o = card.options || {};
@@ -618,7 +626,7 @@ function renderPreview() {
           <div class="pc-slider-fill" style="width:${value}%; background:${color}"></div>
           <div class="pc-slider-label">${value}%</div>
         </div>`;
-      const cycleBtnHtml = enabledControls.length > 1 ? `<div class="pc-cycle-btn" title="Cycles through: ${enabledControls.join(', ')}">${mdiSvg(MDI.chevronRight)}</div>` : '';
+      const cycleBtnHtml = enabledControls.length > 1 ? `<div class="pc-cycle-btn" title="${I18N.t('web_preview_cycles_through', enabledControls.join(', '))}">${mdiSvg(MDI.chevronRight)}</div>` : '';
       const controlsHtml = (full) => {
         let inner;
         if (activeControl === 'position') inner = sliderHtml(position, 'var(--accent)');
@@ -661,15 +669,16 @@ function renderPreview() {
         <div class="card">
           <div class="card-title"><span>cover</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${bodyHtml}
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'cover.entity'} · Layout: ${layout} · Controls: ${enabledControls.join(', ') || 'none'} · ${haEntity(o.entity_id) ? 'live HA data' : 'example data'} (${mock.friendly_name}, ${position}% open${ctrlTilt ? `, tilt ${tilt}%` : ''})</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'cover.entity')} · ${I18N.t('web_preview_layout', layout)} · ${I18N.t('web_preview_controls', enabledControls.join(', ') || I18N.t('web_preview_none'))} · ${I18N.t(haEntity(o.entity_id) ? 'web_preview_live_data' : 'web_preview_example_data')} (${mock.friendly_name}, ${I18N.t('cover_position_open', position)}${ctrlTilt ? `, ${I18N.t('web_preview_tilt_pct', tilt)}` : ''})</div>
         </div>`;
     } else if (card.type === 'select') {
       const o = card.options || {};
       const name = o.name || o.entity_id || SELECT_MOCK.friendly_name;
       const options = SELECT_MOCK.options;
       const current = SELECT_MOCK.state;
-      const stateLabel = current || (options.length ? 'Select…' : 'No options');
-      const layout = (o.layout === 'horizontal' || o.layout === 'vertical') ? o.layout : 'default';
+      const stateLabel = current || (options.length ? I18N.t('select_choose') : I18N.t('select_no_options'));
+      const layout = ['horizontal', 'vertical', 'dropdown'].includes(o.layout) ? o.layout : 'default';
+      const fontPx = o.font_size ? Number(o.font_size) : (layout === 'dropdown' ? 16 : 13);
       const iconColor = parseHexColorCss(o.icon_color);
       const iconBg = iconColor ? `${iconColor}33` : '#2A4954';
       const iconTint = iconColor || '#B6C9CE';
@@ -685,12 +694,14 @@ function renderPreview() {
       // pill shape (no fill bar though, this control has no "amount").
       const controlHtml = `
         <div class="pc-slider" style="background:#152B33; justify-content:space-between; padding:0 12px; box-sizing:border-box;">
-          <span class="pc-slider-label" style="position:static;">${current || '—'}</span>
+          <span class="pc-slider-label" style="position:static; font-size:${fontPx}px;">${current || '—'}</span>
           <span class="pc-slider-label" style="position:static; opacity:0.7;">▾</span>
         </div>`;
 
       let bodyHtml;
-      if (layout === 'horizontal') {
+      if (layout === 'dropdown') {
+        bodyHtml = `<div style="height:${Math.max(52, fontPx * 2.6)}px">${controlHtml.replace('background:#152B33;', 'background:#1E3841; height:100%;')}</div>`;
+      } else if (layout === 'horizontal') {
         bodyHtml = `
           <div class="preview-cover layout-horizontal">
             ${iconHtml(false)}
@@ -719,7 +730,7 @@ function renderPreview() {
         <div class="card">
           <div class="card-title"><span>select</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${bodyHtml}
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'input_select.entity'} · Layout: ${layout} · example data (${SELECT_MOCK.friendly_name}: ${options.join(', ')})</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'input_select.entity')} · ${I18N.t('web_preview_layout', layout)} · ${I18N.t('web_preview_example_data_options', SELECT_MOCK.friendly_name, options.join(', '))}</div>
         </div>`;
     } else if (card.type === 'light') {
       const o = card.options || {};
@@ -781,7 +792,7 @@ function renderPreview() {
           ${['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#FFFFFF']
             .map(c => `<div class="pl-swatch" style="background:${c}"></div>`).join('')}
         </div>`;
-      const cycleBtnHtml = enabledControls.length > 1 ? `<div class="pc-cycle-btn" title="Cycles through: ${enabledControls.join(', ')}">${mdiSvg(MDI.chevronRight)}</div>` : '';
+      const cycleBtnHtml = enabledControls.length > 1 ? `<div class="pc-cycle-btn" title="${I18N.t('web_preview_cycles_through', enabledControls.join(', '))}">${mdiSvg(MDI.chevronRight)}</div>` : '';
       const controlsHtml = () => {
         if (!controlsVisible) return '';
         let inner;
@@ -825,7 +836,7 @@ function renderPreview() {
         <div class="card">
           <div class="card-title"><span>light</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${bodyHtml}
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'light.entity'} · Layout: ${layout}${useLightColor ? ' · icon tinted with light colour' : ''} · Controls: ${enabledControls.join(', ') || 'none'}${collapsible ? ' (hidden while off)' : ''} · ${haEntity(o.entity_id) ? 'live HA data' : 'example data'} (${mock.friendly_name}, ${brightnessPct}%)</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'light.entity')} · ${I18N.t('web_preview_layout', layout)}${useLightColor ? ' · ' + I18N.t('web_preview_icon_tinted') : ''} · ${I18N.t('web_preview_controls', enabledControls.join(', ') || I18N.t('web_preview_none'))}${collapsible ? ' ' + I18N.t('web_preview_hidden_while_off') : ''} · ${I18N.t(haEntity(o.entity_id) ? 'web_preview_live_data' : 'web_preview_example_data')} (${mock.friendly_name}, ${brightnessPct}%)</div>
         </div>`;
     } else if (card.type === 'media_player') {
       const o = card.options || {};
@@ -902,7 +913,7 @@ function renderPreview() {
         <div class="card">
           <div class="card-title"><span>media_player (${full ? 'full' : 'compact'})</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${bodyHtml}
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'media_player.entity'} · ${haEntity(o.entity_id) ? 'live HA data' : 'example data'} (${mock.friendly_name}, ${mock.state}) · long-press the compact tile in-app opens the detail dialog</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'media_player.entity')} · ${I18N.t(haEntity(o.entity_id) ? 'web_preview_live_data' : 'web_preview_example_data')} (${mock.friendly_name}, ${mock.state}) · ${I18N.t('web_preview_media_long_press')}</div>
         </div>`;
     } else if (card.type === 'button_grid' || card.type === 'scene_grid') {
       const isScene = card.type === 'scene_grid';
@@ -961,12 +972,12 @@ function renderPreview() {
 
       cardEl.innerHTML = `
         <div class="card">
-          <div class="card-title"><span>${card.type} (${items.length} items)</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+          <div class="card-title"><span>${card.type} (${I18N.t('plex_items', items.length)})</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${gridHtml}
         </div>`;
     } else if (card.type === 'camera') {
       const o = card.options || {};
-      const title = o.name || haFriendlyName(o.entity_id) || prettyEntityName(o.entity_id) || 'Camera';
+      const title = o.name || haFriendlyName(o.entity_id) || prettyEntityName(o.entity_id) || I18N.t('web_preview_camera_name');
       const aspect = (o.aspect != null && Number(o.aspect) > 0) ? Number(o.aspect) : (16 / 9);
       const fit = o.fit === 'contain' ? 'contain' : 'cover';
       const mode = o.mode === 'snapshot' ? 'snapshot' : 'stream';
@@ -988,14 +999,14 @@ function renderPreview() {
             ${imgHtml}
             <div style="position:absolute; left:0; right:0; bottom:0; padding:8px 12px; background:linear-gradient(to top, rgba(0,0,0,.75), transparent); color:#fff; font-weight:600; font-size:13px;">${title}</div>
           </div>
-          <div class="hint" style="margin-top:6px">Entity: ${o.entity_id || 'camera.entity'} · ${canFetch ? 'live frame from this device' : "placeholder here — a real still shows when opened from your device's /builder/"} · on the remote: ${mode === 'stream' ? 'live MJPEG stream (auto-falls-back to stills)' : 'still snapshot refresh'}</div>
+          <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'camera.entity')} · ${canFetch ? I18N.t('web_preview_camera_live_frame') : I18N.t('web_preview_camera_placeholder')} · ${I18N.t('web_preview_on_remote', mode === 'stream' ? I18N.t('web_preview_camera_stream') : I18N.t('web_preview_camera_snapshot'))}</div>
         </div>`;
     } else if (card.type === 'plex') {
       const o = card.options || {};
       const rows = [];
-      if (o.show_on_deck !== false) rows.push({ label: 'On Deck', items: PLEX_MOCK.on_deck });
-      if (o.show_recently_added_movies !== false) rows.push({ label: 'Recently Added Movies', items: PLEX_MOCK.recently_added_movies });
-      if (o.show_recently_added_shows !== false) rows.push({ label: 'Recently Added TV', items: PLEX_MOCK.recently_added_shows });
+      if (o.show_on_deck !== false) rows.push({ label: I18N.t('plex_on_deck'), items: PLEX_MOCK.on_deck });
+      if (o.show_recently_added_movies !== false) rows.push({ label: I18N.t('plex_recently_added_movies'), items: PLEX_MOCK.recently_added_movies });
+      if (o.show_recently_added_shows !== false) rows.push({ label: I18N.t('plex_recently_added_tv'), items: PLEX_MOCK.recently_added_shows });
       const rowsHtml = rows.length
         ? rows.map(row => `
           <div style="margin-top:8px">
@@ -1009,13 +1020,18 @@ function renderPreview() {
                 </div>`).join('')}
             </div>
           </div>`).join('')
-        : `<div class="hint" style="margin-top:6px">No rows enabled — edit the card to turn at least one on.</div>`;
+        : `<div class="hint" style="margin-top:6px">${I18N.t('web_preview_plex_no_rows')}</div>`;
       cardEl.innerHTML = `
         <div class="card">
           <div class="card-title"><span>plex</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
           ${rowsHtml}
-          <div class="hint" style="margin-top:8px">Titles/posters shown here are placeholders — real Plex data loads live on the device. Server: ${o.host || '(not set)'} · Playback entity: ${o.media_entity || '(not set)'}${o.play_entity ? ' · Direct client: ' + o.play_entity : ''} · ${o.items_per_row ?? 12} items/row.</div>
+          <div class="hint" style="margin-top:8px">${I18N.t('web_preview_plex_placeholder')} ${I18N.t('web_preview_server', o.host || I18N.t('web_preview_not_set'))} · ${I18N.t('web_preview_playback_entity', o.media_entity || I18N.t('web_preview_not_set'))}${o.play_entity ? ' · ' + I18N.t('web_preview_direct_client', o.play_entity) : ''} · ${I18N.t('web_preview_items_per_row', o.items_per_row ?? 12)}.</div>
         </div>`;
+    } else if (card.type === 'monitor') {
+      cardEl.className = 'card';
+      cardEl.innerHTML = `
+        <div class="card-title"><span>monitor${card.options?.layout === 'vertical' ? ' · vertical' : ''}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+        ${monitorPreviewHtml(card.options || {})}`;
     } else {
       cardEl.className = 'card';
       cardEl.innerHTML = `
@@ -1044,7 +1060,7 @@ function enhanceCardControls(contentContainer) {
       if (iconsSpan && !iconsSpan.querySelector('.card-move-up')) {
         const upSpan = document.createElement('span');
         upSpan.className = 'remove card-move-up';
-        upSpan.title = 'Move up';
+        upSpan.title = I18N.t('web_preview_move_up');
         upSpan.textContent = '↑';
         upSpan.style.opacity = idx === 0 ? '0.3' : '1';
         upSpan.style.cursor = idx === 0 ? 'default' : 'pointer';
@@ -1052,7 +1068,7 @@ function enhanceCardControls(contentContainer) {
 
         const downSpan = document.createElement('span');
         downSpan.className = 'remove card-move-down';
-        downSpan.title = 'Move down';
+        downSpan.title = I18N.t('web_preview_move_down');
         downSpan.textContent = '↓';
         downSpan.style.opacity = idx === cardEls.length - 1 ? '0.3' : '1';
         downSpan.style.cursor = idx === cardEls.length - 1 ? 'default' : 'pointer';
@@ -1081,4 +1097,151 @@ function enhanceCardControls(contentContainer) {
       if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) reorderCard(fromIdx, toIdx);
     });
   });
+}
+
+// ---- apple_tv_remote preview ---------------------------------------------
+// Mirrors AppleTvRemoteCard.kt's three layouts block for block (classic,
+// compact, full), with the same defaults: chosen buttons (or each layout's
+// default row), up to 5 apps (6 in compact), ±10 s only for a directly
+// paired Apple TV, now-playing only when there is a media_player to read.
+
+const ATV_PREVIEW_ICONS = {
+  Menu: '☰', Home: '⌂', SeekBackward: '↺', SeekForward: '↻', Rewind: '⏪', FastForward: '⏩',
+  Previous: '⏮', Next: '⏭', Siri: '🎤', Screensaver: '🖼', Guide: '☷', VolumeUp: '🔊', VolumeDown: '🔉', ControlCenter: '▦'
+};
+const ATV_PREVIEW_DEFAULTS = { classic: ['Menu', 'Home'], compact: ['Menu', 'SeekBackward', 'SeekForward', 'Home'], full: ['Menu', 'Home'] };
+const ATV_APP_FALLBACK_COLORS = ['#B3261E', '#1F5FBF', '#3A3A40', '#B86E00', '#1E7A4A', '#5B3FA8'];
+
+function atvPreviewButtonLabel(id) {
+  const b = ATV_EXTRA_BUTTONS.find(x => x.id.toLowerCase() === String(id).toLowerCase());
+  return b ? (b.labelKey ? I18N.t(b.labelKey) : b.label) : id;
+}
+
+function atvPreviewInitials(label) {
+  const words = String(label).split(/[ +\-.]/).filter(Boolean);
+  return (words.length >= 2 ? words[0][0] + words[1][0] : String(label).slice(0, 2)).toUpperCase();
+}
+
+function atvPreviewRound(id, size) {
+  const glyph = ATV_PREVIEW_ICONS[id] || '•';
+  const ten = id === 'SeekBackward' || id === 'SeekForward' ? '<span style="font-size:8px;position:absolute">10</span>' : '';
+  return `<div title="${atvPreviewButtonLabel(id)}" style="position:relative;width:${size}px;height:${size}px;border-radius:50%;background:var(--control);display:flex;align-items:center;justify-content:center;font-size:${Math.round(size * 0.4)}px;color:var(--text);flex:none">${glyph}${ten}</div>`;
+}
+
+function atvPreviewPlay(size, filled) {
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${filled ? '#0A84FF' : 'var(--control)'};display:flex;align-items:center;justify-content:center;color:#fff;font-size:${Math.round(size * 0.38)}px;flex:none">⏯</div>`;
+}
+
+function atvPreviewTrackpad(size) {
+  return `<div class="preview-trackpad" style="width:${size}px;height:${size}px;flex:none">
+      <div style="position:absolute; top:10px;">▲</div><div style="position:absolute; bottom:10px;">▼</div>
+      <div style="position:absolute; left:10px;">◀</div><div style="position:absolute; right:10px;">▶</div>
+      <div class="preview-inner-select"></div>
+    </div>`;
+}
+
+function atvPreviewApps(apps, size, labels) {
+  if (!apps.length) return '';
+  return `<div style="display:flex;gap:${labels ? 4 : 8}px;justify-content:center;width:100%">${apps.map((a, i) => {
+    const label = a.label || a.source || '';
+    const src = !a.icon ? '' : (/^https?:\/\//.test(a.icon) ? a.icon : iconUrl(a.icon));
+    const bg = a.color || (src ? 'transparent' : ATV_APP_FALLBACK_COLORS[i % ATV_APP_FALLBACK_COLORS.length]);
+    const tile = `<div title="${label}" style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.26)}px;background:${bg};overflow:hidden;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center">${src ? `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.replaceWith(document.createTextNode('${atvPreviewInitials(label).replace(/'/g, '')}'))">` : atvPreviewInitials(label)}</div>`;
+    return labels
+      ? `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;width:${size + 14}px">${tile}<div style="font-size:9px;opacity:.7;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</div></div>`
+      : tile;
+  }).join('')}</div>`;
+}
+
+function atvPreviewProgress(thick) {
+  return `<div style="height:${thick ? 5 : 3}px;background:#444;border-radius:3px;width:100%"><div style="width:38%;height:100%;background:#0A84FF;border-radius:3px"></div></div>`;
+}
+
+function appleTvRemotePreviewHtml(atv) {
+  const layout = atv.layout === 'compact' || atv.layout === 'full' ? atv.layout : 'classic';
+  const hasMedia = !!(atv.entity || atv.appleTv);
+  const isDirect = !!atv.appleTv;
+  const showArtwork = atv.showArtwork !== false;
+  const showProgress = atv.showProgress !== false;
+  const showSkip = atv.showSkip !== false && isDirect;
+  const buttons = (Array.isArray(atv.buttons) && atv.buttons.length) ? atv.buttons : ATV_PREVIEW_DEFAULTS[layout];
+  const apps = hasMedia ? (atv.apps || []) : [];
+  const box = inner => `<div class="preview-apple-remote" style="gap:${layout === 'classic' ? 18 : 12}px;padding:${layout === 'classic' ? 20 : 14}px">${inner}</div>`;
+
+  if (layout === 'classic') {
+    return box(`
+      ${atvPreviewTrackpad(160)}
+      <div class="preview-row-buttons">${buttons.map(id => `<div class="preview-pill">${ATV_PREVIEW_ICONS[id] ? ATV_PREVIEW_ICONS[id] + ' ' : ''}${atvPreviewButtonLabel(id)}</div>`).join('')}</div>
+      <div class="preview-play-btn">⏯</div>
+      ${atvPreviewApps(apps.slice(0, 5), 34, false)}`);
+  }
+
+  if (layout === 'compact') {
+    const strip = hasMedia && (showArtwork || showProgress);
+    return box(`
+      ${strip ? `<div style="display:flex;align-items:center;gap:8px;padding:6px;border-radius:12px;background:rgba(255,255,255,0.06);width:100%;box-sizing:border-box">
+          ${showArtwork ? '<div style="width:34px;height:34px;border-radius:7px;background:#2a3550;flex:none"></div>' : ''}
+          <div style="flex:1;min-width:0;font-size:11px;text-align:left;display:flex;flex-direction:column;gap:4px"><b>${I18N.t('web_preview_now_playing')}</b>${showProgress ? atvPreviewProgress(false) : ''}</div>
+          ${atvPreviewPlay(30, true)}</div>` : ''}
+      ${atvPreviewTrackpad(strip ? 130 : 145)}
+      <div style="display:flex;justify-content:space-evenly;width:100%">${buttons.map(id => atvPreviewRound(id, 34)).join('')}</div>
+      ${strip ? '' : atvPreviewPlay(40, false)}
+      ${atvPreviewApps(apps.slice(0, 6), 34, false)}`);
+  }
+
+  // full
+  const flank = buttons.slice(0, 2);
+  const side = buttons.slice(2, 8);
+  const header = hasMedia
+    ? `<div style="display:flex;gap:10px;align-items:center;width:100%">
+         ${showArtwork ? '<div style="width:56px;height:56px;border-radius:10px;background:#2a3550;flex:none"></div>' : ''}
+         <div style="font-size:11px;text-align:left;display:flex;flex-direction:column;gap:2px;min-width:0">
+           <span style="color:#0A84FF;font-size:9px;font-weight:600">${I18N.t('media_state_playing')}</span>
+           <b style="font-size:13px">${I18N.t('web_preview_now_playing')}</b>
+           <span style="opacity:.6">Apple TV</span>
+         </div></div>
+       ${showProgress ? atvPreviewProgress(true) : ''}`
+    : '';
+  const transport = `<div style="display:flex;align-items:center;justify-content:${flank.length ? 'space-between' : 'center'};gap:${flank.length ? 0 : 16}px;width:100%">
+      ${flank[0] ? atvPreviewRound(flank[0], 32) : ''}
+      ${showSkip ? atvPreviewRound('SeekBackward', 32) : ''}
+      ${atvPreviewPlay(38, true)}
+      ${showSkip ? atvPreviewRound('SeekForward', 32) : ''}
+      ${flank[1] ? atvPreviewRound(flank[1], 32) : ''}
+    </div>`;
+  const column = ids => `<div style="display:flex;flex-direction:column;gap:7px;width:30px;align-items:center">${ids.map(id => atvPreviewRound(id, 30)).join('')}</div>`;
+  const pad = side.length
+    ? `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+         ${column(side.filter((_, i) => i % 2 === 0))}${atvPreviewTrackpad(130)}${column(side.filter((_, i) => i % 2 === 1))}
+       </div>`
+    : atvPreviewTrackpad(140);
+  return box(`${header}${transport}${atvPreviewApps(apps.slice(0, 5), 30, true)}${pad}`);
+}
+
+
+// ---- monitor preview ------------------------------------------------------
+// Mirrors MonitorCard.kt: name + value (+ unit) per row; "layout": "vertical"
+// puts the value on its own full-width line under the name; "marquee": true
+// keeps the value on one line and scrolls it when it doesn't fit.
+function monitorPreviewHtml(o) {
+  const vertical = o.layout === 'vertical';
+  const marquee = o.marquee === true;
+  const rows = Array.isArray(o.entities) ? o.entities : [];
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const valueHtml = text => marquee
+    ? `<div class="mon-marquee"><span>${esc(text)}</span></div>`
+    : `<span style="font-weight:500">${esc(text)}</span>`;
+  const body = rows.map(r => {
+    const e = typeof haEntity === 'function' ? haEntity(r.entity_id) : null;
+    const name = r.name || (e && e.attributes && e.attributes.friendly_name) || r.entity_id || '';
+    const unit = e && e.attributes && e.attributes.unit_of_measurement ? ' ' + e.attributes.unit_of_measurement : '';
+    const raw = e ? e.state : null;
+    const value = raw == null || raw === 'unknown' || raw === 'unavailable' ? '—' : raw + unit;
+    return vertical
+      ? `<div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="color:#999;font-size:12px">${esc(name)}</span>${valueHtml(value)}</div>`
+      : `<div style="display:flex;align-items:center;gap:10px;min-width:0"><span style="color:#999;font-size:13px;${marquee ? 'white-space:nowrap' : 'flex:1'}">${esc(name)}</span>${marquee ? `<div style="flex:1;min-width:0;text-align:right">${valueHtml(value)}</div>` : valueHtml(value)}</div>`;
+  }).join('');
+  return `<div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+      ${o.title ? `<b>${esc(o.title)}</b>` : ''}${body || `<small style="color:#888">${I18N.t('web_preview_none')}</small>`}
+    </div>`;
 }

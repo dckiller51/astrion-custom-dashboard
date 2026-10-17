@@ -27,7 +27,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +44,7 @@ import com.custom.astrion.cards.DeviceSettingsState
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.DashboardConfig
 import com.custom.astrion.config.DashboardLoader
+import com.custom.astrion.config.DockConfig
 import com.custom.astrion.config.HotkeyConfig
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.IrStepConfig
@@ -49,6 +52,7 @@ import com.custom.astrion.config.IrTarget
 import com.custom.astrion.config.JsonPlain
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.extender.ExtenderRegistry
+import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.harmony.HarmonyHubRegistry
@@ -61,13 +65,23 @@ import com.custom.astrion.ui.DashboardConnection
 import com.custom.astrion.ui.DashboardNavigation
 import com.custom.astrion.ui.DashboardRegistries
 import com.custom.astrion.ui.DashboardUiState
+import com.custom.astrion.ui.DockClockScreen
+import com.custom.astrion.ui.FocusHighlight
+import com.custom.astrion.ui.IrTransmit
 import com.custom.astrion.ui.ProvideTheme
+import com.custom.astrion.ui.RingFoundOverlay
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.web.ConfigServer
+import java.util.concurrent.TimeUnit
 import kotlin.math.acos
 import kotlin.math.sqrt
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * Single-activity host. Owns the HA client, the direct Harmony hub client,
@@ -92,10 +106,15 @@ class MainActivity : ComponentActivity() {
         const val MOTION_CONSECUTIVE_N = 3
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
+        const val BUTTON_EVENT = "astrion_button"
+        const val MOTION_GAP_MS = 1000L
+        const val MOTION_SETTLE_MS = 400L
+        const val MOTION_SETTLE_MIN_SAMPLES = 3
         const val HOLD_SCREEN_INTERVAL_MS = 1000L
         const val KEEP_SCREEN_HOLD_MS = 10000L
         const val AMBIENT_WINDOW_MS = 5000L
         const val WAKE_COOLDOWN_MS = 2000L
+        const val RING_WAKE_MS = 10_000L
 
         // Keys that pop up a temporary volume readout when their hotkey
         // fires an HA service call — see runHotkey()'s bottom branch.
@@ -104,6 +123,10 @@ class MainActivity : ComponentActivity() {
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
         val DIRECTIONAL_KEYS = setOf(HardwareKey.UP, HardwareKey.DOWN, HardwareKey.LEFT, HardwareKey.RIGHT)
+
+        // Activation keys Compose's clickable reacts to — see
+        // shouldSwallowHiddenFocusActivation().
+        val ACTIVATION_KEYCODES = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -154,13 +177,7 @@ class MainActivity : ComponentActivity() {
                     return
                 }
                 trackAmbientWindow(mag, now)
-                if (lastSampleMs == 0L || now - lastSampleMs > 1000) {
-                    gravX = x
-                    gravY = y
-                    gravZ = z
-                    overCount = 0
-                }
-                lastSampleMs = now
+                if (settleBaseline(x, y, z, now)) return
                 val gmag = sqrt(gravX * gravX + gravY * gravY + gravZ * gravZ)
                 val ax = x - gravX
                 val ay = y - gravY
@@ -202,6 +219,45 @@ class MainActivity : ComponentActivity() {
 
             override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
         }
+
+    private var settleUntilMs = 0L
+    private var settleN = 0
+    private var settleX = 0f
+    private var settleY = 0f
+    private var settleZ = 0f
+
+    /**
+     * After a gap in the sensor stream (listener just registered, or the CPU slept and the
+     * accelerometer stalled), the first samples back are often off — and earlier versions took
+     * the very first one as the "at rest" baseline, so the next normal sample looked like a 30°+
+     * tilt and the screen woke up on its own, remote lying still on the table. Now the samples of
+     * the first [MOTION_SETTLE_MS] (at least [MOTION_SETTLE_MIN_SAMPLES]) are averaged into the baseline and never judged as motion.
+     * Returns true while the sample was used for settling (caller ignores it).
+     */
+    private fun settleBaseline(x: Float, y: Float, z: Float, now: Long): Boolean {
+        val gap = lastSampleMs == 0L || now - lastSampleMs > MOTION_GAP_MS
+        lastSampleMs = now
+        if (gap) {
+            settleUntilMs = now + MOTION_SETTLE_MS
+            settleN = 0
+            settleX = 0f
+            settleY = 0f
+            settleZ = 0f
+            overCount = 0
+        }
+        if (settleUntilMs == 0L) return false
+        settleN++
+        settleX += x
+        settleY += y
+        settleZ += z
+        if (now < settleUntilMs || settleN < MOTION_SETTLE_MIN_SAMPLES) return true
+        gravX = settleX / settleN
+        gravY = settleY / settleN
+        gravZ = settleZ / settleN
+        settleUntilMs = 0L
+        Log.i(MOTION_TAG, "baseline settled over $settleN samples: x=${f2(gravX)} y=${f2(gravY)} z=${f2(gravZ)}")
+        return true
+    }
 
     private fun f2(v: Float): String = "%.2f".format(v)
     private fun f1(v: Float): String = "%.1f".format(v)
@@ -284,12 +340,14 @@ class MainActivity : ComponentActivity() {
                                 )?.toLongOrNull()
                             }.getOrNull()
                         Log.i(SCREEN_TAG, "SCREEN_OFF — was on for ${onFor}ms, system timeout=${timeoutMs}ms")
+                        standby.onScreenOff()
                     }
                     Intent.ACTION_SCREEN_ON -> {
                         screenOn = true
                         screenOnSinceMs = now
                         val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
                         Log.i(SCREEN_TAG, "SCREEN_ON — was off for ${offFor}ms")
+                        standby.onScreenOn()
                     }
                 }
             }
@@ -351,7 +409,8 @@ class MainActivity : ComponentActivity() {
      * lambda so it always sees the current instance, including across a
      * dashboard.json reload. Null only for the brief window before the
      * first composition runs. */
-    private var activityRuntime: ActivityRuntime? = null
+    // State, so the dock clock (ScreenOverlays) recomposes once the dashboard hands it over.
+    private var activityRuntime by mutableStateOf<ActivityRuntime?>(null)
 
     /** Live start/stop-activity functions handed up from Dashboard.kt the
      * same way — they close over Compose-scoped state (activitiesById,
@@ -362,6 +421,7 @@ class MainActivity : ComponentActivity() {
     private val keyRouter = HardwareKeyRouter()
     private var dashboard by mutableStateOf(DashboardLoader.Result(DashboardConfig.default, null))
     private var navTarget by mutableStateOf<Int?>(null)
+    private var popupTarget by mutableStateOf<String?>(null)
     private var overlayTarget by mutableStateOf<String?>(null)
 
     /** See DashboardNavigation.volumeHotkeyTrigger — set fresh (never
@@ -383,6 +443,11 @@ class MainActivity : ComponentActivity() {
      * focus (a page/config with no hotkey on that key at all — untouched,
      * "the current focus outline behavior is perfect" for that case). */
     private var clearFocusTrigger by mutableStateOf(0L)
+
+    /** Set when a CENTER/Enter press was swallowed because the focus
+     * outline was hidden (see [shouldSwallowHiddenFocusActivation]), so the
+     * matching key-up is swallowed too. */
+    private var swallowActivationUp = false
 
     /** Which page is currently visible — used to know which page-scoped
      * hotkeys should currently be layered on top of the global ones. */
@@ -408,10 +473,36 @@ class MainActivity : ComponentActivity() {
      * dot, etc. Plays the system touch sound (AudioManager.FX_KEY_CLICK). */
     private var tapFeedbackEnabled by mutableStateOf(true)
 
+    /** Standby policy (quiet HA, motion-wake window, screen timeout, network-aware reconnect) —
+     * see StandbyController.kt; driven by dashboard.json's `power` block. */
+    private val standby: StandbyController by lazy {
+        StandbyController(
+            activity = this,
+            client = { if (::client.isInitialized) client else null },
+            isDocked = { chargeDockMonitor.state.isDocked },
+            motion =
+            StandbyController.MotionHooks(
+                enabled = { wakeOnMotionEnabled },
+                register = ::registerMotionListener,
+                unregister = ::unregisterMotionListener
+            )
+        )
+    }
+
+    /** This remote's friendly name (RemoteIdentity), shown in Settings › About. */
+    private var remoteName by mutableStateOf("")
+
+    /** Pushes the battery level to Home Assistant through the webhook — see BatteryReporter.kt. */
+    private val batteryReporter by lazy { BatteryReporter(this) { if (::client.isInitialized) client else null } }
+
     private val storagePermission =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
         ) { reloadDashboard() }
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -454,6 +545,9 @@ class MainActivity : ComponentActivity() {
         Log.i(SCREEN_TAG, "onCreate — initial screenOn=$screenOn pm.isInteractive=$pmInteractive")
 
         chargeDockMonitor.start()
+        lifecycleScope.launch {
+            FindMyRemote.ringing.collect { ringing -> if (ringing) wakeForRing() }
+        }
 
         initClientsAndServer()
         configServerSupervisor =
@@ -464,6 +558,12 @@ class MainActivity : ComponentActivity() {
             )
         configServerEnabled = prefs.getBoolean("config_server_enabled", true)
         tapFeedbackEnabled = prefs.getBoolean("tap_feedback_enabled", true)
+        migrateDockModePref()
+        remoteName = RemoteIdentity.name(this)
+        batteryReporter.start()
+        standby.start()
+        applyPowerConfig()
+        chargeDockMonitor.sunIsDown = { client.entities.value["sun.sun"]?.state?.let { it == "below_horizon" } }
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
         if (configServerEnabled) configServerSupervisor.start()
@@ -482,6 +582,7 @@ class MainActivity : ComponentActivity() {
      *  unreliable on Android 8.1 HOME launcher activities. */
     private fun initClientsAndServer() {
         client = HaClient(baseUrl = RemoteSettings.haUrl(this), token = RemoteSettings.haToken(this))
+        client.remoteIdentity = { RemoteIdentity.json(this) }
         harmonyRegistry =
             HarmonyHubRegistry(
                 hubs = RemoteSettings.harmonyHubs(this),
@@ -511,6 +612,7 @@ class MainActivity : ComponentActivity() {
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
         appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
+        configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -525,6 +627,8 @@ class MainActivity : ComponentActivity() {
         appleTvRegistry.stop()
 
         initClientsAndServer()
+        standby.onClientReplaced()
+        batteryReporter.resend() // the webhook id may have changed
         if (configServerEnabled) configServerSupervisor.start()
         client.connect()
         lifecycleScope.launch { harmonyRegistry.connectAll() }
@@ -554,6 +658,10 @@ class MainActivity : ComponentActivity() {
             val entities = client.entities.collectAsState()
             val connection = client.connection.collectAsState()
             val isDocked = chargeDockMonitor.state.isDocked
+            val ringing by FindMyRemote.ringing.collectAsState()
+            val dock = dashboard.config.dock
+            SideEffect { chargeDockMonitor.dockConfig = dock }
+            val dockOverlay = dockOverlayFor(isDocked, dock)
             Box {
                 val focusManager = LocalFocusManager.current
                 LaunchedEffect(clearFocusTrigger) {
@@ -573,6 +681,8 @@ class MainActivity : ComponentActivity() {
                         onNavHandled = { navTarget = null },
                         overlayTarget = overlayTarget,
                         onOverlayHandled = { overlayTarget = null },
+                        popupTarget = popupTarget,
+                        onPopupHandled = { popupTarget = null },
                         onPageChanged = { pageIndex ->
                             currentPageIndex = pageIndex
                             rebindHotkeysForCurrentPage()
@@ -591,9 +701,25 @@ class MainActivity : ComponentActivity() {
                             configServerEnabled = configServerEnabled,
                             setConfigServerEnabled = { enabled -> updateConfigServerEnabled(enabled) },
                             tapFeedbackEnabled = tapFeedbackEnabled,
-                            setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) }
+                            setTapFeedbackEnabled = { enabled -> setTapFeedback(enabled) },
+                            dockMode = dashboard.config.dock.mode,
+                            setDockMode = { mode -> setDockMode(mode) },
+                            screenTimeoutSeconds = dashboard.config.power.screenTimeoutSeconds,
+                            setScreenTimeout = { seconds -> setScreenTimeout(seconds) },
+                            appLanguage = AppLanguage.get(this@MainActivity),
+                            setAppLanguage = { tag -> setAppLanguage(tag) },
+                            reloadDashboard = { reloadFromSettings() },
+                            restartApp = { AppLanguage.restart(this@MainActivity) },
+                            testRing = { testRing() },
+                            remoteId = RemoteIdentity.id(this@MainActivity),
+                            remoteName = remoteName,
+                            setRemoteName = { name ->
+                                RemoteIdentity.setName(this@MainActivity, name)
+                                remoteName = RemoteIdentity.name(this@MainActivity)
+                            }
                         ),
-                        screenOn = screenOn && !isDocked
+                        // Heavy cards (camera/vacuum/...) pause while a dock screen covers them.
+                        screenOn = screenOn && dockOverlay == null
                     ),
                     activityCallbacks =
                     DashboardActivityCallbacks(
@@ -602,12 +728,44 @@ class MainActivity : ComponentActivity() {
                         onStopActivityReady = { fn -> stopActivityFn = fn }
                     )
                 )
-                if (isDocked) {
-                    val theme = remember(dashboard.config.theme) { dashboard.config.theme.toColors() }
-                    ProvideTheme(theme) { ChargingScreen(dimmed = chargeDockMonitor.dimmed) }
-                }
+                ScreenOverlays(dockOverlay, dock, entities.value, ringing)
             }
         }
+    }
+
+    /** Which dock screen covers the dashboard right now, or null for none — see [DockConfig]. */
+    private fun dockOverlayFor(isDocked: Boolean, dock: DockConfig): String? = when {
+        !isDocked -> null
+        dock.mode == DockConfig.MODE_CHARGING -> DockConfig.MODE_CHARGING
+        dock.mode == DockConfig.MODE_CLOCK && chargeDockMonitor.dimmed -> DockConfig.MODE_CLOCK
+        else -> null
+    }
+
+    /** The active Activity's `nowPlayingEntity` for the dock clock — live, follows Activity changes. */
+    @Composable
+    private fun rememberActivityPlayer(room: String?): String? {
+        val runtime = activityRuntime
+        val activeByRoom by (runtime?.activeByRoom ?: noActiveActivities).collectAsState()
+        return runtime?.nowPlayingEntity(room, activeByRoom)
+    }
+
+    /** The full-screen layers drawn over the dashboard: the dock screen, then "Find my remote". */
+    @Composable
+    private fun ScreenOverlays(dockOverlay: String?, dock: DockConfig, entities: EntityMap, ringing: Boolean) {
+        val theme = remember(dashboard.config.theme) { dashboard.config.theme.toColors() }
+        when (dockOverlay) {
+            DockConfig.MODE_CHARGING -> ProvideTheme(theme) { ChargingScreen(dimmed = chargeDockMonitor.dimmed) }
+            DockConfig.MODE_CLOCK ->
+                DockClockScreen(
+                    config = dock,
+                    entities = entities,
+                    client = client,
+                    isNight = chargeDockMonitor::isNight,
+                    onTouch = { chargeDockMonitor.onUserInteraction() },
+                    activityPlayer = rememberActivityPlayer(dock.room)
+                )
+        }
+        if (ringing) ProvideTheme(theme) { RingFoundOverlay(onStop = { FindMyRemote.stop() }) }
     }
 
     /**
@@ -670,6 +828,14 @@ class MainActivity : ComponentActivity() {
         dashboard = result
         currentPageIndex = currentPageIndex.coerceIn(0, result.config.pages.size - 1)
         rebindHotkeysForCurrentPage()
+        applyPowerConfig()
+    }
+
+    /** Hands dashboard.json's `power` block to the standby policy and the dock detector. */
+    private fun applyPowerConfig() {
+        val power = dashboard.config.power
+        standby.config = power
+        chargeDockMonitor.dockDebounceMs = TimeUnit.SECONDS.toMillis(power.dockDebounceSeconds.toLong())
     }
 
     /** Merge the global hotkeys with the current page's own hotkeys — a
@@ -686,6 +852,7 @@ class MainActivity : ComponentActivity() {
         val mergedShort = mergeHotkeys(dashboard.config.hotkeys, page?.hotkeys.orEmpty())
         val mergedLong = mergeHotkeys(dashboard.config.longHotkeys, page?.longHotkeys.orEmpty())
         bindHotkeys(mergedShort, mergedLong)
+        bindSettingsFallback()
 
         if (page?.parent != null) {
             val key = runCatching { HardwareKey.valueOf(page.parentKey.uppercase()) }.getOrNull()
@@ -693,6 +860,21 @@ class MainActivity : ComponentActivity() {
                 keyRouter.on(key) { goToParent() }
             }
         }
+    }
+
+    /** Settings must always be reachable from the remote itself (1.2.9): when
+     * no hotkey anywhere in the dashboard opens it — global or page, short or
+     * long — a long press on MAIN does, unless MAIN's long press is already
+     * taken. Swiping down from the top opens Activities, not Settings, so a
+     * dashboard without such a hotkey used to lock the user out of Settings. */
+    private fun bindSettingsFallback() {
+        val cfg = dashboard.config
+        val all =
+            cfg.hotkeys + cfg.longHotkeys +
+                cfg.pages.flatMap { it.hotkeys + it.longHotkeys }
+        if (all.any { it.openOverlay.equals("settings", ignoreCase = true) }) return
+        if (keyRouter.isLongBound(HardwareKey.MAIN)) return
+        keyRouter.onLong(HardwareKey.MAIN) { openOverlayHotkey("settings") }
     }
 
     private fun mergeHotkeys(global: List<HotkeyConfig>, pageSpecific: List<HotkeyConfig>): List<HotkeyConfig> {
@@ -716,7 +898,7 @@ class MainActivity : ComponentActivity() {
             val key =
                 runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
                     ?: return@forEach
-            keyRouter.onLong(key) { runHotkey(hk) }
+            keyRouter.onLong(key) { runHotkey(hk, long = true) }
         }
     }
 
@@ -735,6 +917,58 @@ class MainActivity : ComponentActivity() {
      * configured for this is meant to be a dedicated "back to what's
      * playing" button, not a page-nav/service call in disguise for the
      * idle case. */
+    /** The overlay / Activity-room / Off actions of a hotkey, or null when it has none of them —
+     * split out of [runHotkey] to keep that function under detekt's complexity threshold. */
+    private fun runActivityHotkey(hk: HotkeyConfig, long: Boolean): Boolean? = when {
+        hk.event != null -> fireEventHotkey(hk, hk.event, long)
+        hk.openOverlay != null -> openOverlayHotkey(hk.openOverlay)
+        hk.openCurrentActivityRoom != null -> openCurrentActivityHotkey(hk.openCurrentActivityRoom)
+        hk.stopActivity != null -> stopActivityHotkey(hk.stopActivity)
+        else -> null
+    }
+
+    /**
+     * `"event"`: fires `astrion_button` on Home Assistant's bus (needs an admin token) and, when a
+     * webhook is configured, pushes `{"type": "button", …}` too — both carry this remote's identity,
+     * so automations can tell which remote and which button.
+     */
+    private fun fireEventHotkey(hk: HotkeyConfig, name: String, long: Boolean): Boolean {
+        val page = dashboard.config.pages.getOrNull(currentPageIndex)?.name.orEmpty()
+        val data =
+            buildJsonObject {
+                put("event", name)
+                put("key", hk.key.uppercase())
+                put("long", long)
+                put("page", page)
+            }
+        client.fireEvent(BUTTON_EVENT, data)
+        val webhookId = RemoteSettings.haWebhookId(this)
+        if (webhookId.isNotBlank()) client.pushWebhook(webhookId, JsonObject(data + ("type" to JsonPrimitive("button"))))
+        return true
+    }
+
+    /** `"stopActivity"`: that room's Activity off, or every running one for `"*"`. */
+    private fun stopActivityHotkey(room: String): Boolean {
+        val stop = stopActivityFn ?: return false
+        val rooms =
+            if (room.trim() == "*") {
+                activityRuntime?.activeByRoom?.value?.filterValues { it != null }?.keys.orEmpty()
+            } else {
+                setOf(room.trim())
+            }
+        rooms.forEach(stop)
+        return true
+    }
+
+    /** `"page"`: jumps to that page, or with `"pageMode": "popup"` opens it as a popup (closing it
+     * again if it's already the open one — see Dashboard's HotkeyPopupEffect). */
+    private fun openPageHotkey(pageName: String, popup: Boolean): Boolean {
+        val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
+        if (idx < 0) return false
+        if (popup) popupTarget = dashboard.config.pages[idx].name else navTarget = idx
+        return true
+    }
+
     private fun openCurrentActivityHotkey(room: String): Boolean {
         val pageName = activityRuntime?.activeActivity(room)?.page ?: return false
         val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -771,9 +1005,7 @@ class MainActivity : ComponentActivity() {
         when (val target = device.target) {
             // Unchanged from before this device gained a `target` field —
             // every dashboard.json without one defaults here.
-            IrTarget.Local ->
-                runCatching { irManager?.transmit(irStep.freq, irStep.pattern.toIntArray()) }
-                    .onFailure { Log.e("MainActivity", "hotkey IR send failed: $irDevice/$irCommand", it) }
+            IrTarget.Local -> IrTransmit.local(irManager, irDevice, irCommand, irStep)
             is IrTarget.Extender -> sendHotkeyIrViaExtender(irDevice, irCommand, irStep, target)
         }
     }
@@ -792,21 +1024,19 @@ class MainActivity : ComponentActivity() {
             )
             return
         }
-        extenderRegistry.client(target.extenderId)?.let { client ->
+        val client = extenderRegistry.client(target.extenderId)
+        if (client == null) {
+            Log.w(IrTransmit.TAG, "NOT SENT $irDevice/$irCommand: extender ${target.extenderId} isn't registered")
+        } else {
+            IrTransmit.extender(irDevice, irCommand, target.extenderId, prontoCode)
             lifecycleScope.launch { client.send(prontoCode) }
         }
     }
 
-    private fun runHotkey(hk: HotkeyConfig): Boolean {
-        if (hk.openOverlay != null) return openOverlayHotkey(hk.openOverlay)
-        if (hk.openCurrentActivityRoom != null) return openCurrentActivityHotkey(hk.openCurrentActivityRoom)
+    private fun runHotkey(hk: HotkeyConfig, long: Boolean = false): Boolean {
+        runActivityHotkey(hk, long)?.let { return it }
 
-        hk.page?.let { pageName ->
-            val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
-            if (idx < 0) return false
-            navTarget = idx
-            return true
-        }
+        hk.page?.let { pageName -> return openPageHotkey(pageName, popup = hk.opensPopup) }
 
         hk.harmonyActivity?.let { activityId ->
             harmonyRegistry.client(hk.hub)?.startActivity(activityId)
@@ -872,23 +1102,71 @@ class MainActivity : ComponentActivity() {
             HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS
         ) {
             clearFocusTrigger = System.nanoTime()
+            // clearFocusTrigger alone didn't fix the outline: the key press
+            // itself takes the window out of touch mode (ViewRootImpl does
+            // that before the event reaches dispatchKeyEvent), which hands
+            // the Compose view a default focus, and clearing Compose focus
+            // outside touch mode makes Android hand focus straight back to
+            // the root — so a tile got re-focused and outlined anyway. The
+            // outline itself is hidden instead, until a directional key is
+            // left to Compose's focus navigation again (dispatchUnmappedKey).
+            FocusHighlight.visible = false
         }
+    }
+
+    /**
+     * Unmapped-key path of [dispatchKeyEvent] (no hotkey on this key) —
+     * split out to keep that function under detekt's complexity threshold.
+     * Logs the key, then lets Compose handle it, except for a CENTER/Enter
+     * press swallowed by [shouldSwallowHiddenFocusActivation].
+     */
+    @SuppressLint("RestrictedApi")
+    private fun dispatchUnmappedKey(event: KeyEvent, code: Int): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+            Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)})")
+            if (DEBUG_KEYS) Toast.makeText(this, "Unmapped key: $code", Toast.LENGTH_SHORT).show()
+        }
+        return shouldSwallowHiddenFocusActivation(event, code) || super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * Counterpart of [maybeClearFocusForDirectionalHotkey] for keys that DO
+     * reach Compose: a directional key brings the focus outline back
+     * ([FocusHighlight]). And while the outline is hidden, a CENTER/Enter
+     * press is swallowed (it only reveals the outline again) instead of
+     * activating whichever tile silently holds focus — otherwise "OK" could
+     * fire a tile the person can't see. Returns true when consumed here.
+     */
+    private fun shouldSwallowHiddenFocusActivation(event: KeyEvent, code: Int): Boolean = when {
+        event.action == KeyEvent.ACTION_DOWN && HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS -> {
+            FocusHighlight.visible = true
+            false
+        }
+        code !in ACTIVATION_KEYCODES -> false
+        event.action == KeyEvent.ACTION_DOWN -> {
+            if (!FocusHighlight.visible && event.repeatCount == 0) {
+                FocusHighlight.visible = true
+                swallowActivationUp = true
+            }
+            swallowActivationUp
+        }
+        event.action == KeyEvent.ACTION_UP -> swallowActivationUp.also { swallowActivationUp = false }
+        else -> false
     }
 
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // While "Find my remote" rings, any button just stops it (and does nothing else).
+        if (FindMyRemote.ringing.value) {
+            if (event.action == KeyEvent.ACTION_UP) FindMyRemote.stop()
+            return true
+        }
         val code = event.keyCode
         logKeyEventDown(event)
         val shortH = keyRouter.shortHandler(code)
         val longH = keyRouter.longHandler(code)
 
-        if (shortH == null && longH == null) {
-            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-                Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)})")
-                if (DEBUG_KEYS) Toast.makeText(this, "Unmapped key: $code", Toast.LENGTH_SHORT).show()
-            }
-            return super.dispatchKeyEvent(event)
-        }
+        if (shortH == null && longH == null) return dispatchUnmappedKey(event, code)
 
         // This key is about to be fully consumed as a hotkey below (never
         // reaching Compose's own focus-navigation via super.dispatchKeyEvent).
@@ -973,6 +1251,11 @@ class MainActivity : ComponentActivity() {
         if (wakeOnMotionEnabled) registerMotionListener()
     }
 
+    private fun unregisterMotionListener() {
+        sensorManager?.unregisterListener(motionListener)
+        Log.i(MOTION_TAG, "listener unregistered")
+    }
+
     private fun registerMotionListener() {
         val sm = sensorManager ?: return
         motionSensor?.let { sensor ->
@@ -1041,6 +1324,54 @@ class MainActivity : ComponentActivity() {
         if (enabled) configServerSupervisor.start() else configServerSupervisor.stop()
     }
 
+    /** The Settings page's "Dock screen" choice: written straight into this remote's dashboard.json
+     * (`dock.mode`, every other key kept) — the same value the builder's Dock screen section edits. */
+    private fun setDockMode(mode: String) {
+        if (mode !in DockConfig.MODES) return
+        if (DashboardLoader.updateDockMode(mode)) reloadDashboard()
+    }
+
+    /** The Settings page's "Screen timeout" choice, written into dashboard.json's `power` block
+     * (null = leave the system setting alone); StandbyController applies it on reload. */
+    private fun setScreenTimeout(seconds: Int?) {
+        if (DashboardLoader.updateScreenTimeout(seconds)) reloadDashboard()
+    }
+
+    /** Settings › Language: saved, then the app restarts so every screen picks it up. */
+    private fun setAppLanguage(tag: String) {
+        if (tag == AppLanguage.get(this)) return
+        AppLanguage.set(this, tag)
+        AppLanguage.restart(this)
+    }
+
+    /** Settings › About › Reload dashboard: re-reads dashboard.json (e.g. after copying one over by hand). */
+    private fun reloadFromSettings() {
+        reloadDashboard()
+        Toast.makeText(this, dashboard.notice ?: getString(R.string.dashboard_reloaded), Toast.LENGTH_SHORT).show()
+    }
+
+    /** Settings › Sound & touch › Test "Find my remote": rings exactly like `/ring` would. */
+    private fun testRing() {
+        val error = configServer.startRing()
+        if (error != null) Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+    }
+
+    /** 1.2.4 kept the Settings choice in a local pref that overrode dashboard.json; 1.2.5 moves it
+     * into the file once, so the two can't disagree any more. */
+    private fun migrateDockModePref() {
+        val old = prefs.getString("dock_mode", null) ?: return
+        val moved =
+            when {
+                old !in DockConfig.MODES -> true // "" = followed the file: nothing to move
+                old == DashboardLoader.load().config.dock.mode -> true
+                else -> DashboardLoader.updateDockMode(old)
+            }
+        // Not writable yet (storage permission pending): keep the pref and try again next launch.
+        if (!moved) return
+        Log.i("MainActivity", "dock_mode pref '$old' moved into dashboard.json")
+        prefs.edit { remove("dock_mode") }
+    }
+
     /** Called from the settings page switch — persists the choice, no
      * restart needed. Dashboard reads [tapFeedbackEnabled] and rebuilds the
      * feedback lambda it provides via LocalTapFeedback, so taps go silent
@@ -1061,8 +1392,22 @@ class MainActivity : ComponentActivity() {
         am.playSoundEffect(AudioManager.FX_KEY_CLICK)
     }
 
+    /** Turns the screen on (and lifts the dock's dimming/clock) when "Find my remote" starts. */
+    @Suppress("DEPRECATION")
+    private fun wakeForRing() {
+        chargeDockMonitor.onUserInteraction()
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+        if (pm.isInteractive) return
+        val flags = PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE
+        pm.newWakeLock(flags, "astrion:findmyremote").acquire(RING_WAKE_MS)
+    }
+
     @Suppress("DEPRECATION")
     private fun wakeScreen(tiltDeg: Float, linAcc: Float, mag: Float) {
+        if (chargeDockMonitor.state.isDocked) {
+            Log.i(MOTION_TAG, "wakeScreen skipped: docked (tilt=${f1(tiltDeg)} lin=${f2(linAcc)})")
+            return
+        }
         val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
         if (pm.isInteractive) {
             Log.i(MOTION_TAG, "wakeScreen skipped: already interactive (tilt=${f1(tiltDeg)} lin=${f2(linAcc)})")
@@ -1096,9 +1441,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         Log.i("MainActivity", "onDestroy — activity instance ${this.hashCode()}")
-        sensorManager?.unregisterListener(motionListener)
-        Log.i(MOTION_TAG, "listener unregistered")
+        unregisterMotionListener()
         runCatching { unregisterReceiver(screenStateReceiver) }
+        standby.stop()
+        batteryReporter.stop()
         chargeDockMonitor.stop()
         releaseWifiLock()
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
@@ -1108,3 +1454,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
+/** Stand-in for ActivityRuntime.activeByRoom before the dashboard has created its runtime. */
+private val noActiveActivities = MutableStateFlow<Map<String, String?>>(emptyMap())

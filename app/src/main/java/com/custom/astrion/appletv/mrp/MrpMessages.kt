@@ -30,6 +30,8 @@ object Mrp {
     const val TYPE_UPDATE_CLIENT = 55
     const val TYPE_UPDATE_CONTENT_ITEM = 56
     const val TYPE_PLAYBACK_QUEUE_REQUEST = 32
+    const val TYPE_SEND_COMMAND = 1
+    const val TYPE_SEND_COMMAND_RESULT = 2
 
     // Extension field numbers (ProtocolMessage field carrying each message type's payload).
     const val EXT_DEVICE_INFO = 20
@@ -46,6 +48,29 @@ object Mrp {
     const val EXT_UPDATE_CLIENT = 59
     const val EXT_UPDATE_CONTENT_ITEM = 60
     const val EXT_PLAYBACK_QUEUE_REQUEST = 37
+    const val EXT_SEND_COMMAND = 6
+    const val EXT_SEND_COMMAND_RESULT = 7
+
+    // SendCommandMessage / CommandOptions / SendCommandResultMessage fields (pyatv's protobuf
+    // definitions). The result's two status fields are 0 when the app accepted the command.
+    const val SC_COMMAND = 1
+    const val SC_OPTIONS = 2
+    const val CO_PLAYBACK_POSITION = 9
+    const val SCR_SEND_ERROR = 1
+    const val SCR_HANDLER_RETURN_STATUS = 2
+
+    // Command enum values.
+    const val CMD_SEEK_TO_PLAYBACK_POSITION = 45
+    const val CMD_BEGIN_FAST_FORWARD = 9
+    const val CMD_END_FAST_FORWARD = 10
+    const val CMD_BEGIN_REWIND = 11
+    const val CMD_END_REWIND = 12
+
+    // SetStateMessage.supportedCommands → SupportedCommands.supportedCommands (repeated CommandInfo).
+    const val SS_SUPPORTED_COMMANDS = 2
+    const val SUP_COMMANDS = 1
+    const val CMDI_COMMAND = 1
+    const val CMDI_ENABLED = 2
 
     // DeviceInfoMessage fields.
     const val DI_UNIQUE_IDENTIFIER = 1
@@ -239,6 +264,36 @@ object MrpMessages {
             .double(Mrp.PQR_ARTWORK_HEIGHT, height)
             .bool(Mrp.PQR_RETURN_ASSETS, true)
         return withIdentifier(envelope(Mrp.TYPE_PLAYBACK_QUEUE_REQUEST).message(Mrp.EXT_PLAYBACK_QUEUE_REQUEST, inner), identifier).build()
+    }
+
+    /**
+     * `SendCommandMessage(SeekToPlaybackPosition, playbackPosition = [seconds])` — what pyatv's
+     * `set_position` and the iPhone's remote send. An absolute position, handled by the app's own
+     * player, unlike Companion's relative `SkipBy`.
+     */
+    fun seekToPosition(seconds: Double, identifier: String): ByteArray {
+        val options = ProtobufWire.Builder().double(Mrp.CO_PLAYBACK_POSITION, seconds)
+        val inner =
+            ProtobufWire.Builder()
+                .enumValue(Mrp.SC_COMMAND, Mrp.CMD_SEEK_TO_PLAYBACK_POSITION)
+                .message(Mrp.SC_OPTIONS, options)
+        return withIdentifier(envelope(Mrp.TYPE_SEND_COMMAND).message(Mrp.EXT_SEND_COMMAND, inner), identifier).build()
+    }
+
+    /** A `SendCommandMessage` for a bare [command] with no options (fast-forward/rewind start/stop). */
+    fun command(command: Int, identifier: String): ByteArray {
+        val inner = ProtobufWire.Builder().enumValue(Mrp.SC_COMMAND, command)
+        return withIdentifier(envelope(Mrp.TYPE_SEND_COMMAND).message(Mrp.EXT_SEND_COMMAND, inner), identifier).build()
+    }
+
+    /**
+     * Whether a `SendCommandResultMessage` reply says the command was carried out: both its send
+     * error and the app's handler status are absent or 0. Anything else (no such content, command
+     * failed, skipping prohibited during an ad, ...) is a refusal.
+     */
+    fun commandSucceeded(reply: MrpMessage): Boolean {
+        val result = reply.inner(Mrp.EXT_SEND_COMMAND_RESULT) ?: return reply.type == Mrp.TYPE_SEND_COMMAND_RESULT
+        return (result.enumValue(Mrp.SCR_SEND_ERROR) ?: 0) == 0 && (result.enumValue(Mrp.SCR_HANDLER_RETURN_STATUS) ?: 0) == 0
     }
 
     /** Wraps a HAP pair-setup/pair-verify TLV8 blob for MRP's crypto-pairing envelope. [state]: 2

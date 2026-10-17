@@ -6,6 +6,13 @@
     <string name="active_activities">Active Activities</string>
     <string name="no_active_activities">Nothing active right now</string>
     <string name="stop_activity">Stop</string>
+    <string name="activity_help">Help</string>
+    <string name="activity_help_hint">Tap a device to correct what Astrion believes, then Fix. Nothing is sent until you tap Fix.</string>
+    <string name="device_state_on">On</string>
+    <string name="device_state_off">Off</string>
+    <string name="device_state_unknown">Unknown</string>
+    <string name="activity_fix">Fix</string>
+    <string name="activity_help_input">input: %1$s</string>
     <string name="connected">Connected</string>
     <string name="disconnected">Disconnected</string>
 
@@ -26,6 +33,49 @@
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_beta_update_available">Beta available: %1$s</string>
     <string name="settings_local_config">Local config: %1$s</string>
+
+    <!-- Settings: groups, screen timeout, About (1.2.5) -->
+    <string name="settings_display">Display</string>
+    <string name="settings_connections">Connections</string>
+    <string name="settings_web_config">Web configuration</string>
+    <string name="settings_sound_touch">Sound &amp; touch</string>
+    <string name="settings_about">About</string>
+    <string name="settings_display_summary">Sleep %1$s · Dock: %2$s</string>
+    <string name="state_on">On</string>
+    <string name="state_off">Off</string>
+    <string name="screen_timeout">Screen timeout</string>
+    <string name="screen_timeout_system">System (%1$s)</string>
+    <string name="screen_timeout_hint">How long the screen stays on when untouched. Saved in this remote\'s dashboard.json; \"System\" leaves Android\'s own setting alone.</string>
+    <string name="allow_write_settings">Allow the app to change system settings (tap)</string>
+    <string name="reconnect_now">Reconnect now</string>
+    <string name="ip_address">IP address</string>
+    <string name="about_version">Version</string>
+    <string name="about_channel">Channel</string>
+    <string name="channel_beta">Beta</string>
+    <string name="channel_stable">Stable</string>
+    <string name="about_update">Update</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_up_to_date">Up to date</string>
+    <string name="update_check_failed">Couldn\'t check</string>
+    <string name="update_available_short">Available</string>
+    <string name="about_device">Device</string>
+    <string name="about_battery">Battery</string>
+    <string name="about_package">Package</string>
+    <string name="about_project">Project</string>
+    <string name="remote_name">Name of this remote</string>
+    <string name="remote_name_hint">Shown in Home Assistant and sent with every event, so automations know which remote was used.</string>
+    <string name="about_remote_id">Remote ID</string>
+    <string name="save_short">OK</string>
+    <string name="settings_language">Language</string>
+    <string name="language_system">System</string>
+    <string name="language_hint">The app restarts to apply it.</string>
+    <string name="test_ring">Test \"Find my remote\"</string>
+    <string name="test_ring_hint">Rings as it would from Home Assistant. Touch the screen or press a button to stop it.</string>
+    <string name="reload_dashboard">Reload dashboard</string>
+    <string name="dashboard_reloaded">Dashboard reloaded</string>
+    <string name="restart_app">Restart the app</string>
+    <string name="about_logs">Logs</string>
+    <string name="logs_server_off">turn on Web configuration</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Local configuration</string>
@@ -177,4 +227,20 @@
     <string name="media_state_on">On</string>
     <string name="media_state_off">Off</string>
     <string name="volume_muted">Muted</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Dock screen</string>
+    <string name="dock_screen_hint">What this remote shows on its charging dock — saved in its dashboard.json (same as the builder\'s Dock screen). Tap to change.</string>
+    <string name="dock_mode_charging">Charging</string>
+    <string name="dock_mode_clock">Clock</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">Found me!</string>
+    <string name="ring_found_hint">Tap anywhere or press any button to stop</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Speakers</string>
+    <string name="speaker_muted">Muted</string>
+    <string name="speaker_group">Group</string>
+    <string name="speaker_ungroup">Ungroup</string>
+    <string name="setup_banner_title">Set up this remote from a browser</string>
+    <string name="connection_web_page_hint">Remote\'s web page: %1$s</string>
 </resources>

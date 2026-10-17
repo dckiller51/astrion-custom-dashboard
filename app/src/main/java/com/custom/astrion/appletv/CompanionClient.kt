@@ -163,6 +163,36 @@ class CompanionClient(
         hid(button, down = false)
     }
 
+    /**
+     * Holds a remote button down for [durationMs] before releasing it — pyatv's `InputAction.Hold`.
+     * A ~1 s hold on Select is what opens tvOS's context menu (e.g. "Remove from Up Next" in the
+     * Apple TV app). Blocks the calling thread for the duration; [AppleTvDevice] runs every
+     * command on its own serial thread, so that's harmless there.
+     */
+    fun hold(button: HidButton, durationMs: Long = DEFAULT_HOLD_MS) {
+        hid(button, down = true)
+        try {
+            Thread.sleep(durationMs.coerceIn(MIN_HOLD_MS, MAX_HOLD_MS))
+        } finally {
+            hid(button, down = false)
+        }
+    }
+
+    /**
+     * Jumps the current item by [seconds] (negative = backwards) — what tapping the edge of a
+     * real Siri Remote's clickpad does. Sent as a Double on purpose: OPACK has no negative
+     * integer encoding, and the Apple TV accepts a float here.
+     */
+    fun skipBy(seconds: Double) {
+        mediaControl(MediaCommand.SkipBy, mapOf("_skpS" to seconds))
+    }
+
+    companion object {
+        const val DEFAULT_HOLD_MS = 1000L
+        private const val MIN_HOLD_MS = 100L
+        private const val MAX_HOLD_MS = 5000L
+    }
+
     /** One half of a button press; Wake/Sleep are triggered by the release half alone. */
     fun hid(button: HidButton, down: Boolean) {
         link.exchange("_hidC", mapOf("_hBtS" to if (down) 1L else 2L, "_hidC" to button.code.toLong()))

@@ -16,6 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowLeft
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -51,15 +54,26 @@ import com.custom.astrion.ui.tapClickable
  * row, and volume — all native Compose, resized for the 480x800 panel.
  *
  * Config shape:
- *   CardConfig("tv_remote", mapOf(
- *       "name"         to "TVn",
- *       "remote_entity" to "remote.android_tv_10_0_1_248",
- *       // optional: a separate entity for mute if it differs
- *       "mute_entity"   to "remote.the_club_tvv",
- *   ))
+ *   { "type": "tv_remote", "options": {
+ *       "name": "Living room TV",
+ *       "remote_entity": "remote.living_room_tv",
+ *       // optional: where the volume / mute keys go when it isn't the TV
+ *       // itself (e.g. a soundbar's own remote.* entity)
+ *       "mute_entity": "remote.soundbar",
+ *       // optional: the TV's media_player, for the app buttons. Defaults to
+ *       // media_player.<same object id as remote_entity> — what the Android
+ *       // TV Remote integration creates (1.2.9; it used to default to one
+ *       // hard-coded entity of the original author's setup).
+ *       "media_entity": "media_player.living_room_tv",
+ *       "show_volume": true,     // optional: the vol− / mute / vol+ row (1.2.9)
+ *       "apps": [ { "name": "Netflix", "app": "com.netflix.ninja" },
+ *                 { "name": "Night mode", "service": "script.night", "entity_id": null, "data": {} } ],
+ *       "commands": { "power": "POWER", "volume_up": "VOLUME_UP" }   // optional renames
+ *   } }
  *
- * Command values below match the ones in your existing config (UP/DOWN/LEFT/
- * RIGHT/CENTER/BACK/HOME/MENU/PLAY/PAUSE/VOLUME_UP/VOLUME_DOWN/POWER, etc.).
+ * Command values below match the Android TV Remote integration's
+ * (DPAD_UP/DOWN/LEFT/RIGHT/CENTER, BACK, HOME, MENU, POWER, VOLUME_UP/DOWN,
+ * MUTE); any key can be renamed through `commands`.
  */
 class TvRemoteCard : CardRenderer {
     override val type = "tv_remote"
@@ -91,7 +105,8 @@ class TvRemoteCard : CardRenderer {
         // App-launch buttons. Each entry is either { name, app } (launched via
         // media_player.play_media on `media_entity`) or an explicit
         // { name, service: "domain.service", entity_id, data }.
-        val mediaEntity = config.string("media_entity") ?: "media_player.android_tv_10_0_1_248"
+        val mediaEntity = config.string("media_entity") ?: "media_player.${remoteEntity.substringAfter('.')}"
+        val showVolume = config.bool("show_volume", true)
         val apps = (config.options["apps"] as? List<Map<String, Any?>>) ?: DEFAULT_APPS
 
         fun launch(app: Map<String, Any?>) {
@@ -159,6 +174,22 @@ class TvRemoteCard : CardRenderer {
                 RoundIconButton(Icons.Filled.Menu, ctx.theme) { send(c("menu", "MENU")) }
             }
 
+            // Volume row: sent to mute_entity when set (a soundbar), else the TV.
+            if (showVolume) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    RoundIconButton(Icons.AutoMirrored.Filled.VolumeDown, ctx.theme) {
+                        send(c("volume_down", "VOLUME_DOWN"), muteEntity)
+                    }
+                    RoundIconButton(Icons.AutoMirrored.Filled.VolumeOff, ctx.theme) { send(c("mute", "MUTE"), muteEntity) }
+                    RoundIconButton(Icons.AutoMirrored.Filled.VolumeUp, ctx.theme) {
+                        send(c("volume_up", "VOLUME_UP"), muteEntity)
+                    }
+                }
+            }
+
             // App-launch buttons, two per row.
             apps.chunked(2).forEach { pair ->
                 Row(
@@ -197,9 +228,9 @@ class TvRemoteCard : CardRenderer {
         val DEFAULT_APPS =
             listOf(
                 mapOf("name" to "Netflix", "app" to "com.netflix.ninja"),
-                mapOf("name" to "Plex", "app" to "com.plexapp.android"),
-                mapOf("name" to "ABC iView", "app" to "au.net.abc.iview"),
-                mapOf("name" to "VLC", "app" to "org.videolan.vlc")
+                mapOf("name" to "YouTube", "app" to "com.google.android.youtube.tv"),
+                mapOf("name" to "Prime Video", "app" to "com.amazon.amazonvideo.livingroom"),
+                mapOf("name" to "Plex", "app" to "com.plexapp.android")
             )
     }
 

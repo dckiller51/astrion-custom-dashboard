@@ -3,6 +3,87 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.0] - 2026-10-17
+
+Everything since 1.2.0, from the 1.2.1 to 1.2.9 betas.
+
+> ⚠️ **Good to know when updating from 1.2.0**
+>
+> - **Settings**: a long press on the **Menu** key opens Settings when no hotkey of yours does (swiping down opens Activities).
+> - **New remotes** start with a minimal one-page dashboard instead of the original author's layout. Existing dashboards are not touched.
+> - **No "Disconnected" banner without Home Assistant**: a remote used only with Harmony, IR or Apple TV has no banner any more.
+> - **`tv_remote` card**: without `apps`, it now shows Netflix, YouTube, Prime Video and Plex; without `media_entity`, the app buttons use `media_player.<same name as remote_entity>`. Set both if yours differ.
+> - **Select card** follows your theme colours.
+
+### Added
+
+#### Dashboard & builder
+
+- **Version history of dashboard.json.** The remote keeps every save from the builder or its web page (the last 30, plus pinned ones) in `/sdcard/astrion/history`, with an optional note. Changes made outside the web page are kept too before the next save. From the builder's 🕘 button: open a version in the editor (nothing changes until you save), restore it on the remote, download it, pin it, add a note, delete it. The device page links to it ("Version history"). New routes: `GET /history`, `GET /history/<id>`, `POST /history/{restore,pin,note,delete}`; `POST /dashboard.json` takes a `note`.
+- **Undo / redo in the builder**: ↶ ↷ above the preview, or Ctrl+Z / Ctrl+Y. Rapid changes (typing a colour, dragging a slider) count as one step.
+- **The builder and the device page speak French, Italian and Spanish**, following the browser's language — built on Rob Johnston's ([@ClemsonJeeper](https://github.com/ClemsonJeeper)) i18n work. The app itself is also translated in Spanish (thanks [@enigmat14](https://github.com/enigmat14)) and gets a language setting independent of Android's.
+- **A form for every card type**: monitor, speaker group, row (its cards edited with the normal card form), picture elements (click the floor plan to place a button), TV remote (apps, volume target, command renames). Card types are grouped (Common, Media, Grids, Remotes, Home & layout). Options written by hand are kept when a card is edited.
+- **Deleting a card asks first.**
+
+#### Activities
+
+- **Harmony-style Activities.** With device **profiles** imported from the Harmony archive (power type, delays, repeats, input sequences), composed Activities start, switch and stop like a Harmony hub: shared devices stay on, inputs change only when needed.
+- **IR repeats** sent the way the original remote does (Harmony `pressMinRepeats`), locally and through IR extenders.
+- **Device and Activity state remembered** across restarts and updates (on/off, current input, running Activity per room). **Help** in Active Activities corrects what Astrion believes, then **Fix** replays the Activity.
+- **"Off" for a room**: `"stopActivity": "<room>"` (or `"*"`) on tiles and hotkeys.
+- **Pages that follow an Activity**: `"hideMode": "full"` hides a page completely while its Activity is off.
+- Activity wizard: network Apple TVs (wake, sleep, app to launch) and a Home Assistant entity picker.
+
+#### Remote & dock
+
+- **Dock screen**: battery screen, dim night clock (time, date, weather, now playing) or the dashboard. "Now playing" can follow the Activity of the remote's own room (`dock.room`, `nowPlayingEntity`).
+- **Standby & battery** (`power` block): Home Assistant goes quiet a while after the screen turns off (only listed entities stay live), motion-wake limited in time, screen timeout held by the app.
+- **Settings reorganized** into groups (Display, Connections, Web configuration, Sound & touch, Language, About), with **Reload dashboard**, **Restart the app** and **Test Find my remote**.
+- **Find my remote** can be stopped from the remote ("Found me!").
+- **Logs without adb**: `http://<remote>:8080/logs`.
+
+#### Home Assistant & several remotes
+
+- **Each remote has an identity** (stable id + name, `GET /info`, rename from Settings or the web page), sent with every webhook push.
+- **Battery pushed to Home Assistant** through the webhook.
+- **Hotkey action "Home Assistant event"** (`astrion_button`, with the key, page and remote).
+- Works with the **Astrion Custom Dashboard integration 2026.10.0** (devices, Activities, page select, ring, events).
+
+#### Cards
+
+- **Long press** on `button_grid` / `scene_grid` tiles (`long_press` block).
+- **`apple_tv_remote`**: compact and full layouts, app shortcuts, long press on the trackpad (context menu, ±10 s), fast-forward / rewind, seeking — and a builder preview matching the chosen layout.
+- **Hotkeys and tiles can open a page as a popup** (`"pageMode": "popup"`).
+- **Monitor**: vertical layout and scrolling long values.
+- **Select**: "dropdown" layout and text size ([#93](../../issues/93) by [@dpdonovan-cyber](https://github.com/dpdonovan-cyber)).
+- **TV remote**: volume row (to the TV or a soundbar's `remote`).
+- **Switch** and **picture elements**: PNG icons; picture elements `on_color`.
+- **Web page**: delete icons and IR database files (with a warning when still used).
+
+### Changed
+
+- **Settings always reachable** (long press Menu, see above) and **minimal starter dashboard** for new remotes.
+- **Connection banner**: none without Home Assistant; on a new remote it shows the remote's web address; with Home Assistant unreachable it also gives that address. Tap it to reconnect.
+- **Home Assistant connection, lighter**: updates published as they arrive, one heartbeat, reconnects follow the network.
+- **Beta updates** are offered only when newer than the installed app, under their real name.
+- Hotkey lists show keys as named on the remote ("Menu (MAIN)").
+- The IR sniffer's "Send to my remote" merges models into the IR database instead of replacing the file.
+- Select card follows the theme; TV remote card defaults (see above).
+
+### Fixed
+
+- Apple TV: the remote-control session no longer drops every 30 s (tvOS AirPlay 2); title and artwork no longer flicker on live streams.
+- IR: devices imported from the Harmony archive work in Activities; codes captured with old IR sniffer versions are repaired on load.
+- The screen no longer wakes by itself on a still remote; D-pad focus outline no longer stays visible on bound arrow keys.
+- A Harmony Activity tile no longer stays outlined after turning it off (single hub).
+- Builder: importing a dashboard keeps popup pages' `openMode`.
+- The downloaded update APK no longer stays in the app cache.
+- Cards: switch `#RRGGBB` colours, source select icon, speaker group labels, clock & weather 24 h calendar event, climate without fan modes, fan `step` layout.
+
+### Internal
+
+- Android Gradle Plugin 8.13.2, Gradle 9.5.1.
+
 ## [1.2.0] - 2026-10-07
 
 ### Added

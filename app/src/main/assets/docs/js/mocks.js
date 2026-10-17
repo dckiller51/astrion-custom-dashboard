@@ -9,15 +9,13 @@ const CLIMATE_MOCK = {
   current_temperature: 27,
 };
 
-// Mirrors assets/ha_labels/en.json — kept separate since this is a static
-// preview page, not the running app (which reads the real per-language JSON).
-const CLIMATE_HVAC_LABELS = { off: 'Off', heat: 'Heat', cool: 'Cool', heat_cool: 'Auto', auto: 'Auto', dry: 'Dry', fan_only: 'Fan' };
-const CLIMATE_FAN_LABELS = { auto: 'Auto', low: 'Low', medium: 'Medium', high: 'High', silent: 'Silent', quiet: 'Silent', turbo: 'Turbo' };
-const CLIMATE_SWING_LABELS = { off: 'Off', on: 'On', both: 'Both', vertical: 'Vertical', horizontal: 'Horizontal', stop: 'Off', swing: 'On' };
-
-function climateHvacLabel(m) { return CLIMATE_HVAC_LABELS[m] || (m.charAt(0).toUpperCase() + m.slice(1)); }
-function climateFanLabel(f) { return CLIMATE_FAN_LABELS[f.toLowerCase()] || (f.charAt(0).toUpperCase() + f.slice(1)); }
-function climateSwingLabel(s) { return CLIMATE_SWING_LABELS[s.toLowerCase()] || (s.charAt(0).toUpperCase() + s.slice(1)); }
+// HA state-label lookups now go through the shared i18n table's nested "ha"
+// object (I18N.ha.<category>[rawValue]) — the exact data the app loads from
+// its generated assets/ha_labels/<lang>.json, so the preview shows the same
+// labels the device does in the viewer's language.
+function climateHvacLabel(m) { return I18N.ha.hvac_mode[m] || (m.charAt(0).toUpperCase() + m.slice(1)); }
+function climateFanLabel(f) { return I18N.ha.fan_mode[f.toLowerCase()] || (f.charAt(0).toUpperCase() + f.slice(1)); }
+function climateSwingLabel(s) { return I18N.ha.swing_mode[s.toLowerCase()] || (s.charAt(0).toUpperCase() + s.slice(1)); }
 
 // Same MDI path data as MdiIcons.kt — see that file for the source/rationale.
 const MDI = {
@@ -122,27 +120,32 @@ function climateChipRowsHtml(items, selected, style, maxPerRow, labelFn, iconFn)
 // Fake example weather entity — real data (from weather.saint_martin_sur_le_pre)
 // for the current condition/temp; the day-by-day forecast is synthetic since
 // the real card fetches it via a live service call (weather.get_forecasts),
-// not something visible in Dev Tools > States for a static preview.
+// not something visible in Dev Tools > States for a static preview. Forecast
+// days are stored as ISO dates so the preview can render weekday names in
+// the viewer's own locale (like ClockWeatherCard does on-device).
 const WEATHER_MOCK = {
   friendly_name: 'Saint-Martin-sur-le-Pré',
   state: 'sunny',
   temperature: 21.1,
-  forecast: [
-    { day: 'Mon', condition: 'sunny', low: 12, high: 22 },
-    { day: 'Tue', condition: 'partlycloudy', low: 13, high: 20 },
-    { day: 'Wed', condition: 'cloudy', low: 11, high: 18 },
-    { day: 'Thu', condition: 'rainy', low: 10, high: 16 },
-  ],
+  forecast: (() => {
+    const days = [];
+    const d = new Date();
+    for (let i = 1; i <= 4; i++) {
+      const day = new Date(d.getFullYear(), d.getMonth(), d.getDate() + i);
+      days.push({
+        date: day.toISOString().slice(0, 10),
+        condition: ['sunny', 'partlycloudy', 'cloudy', 'rainy'][i - 1],
+        low: [12, 13, 11, 10][i - 1],
+        high: [22, 20, 18, 16][i - 1],
+      });
+    }
+    return days;
+  })(),
 };
 
-// Mirrors assets/ha_labels/en.json's weather_condition category.
-const WEATHER_CONDITION_LABELS = {
-  'clear-night': 'Clear night', clear: 'Clear', cloudy: 'Cloudy', partlycloudy: 'Partly cloudy',
-  sunny: 'Sunny', rainy: 'Rainy', pouring: 'Heavy rain', snowy: 'Snowy', 'snowy-rainy': 'Snow and rain',
-  windy: 'Windy', 'windy-variant': 'Windy', fog: 'Fog', lightning: 'Lightning',
-  'lightning-rainy': 'Lightning with rain', hail: 'Hail', exceptional: 'Exceptional',
-};
-function weatherConditionLabel(c) { return WEATHER_CONDITION_LABELS[c] || c; }
+// Weather condition names come from the shared i18n table's "ha" section —
+// same translations the app's HaLabels.weatherCondition() uses.
+function weatherConditionLabel(c) { return I18N.ha.weather_condition[c] || c; }
 
 // Mirrors ClockWeatherCard.kt's emojiFor().
 function weatherEmoji(c) {
@@ -169,9 +172,9 @@ const VACUUM_MOCK = {
   fan_speed_list: ['min', 'medium', 'high', 'max', 'mop'],
 };
 
-// Mirrors assets/ha_labels/en.json's vacuum_state category.
-const VACUUM_STATE_LABELS = { cleaning: 'Cleaning', docked: 'Docked', idle: 'Idle', paused: 'Paused', returning: 'Returning to dock', error: 'Error' };
-function vacuumStateLabel(s) { return VACUUM_STATE_LABELS[s] || vacuumPrettyLabel(s); }
+// Vacuum state names come from the shared i18n table's "ha" section — same
+// translations the app's HaLabels.vacuumState() uses.
+function vacuumStateLabel(s) { return I18N.ha.vacuum_state[s] || vacuumPrettyLabel(s); }
 // Mirrors VacuumCard.kt's prettyVacuumLabel() — used for fan_speed only,
 // since (unlike vacuum_state) it isn't a fixed HA-wide value set.
 function vacuumPrettyLabel(s) { return s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '); }
@@ -198,7 +201,7 @@ const FAN_MOCK = {
 
 // Mirrors FanCard.kt's oscillate-toggle label — reuses the swing_mode
 // on/off translation, same concept (oscillation on/off) as ClimateCard's swing.
-function fanOscillateLabel(on) { return on ? CLIMATE_SWING_LABELS.on : CLIMATE_SWING_LABELS.off; }
+function fanOscillateLabel(on) { return I18N.ha.swing_mode[on ? 'on' : 'off'] || (on ? 'On' : 'Off'); }
 
 // Fake example cover entity (real data, from cover.volet_chambre_noham).
 const COVER_MOCK = {
@@ -210,18 +213,19 @@ const COVER_MOCK = {
   device_class: 'shutter',
 };
 
-// Mirrors assets/ha_labels/en.json's cover_state category (used only as a
-// fallback for covers with no current_position — see coverStateLabel below).
-const COVER_STATE_LABELS = { open: 'Open', closed: 'Closed', opening: 'Opening', closing: 'Closing', stopped: 'Stopped', unknown: 'Unknown' };
-function coverStateLabel(s) { return COVER_STATE_LABELS[s] || (s.charAt(0).toUpperCase() + s.slice(1)); }
+// Cover state names come from the shared i18n table's "ha" section — same
+// translations the app's HaLabels.coverState() uses (this is only the
+// fallback for covers with no current_position — see coverPositionLabel below).
+function coverStateLabel(s) { return I18N.ha.cover_state[s] || (s.charAt(0).toUpperCase() + s.slice(1)); }
 
 // Mirrors CoverCard.kt's stateLabel logic: 100% -> "Open", 0% -> "Closed",
 // anything in between -> "N% open"; falls back to the raw HA state when the
-// entity has no current_position attribute at all.
+// entity has no current_position attribute at all. Uses the same shared
+// string keys as the app (cover_open / cover_closed / cover_position_open).
 function coverPositionLabel(position, rawState) {
-  if (position === 100) return 'Open';
-  if (position === 0) return 'Closed';
-  if (position != null) return `${position}% open`;
+  if (position === 100) return I18N.t('cover_open');
+  if (position === 0) return I18N.t('cover_closed');
+  if (position != null) return I18N.t('cover_position_open', position);
   return coverStateLabel(rawState);
 }
 
@@ -272,12 +276,13 @@ function kelvinToPreviewRgb(k) {
 
 // Mirrors LightCard.kt's stateLabel logic: off -> "Off", 0% -> "Off",
 // otherwise "N%" — only shown when showBrightness is on and the light
-// reports a brightness; a plain toggle-only light just shows "On".
+// reports a brightness; a plain toggle-only light just shows "On". Uses the
+// same shared string keys as the app (light_state_on/off, light_brightness_pct).
 function lightStateLabel(isOn, brightnessPct, showBrightness) {
-  if (!isOn) return 'Off';
-  if (!showBrightness || brightnessPct == null) return 'On';
-  if (brightnessPct <= 0) return 'Off';
-  return `${brightnessPct}%`;
+  if (!isOn) return I18N.t('light_state_off');
+  if (!showBrightness || brightnessPct == null) return I18N.t('light_state_on');
+  if (brightnessPct <= 0) return I18N.t('light_state_off');
+  return I18N.t('light_brightness_pct', brightnessPct);
 }
 
 // Same shapes as MdiIcons.kt's Play/Pause/SkipPrevious/SkipNext/VolumeHigh/VolumeOff,
@@ -362,15 +367,17 @@ const MEDIA_FEATURE = {
   SHUFFLE_SET: 32768, REPEAT_SET: 262144,
 };
 
-// Mirrors MediaPlayerCard.kt's mediaStateLabel() — matches strings.xml/values-fr.
+// Mirrors MediaPlayerCard.kt's mediaStateLabel() — same shared string keys
+// (media_state_*), so the preview shows the same label the device does, in
+// the viewer's language.
 function mediaStateLabel(state) {
   switch (state) {
-    case 'playing': return 'Lecture';
-    case 'paused': return 'Pause';
-    case 'idle': return 'Inactif';
-    case 'buffering': return 'Chargement';
-    case 'on': return 'Allumé';
-    case 'off': default: return 'Éteint';
+    case 'playing': return I18N.t('media_state_playing');
+    case 'paused': return I18N.t('media_state_paused');
+    case 'idle': return I18N.t('media_state_idle');
+    case 'buffering': return I18N.t('media_state_buffering');
+    case 'on': return I18N.t('media_state_on');
+    case 'off': default: return I18N.t('media_state_off');
   }
 }
 

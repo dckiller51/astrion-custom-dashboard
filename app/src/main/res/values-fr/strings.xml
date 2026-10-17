@@ -6,6 +6,13 @@
     <string name="active_activities">Activités actives</string>
     <string name="no_active_activities">Rien d\'actif pour l\'instant</string>
     <string name="stop_activity">Arrêter</string>
+    <string name="activity_help">Aide</string>
+    <string name="activity_help_hint">Touchez un appareil pour corriger ce qu\'Astrion croit, puis Corriger. Rien n\'est envoyé avant de toucher Corriger.</string>
+    <string name="device_state_on">Allumé</string>
+    <string name="device_state_off">Éteint</string>
+    <string name="device_state_unknown">Inconnu</string>
+    <string name="activity_fix">Corriger</string>
+    <string name="activity_help_input">entrée : %1$s</string>
     <string name="connected">Connecté</string>
     <string name="disconnected">Déconnecté</string>
 
@@ -26,6 +33,49 @@
     <string name="settings_update_available">Mise à jour disponible : v%1$s</string>
     <string name="settings_beta_update_available">Bêta disponible : %1$s</string>
     <string name="settings_local_config">Configuration locale : %1$s</string>
+
+    <!-- Settings: groups, screen timeout, About (1.2.5) -->
+    <string name="settings_display">Écran</string>
+    <string name="settings_connections">Connexions</string>
+    <string name="settings_web_config">Configuration web</string>
+    <string name="settings_sound_touch">Son et toucher</string>
+    <string name="settings_about">À propos</string>
+    <string name="settings_display_summary">Veille %1$s · Dock : %2$s</string>
+    <string name="state_on">Activé</string>
+    <string name="state_off">Désactivé</string>
+    <string name="screen_timeout">Mise en veille de l\'écran</string>
+    <string name="screen_timeout_system">Système (%1$s)</string>
+    <string name="screen_timeout_hint">Durée avant que l\'écran s\'éteigne sans être touché. Enregistré dans le dashboard.json de cette télécommande ; « Système » laisse le réglage d\'Android tel quel.</string>
+    <string name="allow_write_settings">Autoriser l\'app à modifier les paramètres système (appuyer)</string>
+    <string name="reconnect_now">Reconnecter maintenant</string>
+    <string name="ip_address">Adresse IP</string>
+    <string name="about_version">Version</string>
+    <string name="about_channel">Canal</string>
+    <string name="channel_beta">Bêta</string>
+    <string name="channel_stable">Stable</string>
+    <string name="about_update">Mise à jour</string>
+    <string name="update_checking">Vérification…</string>
+    <string name="update_up_to_date">À jour</string>
+    <string name="update_check_failed">Vérification impossible</string>
+    <string name="update_available_short">Disponible</string>
+    <string name="about_device">Appareil</string>
+    <string name="about_battery">Batterie</string>
+    <string name="about_package">Paquet</string>
+    <string name="about_project">Projet</string>
+    <string name="remote_name">Nom de cette télécommande</string>
+    <string name="remote_name_hint">Affiché dans Home Assistant et envoyé avec chaque événement, pour que les automatisations sachent quelle télécommande a servi.</string>
+    <string name="about_remote_id">ID de la télécommande</string>
+    <string name="save_short">OK</string>
+    <string name="settings_language">Langue</string>
+    <string name="language_system">Système</string>
+    <string name="language_hint">L\'app redémarre pour l\'appliquer.</string>
+    <string name="test_ring">Tester « Find my remote »</string>
+    <string name="test_ring_hint">Sonne comme depuis Home Assistant. Touchez l\'écran ou appuyez sur un bouton pour l\'arrêter.</string>
+    <string name="reload_dashboard">Recharger le dashboard</string>
+    <string name="dashboard_reloaded">Dashboard rechargé</string>
+    <string name="restart_app">Redémarrer l\'app</string>
+    <string name="about_logs">Logs</string>
+    <string name="logs_server_off">activer la Configuration web</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configuration locale</string>
@@ -177,4 +227,20 @@
     <string name="media_state_on">Allumé</string>
     <string name="media_state_off">Éteint</string>
     <string name="volume_muted">Muet</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Écran sur le dock</string>
+    <string name="dock_screen_hint">Ce que cette télécommande affiche sur son dock de charge — enregistré dans son dashboard.json (comme la section Écran sur le dock du builder). Touchez pour changer.</string>
+    <string name="dock_mode_charging">Charge</string>
+    <string name="dock_mode_clock">Horloge</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">Retrouvée !</string>
+    <string name="ring_found_hint">Touchez l\'écran ou appuyez sur un bouton pour arrêter</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Enceintes</string>
+    <string name="speaker_muted">Muet</string>
+    <string name="speaker_group">Grouper</string>
+    <string name="speaker_ungroup">Dégrouper</string>
+    <string name="setup_banner_title">Configurez cette télécommande depuis un navigateur</string>
+    <string name="connection_web_page_hint">Page web de la télécommande : %1$s</string>
 </resources>

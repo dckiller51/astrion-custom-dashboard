@@ -65,6 +65,7 @@ import com.custom.astrion.cards.DeviceSettingsState
 import com.custom.astrion.config.ActivityConfig
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.AppConfig
+import com.custom.astrion.config.DashboardConfig
 import com.custom.astrion.config.IrDeviceConfig
 import com.custom.astrion.config.PageConfig
 import com.custom.astrion.config.RemoteSettings
@@ -124,6 +125,10 @@ data class DashboardNavigation(
      * as [navTarget]/[onNavHandled], via [onOverlayHandled]. */
     val overlayTarget: String? = null,
     val onOverlayHandled: () -> Unit = {},
+    /** Page name a hardware hotkey with `"pageMode": "popup"` wants opened as a popup (or closed,
+     * when that same page's popup is already open) — consumed via [onPopupHandled], like [navTarget]. */
+    val popupTarget: String? = null,
+    val onPopupHandled: () -> Unit = {},
     /** Called whenever the visible page changes (swipe, dot, hardware nav, or
      * a card's navigateToPage) — MainActivity uses this to rebind hardware
      * hotkeys to the newly-visible page's own bindings. */
@@ -262,7 +267,12 @@ private fun DashboardActivityRuntimeEffects(
             launch {
                 hubClient.connected.first { it }
                 hubClient.getCurrentActivity()
-                activityRuntime.bind(hubClient, localId)
+                // isDefaultHub: tiles/hotkeys with no "hub" field (the usual
+                // single-hub setup) belong to the hub client(null) resolves to.
+                // Without it their Activity was never matched to the hub's
+                // live state, so its PowerOff (-1) never cleared the room and
+                // the tile's border stayed lit.
+                activityRuntime.bind(hubClient, localId, isDefaultHub = hubClient === harmonyRegistry.client(null))
             }
         }
     }
@@ -359,6 +369,7 @@ private data class CardContextInputs(
     val sendIrCommand: (String, String) -> Unit,
     val activitiesById: Map<String, ActivityConfig>,
     val startActivity: (String) -> Unit,
+    val stopActivity: (String) -> Unit,
     val activityRuntime: ActivityRuntime,
     val theme: ThemeColors,
     val screenOn: Boolean
@@ -389,6 +400,7 @@ private fun buildCardContext(inputs: CardContextInputs): CardContext = CardConte
     sendIrCommand = inputs.sendIrCommand,
     activities = inputs.activitiesById,
     startActivity = inputs.startActivity,
+    stopActivity = inputs.stopActivity,
     activityRuntime = inputs.activityRuntime,
     theme = inputs.theme,
     screenOn = inputs.screenOn
@@ -456,7 +468,9 @@ private data class DashboardRuntimeState(
      * one place that touches ConsumerIrManager. */
     val irManager: ConsumerIrManager?,
     val irDevicesById: Map<String, IrDeviceConfig>,
-    val activitiesById: Map<String, ActivityConfig>
+    val activitiesById: Map<String, ActivityConfig>,
+    /** Which page's content each pager slot draws — see [HiddenPageSkipEffect]. */
+    val hiddenPageContent: HiddenPageContent
 )
 
 @Composable
@@ -479,6 +493,7 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
             initialPage = config.startPage.coerceIn(0, pageCount - 1),
             pageCount = { pageCount }
         )
+    val hiddenPageContent = HiddenPageSkipEffect(config.pages, pagerState, activeActivityIds)
 
     val navigateToPage: (String) -> Unit = { pageName ->
         val idx = config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
@@ -505,7 +520,8 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
         navigateToPage = navigateToPage,
         irManager = irManager,
         irDevicesById = irDevicesById,
-        activitiesById = activitiesById
+        activitiesById = activitiesById,
+        hiddenPageContent = hiddenPageContent
     )
 }
 
@@ -548,6 +564,8 @@ fun Dashboard(
     val onNavHandled = navigation.onNavHandled
     val overlayTarget = navigation.overlayTarget
     val onOverlayHandled = navigation.onOverlayHandled
+    val popupTarget = navigation.popupTarget
+    val onPopupHandled = navigation.onPopupHandled
     val onPageChanged = navigation.onPageChanged
     val volumeHotkeyTrigger = navigation.volumeHotkeyTrigger
     val onActivityRuntimeReady = activityCallbacks.onActivityRuntimeReady
@@ -612,6 +630,8 @@ fun Dashboard(
             val sendIrCommand = dispatcher::sendIrCommand
             val startActivity: (String) -> Unit = dispatcher::startActivity
             val stopActivity = dispatcher::stopActivity
+            val activityActions =
+                remember(dispatcher) { ActivityOverlayActions(stop = dispatcher::stopActivity, resync = dispatcher::resyncActivity) }
             LaunchedEffect(activityRuntime) {
                 onStartActivityReady(startActivity)
                 onStopActivityReady(stopActivity)
@@ -673,6 +693,13 @@ fun Dashboard(
                 popupOpenedByEntityId = null
                 linkedPopupPage = null
             }
+            HotkeyPopupEffect(
+                popupTarget = popupTarget,
+                openPageName = linkedPopupPage?.targetPage?.name,
+                open = openPagePopup,
+                close = closePopup,
+                onHandled = onPopupHandled
+            )
 
             val ctx =
                 buildCardContext(
@@ -689,6 +716,7 @@ fun Dashboard(
                         sendIrCommand = sendIrCommand,
                         activitiesById = activitiesById,
                         startActivity = startActivity,
+                        stopActivity = dispatcher::stopActivities,
                         activityRuntime = activityRuntime,
                         theme = theme,
                         screenOn = screenOn
@@ -741,7 +769,7 @@ fun Dashboard(
                     configNotice = configNotice,
                     overlayState = overlayState,
                     activityRuntime = activityRuntime,
-                    stopActivity = stopActivity,
+                    activityActions = activityActions,
                     onPageChanged = onPageChanged,
                     webhookContext = webhookContext,
                     client = client,
@@ -749,6 +777,7 @@ fun Dashboard(
                     onLinkedJumpChange = { linkedJump = it },
                     volumeHotkeyTrigger = volumeHotkeyTrigger,
                     linkedPopupPage = linkedPopupPage,
+                    hiddenPageContent = runtime.hiddenPageContent,
                     onLinkedPopupPageChange = { page, entityId ->
                         linkedPopupPage = page
                         popupOpenedByEntityId = entityId
@@ -771,7 +800,7 @@ private data class DashboardContentInputs(
     val configNotice: String?,
     val overlayState: DashboardOverlayState,
     val activityRuntime: ActivityRuntime,
-    val stopActivity: (String) -> Unit,
+    val activityActions: ActivityOverlayActions,
     val onPageChanged: (Int) -> Unit,
     val webhookContext: Context,
     val client: HaClient,
@@ -785,7 +814,8 @@ private data class DashboardContentInputs(
     /** Sets (or clears, when both args are null) the shared popup slot —
      * second arg is the entity responsible, null for a manual swipe-up
      * open/close. See [DashboardEntityPageEffect]'s doc comment. */
-    val onLinkedPopupPageChange: (LinkedPagePopupState?, String?) -> Unit
+    val onLinkedPopupPageChange: (LinkedPagePopupState?, String?) -> Unit,
+    val hiddenPageContent: HiddenPageContent
 )
 
 /** The dynamic "‹ back" target for [PageIndicator]: a page's own static
@@ -950,7 +980,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
     val configNotice = inputs.configNotice
     val overlayState = inputs.overlayState
     val activityRuntime = inputs.activityRuntime
-    val stopActivity = inputs.stopActivity
+    val activityActions = inputs.activityActions
     val onPageChanged = inputs.onPageChanged
     val webhookContext = inputs.webhookContext
     val client = inputs.client
@@ -961,17 +991,20 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
     val volumeHotkeyTrigger = inputs.volumeHotkeyTrigger
     val linkedPopupPage = inputs.linkedPopupPage
     val onLinkedPopupPageChange = inputs.onLinkedPopupPageChange
+    // The page actually on screen: a fully hidden page swiped onto shows (and counts as) the page
+    // the swipe ends up on, so hotkeys and Home Assistant never see the hidden one.
+    val shownPage = inputs.hiddenPageContent.contentIndex(pagerState.currentPage)
 
-    LaunchedEffect(pagerState.currentPage) {
-        onPageChanged(pagerState.currentPage)
+    LaunchedEffect(shownPage) {
+        onPageChanged(shownPage)
         val webhookId = RemoteSettings.haWebhookId(webhookContext)
         if (webhookId.isNotBlank()) {
-            val page = config.pages.getOrNull(pagerState.currentPage)
+            val page = config.pages.getOrNull(shownPage)
             client.pushWebhook(
                 webhookId,
                 buildJsonObject {
                     put("type", "page")
-                    put("index", pagerState.currentPage)
+                    put("index", shownPage)
                     put("name", page?.name ?: "")
                 }
             )
@@ -994,7 +1027,13 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             // now just a regular assignable hotkey (openOverlay: "settings"),
             // see the Hotkeys tab.
             TopStatusBar(onSwipeDown = { overlayState.onShowActivitiesChange(true) })
-            ConnectionBanner(connection)
+            ConnectionBanner(
+                connection,
+                webPageEnabled = ctx.deviceSettings.configServerEnabled,
+                haConfigured = RemoteSettings.isConfigured(webhookContext),
+                starterDashboard = DashboardConfig.isStarter(config),
+                onRetry = client::reconnectNow
+            )
             if (configNotice != null) ConfigNoticeBanner(configNotice)
 
             HorizontalPager(
@@ -1004,14 +1043,14 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                     .weight(1f)
                     .fillMaxWidth()
             ) { pageIndex ->
-                PageContent(config.pages[pageIndex], ctx)
+                PageContent(config.pages[inputs.hiddenPageContent.contentIndex(pageIndex)], ctx)
             }
 
-            val backTargetName = resolveBackTargetName(config.pages, pagerState.currentPage, linkedJump)
+            val backTargetName = resolveBackTargetName(config.pages, shownPage, linkedJump)
 
             PageIndicator(
                 pages = config.pages,
-                current = pagerState.currentPage,
+                current = shownPage,
                 activeActivityIds = activeActivityIds,
                 backTargetName = backTargetName,
                 // Same instant scrollToPage as navigateToPage/hardware nav —
@@ -1027,7 +1066,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                 // same as a page with no `parent`/remembered source does
                 // nothing on BACK.
                 onSwipeUpToLinkedPage = {
-                    val current = config.pages.getOrNull(pagerState.currentPage)
+                    val current = config.pages.getOrNull(shownPage)
                     if (current != null) {
                         val linkedName = current.linkedPage
                         val linkedPageConfig = linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
@@ -1057,7 +1096,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             ActivitiesOverlay(
                 activityRuntime = activityRuntime,
                 ctx = ctx,
-                onStop = stopActivity,
+                actions = activityActions,
                 onClose = { overlayState.onShowActivitiesChange(false) }
             )
         }
@@ -1083,6 +1122,9 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
  */
 @Composable
 private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
+    // The group opened from the list (Display, Connections...), drawn as a popup over everything below.
+    var section by remember { mutableStateOf<SettingsSection?>(null) }
+    val update = rememberUpdateCheck()
     Box(modifier = Modifier.fillMaxSize().background(LocalTheme.current.background)) {
         Column(
             modifier =
@@ -1104,7 +1146,7 @@ private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 )
             }
-            SettingsMenu(ctx)
+            SettingsMenu(ctx, update, onOpen = { section = it })
         }
         // Bottom gesture strip: swipe up to close. Sits above the scrollable
         // content so the drag detector doesn't fight verticalScroll for events.
@@ -1131,6 +1173,7 @@ private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
                     .background(LocalTheme.current.controlBackground)
             )
         }
+        section?.let { SettingsSectionPopup(ctx, it, update, onDismiss = { section = null }) }
     }
 }
 
@@ -1151,10 +1194,10 @@ private fun SettingsOverlay(ctx: CardContext, onClose: () -> Unit) {
 private fun ActivitiesOverlay(
     activityRuntime: ActivityRuntime,
     ctx: CardContext,
-    /** Stops the Activity active in a given room — see Dashboard()'s own
-     * `stopActivity`. Separate from `onClose`: stopping doesn't dismiss the
-     * overlay, so more than one room can be stopped in a row. */
-    onStop: (room: String) -> Unit,
+    /** Stop / Help per room — see [ActivityOverlayActions]. Separate from
+     * `onClose`: stopping doesn't dismiss the overlay, so more than one
+     * room can be stopped in a row. */
+    actions: ActivityOverlayActions,
     onClose: () -> Unit
 ) {
     val activeByRoom by activityRuntime.activeByRoom.collectAsState()
@@ -1205,40 +1248,13 @@ private fun ActivitiesOverlay(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
                 activities.forEach { activity ->
-                    Row(
-                        modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(LocalTheme.current.insetSurface)
-                            .tapClickable(enabled = activity.page != null) {
-                                activity.page?.let {
-                                    ctx.navigateToPage(it)
-                                    onClose()
-                                }
-                            }.padding(horizontal = 14.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(activity.name, color = LocalTheme.current.primaryText, fontSize = 15.sp)
-                        // Dedicated per-room stop — the missing piece this
-                        // overlay didn't have before: previously the only
-                        // way to end a classic Harmony Activity was a
-                        // generic PowerOff hotkey, which (when a hub drives
-                        // more than one room) kills every room on that hub
-                        // instead of just this one. stopActivity() targets
-                        // only this Activity's own hub.
-                        Text(
-                            stringResource(R.string.stop_activity),
-                            color = LocalTheme.current.danger,
-                            fontSize = 13.sp,
-                            modifier =
-                            Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .tapClickable { onStop(room) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
+                    ActiveActivityRow(
+                        activity = activity,
+                        composed = activityRuntime.activityConfigs[activity.id],
+                        ctx = ctx,
+                        actions = actions,
+                        onClose = onClose
+                    )
                 }
             }
         }
@@ -1502,7 +1518,8 @@ private fun RenderCard(cardConfig: CardConfig, ctx: CardContext) {
             .fillMaxWidth()
             .onFocusChanged { hasFocus = it.hasFocus }
             .then(
-                if (hasFocus) {
+                // Hidden while a D-pad hotkey owns the arrow keys — see FocusHighlight.
+                if (hasFocus && FocusHighlight.visible) {
                     Modifier.border(2.dp, ctx.theme.accent, RoundedCornerShape(18.dp))
                 } else {
                     Modifier
@@ -1710,27 +1727,60 @@ private fun EdgeEllipsis() {
     Text("…", color = LocalTheme.current.mutedText, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 2.dp))
 }
 
+/**
+ * Shown while Home Assistant isn't connected — but only when it is set up: a remote used
+ * without Home Assistant (Harmony, IR, Apple TV only) gets no banner at all (1.2.9; it used to
+ * say "Disconnected" forever). While the remote still runs the built-in starter dashboard, it
+ * instead invites to set the remote up and gives its web page address. Connection errors also
+ * show that address, where the Home Assistant settings are fixed.
+ */
 @Composable
-private fun ConnectionBanner(connection: ConnectionState) {
+private fun ConnectionBanner(
+    connection: ConnectionState,
+    webPageEnabled: Boolean,
+    haConfigured: Boolean,
+    starterDashboard: Boolean,
+    onRetry: () -> Unit
+) {
     if (connection == ConnectionState.CONNECTED) return
-    val (label, color) =
-        when (connection) {
-            ConnectionState.CONNECTING,
-            ConnectionState.AUTHENTICATING
-            -> stringResource(R.string.connection_connecting) to LocalTheme.current.accentSecondary
-            ConnectionState.AUTH_FAILED -> stringResource(R.string.connection_auth_failed) to LocalTheme.current.danger
-            ConnectionState.ERROR -> stringResource(R.string.connection_error_retrying) to LocalTheme.current.danger
-            else -> stringResource(R.string.disconnected) to LocalTheme.current.controlBackground
+    if (!haConfigured && !starterDashboard) return
+    val (label, color) = connectionBannerLabel(connection, haConfigured)
+    // Re-read when the state changes (Wi-Fi back, new DHCP lease…), not on every recomposition.
+    val ip = remember(connection) { localIpAddress() }
+    val address = if (webPageEnabled && ip != null) "http://$ip:8080" else null
+    val connecting = connection == ConnectionState.CONNECTING || connection == ConnectionState.AUTHENTICATING
+    val hint =
+        when {
+            !haConfigured -> address
+            connecting || address == null -> null
+            else -> stringResource(R.string.connection_web_page_hint, address)
         }
-    Box(
+    Column(
         modifier =
         Modifier
             .fillMaxWidth()
             .background(color)
+            // Tap to retry right away instead of waiting for the next attempt.
+            .tapClickable(onClick = onRetry)
             .padding(12.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(text = label, color = Color.White, fontSize = 14.sp)
+        if (hint != null) Text(text = hint, color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp)
+    }
+}
+
+/** The banner's text and colour — split out of [ConnectionBanner] to keep its complexity down. */
+@Composable
+private fun connectionBannerLabel(connection: ConnectionState, haConfigured: Boolean): Pair<String, Color> {
+    val theme = LocalTheme.current
+    return when {
+        !haConfigured -> stringResource(R.string.setup_banner_title) to theme.controlBackground
+        connection == ConnectionState.CONNECTING || connection == ConnectionState.AUTHENTICATING ->
+            stringResource(R.string.connection_connecting) to theme.accentSecondary
+        connection == ConnectionState.AUTH_FAILED -> stringResource(R.string.connection_auth_failed) to theme.danger
+        connection == ConnectionState.ERROR -> stringResource(R.string.connection_error_retrying) to theme.danger
+        else -> stringResource(R.string.disconnected) to theme.controlBackground
     }
 }
 
@@ -1757,5 +1807,22 @@ private fun UnknownCard(type: String) {
             .padding(14.dp)
     ) {
         Text(text = stringResource(R.string.unknown_card_type, type), color = LocalTheme.current.danger, fontSize = 13.sp)
+    }
+}
+
+/** A hardware hotkey's `"pageMode": "popup"`: opens [popupTarget] as a popup, or closes it when that
+ * page's popup is already the one on screen (so the same key toggles it), then consumes it. */
+@Composable
+private fun HotkeyPopupEffect(
+    popupTarget: String?,
+    openPageName: String?,
+    open: (String) -> Unit,
+    close: () -> Unit,
+    onHandled: () -> Unit
+) {
+    LaunchedEffect(popupTarget) {
+        val target = popupTarget ?: return@LaunchedEffect
+        if (openPageName.equals(target, ignoreCase = true)) close() else open(target)
+        onHandled()
     }
 }

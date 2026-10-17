@@ -14,16 +14,21 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import androidx.core.net.toUri
+import com.custom.astrion.AppLogs
 import com.custom.astrion.BuildConfig
+import com.custom.astrion.FindMyRemote
 import com.custom.astrion.R
+import com.custom.astrion.RemoteIdentity
 import com.custom.astrion.appletv.AppleTvCredentials
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.AppleTvServiceKind
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.AppleTvConfig
+import com.custom.astrion.config.DashboardHistory
 import com.custom.astrion.config.DashboardLoader
 import com.custom.astrion.config.ExtenderConfig
 import com.custom.astrion.config.HarmonyHubConfig
+import com.custom.astrion.config.IrDatabaseMerge
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.ha.ConnectionState
@@ -114,6 +119,9 @@ import org.json.JSONObject
  *  POST /icons           upload a PNG into /sdcard/astrion/icons/
  *  GET  /icons-list       list every uploaded icon's filename, as JSON — feeds
  *                        the dashboard editor's icon picker
+ *  DELETE /icons/<file>  delete an uploaded icon (Devices page → Icons)
+ *  DELETE /ir-database/<category>.json  delete an ir-database category file
+ *                        (Devices page → IR database)
  *  GET  /icons/<file>     serve an uploaded icon back out — lets the dashboard
  *                        editor's picker/preview (docs/js/cards.js) show a
  *                        card's real configured icon when opened from this
@@ -140,6 +148,9 @@ import org.json.JSONObject
  *  GET  /version            `{"version","versionCode"}` — the installed
  *                        app's own version, static per build.
  *  GET  /battery         { level, charging } — this device's own battery
+ *  GET  /logs            this app's recent log lines, as a .txt download (bug reports without adb)
+ *  GET  /info            { id, name, manufacturer, model, android, version, versionCode, webhook } — who this remote is
+ *  POST /remote-name     name=… — renames this remote (blank = back to the default name)
  *                        status, for the companion HA integration
  *  GET  /activities        every trackable Activity (`"track": true` tile,
  *                        hotkey, or composed AppConfig.activities entry),
@@ -219,6 +230,10 @@ class ConfigServer(
     @Volatile
     var appleTvRegistry: AppleTvRegistry? = null
 
+    /** Called after POST /remote-name — the activity refreshes what shows the name. */
+    @Volatile
+    var onRemoteRenamed: () -> Unit = {}
+
     @Volatile
     private var lastResult: UpdateChecker.CheckResult? = null
 
@@ -281,6 +296,9 @@ class ConfigServer(
             "/current-page" -> if (method == Method.GET) serveCurrentPage() else methodNotAllowed()
             "/version" -> if (method == Method.GET) serveVersion() else methodNotAllowed()
             "/battery" -> if (method == Method.GET) serveBattery() else methodNotAllowed()
+            "/logs" -> if (method == Method.GET) serveLogs() else methodNotAllowed()
+            "/info" -> if (method == Method.GET) serveInfo() else methodNotAllowed()
+            "/remote-name" -> if (method == Method.POST) handleRemoteName(session) else methodNotAllowed()
             "/set-page" -> if (method == Method.POST) handleSetPage(session) else methodNotAllowed()
             "/activities" -> if (method == Method.GET) serveActivities() else methodNotAllowed()
             "/activities/active" -> if (method == Method.GET) serveActiveActivities() else methodNotAllowed()
@@ -288,13 +306,24 @@ class ConfigServer(
             "/activities/stop" -> if (method == Method.POST) handleStopActivity(session) else methodNotAllowed()
             "/ring" -> if (method == Method.POST) handleRing(session) else methodNotAllowed()
             "/ring/stop" -> if (method == Method.POST) handleStopRing() else methodNotAllowed()
+            "/history" -> if (method == Method.GET) serveHistoryList() else methodNotAllowed()
             else ->
                 when {
+                    uri.startsWith("/history/") -> handleHistory(session, uri.removePrefix("/history/"))
                     uri.startsWith("/builder/") ->
                         if (method == Method.GET) serveBuilderAsset(uri) else methodNotAllowed()
-                    uri.startsWith("/icons/") -> if (method == Method.GET) serveIcon(uri) else methodNotAllowed()
+                    uri.startsWith("/icons/") ->
+                        when (method) {
+                            Method.GET -> serveIcon(uri)
+                            Method.DELETE -> deleteIcon(uri)
+                            else -> methodNotAllowed()
+                        }
                     uri.startsWith("/ir-database/") ->
-                        if (method == Method.GET) serveIrDatabaseFile(uri) else methodNotAllowed()
+                        when (method) {
+                            Method.GET -> serveIrDatabaseFile(uri)
+                            Method.DELETE -> deleteIrDatabaseFile(uri)
+                            else -> methodNotAllowed()
+                        }
                     uri.startsWith("/appletv-artwork/") ->
                         if (method == Method.GET) serveAppleTvArtwork(uri) else methodNotAllowed()
                     // Any other GET falls through to a plain docs/ asset lookup —
@@ -521,6 +550,7 @@ class ConfigServer(
                     }
                 )
                 put("appleTvs", appleTvsJson())
+                put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
                     JSONArray().apply {
@@ -762,6 +792,25 @@ class ConfigServer(
     }
 
     // ---- version & battery --------------------------------------------------
+
+    /** Who this remote is — stable id, friendly name, device and app version (see [RemoteIdentity]). */
+    private fun serveInfo(): Response =
+        newFixedLengthResponse(Response.Status.OK, "application/json", RemoteIdentity.info(context).toString())
+
+    private fun handleRemoteName(session: IHTTPSession): Response {
+        val files = HashMap<String, String>()
+        session.parseBody(files)
+        RemoteIdentity.setName(context, session.parameters["name"]?.firstOrNull().orEmpty())
+        onRemoteRenamed()
+        return serveInfo()
+    }
+
+    /** This app's recent log lines as a downloadable text file (see [AppLogs]) — bug reports without adb. */
+    private fun serveLogs(): Response {
+        val response = newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", AppLogs.dump())
+        response.addHeader("Content-Disposition", "attachment; filename=\"${AppLogs.fileName()}\"")
+        return response
+    }
 
     /** The installed app version — lets a remote controller (the Home
      * Assistant integration's `update.*` entity, primarily) know what's
@@ -1350,9 +1399,49 @@ class ConfigServer(
                     "text/plain",
                     "Missing file"
                 )
+        // Version history (1.3.0): the new content is kept, with the optional note sent along.
+        val note = session.parameters["note"]?.firstOrNull()
+        runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }
         File(tmpPath).copyTo(DashboardLoader.configFile, overwrite = true)
         onDashboardUpdated()
         return redirectHome(context.getString(R.string.web_config_dashboard_updated))
+    }
+
+    /**
+     * dashboard.json version history (1.3.0), see [DashboardHistory]:
+     *  GET  /history/<id>      that version's content (download / open in the builder)
+     *  POST /history/restore   id → writes it back to dashboard.json and reloads the dashboard
+     *  POST /history/pin       id, pinned=true|false → never deleted automatically while pinned
+     *  POST /history/note      id, note
+     *  POST /history/delete    id
+     */
+    private fun serveHistoryList(): Response = jsonResponse(Response.Status.OK, JSONObject().put("versions", DashboardHistory.list()))
+
+    private fun handleHistory(session: IHTTPSession, action: String): Response {
+        if (session.method == Method.GET) {
+            val content =
+                DashboardHistory.read(action)
+                    ?: return jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+            return newFixedLengthResponse(Response.Status.OK, "application/json", content)
+                .apply { addHeader("Content-Disposition", "attachment; filename=\"dashboard-$action.json\"") }
+        }
+        if (session.method != Method.POST) return methodNotAllowed()
+        session.parseBody(HashMap())
+        val id = session.parameters["id"]?.firstOrNull()?.trim().orEmpty()
+        if (!DashboardHistory.isValidId(id)) return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "bad id"))
+        val ok =
+            when (action) {
+                "restore" -> DashboardHistory.restore(id).also { if (it) onDashboardUpdated() }
+                "pin" -> DashboardHistory.setPinned(id, session.parameters["pinned"]?.firstOrNull() == "true")
+                "note" -> DashboardHistory.setNote(id, session.parameters["note"]?.firstOrNull().orEmpty())
+                "delete" -> DashboardHistory.delete(id)
+                else -> return newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not found")
+            }
+        return if (ok) {
+            jsonResponse(Response.Status.OK, JSONObject().put("ok", true))
+        } else {
+            jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+        }
     }
 
     private fun handleIconUpload(session: IHTTPSession): Response {
@@ -1402,7 +1491,17 @@ class ConfigServer(
             "Expected a single .json ir-database category file (with \"category\"+\"brands\" keys)"
         )
 
-        File(tmpPath).copyTo(File(irDatabaseDir, target), overwrite = true)
+        val dest = File(irDatabaseDir, target)
+        if (wantsJson && dest.exists()) {
+            // The sniffer's "Send to my remote" only exports the models
+            // checked in that browser session (often a single device just
+            // imported from the Harmony archive): merge it into what's
+            // already there instead of wiping the category's other devices.
+            // This page's own upload form still replaces the whole file.
+            dest.writeText(IrDatabaseMerge.merge(dest.readText(), File(tmpPath).readText()))
+        } else {
+            File(tmpPath).copyTo(dest, overwrite = true)
+        }
         IrDatabaseRuntime.invalidate()
 
         return if (wantsJson) {
@@ -1483,6 +1582,28 @@ class ConfigServer(
     }
 
     /**
+     * Deletes one category file from [irDatabaseDir] (`DELETE
+     * /ir-database/<category>.json`, the Devices page's per-file "Delete").
+     * Same case-insensitive match and `sanitize()` as [serveIrDatabaseFile],
+     * so the path can't leave [irDatabaseDir]; the runtime cache is
+     * dropped so devices referencing it stop resolving right away.
+     */
+    private fun deleteIrDatabaseFile(uri: String): Response {
+        val category = sanitize(uri.removePrefix("/ir-database/").removeSuffix(".json"))
+        val file = irDatabaseDir.listFiles()?.firstOrNull { it.name.equals("$category.json", ignoreCase = true) }
+        val deleted = category.isNotBlank() && file != null && file.delete()
+        if (deleted) IrDatabaseRuntime.invalidate()
+        return when {
+            deleted -> irDatabaseJson(Response.Status.OK, "deleted", "$category.json")
+            file == null -> irDatabaseError(Response.Status.NOT_FOUND, "No ir-database file for $category")
+            else -> irDatabaseError(Response.Status.INTERNAL_ERROR, "Could not delete $category.json")
+        }
+    }
+
+    private fun irDatabaseJson(status: Response.Status, key: String, value: String): Response =
+        jsonResponse(status, buildJsonObject { put(key, value) })
+
+    /**
      * Lists every icon previously uploaded to [iconsDir], as a JSON array of
      * bare filenames — feeds the dashboard builder's icon picker (`docs/js/
      * cards.js`'s `openIconPicker()`), which shows them as clickable
@@ -1497,6 +1618,25 @@ class ConfigServer(
                 ?.sorted() ?: emptyList()
         val json = JSONArray(names).toString()
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
+    }
+
+    /**
+     * Deletes one uploaded icon from [iconsDir] (`DELETE /icons/<file>`, the
+     * Devices page's per-icon "Delete"). Same `sanitize()` as upload/serve,
+     * so the path can't leave [iconsDir]. Cards still pointing at a deleted
+     * icon just render without it — the page warns before deleting one
+     * that dashboard.json still references.
+     */
+    private fun deleteIcon(uri: String): Response {
+        val name = sanitize(uri.removePrefix("/icons/"))
+        val file = File(iconsDir, name)
+        return when {
+            name.isBlank() || !file.isFile ->
+                jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "No icon named $name"))
+            !file.delete() ->
+                jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", "Could not delete $name"))
+            else -> jsonResponse(Response.Status.OK, JSONObject().put("status", "ok").put("deleted", name))
+        }
     }
 
     /**
@@ -1544,7 +1684,7 @@ class ConfigServer(
      */
     private fun handleCheckUpdate(): Response {
         val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
-        val result = if (isBeta) UpdateChecker.checkBetaUpdate() else UpdateChecker.checkForUpdate()
+        val result = if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
         lastResult = result
         val message =
             when (result) {
@@ -1564,7 +1704,7 @@ class ConfigServer(
         val result =
             lastResult ?: run {
                 val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
-                if (isBeta) UpdateChecker.checkBetaUpdate() else UpdateChecker.checkForUpdate()
+                if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
             }
         val info =
             (result as? UpdateChecker.CheckResult.Available)?.info
@@ -1694,25 +1834,42 @@ class ConfigServer(
         val files = HashMap<String, String>()
         session.parseBody(files)
         val soundParam = session.parameters["sound"]?.firstOrNull()?.trim()?.lowercase() ?: "ringtone"
-        val ringtoneType =
-            ringSounds[soundParam]
-                ?: return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    """{"error":"unknown sound '$soundParam', expected one of ${ringSounds.keys}"}"""
-                )
+        if (soundParam !in ringSounds) {
+            return newFixedLengthResponse(
+                Response.Status.BAD_REQUEST,
+                "application/json",
+                """{"error":"unknown sound '$soundParam', expected one of ${ringSounds.keys}"}"""
+            )
+        }
         val volume = (session.parameters["volume"]?.firstOrNull()?.trim()?.toIntOrNull() ?: 80).coerceIn(1, 100)
         val durationSeconds =
             (session.parameters["duration"]?.firstOrNull()?.trim()?.toIntOrNull() ?: 15).coerceIn(1, 60)
+        val error = startRing(soundParam, volume, durationSeconds)
+        if (error != null) {
+            return newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                JSONObject().put("error", error).toString()
+            )
+        }
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "application/json",
+            """{"status":"ringing","sound":"$soundParam","volume":$volume,"duration":$durationSeconds}"""
+        )
+    }
 
+    /**
+     * Rings like `/ring` — also used by the remote's own Settings › Sound & touch › "Test Find my
+     * remote", which works even with the web server switched off. Returns an error message, or
+     * null once the sound is playing.
+     */
+    fun startRing(soundParam: String = "ringtone", volume: Int = 80, durationSeconds: Int = 15): String? {
+        val ringtoneType = ringSounds[soundParam] ?: return "unknown sound '$soundParam'"
         val ringtoneUri =
             RingtoneManager.getActualDefaultRingtoneUri(context, ringtoneType)
                 ?: RingtoneManager.getValidRingtoneUri(context)
-                ?: return newFixedLengthResponse(
-                    Response.Status.INTERNAL_ERROR,
-                    "application/json",
-                    """{"error":"no ringtone available on this device"}"""
-                )
+                ?: return "no ringtone available on this device"
 
         // A ring already in progress is replaced, not layered on top of.
         stopRingInternal()
@@ -1740,22 +1897,15 @@ class ConfigServer(
         } catch (e: Exception) {
             Log.e("ConfigServer", "ring: failed to start playback", e)
             stopRingInternal()
-            return newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                """{"error":"could not play sound: ${e.message}"}"""
-            )
+            return "could not play sound: ${e.message}"
         }
 
         val handler = Handler(Looper.getMainLooper())
         ringStopHandler = handler
         handler.postDelayed({ stopRingInternal() }, durationSeconds * 1000L)
-
-        return newFixedLengthResponse(
-            Response.Status.OK,
-            "application/json",
-            """{"status":"ringing","sound":"$soundParam","volume":$volume,"duration":$durationSeconds}"""
-        )
+        // Lets the remote itself wake its screen and stop the ring on the first touch/button.
+        FindMyRemote.started { handler.post { stopRingInternal() } }
+        return null
     }
 
     private fun handleStopRing(): Response {
@@ -1779,6 +1929,7 @@ class ConfigServer(
             runCatching { player.release() }
         }
         ringMediaPlayer = null
+        FindMyRemote.stopped()
         ringOriginalAlarmVolume?.let { original ->
             val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             runCatching { audioManager.setStreamVolume(AudioManager.STREAM_ALARM, original, 0) }

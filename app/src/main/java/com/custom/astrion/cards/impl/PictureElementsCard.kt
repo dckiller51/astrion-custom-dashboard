@@ -66,6 +66,10 @@ import kotlinx.coroutines.withContext
  * Floorplan card — the picture-elements equivalent. Draws a background image
  * (loaded safely off-thread) with tappable icons positioned by percentage,
  * each toggling a light and lighting up (amber) when that entity is on.
+ *
+ * Element `icon`: `"power"`, a PNG path (`/sdcard/astrion/icons/xxx.png`,
+ * 1.2.9+), or nothing (a bulb). `on_color` (1.2.9+, `#RRGGBB`/`#AARRGGBB`)
+ * replaces the amber background while the entity is on.
  */
 class PictureElementsCard : CardRenderer {
     override val type = "picture_elements"
@@ -123,7 +127,11 @@ class PictureElementsCard : CardRenderer {
                 val topPct = (el["top"] as? Number)?.toFloat() ?: 50f
                 val entityId = el["entity_id"] as? String
                 val service = el["service"] as? String
-                val isPower = (el["icon"] as? String) == "power"
+                val iconOpt = el["icon"] as? String
+                val isPower = iconOpt == "power"
+                val iconPx = with(LocalDensity.current) { (iconBox - 12.dp).toPx() }.toInt()
+                val png = remember(iconOpt, iconPx) { iconOpt?.takeIf { it.contains('/') }?.let { decodeIconSampled(it, iconPx) } }
+                val onColor = parseHexColor(el["on_color"] as? String)
 
                 val on = entityId?.let { ctx.entities[it]?.isOn == true } ?: false
 
@@ -131,7 +139,7 @@ class PictureElementsCard : CardRenderer {
                 val x = w * (leftPct / 100f) - iconBox / 2
                 val y = h * (topPct / 100f) - iconBox / 2
 
-                val bg = if (on) ctx.theme.amber.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.2f)
+                val bg = if (on) onColor ?: ctx.theme.amber.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.2f)
                 val tint = if (on) Color(0xFFFFD37A) else Color(0xFFE8ECF2)
                 val icon =
                     when {
@@ -140,10 +148,7 @@ class PictureElementsCard : CardRenderer {
                         else -> Icons.Outlined.Lightbulb
                     }
 
-                Icon(
-                    imageVector = icon,
-                    contentDescription = entityId,
-                    tint = tint,
+                Box(
                     modifier =
                     Modifier
                         .offset(x = x.coerceAtLeast(0.dp), y = y.coerceAtLeast(0.dp))
@@ -166,8 +171,15 @@ class PictureElementsCard : CardRenderer {
                                     }
                                 }
                             }
-                        }.padding(6.dp)
-                )
+                        }.padding(6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (png != null) {
+                        Image(bitmap = png, contentDescription = entityId, modifier = Modifier.fillMaxSize())
+                    } else {
+                        Icon(imageVector = icon, contentDescription = entityId, tint = tint, modifier = Modifier.fillMaxSize())
+                    }
+                }
             }
 
             // Radar overlay: plot mmWave target dots (e.g. LD2450) on the plan.

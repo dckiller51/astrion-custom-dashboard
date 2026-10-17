@@ -66,7 +66,26 @@ data class DeviceSettingsState(
      * [com.custom.astrion.ui.LocalTapFeedback] + Modifier.tapClickable);
      * when off they stay silent. See TapFeedback.kt for details. */
     val tapFeedbackEnabled: Boolean = true,
-    val setTapFeedbackEnabled: (Boolean) -> Unit = {}
+    val setTapFeedbackEnabled: (Boolean) -> Unit = {},
+    /** dashboard.json's `dock.mode` — "charging" / "clock" / "dashboard" (see
+     * [com.custom.astrion.config.DockConfig]); [setDockMode] writes it back into the file. */
+    val dockMode: String = "",
+    val setDockMode: (String) -> Unit = {},
+    /** dashboard.json's `power.screen_timeout_seconds` (null = the system setting is left alone);
+     * [setScreenTimeout] writes it back into the file. */
+    val screenTimeoutSeconds: Int? = null,
+    val setScreenTimeout: (Int?) -> Unit = {},
+    /** The app's own language ("" = Android's) — see com.custom.astrion.AppLanguage; setting it restarts the app. */
+    val appLanguage: String = "",
+    val setAppLanguage: (String) -> Unit = {},
+    /** Settings actions: re-read dashboard.json, restart the app, ring "Find my remote" once. */
+    val reloadDashboard: () -> Unit = {},
+    val restartApp: () -> Unit = {},
+    val testRing: () -> Unit = {},
+    /** This remote's identity (com.custom.astrion.RemoteIdentity): stable id and friendly name. */
+    val remoteId: String = "",
+    val remoteName: String = "",
+    val setRemoteName: (String) -> Unit = {}
 )
 
 /**
@@ -141,6 +160,9 @@ constructor(
      * device used by both is left alone — see ActivityRuntime.switchActivity),
      * then marks it active. No-op if `activityId` isn't found. */
     val startActivity: (activityId: String) -> Unit = {},
+    /** The "Off" action: stops the Activity running in a room (`"*"` = every room) — see
+     * ActivityDispatcher.stopActivities. No-op default, same as [startActivity]. */
+    val stopActivity: (room: String) -> Unit = {},
     /** Tracks which AV Activity is active in each room — see the NOTE atop
      * AppConfig.kt. Cards that render a trackable item (scene_grid with
      * `track: true`, or `activity`) call into this after firing their own

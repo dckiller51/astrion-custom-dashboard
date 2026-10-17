@@ -1,0 +1,246 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- General / App Info -->
+    <string name="app_name">Astrion Custom</string>
+    <string name="close">Cerrar</string>
+    <string name="active_activities">Actividades activas</string>
+    <string name="no_active_activities">Nada activo ahora mismo</string>
+    <string name="stop_activity">Detener</string>
+    <string name="activity_help">Ayuda</string>
+    <string name="activity_help_hint">Toca un dispositivo para corregir lo que Astrion cree, luego toca Corregir. Nada se envía hasta que toques Corregir.</string>
+    <string name="device_state_on">Encendido</string>
+    <string name="device_state_off">Apagado</string>
+    <string name="device_state_unknown">Desconocido</string>
+    <string name="activity_fix">Corregir</string>
+    <string name="activity_help_input">entrada: %1$s</string>
+    <string name="connected">Conectado</string>
+    <string name="disconnected">Desconectado</string>
+
+    <!-- Native App Settings UI -->
+    <string name="settings_title">Ajustes</string>
+    <string name="wifi_network">Red Wi-Fi</string>
+    <string name="android_system">Sistema Android</string>
+    <string name="wake_on_motion">Despertar por movimiento</string>
+    <string name="config_server_toggle">Servidor de configuración local</string>
+    <string name="config_server_toggle_hint">También desactiva /builder/, la subida de iconos y la subida/descarga de dashboard.json. Vuelve a activarlo aquí para reconfigurar.</string>
+    <string name="wifi_keep_awake">Mantener Wi-Fi activo</string>
+    <string name="wifi_keep_awake_hint">Desactivado por defecto. Soluciona el problema de que Home Assistant a veces no alcanza este dispositivo (servicios, notificaciones) mientras la pantalla está apagada; consume algo de batería, ya que impide que la radio Wi-Fi entre en modo de ahorro de energía.</string>
+    <string name="config_server_off_hint">El servidor de configuración local está desactivado</string>
+    <string name="tap_feedback">Feedback al tocar</string>
+    <string name="tap_feedback_hint">Un sonido corto al tocar una escena, botón o punto, igual que los menús de Android del dispositivo.</string>
+    <string name="brightness">Brillo</string>
+    <string name="allow_brightness_write">Permitir control de brillo (tocar)</string>
+    <string name="settings_update_available">Actualización disponible: v%1$s</string>
+    <string name="settings_beta_update_available">Beta disponible: %1$s</string>
+    <string name="settings_local_config">Configuración local: %1$s</string>
+
+    <!-- Settings: groups, screen timeout, About (1.2.5) -->
+    <string name="settings_display">Pantalla</string>
+    <string name="settings_connections">Conexiones</string>
+    <string name="settings_web_config">Configuración web</string>
+    <string name="settings_sound_touch">Sonido y tacto</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_display_summary">Apagado %1$s · Base: %2$s</string>
+    <string name="state_on">Activado</string>
+    <string name="state_off">Desactivado</string>
+    <string name="screen_timeout">Apagado de la pantalla</string>
+    <string name="screen_timeout_system">Sistema (%1$s)</string>
+    <string name="screen_timeout_hint">Cuánto tiempo sigue encendida la pantalla sin tocarla. Guardado en el dashboard.json de este mando; «Sistema» deja el ajuste de Android como está.</string>
+    <string name="allow_write_settings">Permitir que la app cambie los ajustes del sistema (toca)</string>
+    <string name="reconnect_now">Reconectar ahora</string>
+    <string name="ip_address">Dirección IP</string>
+    <string name="about_version">Versión</string>
+    <string name="about_channel">Canal</string>
+    <string name="channel_beta">Beta</string>
+    <string name="channel_stable">Estable</string>
+    <string name="about_update">Actualización</string>
+    <string name="update_checking">Comprobando…</string>
+    <string name="update_up_to_date">Actualizado</string>
+    <string name="update_check_failed">No se pudo comprobar</string>
+    <string name="update_available_short">Disponible</string>
+    <string name="about_device">Dispositivo</string>
+    <string name="about_battery">Batería</string>
+    <string name="about_package">Paquete</string>
+    <string name="about_project">Proyecto</string>
+    <string name="remote_name">Nombre de este mando</string>
+    <string name="remote_name_hint">Se muestra en Home Assistant y se envía con cada evento, para que las automatizaciones sepan qué mando se usó.</string>
+    <string name="about_remote_id">ID del mando</string>
+    <string name="save_short">OK</string>
+    <string name="settings_language">Idioma</string>
+    <string name="language_system">Sistema</string>
+    <string name="language_hint">La app se reinicia para aplicarlo.</string>
+    <string name="test_ring">Probar «Find my remote»</string>
+    <string name="test_ring_hint">Suena como desde Home Assistant. Toca la pantalla o pulsa un botón para pararlo.</string>
+    <string name="reload_dashboard">Recargar el dashboard</string>
+    <string name="dashboard_reloaded">Dashboard recargado</string>
+    <string name="restart_app">Reiniciar la app</string>
+    <string name="about_logs">Registros</string>
+    <string name="logs_server_off">activa la Configuración web</string>
+
+    <!-- Web Config: Header & General -->
+    <string name="web_config_title">Astrion Custom — Configuración local</string>
+    <string name="web_config_save_button">Guardar y reconectar</string>
+    <string name="web_config_save_note">La aplicación se reinicia para reconectar tras guardar.</string>
+    <string name="web_config_saved_reconnecting">Ajustes guardados — reconectando</string>
+    <string name="web_config_status_not_set">no configurado</string>
+    <string name="web_config_status_hub_singular">hub</string>
+    <string name="web_config_status_hub_plural">hubs</string>
+
+    <!-- Web Config: Home Assistant -->
+    <string name="web_config_ha_heading">Home Assistant</string>
+    <string name="web_config_ha_url_label">URL de Home Assistant</string>
+    <string name="web_config_ha_token_label">Token de acceso de larga duración de Home Assistant</string>
+    <string name="web_config_ha_webhook_label">ID de Webhook (opcional — envío instantáneo en lugar de consulta)</string>
+    <string name="web_config_ha_webhook_hint">Si tu integración de Home Assistant registra un webhook, pega su ID aquí para que Astrion pueda enviar la página actual y la Actividad activa en el instante en que cambien, en lugar de que Home Assistant los consulte. Déjalo en blanco para mantener la consulta; todo seguirá funcionando de cualquier modo.</string>
+
+    <!-- Web Config: Harmony Hubs -->
+    <string name="web_config_harmony_heading">Harmony Hubs</string>
+    <string name="web_config_harmony_name_label">Nombre</string>
+    <string name="web_config_harmony_ip_label">Dirección IP</string>
+    <string name="web_config_harmony_id_label">ID del Hub (opcional)</string>
+    <string name="web_config_harmony_add_button">+ Añadir un hub</string>
+    <string name="web_config_harmony_remove_button">Eliminar</string>
+    <string name="web_config_harmony_fetch_link">Obtener configuración del hub</string>
+    <string name="web_config_harmony_fetching">Obteniendo…</string>
+    <string name="web_config_harmony_discover_button">Autodetectar ID</string>
+    <string name="web_config_harmony_discover_need_ip">Introduce la dirección IP primero</string>
+    <string name="web_config_harmony_discover_failed">No se ha podido detectar el ID del hub</string>
+
+    <!-- Web Config: Dashboard & Builder -->
+    <string name="web_config_dashboard_heading">dashboard.json</string>
+    <string name="web_config_dashboard_sub">Construye y edita tu dashboard.json visualmente, directamente desde este dispositivo.</string>
+    <string name="web_config_dashboard_builder_link">Abrir el editor de dashboard</string>
+    <string name="web_config_dashboard_download">Descargar dashboard.json actual</string>
+    <string name="web_config_dashboard_upload_button">Subir y recargar dashboard</string>
+    <string name="web_config_dashboard_updated">dashboard.json actualizado</string>
+
+    <!-- Web Config: Icons -->
+    <string name="web_config_icons_heading">Iconos</string>
+    <string name="web_config_icons_upload_button">Subir icono</string>
+    <string name="web_config_icons_note">Guardado en /sdcard/astrion/icons/&lt;filename&gt; — referréncialo en dashboard.json como \"/sdcard/astrion/icons/&lt;filename&gt;\".</string>
+    <string name="web_config_icon_uploaded">Icono subido</string>
+
+    <!-- Web Config: IR Database -->
+    <string name="web_config_ir_database_heading">Dispositivos IR</string>
+    <string name="web_config_ir_database_sub">Referencia un dispositivo desde el selector de ir-database en el constructor de dashboard, o sube sus archivos curados aquí para que funcione inmediatamente.</string>
+    <string name="web_config_ir_database_picker_link">Elige tus dispositivos IR \u2192</string>
+    <string name="web_config_ir_database_upload_button">Subir archivo ir-database</string>
+    <string name="web_config_ir_database_note">Guardado en /sdcard/astrion/ir-database/&lt;category&gt;.json — se detecta inmediatamente, no es necesario reiniciar.</string>
+    <string name="web_config_ir_database_uploaded">archivo ir-database subido</string>
+
+    <!-- Charging screen -->
+    <string name="charging_screen_charging">Cargando</string>
+    <string name="charging_screen_full">Cargado</string>
+
+    <!-- Web Config: Find my remote (ring) -->
+    <string name="web_config_ring_heading">Encontrar mi mando</string>
+    <string name="web_config_ring_sub">Prueba el sonido y el volumen del timbre desde aquí, antes de conectarlo en Home Assistant.</string>
+    <string name="web_config_ring_volume_label">Volumen</string>
+    <string name="web_config_ring_sound_label">Sonido</string>
+    <string name="web_config_ring_sound_ringtone">Tono de llamada</string>
+    <string name="web_config_ring_sound_alarm">Alarma</string>
+    <string name="web_config_ring_sound_notification">Notificación</string>
+    <string name="web_config_ring_duration_label">Duración (segundos)</string>
+    <string name="web_config_ring_button">Timbrar</string>
+    <string name="web_config_ring_stop_button">Detener</string>
+    <string name="web_config_ring_status_ringing">Timbrando…</string>
+    <string name="web_config_ring_status_stopped">Detenido</string>
+    <string name="web_config_ring_status_error">No se ha podido timbrar:</string>
+
+    <!-- Web Config: OTA / Updates -->
+    <string name="web_config_updates_heading">Actualizaciones</string>
+    <string name="web_config_current_version">Versión actual</string>
+    <string name="web_config_check_update_link">Buscar actualizaciones</string>
+    <string name="web_config_update_found">Actualización disponible: v%1$s</string>
+    <string name="web_config_update_none">Ya está actualizado</string>
+    <string name="web_config_install_update_button">Descargar e instalar</string>
+    <string name="web_config_update_installing">Instalador lanzado — aprueba la solicitud de instalación en la pantalla del panel</string>
+    <string name="web_config_update_needs_permission">Permite \"Instalar aplicaciones desconocidas\" para esta aplicación en la pantalla que acaba de abrirse, luego toca Descargar e instalar de nuevo.</string>
+    <string name="web_config_update_failed">Error al buscar actualizaciones: %1$s</string>
+
+    <!-- Connection status -->
+    <string name="connection_connecting">Conectando…</string>
+    <string name="connection_auth_failed">Error de autenticación — revisa el token</string>
+    <string name="connection_error_retrying">Error de conexión — reintentando</string>
+
+    <!-- Unknown card -->
+    <string name="unknown_card_type">Tipo de tarjeta desconocido: \"%1$s\"</string>
+
+    <!-- Media (player, Plex, browser) -->
+    <string name="media_loading">Cargando…</string>
+    <string name="media_loading_more">Cargando más…</string>
+    <string name="media_no_items">Sin elementos</string>
+    <string name="media_nothing_here">Nada aquí</string>
+    <string name="media_default_title">Multimedia</string>
+    <string name="media_apps_title">Aplicaciones</string>
+    <string name="media_load_timeout">No se pudo cargar multimedia (tiempo agotado)</string>
+    <string name="media_load_failed">No se pudo cargar multimedia</string>
+    <string name="media_browse">Explorar</string>
+    <string name="media_power_toggle">Alternar</string>
+    <string name="media_browser_play">Reproducir</string>
+    <string name="media_browser_add_to_queue">Añadir a la cola</string>
+    <string name="plex_error_no_items">No se han devuelto elementos de Plex</string>
+    <string name="plex_error_generic">Error de Plex</string>
+    <string name="plex_library">Biblioteca</string>
+    <string name="plex_this_season">Esta temporada</string>
+    <string name="plex_play">Reproducir</string>
+    <string name="plex_episode">E%1$s · %2$s</string>
+
+    <!-- Select cards -->
+    <string name="select_no_options">Sin opciones</string>
+    <string name="select_choose">Seleccionar…</string>
+    <string name="source_no_sources">Sin fuentes (¿dispositivo apagado?)</string>
+    <string name="source_choose">Seleccionar fuente…</string>
+
+    <!-- ClimateCard -->
+    <string name="climate_current_temp">Ahora %1$s°</string>
+    <string name="climate_hvac_caption">Modo</string>
+    <string name="climate_fan_caption">Ventilador</string>
+    <string name="climate_swing_caption">Oscilación</string>
+
+    <!-- FanCard -->
+    <string name="fan_preset_caption">Ajuste preestablecido</string>
+    <string name="fan_oscillate_caption">Oscilar</string>
+    <string name="astrion_state_on">Encendido</string>
+    <string name="astrion_state_off">Apagado</string>
+
+    <!-- VacuumCard -->
+    <string name="vacuum_fan_speed_caption">Modo de limpieza</string>
+    <string name="vacuum_default_name">Aspiradora</string>
+    <string name="vacuum_map_label">Mapa de la aspiradora</string>
+
+    <!-- CoverCard -->
+    <string name="cover_open">Abrir</string>
+    <string name="cover_closed">Cerrado</string>
+    <string name="cover_position_open">%1$d%% abierto</string>
+
+    <!-- LightCard -->
+    <string name="light_state_on">Encendido</string>
+    <string name="light_state_off">Apagado</string>
+    <string name="light_brightness_pct">%1$d%%</string>
+
+    <!-- MediaPlayerCard / MediaPlayerDetailDialog -->
+    <string name="media_state_playing">Reproduciendo</string>
+    <string name="media_state_paused">Pausado</string>
+    <string name="media_state_idle">Inactivo</string>
+    <string name="media_state_buffering">Cargando</string>
+    <string name="media_state_on">Encendido</string>
+    <string name="media_state_off">Apagado</string>
+    <string name="volume_muted">Silenciado</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Pantalla en la base</string>
+    <string name="dock_screen_hint">Lo que muestra este mando en su base de carga — guardado en su dashboard.json (como la sección Pantalla en la base del builder). Toca para cambiar.</string>
+    <string name="dock_mode_charging">Carga</string>
+    <string name="dock_mode_clock">Reloj</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">¡Encontrado!</string>
+    <string name="ring_found_hint">Toca la pantalla o pulsa un botón para detener</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Altavoces</string>
+    <string name="speaker_muted">Silenciado</string>
+    <string name="speaker_group">Agrupar</string>
+    <string name="speaker_ungroup">Desagrupar</string>
+    <string name="setup_banner_title">Configura este mando desde un navegador</string>
+    <string name="connection_web_page_hint">Página web del mando: %1$s</string>
+</resources>

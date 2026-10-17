@@ -97,8 +97,21 @@ function resetAll() {
 // parent/linkedPage/hiddenUnlessActivity/openWhen* were only ever added to
 // this function's old importJson()-only copy, so loading a dashboard via
 // the device (not the paste box) silently dropped every one of them.
+//
+// Fields this function doesn't know about are carried over untouched (see
+// PAGE_FIELDS_NORMALIZED): a page field added to the app later must never
+// again vanish on import the way "openMode" did — it wasn't listed here,
+// so an imported popup page came back as a full page and lost it on save.
+const PAGE_FIELDS_NORMALIZED = new Set([
+  'name', 'cards', 'hotkeys', 'longHotkeys', 'parent', 'parentKey', 'linkedPage', 'linkedPageMode',
+  'popupWidth', 'popupHeight', 'popupPosition', 'hiddenUnlessActivity',
+  'openWhenEntity', 'openWhenState', 'closeWhenState', 'openMode'
+]);
+
 function normalizePageFromJson(p) {
+  const unknownFields = Object.fromEntries(Object.entries(p).filter(([key]) => !PAGE_FIELDS_NORMALIZED.has(key)));
   return {
+    ...unknownFields,
     name: p.name || 'Page',
     cards: p.cards || [],
     hotkeys: p.hotkeys || [],
@@ -120,6 +133,7 @@ function normalizePageFromJson(p) {
     ...(p.openWhenEntity ? { openWhenEntity: p.openWhenEntity } : {}),
     ...(p.openWhenEntity && p.openWhenState && p.openWhenState !== 'on' ? { openWhenState: p.openWhenState } : {}),
     ...(p.openWhenEntity && p.closeWhenState ? { closeWhenState: p.closeWhenState } : {}),
+    ...(p.openWhenEntity && p.openMode === 'popup' ? { openMode: 'popup' } : {}),
   };
 }
 
@@ -142,6 +156,9 @@ function normalizeDashboardData(parsed) {
     harmonyAliases: parsed.harmonyAliases || {},
     activities: parsed.activities || [],
     theme: parsed.theme || {},
+    // Optional; absent stays absent so an untouched dashboard.json round-trips unchanged.
+    dock: parsed.dock && typeof parsed.dock === 'object' ? parsed.dock : undefined,
+    power: parsed.power && typeof parsed.power === 'object' ? parsed.power : undefined,
   };
   if (data.pages.length === 0) {
     data.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });
@@ -157,9 +174,9 @@ function importJson() {
     dashboardData = normalizeDashboardData(parsed);
     currentActivePage = 0;
     initEditor();
-    alert('dashboard.json loaded — you can now edit it below.');
+    alert(I18N.t('web_page_imported'));
   } catch (e) {
-    alert('Invalid JSON: ' + e.message);
+    alert(I18N.t('web_page_invalid_json', e.message));
   }
 }
 
@@ -172,6 +189,8 @@ function initEditor() {
   renderHotkeysList();
   renderActivitiesList();
   if (typeof renderThemeForm === 'function') renderThemeForm();
+  if (typeof renderDockForm === 'function') renderDockForm();
+  if (typeof renderPowerForm === 'function') renderPowerForm();
   if (typeof applyThemeToPreview === 'function') applyThemeToPreview();
   updateJsonOutput();
   updateHotkeyActionInputs();
@@ -193,7 +212,7 @@ function onPageChange(index) {
 function openPageDialog(index) {
   editingPage = index; // null = adding a new page
   const isNew = index === null;
-  document.getElementById('pageDialogTitle').textContent = isNew ? 'Add page' : 'Page settings';
+  document.getElementById('pageDialogTitle').textContent = isNew ? I18N.t('web_modal_add_page') : I18N.t('web_modal_page_settings');
   document.getElementById('pageDialogName').value = isNew ? '' : dashboardData.pages[index].name;
   populatePageParentSelect(index);
   document.getElementById('pageDialogParent').value = isNew ? '' : (dashboardData.pages[index].parent || '');
@@ -219,6 +238,8 @@ function openPageDialog(index) {
   onPageDialogLinkedPageModeChange();
   populatePageHiddenUnlessActivitySelect();
   document.getElementById('pageDialogHiddenUnlessActivity').value = isNew ? '' : (dashboardData.pages[index].hiddenUnlessActivity || '');
+  document.getElementById('pageDialogHideFull').checked = !isNew && dashboardData.pages[index].hideMode === 'full';
+  onPageDialogHiddenChange();
   document.getElementById('pageDialogOpenWhenEntity').value = isNew ? '' : (dashboardData.pages[index].openWhenEntity || '');
   document.getElementById('pageDialogOpenWhenState').value = isNew ? '' : (dashboardData.pages[index].openWhenState || '');
   document.getElementById('pageDialogCloseWhenState').value = isNew ? '' : (dashboardData.pages[index].closeWhenState || '');
@@ -304,7 +325,7 @@ function pagesUnavailableAsParentOf(excludeIndex) {
 function populatePageParentSelect(excludeIndex) {
   const select = document.getElementById('pageDialogParent');
   const unavailable = pagesUnavailableAsParentOf(excludeIndex);
-  select.innerHTML = '<option value="">— None (top-level page) —</option>' +
+  select.innerHTML = '<option value="">' + I18N.t('web_page_parent_none') + '</option>' +
     dashboardData.pages
       .filter(p => !unavailable.has(p.name))
       .map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`)
@@ -318,7 +339,7 @@ function populatePageParentSelect(excludeIndex) {
 function populatePageLinkedPageSelect(excludeIndex) {
   const select = document.getElementById('pageDialogLinkedPage');
   const selfName = excludeIndex === null ? null : dashboardData.pages[excludeIndex].name;
-  select.innerHTML = '<option value="">— None —</option>' +
+  select.innerHTML = `<option value="">${I18N.t('web_page_linked_none')}</option>` +
     dashboardData.pages
       .filter(p => p.name !== selfName)
       .map(p => `<option value="${p.name.replace(/"/g, '&quot;')}">${p.name}</option>`)
@@ -331,10 +352,10 @@ function populatePageLinkedPageSelect(excludeIndex) {
 function populatePageHiddenUnlessActivitySelect() {
   const select = document.getElementById('pageDialogHiddenUnlessActivity');
   const options = collectTrackableActivities();
-  select.innerHTML = '<option value="">— Always shown —</option>' +
+  select.innerHTML = `<option value="">${I18N.t('web_page_hidden_always')}</option>` +
     options.map(o => `<option value="${o.id.replace(/"/g, '&quot;')}">${o.label}</option>`).join('');
   if (options.length === 0) {
-    select.innerHTML += '<option value="" disabled>(no trackable Activities yet — add one in the Activities tab, or a "track": true scene_grid tile)</option>';
+    select.innerHTML += `<option value="" disabled>${I18N.t('web_page_hidden_no_activities')}</option>`;
   }
 }
 
@@ -345,7 +366,7 @@ function closePageDialog() {
 
 function savePageDialog() {
   const name = document.getElementById('pageDialogName').value.trim();
-  if (!name) { alert('Give the page a name.'); return; }
+  if (!name) { alert(I18N.t('web_page_need_name')); return; }
   const parent = document.getElementById('pageDialogParent').value || undefined;
   const parentKey = document.getElementById('pageDialogParentKey').value || 'BACK';
   const linkedPage = document.getElementById('pageDialogLinkedPage').value || undefined;
@@ -355,6 +376,7 @@ function savePageDialog() {
   const popupPosition = document.getElementById('pageDialogPopupPosition').value;
   const tilePopup = document.getElementById('pageDialogTilePopup').checked;
   const hiddenUnlessActivity = document.getElementById('pageDialogHiddenUnlessActivity').value || undefined;
+  const hideFull = !!hiddenUnlessActivity && document.getElementById('pageDialogHideFull').checked;
   const openWhenEntity = document.getElementById('pageDialogOpenWhenEntity').value.trim() || undefined;
   const openWhenState = document.getElementById('pageDialogOpenWhenState').value.trim() || undefined;
   const closeWhenState = document.getElementById('pageDialogCloseWhenState').value.trim() || undefined;
@@ -372,6 +394,7 @@ function savePageDialog() {
       if (linkedPageMode === 'popup') page.linkedPageMode = 'popup';
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity;
+    if (hideFull) page.hideMode = 'full';
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState;
@@ -405,6 +428,7 @@ function savePageDialog() {
       delete page.linkedPageMode;
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity; else delete page.hiddenUnlessActivity;
+    if (hideFull) page.hideMode = 'full'; else delete page.hideMode;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState; else delete page.openWhenState;
@@ -447,13 +471,13 @@ function savePageDialog() {
 function deletePageFromDialog() {
   const i = editingPage;
   if (i === null) return;
-  if (dashboardData.pages.length <= 1) { alert('You need at least one page.'); return; }
+  if (dashboardData.pages.length <= 1) { alert(I18N.t('web_page_need_one')); return; }
   const deletedName = dashboardData.pages[i].name;
   const children = dashboardData.pages.filter(p => p.parent === deletedName);
   const childWarning = children.length
-    ? ` ${children.length} child page(s) (${children.map(c => c.name).join(', ')}) will become top-level pages instead of being deleted.`
+    ? ' ' + I18N.t('web_page_delete_child_warning', children.length, children.map(c => c.name).join(', '))
     : '';
-  if (!confirm(`Delete page "${deletedName}" and everything on it (cards, page hotkeys)?${childWarning}`)) return;
+  if (!confirm(I18N.t('web_page_delete_confirm', deletedName) + childWarning)) return;
   children.forEach(c => delete c.parent);
   // Any page linking up to the one being deleted loses that link too —
   // otherwise its swipe-up would silently point at a page that no longer
@@ -536,3 +560,9 @@ function wireModalBackdropClose(modalId, closeFn) {
   ['activityWizardModal', () => closeActivityWizard()],
   ['iconPickerModal', () => closeIconPicker()],
 ].forEach(([id, fn]) => wireModalBackdropClose(id, fn));
+/** The "Hide completely" option only makes sense once an Activity is chosen. */
+function onPageDialogHiddenChange() {
+  const row = document.getElementById('pageDialogHideFullRow');
+  const hasActivity = !!document.getElementById('pageDialogHiddenUnlessActivity').value;
+  if (row) row.style.display = hasActivity ? '' : 'none';
+}
