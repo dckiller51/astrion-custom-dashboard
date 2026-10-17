@@ -121,11 +121,17 @@
             <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
             <button id="saveToDeviceBtn" style="display:none" data-i18n="web_ui_save_to_device" onclick="saveDashboardToDevice()">Save to device</button>
         </div>
+        <input type="text" id="saveNote" maxlength="200" style="display:none;margin-top:8px" data-i18n-attr="placeholder:web_history_save_note_ph" placeholder="Note for this version (optional), e.g. new Apple TV page">
     </div>
 
     <!-- RIGHT PANE -->
     <div class="preview-pane">
-        <h2 style="margin-top:0" data-i18n="web_ui_preview">Preview</h2>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+            <h2 style="margin:0;flex:1" data-i18n="web_ui_preview">Preview</h2>
+            <button type="button" id="undoBtn" class="ha-icon-btn" disabled onclick="undoChange()" data-i18n-attr="title:web_history_undo" title="Undo (Ctrl+Z)">↶</button>
+            <button type="button" id="redoBtn" class="ha-icon-btn" disabled onclick="redoChange()" data-i18n-attr="title:web_history_redo" title="Redo (Ctrl+Y)">↷</button>
+            <button type="button" id="historyBtn" class="ha-icon-btn" style="display:none" onclick="openHistory()" data-i18n-attr="title:web_history_title" title="Version history">🕘</button>
+        </div>
         <div class="ha-toolbar">
             <div id="tabs" class="tabs"></div>
             <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
@@ -423,6 +429,15 @@
     </div>
 </div>
 
+<div id="historyModal" class="preview-modal">
+    <div class="preview-modal-inner ha-dialog">
+        <button class="preview-modal-close" data-i18n="web_modal_close" onclick="closeHistory()">✕ Close</button>
+        <h2 style="margin-top:0" data-i18n="web_history_title">Version history</h2>
+        <div class="hint" data-i18n="web_history_hint">Every save to the remote is kept here (the last 30, plus the pinned ones). Open a version in the editor to look at it — nothing changes on the remote until you save — or restore it on the remote straight away.</div>
+        <div id="historyList" style="margin-top:12px;max-height:60vh;overflow:auto"></div>
+    </div>
+</div>
+
 <div id="toast" class="toast"></div>
 
 <script src="js/i18n.js"></script>
@@ -430,6 +445,7 @@
 <script src="js/pages.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/cards-extra.js"></script>
+<script src="js/history.js"></script>
 <script src="js/harmony.js"></script>
 <script src="js/hotkeys.js"></script>
 <script src="js/activities.js"></script>

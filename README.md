@@ -17,10 +17,13 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 
 📖 **Documentation lives in the [Wiki](https://github.com/dckiller51/astrion-custom-dashboard/wiki)**. This page is the overview.
 
+🎬 **Your Logitech Harmony died?** Start with [Coming from Harmony](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Coming-from-Harmony): Activities, IR, your Harmony codes and Apple TV, no cloud, Home Assistant optional.
+
 ## Features
 
 - **Swipeable pages of cards**: lights, covers, climate, media, cameras, vacuums, Plex, scenes, remotes… ([card reference](https://github.com/dckiller51/astrion-custom-dashboard/wiki)).
 - **Browser-based builder** at `http://<remote-ip>:8080/builder/`. You edit visually with a live preview of the remote, and no hand-written JSON is needed. Available in English, French, Italian and Spanish.
+- **Undo and version history**: undo / redo in the builder (Ctrl+Z / Ctrl+Y), and the remote keeps every saved version of its dashboard. Open, restore, pin or annotate any of them ([details](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Builder#undo-and-version-history-since-130)).
 - **Physical keys**: every hardware key, short or long press, can be bound to a page, a popup, a Home Assistant service or event, a Harmony or IR command, an Apple TV command, or an Activity. Bindings can be global or per page.
 - **Activities**: "Watch Apple TV", "Listen to music"… One tap powers on the right devices, switches inputs, binds the volume keys and opens the right page. Activities are tracked per room, and the "Off" button works like Harmony's.
 - **Many ways to control your devices**:
@@ -32,6 +35,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 - **Battery-friendly standby**: quiet Home Assistant mode while the screen is off, a time-limited motion wake, and a screen timeout.
 - **Several remotes in one home**: each remote has its own identity and name, so Home Assistant knows which remote and which button sent an event.
 - **Home Assistant integration**: [ha-astrion-custom-dashboard](https://github.com/dckiller51/ha-astrion-custom-dashboard) adds each remote as a device in Home Assistant (battery, last seen, button events, "Find my remote").
+- **Managing several remotes from Home Assistant**: the community add-on [Astrion Config Manager](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Astrion-Config-Manager) by [@dvbit](https://github.com/dvbit) lists all your remotes in the Home Assistant sidebar, checks entities before sending, copies pages between remotes and has a live simulator.
 - **Find my remote**: rings the remote from its web page or from Home Assistant.
 - **Self-updating**: the remote's web page checks GitHub Releases and installs updates. No adb needed after the first install.
 
@@ -60,6 +64,15 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | [`scene_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SceneGrid) | Grid of scenes, shortcuts and Activities | ✅ | ✅ | ✅ | ✅ |
 | [`tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | TV / box remote layout (via a Home Assistant `remote` entity) | ✅ | | | |
 | [`apple_tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | Apple TV remote: classic, compact or full | | ✅ | | ✅ |
+
+## Related projects
+
+| Project | What it does |
+| :--- | :--- |
+| [ha-astrion-custom-dashboard](https://github.com/dckiller51/ha-astrion-custom-dashboard) | Home Assistant **integration**: each remote as a device (battery, last seen, button events, Activities, Find my remote). |
+| [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) | Home Assistant **add-on** by [@dvbit](https://github.com/dvbit): manage the dashboards of all your remotes from HA, with history, entity checks, page copy and a live simulator. [Wiki page](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Astrion-Config-Manager). |
+| [astrion-ir-sniffer](https://dckiller51.github.io/astrion-ir-sniffer/) | IR database picker, Harmony archive import, sends codes to your remote. |
+| [astrion-ir-extender](https://github.com/dckiller51/astrion-ir-extender) | Wi-Fi IR extender (ESP board) for closed cabinets and other rooms. |
 
 ## Install
 
@@ -136,7 +149,8 @@ src/main/
 
 ## Help and contributing
 
-- Questions and bug reports: [open an issue](https://github.com/dckiller51/astrion-custom-dashboard/issues), or find me on Discord (`dckilller`).
+- Questions: [Discord](https://discord.gg/jqsSAAXSxB) (help forum, beta news). Bug reports and feature requests: [open an issue](https://github.com/dckiller51/astrion-custom-dashboard/issues).
+- Questions about the Config Manager add-on go to [its own repository](https://github.com/dvbit/ha-astrion-config-manager/issues).
 - Release notes: [CHANGELOG.md](./CHANGELOG.md).
 - Translations are the easiest way to contribute: add the files for your language (see above) and open a pull request.
 

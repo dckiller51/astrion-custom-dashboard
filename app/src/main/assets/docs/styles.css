@@ -642,3 +642,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .mon-marquee { overflow: hidden; white-space: nowrap; min-width: 0; font-weight: 500; }
 .mon-marquee span { display: inline-block; padding-left: 0; animation: mon-marquee 8s linear infinite; }
 @keyframes mon-marquee { 0%, 15% { transform: translateX(0); } 85%, 100% { transform: translateX(min(0px, calc(-100% + 120px))); } }
+  .history-badge { font-size: 0.75rem; padding: 1px 8px; border-radius: 10px; background: #1f3a40; color: #00E5FF; }
+  .history-badge.pinned { background: #3a331f; color: #ffcf5c; }
+  .secondary-link { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; background: #2d2d2d; color: #eee; text-decoration: none; font-size: 0.85rem; border: 1px solid #444; }
+  .ha-icon-btn:disabled { opacity: 0.35; cursor: default; }
+  #historyList button:disabled { opacity: 0.35; cursor: default; }
