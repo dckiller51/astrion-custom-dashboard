@@ -42,14 +42,15 @@ object DashboardHistory {
 
     fun isValidId(id: String?): Boolean = id != null && ID_PATTERN.matches(id)
 
-    /** Keeps [newContent] as the newest version (after keeping what's on disk when it isn't kept yet). */
+    /**
+     * Keeps [newContent] as the newest version (after keeping what's on disk when it isn't kept yet).
+     * Returns the new version's id, or null when the history couldn't be written.
+     */
     @Synchronized
-    fun recordSave(newContent: String, note: String?) {
-        runCatching {
-            keepCurrentIfUnrecorded()
-            add(newContent, REASON_SAVE, note, restoredFrom = null)
-        }.onFailure { Log.w(TAG, "Couldn't record a version", it) }
-    }
+    fun recordSave(newContent: String, note: String?): String? = runCatching {
+        keepCurrentIfUnrecorded()
+        add(newContent, REASON_SAVE, note, restoredFrom = null)
+    }.onFailure { Log.w(TAG, "Couldn't record a version", it) }.getOrNull()
 
     /** Writes version [id] back to dashboard.json. False when it doesn't exist. */
     @Synchronized
@@ -125,7 +126,8 @@ object DashboardHistory {
         if (newestText == null || !sameJson(newestText, text)) add(text, REASON_OUTSIDE, note = null, restoredFrom = null)
     }
 
-    private fun add(content: String, reason: String, note: String?, restoredFrom: String?) {
+    /** Writes [content] as a new version and returns its id. */
+    private fun add(content: String, reason: String, note: String?, restoredFrom: String?): String {
         dir.mkdirs()
         val now = System.currentTimeMillis()
         var id = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(now))
@@ -140,6 +142,7 @@ object DashboardHistory {
             }
         )
         saveIndex(prune(list))
+        return id
     }
 
     private fun baseId(id: String): String = id.split("-").take(2).joinToString("-")

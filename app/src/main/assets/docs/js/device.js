@@ -46,7 +46,7 @@ async function loadDashboardFromDevice() {
     console.error('Failed to load dashboard.json from this device.', e);
   }
   updateDeviceModeUi();
-  if (typeof openHistoryFromHash === 'function') openHistoryFromHash();
+  if (typeof openFromHash === 'function') openFromHash(); // deep links: #history, #page=…, #activity=…, #hotkeys
 }
 
 /**

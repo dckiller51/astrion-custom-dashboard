@@ -115,8 +115,10 @@ import org.json.JSONObject
  *  POST /dashboard.json  replace dashboard.json, then live-reload the dashboard
  *                        — also how the Devices page (/) saves IR device
  *                        add/edit/remove, re-posting the whole file with only
- *                        "irDevices" changed
- *  POST /icons           upload a PNG into /sdcard/astrion/icons/
+ *                        "irDevices" changed. Optional field `note`; the reply
+ *                        carries `X-Astrion-Version-Id`, the history version
+ *                        it created (see /history)
+ *  POST /icons          upload a PNG into /sdcard/astrion/icons/
  *  GET  /icons-list       list every uploaded icon's filename, as JSON — feeds
  *                        the dashboard editor's icon picker
  *  DELETE /icons/<file>  delete an uploaded icon (Devices page → Icons)
@@ -1401,10 +1403,14 @@ class ConfigServer(
                 )
         // Version history (1.3.0): the new content is kept, with the optional note sent along.
         val note = session.parameters["note"]?.firstOrNull()
-        runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }
+        val versionId = runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }.getOrNull()
         File(tmpPath).copyTo(DashboardLoader.configFile, overwrite = true)
         onDashboardUpdated()
-        return redirectHome(context.getString(R.string.web_config_dashboard_updated))
+        // 1.3.1: tools pushing a dashboard (Astrion Config Manager…) learn which version they created,
+        // e.g. to pin it, without reading /history. The HTML body stays for browsers.
+        return redirectHome(context.getString(R.string.web_config_dashboard_updated)).apply {
+            if (versionId != null) addHeader(VERSION_ID_HEADER, versionId)
+        }
     }
 
     /**
@@ -1947,3 +1953,6 @@ class ConfigServer(
 
     private fun sanitize(name: String) = name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
 }
+
+/** Response header of `POST /dashboard.json`: id of the version it created in the history (1.3.1). */
+private const val VERSION_ID_HEADER = "X-Astrion-Version-Id"

@@ -647,3 +647,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .secondary-link { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; background: #2d2d2d; color: #eee; text-decoration: none; font-size: 0.85rem; border: 1px solid #444; }
   .ha-icon-btn:disabled { opacity: 0.35; cursor: default; }
   #historyList button:disabled { opacity: 0.35; cursor: default; }
+
+/* Deep link target (#hotkeys…): a short highlight once scrolled to. */
+.deeplink-flash { animation: deeplinkFlash 1.6s ease-out; border-radius: 6px; }
+@keyframes deeplinkFlash { 0%, 40% { background: rgba(0, 229, 255, .22); box-shadow: 0 0 0 6px rgba(0, 229, 255, .22); } 100% { background: transparent; box-shadow: none; } }

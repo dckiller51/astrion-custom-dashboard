@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.1-beta] - 2026-10-19
+
+For tools that manage a remote's dashboard, such as the [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) add-on by [@dvbit](https://github.com/dvbit). The whole contract is on the new wiki page [Web API](../../wiki/Web-API).
+
+### Added
+
+- **Links straight to a place in the builder.** `/builder/#page=<name>` opens that page, `#page=<name>&card=<index>` that card's form (index from 0), `#activity=<id>` that Activity's wizard, `#hotkeys` the physical keys section, and `#history` the version history as before. Names are URL-encoded; an unknown page, card or Activity just opens the builder. Changing the hash in an open builder tab works too.
+- **`POST /dashboard.json` says which version it created**: header `X-Astrion-Version-Id: <id>`, the id in the version history. A tool can pin or annotate its own push without reading `/history` first. The reply's body doesn't change.
+
 ## [1.3.0] - 2026-10-17
 
 Everything since 1.2.0, from the 1.2.1 to 1.2.9 betas.

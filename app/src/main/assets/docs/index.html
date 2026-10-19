@@ -42,7 +42,7 @@
             everything below just references them by name.
         </div>
 
-        <h2 data-i18n="web_ui_section_hotkeys">1. Hotkeys</h2>
+        <h2 id="hotkeysSection" data-i18n="web_ui_section_hotkeys">1. Hotkeys</h2>
         <div class="section-box">
             <label data-i18n="web_ui_scope_label">Scope</label>
             <select id="hkScope">
@@ -125,7 +125,7 @@
     </div>
 
     <!-- RIGHT PANE -->
-    <div class="preview-pane">
+    <div class="preview-pane" id="preview-container">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
             <h2 style="margin:0;flex:1" data-i18n="web_ui_preview">Preview</h2>
             <button type="button" id="undoBtn" class="ha-icon-btn" disabled onclick="undoChange()" data-i18n-attr="title:web_history_undo" title="Undo (Ctrl+Z)">↶</button>
@@ -446,6 +446,7 @@
 <script src="js/cards.js"></script>
 <script src="js/cards-extra.js"></script>
 <script src="js/history.js"></script>
+<script src="js/deeplink.js"></script>
 <script src="js/harmony.js"></script>
 <script src="js/hotkeys.js"></script>
 <script src="js/activities.js"></script>
