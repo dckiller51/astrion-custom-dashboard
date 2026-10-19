@@ -32,7 +32,9 @@ function renderDockForm() {
   const box = document.getElementById('dockBox');
   if (!box) return;
   const d = dockValues();
-  const weatherOptions = dockEntityOptions('weather');
+  const weatherOptions = dockEntityOptions('weather').filter(([id]) => id !== 'weather.astrion');
+  const builtinWeather = typeof builtinWeatherOption === 'function' ? builtinWeatherOption() : null;
+  if (builtinWeather) weatherOptions.unshift(builtinWeather);
   if (d.weather_entity && !weatherOptions.some(([id]) => id === d.weather_entity)) weatherOptions.unshift([d.weather_entity, d.weather_entity]);
   const mediaOptions = dockEntityOptions('media_player');
   const selectedMedia = d.media_entities || [];

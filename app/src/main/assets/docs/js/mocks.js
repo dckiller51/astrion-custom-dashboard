@@ -153,7 +153,7 @@ function weatherEmoji(c) {
   if (c === 'clear-night') return '🌙';
   if (c === 'partlycloudy') return '⛅';
   if (c === 'cloudy') return '☁️';
-  if (c === 'fog') return '🌫️';
+  if (c === 'fog') return '☁️'; // 🌫️ is a grey square on the HA100's Android 8.1
   if (c === 'rainy' || c === 'pouring') return '🌧️';
   if (c === 'lightning' || c === 'lightning-rainy') return '⛈️';
   if (c === 'snowy' || c === 'snowy-rainy') return '❄️';

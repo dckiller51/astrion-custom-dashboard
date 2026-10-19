@@ -83,6 +83,7 @@ async function loadAll() {
   dashboardData.irDevices = fullDashboard.irDevices || [];
   dashboardData.haDevices = fullDashboard.haDevices || [];
   dashboardData.harmonyAliases = fullDashboard.harmonyAliases || {};
+  dashboardData.weather = fullDashboard.weather && typeof fullDashboard.weather === 'object' ? fullDashboard.weather : undefined;
   await reconcileAppleTvHaDevices();
   await refreshHaStates();
   renderDevicesList();
@@ -121,6 +122,9 @@ async function refreshHaStates() {
 }
 
 function renderDevicesList() {
+  const tileWeather = document.getElementById('tileWeatherCount');
+  if (tileWeather) tileWeather.textContent = dashboardData.weather ? (dashboardData.weather.name || '📍') : I18N.t('web_dev_weather_not_set');
+  if (typeof renderWeatherForm === 'function') renderWeatherForm();
   const haSummary = document.getElementById('haConnectionSummary');
   if (haSummary) {
     haSummary.textContent = haConfig.url ? I18N.t('web_dev_connected_to', haConfig.url) : I18N.t('web_dev_not_connected_yet');
@@ -1373,6 +1377,25 @@ async function persistIrDevices() {
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
+  }
+}
+
+// ---- Built-in weather (1.3.2): js/weather.js edits dashboardData.weather and calls this. ---------
+// Saved right away like everything else on this page: dashboard.json with only "weather" changed.
+async function weatherChanged() {
+  try {
+    const payload = { ...fullDashboard };
+    if (dashboardData.weather) payload.weather = dashboardData.weather; else delete payload.weather;
+    const form = new FormData();
+    form.append('file', new Blob([JSON.stringify(payload)], { type: 'application/json' }), 'dashboard.json');
+    form.append('note', I18N.t('web_dev_weather_note'));
+    const res = await fetch('/dashboard.json', { method: 'POST', body: form });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    fullDashboard = payload;
+    showToast(I18N.t('web_dev_saved'));
+    renderDevicesList();
+  } catch (e) {
+    showToast(I18N.t('web_device_save_failed', e), 'error');
   }
 }
 

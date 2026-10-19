@@ -36,6 +36,7 @@ import com.custom.astrion.ha.HaClient
 import com.custom.astrion.harmony.HarmonyHubDiscovery
 import com.custom.astrion.harmony.HarmonyHubRegistry
 import com.custom.astrion.update.UpdateChecker
+import com.custom.astrion.weather.LocalWeather
 import fi.iki.elonen.NanoHTTPD
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -300,6 +301,7 @@ class ConfigServer(
             "/battery" -> if (method == Method.GET) serveBattery() else methodNotAllowed()
             "/logs" -> if (method == Method.GET) serveLogs() else methodNotAllowed()
             "/info" -> if (method == Method.GET) serveInfo() else methodNotAllowed()
+            "/weather-search" -> if (method == Method.GET) serveWeatherSearch(session) else methodNotAllowed()
             "/remote-name" -> if (method == Method.POST) handleRemoteName(session) else methodNotAllowed()
             "/set-page" -> if (method == Method.POST) handleSetPage(session) else methodNotAllowed()
             "/activities" -> if (method == Method.GET) serveActivities() else methodNotAllowed()
@@ -805,6 +807,23 @@ class ConfigServer(
         RemoteIdentity.setName(context, session.parameters["name"]?.firstOrNull().orEmpty())
         onRemoteRenamed()
         return serveInfo()
+    }
+
+    /**
+     * Place search for the web page's built-in weather (1.3.2), proxied through the remote so the
+     * page needs no direct access to Open-Meteo: `?q=<name or postcode>&lang=fr`.
+     */
+    private fun serveWeatherSearch(session: IHTTPSession): Response {
+        val query = session.parameters["q"]?.firstOrNull()?.trim().orEmpty()
+        if (query.length < 2) return jsonResponse(Response.Status.BAD_REQUEST, buildJsonObject { put("error", "query too short") })
+        val lang = session.parameters["lang"]?.firstOrNull()?.take(2).orEmpty()
+        return runCatching { LocalWeather.search(query, lang) }
+            .fold(
+                onSuccess = { jsonResponse(Response.Status.OK, buildJsonObject { put("results", it) }) },
+                onFailure = {
+                    jsonResponse(Response.Status.SERVICE_UNAVAILABLE, buildJsonObject { put("error", it.message ?: "search failed") })
+                }
+            )
     }
 
     /** This app's recent log lines as a downloadable text file (see [AppLogs]) — bug reports without adb. */

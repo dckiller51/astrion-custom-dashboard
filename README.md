@@ -32,6 +32,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
   - the remote's own **IR blaster**, with a built-in IR database ([ir-sniffer](https://dckiller51.github.io/astrion-ir-sniffer/)), or network IR blasters ([astrion-ir-extender](https://github.com/dckiller51/astrion-ir-extender)) to reach a closed cabinet or another room;
   - **Apple TV paired directly**: remote, now playing and app launching, without Home Assistant.
 - **Dock screen**: while charging, show the battery, a dim night-friendly clock (time, weather, what's playing in the room) or the dimmed dashboard.
+- **Weather without Home Assistant**: the remote fetches its own forecast from Open-Meteo (free, no key, Météo-France models available) for the clock & weather card and the dock clock.
 - **Battery-friendly standby**: quiet Home Assistant mode while the screen is off, a time-limited motion wake, and a screen timeout.
 - **Several remotes in one home**: each remote has its own identity and name, so Home Assistant knows which remote and which button sent an event.
 - **Home Assistant integration**: [ha-astrion-custom-dashboard](https://github.com/dckiller51/ha-astrion-custom-dashboard) adds each remote as a device in Home Assistant (battery, last seen, button events, "Find my remote").
