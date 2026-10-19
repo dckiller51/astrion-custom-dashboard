@@ -226,7 +226,4 @@ async function deleteHistoryVersion(id) {
   try { await historyPost('delete', { id }); await refreshHistory(); } catch (e) { showToast(I18N.t('web_history_failed', e.message), 'error'); }
 }
 
-// /builder/#history (the link on the remote's web page) opens the list once the dashboard is in.
-function openHistoryFromHash() {
-  if (location.hash === '#history' && typeof deviceModeAvailable !== 'undefined' && deviceModeAvailable) openHistory();
-}
+// /builder/#history (the link on the remote's web page) is handled with the other deep links, see deeplink.js.
