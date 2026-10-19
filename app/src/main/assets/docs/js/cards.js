@@ -16,12 +16,16 @@ const HA_DOMAIN_LABEL_KEYS = {
 const haDomainLabel = (domain) => (HA_DOMAIN_LABEL_KEYS[domain] ? I18N.t(HA_DOMAIN_LABEL_KEYS[domain]) : domain);
 
 function haEntityFieldHtml(domain, fieldId, label) {
-  const options = (dashboardData.haDevices || []).filter(d => d.domain === domain);
+  const options = (dashboardData.haDevices || []).filter(d => d.domain === domain).map(d => ({ entityId: d.entityId, name: d.name }));
+  // The built-in weather (1.3.2, js/weather.js) is a weather entity like the catalog's, without Home Assistant.
+  const builtin = domain === 'weather' && typeof builtinWeatherOption === 'function' ? builtinWeatherOption() : null;
+  if (builtin) options.unshift({ entityId: builtin[0], name: builtin[1] });
   if (!options.length) {
     return `
       <label>${label}</label>
       <select id="${fieldId}" disabled><option value="">${I18N.t('web_card_none_in_the_catalog')}</option></select>
       <div class="hint">${I18N.t('web_card_no_catalog_device', haDomainLabel(domain))}</div>
+      ${domain === 'weather' ? `<div class="hint">${I18N.t('web_weather_card_hint')}</div>` : ''}
     `;
   }
   return `
@@ -474,7 +478,7 @@ function updateCardFormInputs() {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">
       <label>${I18N.t('web_card_plex_token')}</label><input type="text" id="optPlexToken" placeholder="${I18N.t('web_card_ph_plex_token')}">
-      <div class="hint">${I18N.t('web_card_plex_token_hint')}</div>
+      <div class="hint">${I18N.t('web_card_plex_token_hint')} <a href="https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex#finding-your-token" target="_blank" rel="noopener">${I18N.t('web_card_plex_token_help')}</a></div>
       <label>${I18N.t('web_card_plex_media_entity')}</label><input type="text" id="optPlexMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
       <label>${I18N.t('web_card_plex_source')}</label><input type="text" id="optPlexSource" value="Plex" placeholder="${I18N.t('web_card_plex')}">
       <label>${I18N.t('web_card_plex_play_entity')}</label><input type="text" id="optPlexPlayEntity" placeholder="${I18N.t('web_card_ph_plex_play_entity')}">

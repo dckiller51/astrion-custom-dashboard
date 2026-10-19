@@ -159,6 +159,7 @@ function normalizeDashboardData(parsed) {
     // Optional; absent stays absent so an untouched dashboard.json round-trips unchanged.
     dock: parsed.dock && typeof parsed.dock === 'object' ? parsed.dock : undefined,
     power: parsed.power && typeof parsed.power === 'object' ? parsed.power : undefined,
+    weather: parsed.weather && typeof parsed.weather === 'object' ? parsed.weather : undefined,
   };
   if (data.pages.length === 0) {
     data.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });
@@ -230,10 +231,13 @@ function openPageDialog(index) {
   // user hand-edited the JSON that way). Doesn't fire onPageDialogTilePopupChange
   // itself; the explicit updatePopupRowVisibility() call below does, once
   // every popup-related field above is in its final loaded state.
+  // 1.3.2: also ticked when a tile or a key of this dashboard opens the page as a popup — the
+  // size used to stay hidden for a popup opened by a key until this box was ticked by hand.
   document.getElementById('pageDialogTilePopup').checked = !isNew &&
     (dashboardData.pages[index].linkedPageMode !== 'popup') &&
     (dashboardData.pages[index].openMode !== 'popup') &&
-    (dashboardData.pages[index].popupWidth != null || dashboardData.pages[index].popupHeight != null || !!dashboardData.pages[index].popupPosition);
+    (dashboardData.pages[index].popupWidth != null || dashboardData.pages[index].popupHeight != null ||
+      !!dashboardData.pages[index].popupPosition || popupOpenersOf(dashboardData.pages[index].name) > 0);
   onPageDialogLinkedPageChange();
   onPageDialogLinkedPageModeChange();
   populatePageHiddenUnlessActivitySelect();
@@ -290,6 +294,27 @@ function onPageDialogOpenModeChange() {
 // OTHER page's card, invisible from here), so it's a manual toggle instead.
 function onPageDialogTilePopupChange() {
   updatePopupRowVisibility();
+}
+
+/**
+ * How many tiles, buttons and keys of the dashboard open page [name] as a popup: any object whose
+ * `page` (or `<prefix>_page`) is [name] with the matching `pageMode` (`<prefix>_pageMode`) set to
+ * "popup" — scene_grid/button_grid items, their long_press, title cards, hotkeys.
+ */
+function popupOpenersOf(name) {
+  let n = 0;
+  const walk = (v) => {
+    if (Array.isArray(v)) { v.forEach(walk); return; }
+    if (!v || typeof v !== 'object') return;
+    Object.keys(v).forEach(k => {
+      if (/(^|_)page$/.test(k) && v[k] === name && v[k + 'Mode'] === 'popup') n++;
+      walk(v[k]);
+    });
+  };
+  walk(dashboardData.pages);
+  walk(dashboardData.hotkeys);
+  walk(dashboardData.longHotkeys);
+  return n;
 }
 
 function updatePopupRowVisibility() {

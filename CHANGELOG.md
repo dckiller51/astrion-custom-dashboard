@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.2] - 2026-10-19
+
+### Added
+
+- **Weather without Home Assistant.** The remote fetches the forecast itself from [Open-Meteo](https://open-meteo.com) (free, no account, no key) and publishes it as `weather.astrion`, which the clock & weather card and the dock clock use like any Home Assistant weather entity. On the remote's web page, the new **Weather** tile finds your town by name or postcode (searched by the remote, `GET /weather-search`) and offers two forecasts: **Automatic** (best model for the place, 7 days) or **Météo-France** (France and Europe, 4 days), in °C or °F. Then pick **Built-in weather** in the builder's weather fields. Updated every 30 minutes, only while the screen is on. Stored as a `weather` block in `dashboard.json` (`name`, `latitude`, `longitude`, `model`, `unit`).
+
+### Changed
+
+- **Popup size easier to find.** In a page's settings, "Opened as a popup by a tile or a key" now ticks itself when a tile, a button or a key of the dashboard opens that page as a popup, so *Popup size & position* shows right away. It used to stay hidden for a popup opened by a key (reported by Wolfgang, [@Coyotex1](https://github.com/Coyotex1)).
+- **Clock & weather card**: fog now shows a cloud ☁️. The fog emoji 🌫️ looked like a grey square on the remote's Android 8.1.
+- **Plex card**: a "How to find my token" link under the token field. The wiki now gives the simplest way (the browser console on app.plex.tv) and warns about `claim-…` tokens, which stop working after a few minutes.
+
 ## [1.3.1-beta] - 2026-10-19
 
 For tools that manage a remote's dashboard, such as the [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) add-on by [@dvbit](https://github.com/dvbit). The whole contract is on the new wiki page [Web API](../../wiki/Web-API).

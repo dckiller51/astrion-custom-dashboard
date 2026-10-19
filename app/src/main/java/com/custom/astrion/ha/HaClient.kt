@@ -192,6 +192,14 @@ class HaClient(
     @Volatile
     var localBrowseMediaHandler: ((entityId: String, contentId: String?, contentType: String?) -> JsonObject?)? = null
 
+    /**
+     * Optional interceptor for [getForecast]: the forecast of a locally-published weather entity
+     * (the built-in weather, see [com.custom.astrion.weather.LocalWeather]), or null to ask Home
+     * Assistant as usual.
+     */
+    @Volatile
+    var localForecastHandler: ((entityId: String) -> JsonArray?)? = null
+
     /** Adds or replaces a locally-driven entity and republishes [entities]. */
     fun setLocalEntity(state: EntityState) {
         localEntityStore[state.entityId] = state
@@ -483,6 +491,7 @@ class HaClient(
      * (each item: datetime, condition, temperature, templow), or null.
      */
     suspend fun getForecast(entityId: String, forecastType: String = "daily"): JsonArray? {
+        localForecastHandler?.invoke(entityId)?.let { return it }
         val id = idCounter.getAndIncrement()
         val deferred = CompletableDeferred<JsonObject>()
         pending[id] = deferred

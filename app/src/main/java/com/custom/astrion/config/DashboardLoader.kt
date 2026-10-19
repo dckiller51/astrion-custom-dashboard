@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.intOrNull
@@ -167,7 +168,8 @@ object DashboardLoader {
             val theme = root["theme"]?.jsonObject?.let { parseTheme(it) } ?: ThemeConfig()
             val dock = (root["dock"] as? JsonObject)?.let { parseDock(it) } ?: DockConfig()
             val power = (root["power"] as? JsonObject)?.let { parsePower(it) } ?: PowerConfig()
-            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme, dock, power)
+            val weather = (root["weather"] as? JsonObject)?.let { parseWeather(it) }
+            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme, dock, power, weather)
         }
         else -> error("top level must be an object or array")
     }
@@ -369,6 +371,20 @@ object DashboardLoader {
                 .orEmpty(),
             showBattery = (obj["show_battery"] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: true,
             room = str("room")
+        )
+    }
+
+    /** The `weather` block (1.3.2): null unless it has a usable latitude and longitude. */
+    private fun parseWeather(obj: JsonObject): WeatherConfig? {
+        fun str(key: String) = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim().orEmpty()
+        val lat = (obj["latitude"] as? JsonPrimitive)?.doubleOrNull?.takeIf { it in -90.0..90.0 } ?: return null
+        val lon = (obj["longitude"] as? JsonPrimitive)?.doubleOrNull?.takeIf { it in -180.0..180.0 } ?: return null
+        return WeatherConfig(
+            latitude = lat,
+            longitude = lon,
+            name = str("name"),
+            model = str("model").takeIf { it == WeatherConfig.MODEL_METEOFRANCE } ?: WeatherConfig.MODEL_AUTO,
+            unit = str("unit").takeIf { it == WeatherConfig.UNIT_FAHRENHEIT } ?: WeatherConfig.UNIT_CELSIUS
         )
     }
 

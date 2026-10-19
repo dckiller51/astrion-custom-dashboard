@@ -72,6 +72,7 @@ import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.RingFoundOverlay
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
+import com.custom.astrion.weather.LocalWeather
 import com.custom.astrion.web.ConfigServer
 import java.util.concurrent.TimeUnit
 import kotlin.math.acos
@@ -495,6 +496,9 @@ class MainActivity : ComponentActivity() {
     /** Pushes the battery level to Home Assistant through the webhook — see BatteryReporter.kt. */
     private val batteryReporter by lazy { BatteryReporter(this) { if (::client.isInitialized) client else null } }
 
+    /** Built-in weather (1.3.2): `weather.astrion`, fetched only while the screen is on. */
+    private val localWeather by lazy { LocalWeather(client = { if (::client.isInitialized) client else null }, screenOn = { screenOn }) }
+
     private val storagePermission =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -563,6 +567,7 @@ class MainActivity : ComponentActivity() {
         batteryReporter.start()
         standby.start()
         applyPowerConfig()
+        localWeather.start(lifecycleScope)
         chargeDockMonitor.sunIsDown = { client.entities.value["sun.sun"]?.state?.let { it == "below_horizon" } }
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
@@ -612,6 +617,7 @@ class MainActivity : ComponentActivity() {
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
         appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
+        localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
     }
 
@@ -831,8 +837,10 @@ class MainActivity : ComponentActivity() {
         applyPowerConfig()
     }
 
-    /** Hands dashboard.json's `power` block to the standby policy and the dock detector. */
+    /** Hands dashboard.json's `power` block to the standby policy and the dock detector,
+     * and its `weather` block to the built-in weather. */
     private fun applyPowerConfig() {
+        localWeather.config = dashboard.config.weather
         val power = dashboard.config.power
         standby.config = power
         chargeDockMonitor.dockDebounceMs = TimeUnit.SECONDS.toMillis(power.dockDebounceSeconds.toLong())
@@ -1445,6 +1453,7 @@ class MainActivity : ComponentActivity() {
         runCatching { unregisterReceiver(screenStateReceiver) }
         standby.stop()
         batteryReporter.stop()
+        localWeather.stop()
         chargeDockMonitor.stop()
         releaseWifiLock()
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
