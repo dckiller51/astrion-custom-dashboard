@@ -3,7 +3,7 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.3.2] - 2026-10-19
+## [1.3.2-beta] - 2026-10-19
 
 ### Added
 
