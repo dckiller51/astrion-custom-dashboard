@@ -79,7 +79,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 
 You need USB debugging once, for the first install. Updates after that are done from the remote's web page.
 
-**Windows (recommended):** download [`initial-installation-v0.9.0`](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/initial-installation-v0.9.0), enable *Developer options* and *USB debugging* on the remote, then run `install.bat`.
+**Windows (recommended):** download the [installer](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/install), enable *Developer options* and *USB debugging* on the remote, then run `install.bat` and choose **Stable** or **Beta**.
 
 **Any OS (adb):** download the APK from [Releases](https://github.com/dckiller51/astrion-custom-dashboard/releases), then:
 
