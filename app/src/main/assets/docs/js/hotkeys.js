@@ -210,6 +210,19 @@ function updateHotkeyActionInputs(preselect) {
       </select>
     `;
     populateHkAppleTvSelect(preselect && preselect.appleTvEntityId);
+  } else if (action === 'irCommand') {
+    const devices = dashboardData.irDevices || [];
+    container.innerHTML = `
+      <label>${I18N.t('web_hotkey_ir_device_label')}</label>
+      <select id="hkIrDevice" onchange="onHkIrDeviceChange()">
+        ${devices.map(d => `<option value="${escapeAttr(d.id)}">${escapeAttr(d.name || d.id)}</option>`).join('')}
+      </select>
+      <label>${I18N.t('web_hotkey_ir_command_label')}</label>
+      <input type="text" id="hkIrCommand" list="hkIrCommandHints" placeholder="${I18N.t('web_hotkey_ir_command_ph')}">
+      <datalist id="hkIrCommandHints"></datalist>
+      ${devices.length ? '' : `<div class="hint">${I18N.t('web_card_no_ir_devices_yet_add_one')}</div>`}
+    `;
+    onHkIrDeviceChange();
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       renderHarmonyHubSelect(container, 'command', 'hk');
@@ -228,6 +241,26 @@ function updateHotkeyActionInputs(preselect) {
   }
 }
 
+/**
+ * Command suggestions for the picked IR device: an inline device's own commands, else the
+ * ir-database model's full list (when the builder is opened from the remote), else the ids
+ * typed in when the device was created. Free text either way, like the tiles' IR field.
+ */
+async function onHkIrDeviceChange() {
+  const select = document.getElementById('hkIrDevice');
+  const datalist = document.getElementById('hkIrCommandHints');
+  if (!select || !datalist) return;
+  const deviceId = select.value;
+  const device = (dashboardData.irDevices || []).find(d => d.id === deviceId);
+  let entries = irDeviceCommandEntries(device);
+  if (device && !device.commands) {
+    const model = await loadIrDatabaseModel(device);
+    if (model) entries = modelCommandEntries(model, false);
+    if (select.value !== deviceId) return; // changed while loading
+  }
+  datalist.innerHTML = entries.map(([id, label]) => `<option value="${escapeAttr(id)}">${escapeAttr(label)}</option>`).join('');
+}
+
 function describeHotkey(h) {
   if (h.page) return I18N.t(h.pageMode === 'popup' ? 'web_hotkey_desc_page_popup' : 'web_hotkey_desc_page', h.page);
   if (h.openOverlay) return I18N.t(h.openOverlay === 'activities' ? 'web_hotkey_desc_overlay_activities' : 'web_hotkey_desc_overlay_settings');
@@ -243,6 +276,10 @@ function describeHotkey(h) {
     return I18N.t('web_hotkey_desc_atv', h.entityId || '?', cmd);
   }
   if (h.service) return h.entityId ? I18N.t('web_hotkey_desc_service', h.service, h.entityId) : I18N.t('web_hotkey_desc_service_plain', h.service);
+  if (h.irDevice && h.irCommand) {
+    const dev = (dashboardData.irDevices || []).find(d => d.id === h.irDevice);
+    return I18N.t('web_hotkey_desc_ir', (dev && dev.name) || h.irDevice, h.irCommand);
+  }
   if (h.harmonyCommand) return I18N.t('web_hotkey_desc_harmony', h.harmonyDevice || '?', h.harmonyCommand);
   if (h.harmonyActivity) return I18N.t('web_hotkey_desc_harmony_activity', h.harmonyActivity);
   return '';
@@ -325,7 +362,7 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.event ? 'haEvent' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : 'harmonyActivity';
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.event ? 'haEvent' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
   updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
 
@@ -350,6 +387,10 @@ async function editHotkey(scope, listType, i) {
     refreshRemoteCommandDatalist();
   } else if (action === 'appleTvCommand') {
     document.getElementById('hkAppleTvCommand').value = (h.data && h.data.command) || '';
+  } else if (action === 'irCommand') {
+    document.getElementById('hkIrDevice').value = h.irDevice || '';
+    onHkIrDeviceChange();
+    document.getElementById('hkIrCommand').value = h.irCommand || '';
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       const hubId = h.hub || (harmonyHubsList[0] && harmonyHubsList[0].localId) || '';
@@ -444,6 +485,12 @@ function addHotkey() {
     hkObj.service = 'astrion_appletv.send_command';
     hkObj.entityId = appleTv;
     hkObj.data = { command };
+  } else if (action === 'irCommand') {
+    const irDevice = document.getElementById('hkIrDevice').value;
+    const irCommand = document.getElementById('hkIrCommand').value.trim();
+    if (!irDevice || !irCommand) { alert(I18N.t('web_hotkey_err_ir')); return; }
+    hkObj.irDevice = irDevice;
+    hkObj.irCommand = irCommand;
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
       const hub = document.getElementById('hkHub').value.trim();

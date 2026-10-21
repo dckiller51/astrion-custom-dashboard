@@ -52,16 +52,20 @@ object DashboardHistory {
         add(newContent, REASON_SAVE, note, restoredFrom = null)
     }.onFailure { Log.w(TAG, "Couldn't record a version", it) }.getOrNull()
 
-    /** Writes version [id] back to dashboard.json. False when it doesn't exist. */
+    /** What [restore] did: [versionId] is the new "restore" version, null if it couldn't be recorded. */
+    class Restored(val versionId: String?)
+
+    /** Writes version [id] back to dashboard.json. Null when it doesn't exist. */
     @Synchronized
-    fun restore(id: String): Boolean {
-        val content = read(id) ?: return false
-        runCatching {
-            keepCurrentIfUnrecorded()
-            add(content, REASON_RESTORE, note = null, restoredFrom = id)
-        }.onFailure { Log.w(TAG, "Couldn't record the restore", it) }
+    fun restore(id: String): Restored? {
+        val content = read(id) ?: return null
+        val versionId =
+            runCatching {
+                keepCurrentIfUnrecorded()
+                add(content, REASON_RESTORE, note = null, restoredFrom = id)
+            }.onFailure { Log.w(TAG, "Couldn't record the restore", it) }.getOrNull()
         DashboardLoader.configFile.writeText(content)
-        return true
+        return Restored(versionId)
     }
 
     fun read(id: String): String? {

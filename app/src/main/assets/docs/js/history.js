@@ -177,6 +177,7 @@ async function historyPost(action, fields) {
   Object.entries(fields).forEach(([k, v]) => form.append(k, v));
   const res = await fetch('/history/' + action, { method: 'POST', body: form });
   if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res;
 }
 
 async function openHistoryVersion(id) {
@@ -198,7 +199,8 @@ async function restoreHistoryVersion(id) {
   const v = historyVersions.find(x => x.id === id);
   if (!confirm(I18N.t('web_history_confirm_restore', v ? historyDate(v.time) : id))) return;
   try {
-    await historyPost('restore', { id });
+    const restored = await historyPost('restore', { id });
+    notifyOpener('restore', restored.headers.get('X-Astrion-Version-Id'));
     const res = await fetch('/dashboard.json');
     if (res.ok) {
       closeOpenDialogs();

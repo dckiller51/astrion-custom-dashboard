@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.3-beta] - 2026-10-21
+
+### Added
+
+- **German.** The app (Settings › Language › Deutsch), the remote's web page and the dashboard builder are now in German too, as are Home Assistant's states (climate, covers, vacuums, weather).
+- **The builder tells the tool that opened it when you save.** When the builder was opened by another page (the [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) add-on, a script…), it sends that page `{ type: "astrion-saved", versionId, reason }` after each **Save to device** (`reason: "save"`) and each restore from the 🕘 history (`reason: "restore"`), so the tool picks up the change right away. `POST /history/restore` now also replies with the new version's id (`versionId` in the body and the `X-Astrion-Version-Id` header), like a save. Suggested by [@dvbit](https://github.com/dvbit).
+- **IR commands on the physical keys.** In the builder's **1. Hotkeys**, the new action **IR command** sends a command of one of your IR devices (through the remote's own blaster or its IR extender), e.g. Channel +/- of a set-top box on the CH keys. The remote already understood it; only the builder had no way to set it.
+
+### Changed
+
+- **The beta has its own name: "Astrion Custom β".** It used to be called "Astrion Custom" like the official app, so the two looked the same in Android's "choose a Home app" prompt.
+
 ## [1.3.2-beta] - 2026-10-19
 
 ### Added

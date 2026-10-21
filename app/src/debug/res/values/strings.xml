@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Beta build (com.custom.astrion.debug): its own name, so it can be told apart from the
+     official app in Android's "choose a Home app" prompt and app list. -->
+<resources>
+    <string name="app_name">Astrion Custom β</string>
+</resources>

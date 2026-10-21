@@ -1,7 +1,7 @@
 // ---- Shared i18n string table -----------------------------------------------
 //
 // Every user-facing string of the dashboard editor lives in one JSON file per
-// language, i18n/<lang>.json (en, fr, it, es), next to this page. The language
+// language, i18n/<lang>.json (en, fr, de, it, es), next to this page. The language
 // follows the browser; a key missing from that language falls back to English,
 // and a key missing from English shows the key itself (logged once).
 //
@@ -15,7 +15,7 @@
 window.I18N = (() => {
   'use strict';
 
-  const SUPPORTED = ['en', 'fr', 'it', 'es'];
+  const SUPPORTED = ['en', 'fr', 'de', 'it', 'es'];
   const browserLang = ((navigator.language || 'en').split('-')[0] || 'en').toLowerCase();
   const lang = SUPPORTED.includes(browserLang) ? browserLang : 'en';
   const warned = new Set();
