@@ -102,6 +102,7 @@ async function saveDashboardToDevice() {
     const res = await fetch('/dashboard.json', { method: 'POST', body: form });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     if (noteEl) noteEl.value = '';
+    notifyOpener('save', res.headers.get('X-Astrion-Version-Id'));
     showToast(I18N.t('web_device_saved'));
     if (document.getElementById('historyModal')?.classList.contains('open')) refreshHistory();
   } catch (e) {
@@ -109,6 +110,22 @@ async function saveDashboardToDevice() {
   } finally {
     btn.textContent = originalText;
     btn.disabled = false;
+  }
+}
+
+/**
+ * 1.3.3: tells the window that opened the builder (Astrion Config Manager, a script…) that the
+ * remote's dashboard just changed, so it can pick it up without waiting for the user to come back:
+ *   { type: 'astrion-saved', versionId: '<history id>' | null, reason: 'save' | 'restore' }
+ * Only a version id goes out, so any origin may receive it; the receiver checks event.origin.
+ */
+function notifyOpener(reason, versionId) {
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type: 'astrion-saved', versionId: versionId || null, reason }, '*');
+    }
+  } catch (e) {
+    console.warn('Could not notify the opener window.', e);
   }
 }
 

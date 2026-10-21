@@ -1435,7 +1435,8 @@ class ConfigServer(
     /**
      * dashboard.json version history (1.3.0), see [DashboardHistory]:
      *  GET  /history/<id>      that version's content (download / open in the builder)
-     *  POST /history/restore   id → writes it back to dashboard.json and reloads the dashboard
+     *  POST /history/restore   id → writes it back to dashboard.json and reloads the dashboard;
+     *                          replies {"ok":true,"versionId":…} + X-Astrion-Version-Id (1.3.3)
      *  POST /history/pin       id, pinned=true|false → never deleted automatically while pinned
      *  POST /history/note      id, note
      *  POST /history/delete    id
@@ -1454,9 +1455,9 @@ class ConfigServer(
         session.parseBody(HashMap())
         val id = session.parameters["id"]?.firstOrNull()?.trim().orEmpty()
         if (!DashboardHistory.isValidId(id)) return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "bad id"))
+        if (action == "restore") return handleHistoryRestore(id)
         val ok =
             when (action) {
-                "restore" -> DashboardHistory.restore(id).also { if (it) onDashboardUpdated() }
                 "pin" -> DashboardHistory.setPinned(id, session.parameters["pinned"]?.firstOrNull() == "true")
                 "note" -> DashboardHistory.setNote(id, session.parameters["note"]?.firstOrNull().orEmpty())
                 "delete" -> DashboardHistory.delete(id)
@@ -1466,6 +1467,18 @@ class ConfigServer(
             jsonResponse(Response.Status.OK, JSONObject().put("ok", true))
         } else {
             jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+        }
+    }
+
+    /** Like a save, a restore tells which version it created: `versionId` in the body and the header. */
+    private fun handleHistoryRestore(id: String): Response {
+        val restored =
+            DashboardHistory.restore(id)
+                ?: return jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+        onDashboardUpdated()
+        val body = JSONObject().put("ok", true).apply { restored.versionId?.let { put("versionId", it) } }
+        return jsonResponse(Response.Status.OK, body).apply {
+            restored.versionId?.let { addHeader(VERSION_ID_HEADER, it) }
         }
     }
 
