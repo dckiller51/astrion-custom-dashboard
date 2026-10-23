@@ -81,9 +81,15 @@ enum class HardwareKey {
 class HardwareKeyRouter {
     private val shortHandlers = mutableMapOf<HardwareKey, () -> Boolean>()
     private val longHandlers = mutableMapOf<HardwareKey, () -> Boolean>()
+    private val repeatIntervals = mutableMapOf<HardwareKey, Long>()
 
-    fun on(key: HardwareKey, handler: () -> Boolean) {
+    /**
+     * [repeatEveryMs]: while the key is held, repeat the action at most this
+     * often; null = not repeated (a page, an overlay…: once per press).
+     */
+    fun on(key: HardwareKey, repeatEveryMs: Long? = null, handler: () -> Boolean) {
         shortHandlers[key] = handler
+        if (repeatEveryMs != null) repeatIntervals[key] = repeatEveryMs else repeatIntervals.remove(key)
     }
 
     fun onLong(key: HardwareKey, handler: () -> Boolean) {
@@ -104,7 +110,11 @@ class HardwareKeyRouter {
     fun clear() {
         shortHandlers.clear()
         longHandlers.clear()
+        repeatIntervals.clear()
     }
+
+    /** How often a held key repeats its short-press action, or null if it doesn't. */
+    fun repeatInterval(code: Int): Long? = repeatIntervals[HardwareKey.fromKeyCode(code)]
 
     fun shortHandler(code: Int): (() -> Boolean)? {
         val key = HardwareKey.fromKeyCode(code)

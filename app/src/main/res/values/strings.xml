@@ -155,7 +155,7 @@
     <string name="web_config_update_none">Already up to date</string>
     <string name="web_config_install_update_button">Download &amp; install</string>
     <string name="web_config_update_installing">Installer launched — approve the install prompt on the panel screen</string>
-    <string name="web_config_update_needs_permission">Allow "Install unknown apps" for this app on the screen that just opened, then tap Download &amp; install again.</string>
+    <string name="web_config_update_needs_permission">Allow \"Install unknown apps\" for this app on the screen that just opened, then tap Download &amp; install again.</string>
     <string name="web_config_update_failed">Update check failed: %1$s</string>
 
     <!-- Connection status -->
@@ -164,7 +164,7 @@
     <string name="connection_error_retrying">Connection error — retrying</string>
 
     <!-- Unknown card -->
-    <string name="unknown_card_type">Unknown card type: "%1$s"</string>
+    <string name="unknown_card_type">Unknown card type: \"%1$s\"</string>
 
     <!-- Media (player, Plex, browser) -->
     <string name="media_loading">Loading…</string>

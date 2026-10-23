@@ -205,13 +205,24 @@ class ActivityPlanner(
 
     /** Off → power on. Believed on → only a discrete "on" (harmless to
      * resend) when that belief didn't come from the outgoing Activity —
-     * the device may have been switched off by hand since. */
+     * the device may have been switched off by hand since. A Home
+     * Assistant entity always gets its turn_on: it is discrete by nature,
+     * and the remembered state can't see it being switched off from Home
+     * Assistant or its own remote (1.3.0–1.3.2 then sent nothing at all). */
     private fun needsPower(d: ActivityDeviceConfig, outgoingDevices: Set<String>): Boolean = d.powerOnFirst &&
-        (!isOn(d, outgoingDevices) || (profileOf(d)?.power?.type == PowerType.DISCRETE && d.deviceId !in outgoingDevices))
+        (
+            d.source == "ha" ||
+                !isOn(d, outgoingDevices) ||
+                (profileOf(d)?.power?.type == PowerType.DISCRETE && d.deviceId !in outgoingDevices)
+            )
 
-    /** Select an input unless the device is on and already known to be on it. */
+    /** Select an input unless the device is on and already known to be on it.
+     * Always for a Home Assistant entity: select_source is harmless to repeat. */
     private fun needsInput(d: ActivityDeviceConfig, input: String, poweredNow: Boolean, outgoingDevices: Set<String>): Boolean =
-        poweredNow || states[d.deviceId].input?.equals(input, ignoreCase = true) != true || !isOn(d, outgoingDevices)
+        d.source == "ha" ||
+            poweredNow ||
+            states[d.deviceId].input?.equals(input, ignoreCase = true) != true ||
+            !isOn(d, outgoingDevices)
 
     /** No profiled device: the original order, unchanged — per device,
      * power → input → delayAfterMs. */
@@ -233,7 +244,8 @@ class ActivityPlanner(
                 val timing = profileOf(d)?.timing
                 // A discrete "on" resent to a device believed on is only a
                 // safety net: no power-on wait, no forced input for it.
-                if (!wasOn) readyAt[d.deviceId] = b.clockMs + (timing?.powerOnDelayMs ?: d.delayAfterMs)
+                // A Home Assistant entity may really be off whatever is remembered: give it its delay.
+                if (!wasOn || d.source == "ha") readyAt[d.deviceId] = b.clockMs + (timing?.powerOnDelayMs ?: d.delayAfterMs)
                 b.gap(maxOf(timing?.interDeviceDelayMs ?: 0, d.delayAfterMs))
             }
         }

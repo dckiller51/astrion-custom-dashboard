@@ -382,7 +382,10 @@ data class HotkeyConfig(
     val pageMode: String? = null,
     /** For a `"track": true` hotkey: the `media_player` the dock clock's "Now playing" follows while
      * this Activity is active — see ActivityConfig.nowPlayingEntity. */
-    val nowPlayingEntity: String? = null
+    val nowPlayingEntity: String? = null,
+    /** Starts the composed Activity with this id ([ActivityConfig.id]), exactly like a scene tile's
+     * `"activity"`: its devices, then its page. Checked with [openOverlay]. */
+    val activity: String? = null
 ) {
     val opensPopup: Boolean get() = pageMode.equals("popup", ignoreCase = true)
 
