@@ -171,6 +171,15 @@ function updateHotkeyActionInputs(preselect) {
       <label>${I18N.t('web_hotkey_room_label')}</label><input type="text" id="hkActivityRoom" placeholder="${I18N.t('web_hotkey_room_ph')}">
       <div class="hint" style="margin-top:4px">${I18N.t('web_hotkey_room_hint')}</div>
     `;
+  } else if (action === 'startActivity') {
+    const acts = dashboardData.activities || [];
+    container.innerHTML = acts.length ? `
+      <label>${I18N.t('web_hotkey_activity_label')}</label>
+      <select id="hkStartActivity">
+        ${acts.map(a => `<option value="${escapeAttr(a.id)}">${escapeAttr(a.name || a.id)}${a.room ? ' (' + escapeAttr(a.room) + ')' : ''}</option>`).join('')}
+      </select>
+      <div class="hint" style="margin-top:4px">${I18N.t('web_hotkey_activity_hint')}</div>
+    ` : `<div class="hint">${I18N.t('web_hotkey_no_activities')}</div>`;
   } else if (action === 'stopActivity') {
     container.innerHTML = `
       <label>${I18N.t('web_hotkey_room_label')}</label>
@@ -265,6 +274,10 @@ function describeHotkey(h) {
   if (h.page) return I18N.t(h.pageMode === 'popup' ? 'web_hotkey_desc_page_popup' : 'web_hotkey_desc_page', h.page);
   if (h.openOverlay) return I18N.t(h.openOverlay === 'activities' ? 'web_hotkey_desc_overlay_activities' : 'web_hotkey_desc_overlay_settings');
   if (h.openCurrentActivityRoom) return I18N.t('web_hotkey_desc_current_activity', h.openCurrentActivityRoom);
+  if (h.activity) {
+    const act = (dashboardData.activities || []).find(a => a.id === h.activity);
+    return I18N.t('web_hotkey_desc_activity', (act && act.name) || h.activity);
+  }
   if (h.stopActivity) return h.stopActivity === '*' ? I18N.t('web_hotkey_desc_off_all') : I18N.t('web_hotkey_desc_off_room', h.stopActivity);
   if (h.event) return I18N.t('web_hotkey_desc_event', h.event);
   if (h.service === 'remote.send_command') {
@@ -362,7 +375,7 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.event ? 'haEvent' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.activity ? 'startActivity' : h.event ? 'haEvent' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
   updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
 
@@ -373,6 +386,9 @@ async function editHotkey(scope, listType, i) {
     document.getElementById('hkOverlay').value = h.openOverlay || 'settings';
   } else if (action === 'openCurrentActivity') {
     document.getElementById('hkActivityRoom').value = h.openCurrentActivityRoom || '';
+  } else if (action === 'startActivity') {
+    const sel = document.getElementById('hkStartActivity');
+    if (sel) sel.value = h.activity || '';
   } else if (action === 'stopActivity') {
     document.getElementById('hkStopRoom').value = h.stopActivity || '';
   } else if (action === 'haEvent') {
@@ -455,6 +471,10 @@ function addHotkey() {
     const room = document.getElementById('hkActivityRoom').value.trim();
     if (!room) { alert(I18N.t('web_hotkey_err_room')); return; }
     hkObj.openCurrentActivityRoom = room;
+  } else if (action === 'startActivity') {
+    const id = document.getElementById('hkStartActivity')?.value || '';
+    if (!id) { alert(I18N.t('web_hotkey_err_activity')); return; }
+    hkObj.activity = id;
   } else if (action === 'stopActivity') {
     const room = document.getElementById('hkStopRoom').value.trim();
     if (!room) { alert(I18N.t('web_hotkey_err_room_or_all')); return; }

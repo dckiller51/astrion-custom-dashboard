@@ -155,7 +155,7 @@
     <string name="web_config_update_none">Già aggiornato</string>
     <string name="web_config_install_update_button">Scarica &amp; installa</string>
     <string name="web_config_update_installing">Programma di installazione avviato — approva il prompt di installazione sullo schermo del pannello</string>
-    <string name="web_config_update_needs_permission">Consenti "Installa app sconosciute" per questa app nella schermata che si è appena aperta, quindi tocca di nuovo Scarica &amp; installa.</string>
+    <string name="web_config_update_needs_permission">Consenti \"Installa app sconosciute\" per questa app nella schermata che si è appena aperta, quindi tocca di nuovo Scarica &amp; installa.</string>
     <string name="web_config_update_failed">Controllo aggiornamento fallito: %1$s</string>
 
     <!-- Connection status -->
@@ -164,7 +164,7 @@
     <string name="connection_error_retrying">Errore di connessione — nuovo tentativo in corso</string>
 
     <!-- Unknown card -->
-    <string name="unknown_card_type">Tipo di carta sconosciuto: "%1$s"</string>
+    <string name="unknown_card_type">Tipo di carta sconosciuto: \"%1$s\"</string>
 
     <!-- Media (player, Plex, browser) -->
     <string name="media_loading">Caricamento…</string>

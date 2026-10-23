@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fast, no build needed: every language against English (placeholders, tags, keys).
+      - name: Translations
+        run: python3 .github/scripts/check_translations.py
+
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:

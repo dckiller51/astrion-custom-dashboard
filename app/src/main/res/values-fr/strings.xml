@@ -164,7 +164,7 @@
     <string name="connection_error_retrying">Erreur de connexion — nouvelle tentative</string>
 
     <!-- Unknown card -->
-    <string name="unknown_card_type">Type de carte inconnu : "%1$s"</string>
+    <string name="unknown_card_type">Type de carte inconnu : \"%1$s\"</string>
 
     <!-- Media (player, Plex, browser) -->
     <string name="media_loading">Chargement…</string>

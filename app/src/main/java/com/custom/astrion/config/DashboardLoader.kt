@@ -213,6 +213,7 @@ object DashboardLoader {
         val event = obj["event"]?.jsonPrimitive?.content?.trim()?.takeIf { it.isNotBlank() }
         val pageMode = obj["pageMode"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         val nowPlayingEntity = obj["nowPlayingEntity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
+        val activity = obj["activity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
         return HotkeyConfig(
             key,
             page,
@@ -233,7 +234,8 @@ object DashboardLoader {
             stopActivity,
             event,
             pageMode,
-            nowPlayingEntity
+            nowPlayingEntity,
+            activity
         )
     }
 
@@ -631,6 +633,11 @@ object DashboardLoader {
                     if (hk.devices.isNotEmpty()) put("devices", buildJsonArray { hk.devices.forEach { add(JsonPrimitive(it)) } })
                     hk.openOverlay?.let { put("openOverlay", it) }
                     hk.openCurrentActivityRoom?.let { put("openCurrentActivityRoom", it) }
+                    // Kept when the remote itself rewrites dashboard.json (Settings › Dock screen…).
+                    hk.stopActivity?.let { put("stopActivity", it) }
+                    hk.event?.let { put("event", it) }
+                    hk.nowPlayingEntity?.let { put("nowPlayingEntity", it) }
+                    hk.activity?.let { put("activity", it) }
                 }
             )
         }

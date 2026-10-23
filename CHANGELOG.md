@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.4-beta] - 2026-10-23
+
+### Added
+
+- **Start an Activity from a physical key.** In the builder's **1. Hotkeys**, the new action **Start an Activity** starts a composed Activity exactly like its scene tile (devices on, inputs, then its page). No more adding a tile just to bind a key to it.
+
+### Fixed
+
+- **Composed Activities didn't turn on Home Assistant devices anymore** (since 1.3.0). Astrion remembers whether each device is on, and a Home Assistant TV or amp switched off from Home Assistant or its own remote was still believed on, so its `turn_on` was skipped and nothing happened. A Home Assistant entity now always gets its `turn_on` and `select_source` (both harmless to repeat), as before 1.3.0. IR and Harmony devices keep the memory, which toggle-only devices need.
+- **Holding Volume (or any command key) kept going for seconds after release.** Android repeats a held key about 20 times a second and each repeat sent a command, faster than Home Assistant and the amp could follow. A held key now repeats at a pace the target keeps up with (Home Assistant: about 3 per second, IR and Harmony: about 7) and stops on release. Keys that open a page, a popup or an overlay, start or stop an Activity, or send an event no longer repeat at all when held.
+- **Some hotkey settings were lost when the remote itself saved dashboard.json** (e.g. changing the dock screen in Settings): a hotkey's "Off" room (`stopActivity`), Home Assistant event (`event`) and dock "Now playing" player were dropped. They are kept now.
+- **Quotes missing on screen** in two messages of the app (unknown card type, "Install unknown apps"): Android drops a bare `"` in its text files.
+
+### Development
+
+- **Automatic tests for Activities**: 13 tests of what a composed Activity sends (Home Assistant devices, toggle-only and discrete IR devices, inputs, power-on delays, switching Activities in a room, stopping). They run on every push and pull request, and would have caught the Home Assistant bug above.
+- **Translation check on every push and pull request** (`.github/scripts/check_translations.py`, also runnable locally): every language is compared with English. A wrong placeholder (`%1$s`), HTML tag, line break, unknown key or unescaped apostrophe fails the build; keys not translated yet are only reported.
+
 ## [1.3.3-beta] - 2026-10-21
 
 ### Added
@@ -15,7 +33,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **The beta has its own name: "Astrion Custom β".** It used to be called "Astrion Custom" like the official app, so the two looked the same in Android's "choose a Home app" prompt.
 
-## [1.3.2-beta] - 2026-10-19
+## [1.3.2] - 2026-10-19
 
 ### Added
 

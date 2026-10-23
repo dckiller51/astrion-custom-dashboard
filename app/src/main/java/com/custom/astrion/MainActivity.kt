@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
@@ -102,6 +103,12 @@ class MainActivity : ComponentActivity() {
         const val MOTION_TAG = "MotionWake"
         const val SCREEN_TAG = "ScreenTimeout"
         const val LONG_PRESS_MS = 1500L
+
+        /** Held-key repeat pace: IR/Harmony are sent at once, Home Assistant goes through the
+         * network and the integration (a networked amp can take a few hundred ms per step). */
+        const val IR_REPEAT_MS = 150L
+        const val HA_REPEAT_MS = 350L
+
         const val TILT_WAKE_DEG = 30f
         const val LIN_ACC_WAKE = 2.5f
         const val MOTION_CONSECUTIVE_N = 3
@@ -134,6 +141,9 @@ class MainActivity : ComponentActivity() {
     private var pendingLong: Runnable? = null
     private var activeLongKey = -1
     private var longFired = false
+
+    /** When the held short-press key last ran its action (see [repeatDue]). */
+    private var lastRepeatAt = 0L
 
     private var sensorManager: SensorManager? = null
     private var motionSensor: Sensor? = null
@@ -900,7 +910,7 @@ class MainActivity : ComponentActivity() {
             val key =
                 runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
                     ?: return@forEach
-            keyRouter.on(key) { runHotkey(hk) }
+            keyRouter.on(key, repeatIntervalFor(hk)) { runHotkey(hk) }
         }
         long.forEach { hk ->
             val key =
@@ -908,6 +918,19 @@ class MainActivity : ComponentActivity() {
                     ?: return@forEach
             keyRouter.onLong(key) { runHotkey(hk, long = true) }
         }
+    }
+
+    /**
+     * Held key: only a command (volume, channel, arrows…) repeats, and at a pace the target keeps
+     * up with. Android repeats a held key about 20 times a second; each repeat used to send a
+     * command, so a Home Assistant amp kept turning the volume down for seconds after release.
+     */
+    private fun repeatIntervalFor(hk: HotkeyConfig): Long? = when {
+        hk.page != null || hk.openOverlay != null || hk.event != null || hk.harmonyActivity != null -> null
+        hk.openCurrentActivityRoom != null || hk.stopActivity != null || hk.activity != null || hk.track -> null
+        hk.irDevice != null || hk.harmonyCommand != null -> IR_REPEAT_MS
+        hk.service != null -> HA_REPEAT_MS
+        else -> null
     }
 
     /** `hk.openOverlay`'s handling, split out of [runHotkey] purely to keep
@@ -932,7 +955,15 @@ class MainActivity : ComponentActivity() {
         hk.openOverlay != null -> openOverlayHotkey(hk.openOverlay)
         hk.openCurrentActivityRoom != null -> openCurrentActivityHotkey(hk.openCurrentActivityRoom)
         hk.stopActivity != null -> stopActivityHotkey(hk.stopActivity)
+        hk.activity != null -> startActivityHotkey(hk.activity)
         else -> null
+    }
+
+    /** `"activity"`: starts that composed Activity, as its scene tile would (devices, then its page). */
+    private fun startActivityHotkey(id: String): Boolean {
+        val start = startActivityFn ?: return false
+        start(id)
+        return true
     }
 
     /**
@@ -1196,8 +1227,11 @@ class MainActivity : ComponentActivity() {
                         pendingLong = r
                         keyHandler.postDelayed(r, LONG_PRESS_MS)
                     }
-                } else {
+                } else if (event.repeatCount == 0) {
+                    lastRepeatAt = SystemClock.uptimeMillis()
                     fireButtonTap()
+                    shortH?.invoke()
+                } else if (repeatDue(code)) {
                     shortH?.invoke()
                 }
                 return true
@@ -1215,6 +1249,15 @@ class MainActivity : ComponentActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** A held key's next repeat, once its interval has passed (see [repeatIntervalFor]). */
+    private fun repeatDue(code: Int): Boolean {
+        val every = keyRouter.repeatInterval(code) ?: return false
+        val now = SystemClock.uptimeMillis()
+        if (now - lastRepeatAt < every) return false
+        lastRepeatAt = now
+        return true
     }
 
     private fun cancelPendingLong() {
