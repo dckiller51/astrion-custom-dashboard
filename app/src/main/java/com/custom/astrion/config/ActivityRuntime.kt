@@ -123,6 +123,9 @@ class ActivityRuntime(config: AppConfig, private val memory: ActiveActivityStore
      * get at `devices`/`volumeDeviceId` when starting one. */
     val activityConfigs: Map<String, ActivityConfig> = config.activities.associateBy { it.id }
 
+    /** [AppConfig.keepOnDevices]: never switched off when another Activity takes the room. */
+    val keepOnDevices: Set<String> = config.keepOnDevices
+
     /**
      * Convenience for card renderers: given the exact same scene_grid item
      * map that was just tapped, finds the matching pre-scanned

@@ -19,6 +19,26 @@ sealed class PlannedAction {
     data class HaSource(override val device: ActivityDeviceConfig, val source: String, override val gapBeforeMs: Int) : PlannedAction()
 }
 
+/**
+ * What Home Assistant reports right now for an entity — the truth for a Home
+ * Assistant device, which Astrion's own memory can't see being switched by
+ * Home Assistant or its own remote. [on] null = unknown (unavailable, not
+ * loaded yet, Home Assistant disconnected): then the planner sends anyway.
+ */
+data class LiveHaState(val on: Boolean?, val source: String? = null) {
+    companion object {
+        fun of(state: String, source: String?): LiveHaState = LiveHaState(
+            on =
+            when (state.lowercase()) {
+                "off", "standby" -> false
+                "unavailable", "unknown", "" -> null
+                else -> true // on, playing, paused, idle, buffering…
+            },
+            source = source
+        )
+    }
+}
+
 /** The plan plus the device states to record once it has been sent. */
 data class ActivityPlan(
     val actions: List<PlannedAction>,
@@ -56,8 +76,15 @@ class ActivityPlanner(
     /** Whether a device actually has a command — an explicit power command
      * it doesn't have falls back to the profile's own (e.g. an Apple TV has
      * no IR "PowerOn"; Harmony wakes it with "Home"). */
-    private val hasCommand: (ActivityDeviceConfig, String) -> Boolean = { _, _ -> true }
+    private val hasCommand: (ActivityDeviceConfig, String) -> Boolean = { _, _ -> true },
+    /** Live state of a Home Assistant entity, by entity id — null when not known. */
+    private val haState: (String) -> LiveHaState? = { null },
+    /** Devices never switched off when another Activity takes the room (AppConfig.keepOnDevices). */
+    private val keepOn: Set<String> = emptySet()
 ) {
+    /** Home Assistant's live state for an HA device; null for other sources or when unknown. */
+    private fun live(d: ActivityDeviceConfig): LiveHaState? = if (d.source == "ha") haState(d.deviceId) else null
+
     private inner class Builder(val profileOf: (ActivityDeviceConfig) -> IrDeviceProfile?) {
         val actions = mutableListOf<PlannedAction>()
         val power = mutableMapOf<String, Boolean>()
@@ -199,37 +226,42 @@ class ActivityPlanner(
 
     private fun interDeviceDelay(d: ActivityDeviceConfig): Int = profileOf(d)?.timing?.interDeviceDelayMs ?: 0
 
-    /** Known state first; unknown → "on" only if the outgoing Activity used it. */
+    /** Home Assistant's live state, then the remembered one; unknown → "on" only if the outgoing Activity used it. */
     private fun isOn(d: ActivityDeviceConfig, outgoingDevices: Set<String>): Boolean =
-        states[d.deviceId].on ?: (d.deviceId in outgoingDevices)
+        live(d)?.on ?: states[d.deviceId].on ?: (d.deviceId in outgoingDevices)
 
     /** Off → power on. Believed on → only a discrete "on" (harmless to
      * resend) when that belief didn't come from the outgoing Activity —
      * the device may have been switched off by hand since. A Home
-     * Assistant entity always gets its turn_on: it is discrete by nature,
-     * and the remembered state can't see it being switched off from Home
-     * Assistant or its own remote (1.3.0–1.3.2 then sent nothing at all). */
+     * Assistant entity follows what Home Assistant reports: turn_on unless
+     * it is on right now, and when that isn't known (never the remembered
+     * state: it can't see the device being switched off from Home Assistant
+     * or its own remote — 1.3.0–1.3.3 then sent nothing at all). */
     private fun needsPower(d: ActivityDeviceConfig, outgoingDevices: Set<String>): Boolean = d.powerOnFirst &&
-        (
-            d.source == "ha" ||
-                !isOn(d, outgoingDevices) ||
+        if (d.source == "ha") {
+            live(d)?.on != true
+        } else {
+            !isOn(d, outgoingDevices) ||
                 (profileOf(d)?.power?.type == PowerType.DISCRETE && d.deviceId !in outgoingDevices)
-            )
+        }
 
-    /** Select an input unless the device is on and already known to be on it.
-     * Always for a Home Assistant entity: select_source is harmless to repeat. */
+    /** Select an input unless the device is on and already known to be on it —
+     * for a Home Assistant entity, unless it reports that source right now. */
     private fun needsInput(d: ActivityDeviceConfig, input: String, poweredNow: Boolean, outgoingDevices: Set<String>): Boolean =
-        d.source == "ha" ||
+        if (d.source == "ha") {
+            poweredNow || live(d)?.source?.equals(input, ignoreCase = true) != true
+        } else {
             poweredNow ||
-            states[d.deviceId].input?.equals(input, ignoreCase = true) != true ||
-            !isOn(d, outgoingDevices)
+                states[d.deviceId].input?.equals(input, ignoreCase = true) != true ||
+                !isOn(d, outgoingDevices)
+        }
 
     /** No profiled device: the original order, unchanged — per device,
      * power → input → delayAfterMs. */
     private fun planOriginalStart(b: Builder, incoming: ActivityConfig, outgoingDevices: Set<String>) {
         incoming.devices.forEachIndexed { index, d ->
-            if (needsPower(d, outgoingDevices)) b.power(d, on = true)
-            d.inputCommand?.let { b.input(d, it) }
+            val powered = needsPower(d, outgoingDevices) && b.power(d, on = true)
+            d.inputCommand?.let { if (d.source != "ha" || needsInput(d, it, powered, outgoingDevices)) b.input(d, it) }
             if (index < incoming.devices.lastIndex) b.gap(d.delayAfterMs)
         }
     }
@@ -239,13 +271,12 @@ class ActivityPlanner(
     private fun planPowerOn(b: Builder, incoming: ActivityConfig, outgoingDevices: Set<String>): Map<String, Long> {
         val readyAt = mutableMapOf<String, Long>()
         incoming.devices.forEach { d ->
-            val wasOn = isOn(d, outgoingDevices)
+            val wasOn = if (d.source == "ha") live(d)?.on == true else isOn(d, outgoingDevices)
             if (needsPower(d, outgoingDevices) && b.power(d, on = true)) {
                 val timing = profileOf(d)?.timing
                 // A discrete "on" resent to a device believed on is only a
                 // safety net: no power-on wait, no forced input for it.
-                // A Home Assistant entity may really be off whatever is remembered: give it its delay.
-                if (!wasOn || d.source == "ha") readyAt[d.deviceId] = b.clockMs + (timing?.powerOnDelayMs ?: d.delayAfterMs)
+                if (!wasOn) readyAt[d.deviceId] = b.clockMs + (timing?.powerOnDelayMs ?: d.delayAfterMs)
                 b.gap(maxOf(timing?.interDeviceDelayMs ?: 0, d.delayAfterMs))
             }
         }
@@ -269,7 +300,7 @@ class ActivityPlanner(
     fun planStop(activity: ActivityConfig): ActivityPlan {
         val b = Builder(profileOf)
         activity.devices.forEach { d ->
-            if (d.powerOffOnExit && states[d.deviceId].on != false) {
+            if (d.powerOffOnExit && (live(d)?.on ?: states[d.deviceId].on) != false) {
                 if (b.power(d, on = false)) b.gap(interDeviceDelay(d))
             }
         }
@@ -291,8 +322,8 @@ class ActivityPlanner(
         val byId = LinkedHashMap<String, ActivityDeviceConfig>()
         (outgoingConfigs + roomDevices).forEach { byId.putIfAbsent(it.deviceId, it) }
         return byId.values.filter { d ->
-            val state = states[d.deviceId].on
-            d.deviceId !in incomingIds && d.powerOffOnExit &&
+            val state = live(d)?.on ?: states[d.deviceId].on
+            d.deviceId !in incomingIds && d.deviceId !in keepOn && d.powerOffOnExit &&
                 when (state) {
                     true -> true
                     false -> false

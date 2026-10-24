@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.5-beta] - 2026-10-24
+
+### Added
+
+- **"Keep this device on when switching to another Activity".** A new box in the Activity wizard, for each device. It is a setting of the device, shared by every Activity that uses it: the device is never switched off when another Activity takes the room. Made for a TV that Home Assistant sees as two entities (e.g. Bravia for power and HDMI, Android TV/ADB to launch apps): going from Netflix back to Watch TV no longer switches the TV off through its Android TV entity. "Off" still switches it off when "Power off when this Activity ends" is ticked. Stored as `keepOnDevices` in `dashboard.json`.
+- **What an Activity sends to Home Assistant shows in the remote's logs** (`AstrionActivity`: `turn_on …`, `select_source …`), like IR commands already did.
+
+### Changed
+
+- **Activities follow the state Home Assistant reports** for Home Assistant devices, instead of always resending (1.3.4): `turn_on` only if the device is off, `select_source` only if it isn't on that source already, no `turn_off` for a device already off. When Home Assistant doesn't know the state (entity unavailable, disconnected), the command is sent anyway. IR and Harmony devices keep Astrion's own memory, which toggle-only devices need. Suggested by the user who reported the 1.3.4 bug: "the state should be remembered by the control system".
+
+### Development
+
+- 9 more Activity tests (22 in all): Home Assistant live state, devices kept on between Activities.
+
 ## [1.3.4-beta] - 2026-10-23
 
 ### Added
@@ -13,7 +28,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Composed Activities didn't turn on Home Assistant devices anymore** (since 1.3.0). Astrion remembers whether each device is on, and a Home Assistant TV or amp switched off from Home Assistant or its own remote was still believed on, so its `turn_on` was skipped and nothing happened. A Home Assistant entity now always gets its `turn_on` and `select_source` (both harmless to repeat), as before 1.3.0. IR and Harmony devices keep the memory, which toggle-only devices need.
 - **Holding Volume (or any command key) kept going for seconds after release.** Android repeats a held key about 20 times a second and each repeat sent a command, faster than Home Assistant and the amp could follow. A held key now repeats at a pace the target keeps up with (Home Assistant: about 3 per second, IR and Harmony: about 7) and stops on release. Keys that open a page, a popup or an overlay, start or stop an Activity, or send an event no longer repeat at all when held.
-- **Some hotkey settings were lost when the remote itself saved dashboard.json** (e.g. changing the dock screen in Settings): a hotkey's "Off" room (`stopActivity`), Home Assistant event (`event`) and dock "Now playing" player were dropped. They are kept now.
 - **Quotes missing on screen** in two messages of the app (unknown card type, "Install unknown apps"): Android drops a bare `"` in its text files.
 
 ### Development
