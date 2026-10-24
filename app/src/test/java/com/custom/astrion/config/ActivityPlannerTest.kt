@@ -28,8 +28,12 @@ class ActivityPlannerTest {
     private fun activity(id: String, vararg devices: ActivityDeviceConfig, room: String = "Living Room") =
         ActivityConfig(id = id, name = id, room = room, devices = devices.toList())
 
-    private fun planner(states: Map<String, DeviceState> = emptyMap(), profiles: Map<String, IrDeviceProfile> = emptyMap()) =
-        ActivityPlanner(profileOf = { profiles[it.deviceId] }, states = DeviceStateStore(states))
+    private fun planner(
+        states: Map<String, DeviceState> = emptyMap(),
+        profiles: Map<String, IrDeviceProfile> = emptyMap(),
+        ha: Map<String, LiveHaState> = emptyMap(),
+        keepOn: Set<String> = emptySet()
+    ) = ActivityPlanner(profileOf = { profiles[it.deviceId] }, states = DeviceStateStore(states), haState = { ha[it] }, keepOn = keepOn)
 
     private fun ActivityPlanner.start(
         incoming: ActivityConfig,
@@ -97,6 +101,67 @@ class ActivityPlannerTest {
         val plan = planner().start(activity("a", ha("media_player.tv", "HDMI 2")))
         assertEquals(mapOf("media_player.tv" to true), plan.powerChanges)
         assertEquals(mapOf("media_player.tv" to "HDMI 2"), plan.inputChanges)
+    }
+
+    // ---- Home Assistant live state ------------------------------------------------------------
+
+    @Test
+    fun `HA device on and on the right source gets nothing`() {
+        val live = mapOf("media_player.tv" to LiveHaState(on = true, source = "HDMI 2"))
+        val plan = planner(ha = live).start(activity("a", ha("media_player.tv", "HDMI 2")))
+        assertTrue(plan.describe().isEmpty())
+    }
+
+    @Test
+    fun `HA device on but on another source only gets its source`() {
+        val live = mapOf("media_player.tv" to LiveHaState(on = true, source = "HDMI 1"))
+        val plan = planner(ha = live).start(activity("a", ha("media_player.tv", "HDMI 2")))
+        assertEquals(listOf("source media_player.tv HDMI 2"), plan.describe())
+    }
+
+    /** Switched off with its own remote while Astrion still remembers it on. */
+    @Test
+    fun `HA device reported off is turned on whatever Astrion remembers`() {
+        val live = mapOf("media_player.tv" to LiveHaState(on = false, source = "HDMI 2"))
+        val plan =
+            planner(mapOf("media_player.tv" to DeviceState(on = true, input = "HDMI 2")), ha = live)
+                .start(activity("a", ha("media_player.tv", "HDMI 2")))
+        assertEquals(listOf("turn_on media_player.tv", "source media_player.tv HDMI 2"), plan.describe())
+    }
+
+    @Test
+    fun `HA device in an unknown state is turned on anyway`() {
+        val live = mapOf("media_player.tv" to LiveHaState.of("unavailable", null))
+        val plan = planner(ha = live).start(activity("a", ha("media_player.tv", "HDMI 2")))
+        assertEquals(listOf("turn_on media_player.tv", "source media_player.tv HDMI 2"), plan.describe())
+    }
+
+    @Test
+    fun `HA states map to on and off`() {
+        assertEquals(false, LiveHaState.of("off", null).on)
+        assertEquals(false, LiveHaState.of("standby", null).on)
+        assertEquals(true, LiveHaState.of("playing", null).on)
+        assertEquals(true, LiveHaState.of("idle", null).on)
+        assertEquals(null, LiveHaState.of("unknown", null).on)
+    }
+
+    @Test
+    fun `switching Activity doesn't switch off an HA device Home Assistant reports off`() {
+        val apps = activity("netflix", ha("media_player.android_tv", "com.netflix.ninja"))
+        val watchTv = activity("watch_tv", ha("media_player.bravia", "HDMI 1"))
+        val live = mapOf("media_player.android_tv" to LiveHaState(on = false))
+        val plan =
+            planner(mapOf("media_player.android_tv" to DeviceState(on = true)), ha = live)
+                .start(watchTv, others = listOf(apps), outgoing = apps)
+        assertTrue(plan.describe().none { it.contains("android_tv") })
+    }
+
+    @Test
+    fun `stopping doesn't switch off an HA device Home Assistant reports off`() {
+        val plan =
+            planner(ha = mapOf("media_player.tv" to LiveHaState(on = false)))
+                .planStop(activity("a", ha("media_player.tv")))
+        assertTrue(plan.describe().isEmpty())
     }
 
     // ---- IR devices -----------------------------------------------------------------------------
@@ -170,6 +235,30 @@ class ActivityPlannerTest {
         val music = activity("music", ir("amp", on = "AmpOn"))
         val plan = planner(mapOf("tv" to DeviceState(on = true))).start(music, others = listOf(watchTv), outgoing = watchTv)
         assertTrue(plan.describe().none { it.startsWith("cmd tv") })
+    }
+
+    /** The reporter's setup: the Android TV entity (apps) is the same TV as the Bravia entity (HDMI). */
+    @Test
+    fun `a device kept on between Activities is not switched off by the next one`() {
+        val netflix = activity("netflix", ha("media_player.bravia"), ha("media_player.android_tv", "com.netflix.ninja"))
+        val watchTv = activity("watch_tv", ha("media_player.bravia", "HDMI 1"))
+        val live =
+            mapOf(
+                "media_player.android_tv" to LiveHaState(on = true),
+                "media_player.bravia" to LiveHaState(on = true, source = "HDMI 1")
+            )
+        val kept =
+            planner(ha = live, keepOn = setOf("media_player.android_tv"))
+                .start(watchTv, others = listOf(netflix), outgoing = netflix)
+        assertTrue(kept.describe().none { it.contains("android_tv") })
+        val notKept = planner(ha = live).start(watchTv, others = listOf(netflix), outgoing = netflix)
+        assertTrue("without the setting it is switched off", "turn_off media_player.android_tv" in notKept.describe())
+    }
+
+    @Test
+    fun `a device kept on between Activities is still switched off when its Activity is stopped`() {
+        val plan = planner(keepOn = setOf("media_player.tv")).planStop(activity("a", ha("media_player.tv")))
+        assertEquals(listOf("turn_off media_player.tv"), plan.describe())
     }
 
     @Test

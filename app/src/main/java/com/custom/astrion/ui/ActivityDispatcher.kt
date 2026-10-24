@@ -11,6 +11,7 @@ import com.custom.astrion.config.DeviceStateStore
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.IrDeviceConfig
 import com.custom.astrion.config.IrTarget
+import com.custom.astrion.config.LiveHaState
 import com.custom.astrion.config.PlannedAction
 import com.custom.astrion.extender.ExtenderBatchCommand
 import com.custom.astrion.extender.ExtenderRegistry
@@ -30,6 +31,9 @@ data class ActivityDispatcherScopes(
     val scope: CoroutineScope,
     val extenderScope: CoroutineScope
 )
+
+/** Logcat tag of what an Activity sends to Home Assistant (shown in the remote's /logs). */
+private const val ACTIVITY_TAG = "AstrionActivity"
 
 /**
  * "Send a command somewhere" and "switch/stop an Activity" — extracted out
@@ -131,10 +135,12 @@ class ActivityDispatcher(
                 is PlannedAction.HaPower -> this.steps += DispatchStep.Immediate(gap) {
                     val domain = d.deviceId.substringBefore('.')
                     val service = if (action.on) "turn_on" else "turn_off"
+                    Log.i(ACTIVITY_TAG, "$service ${d.deviceId}")
                     client.callService(ServiceCall(domain = domain, service = service, entityId = d.deviceId))
                 }
                 is PlannedAction.HaSource -> this.steps += DispatchStep.Immediate(gap) {
                     val domain = d.deviceId.substringBefore('.')
+                    Log.i(ACTIVITY_TAG, "select_source ${d.deviceId} \"${action.source}\"")
                     client.callService(ServiceCall.of(domain, "select_source", d.deviceId, "source" to action.source))
                 }
                 is PlannedAction.Command -> when (d.source) {
@@ -301,7 +307,9 @@ class ActivityDispatcher(
             states = DeviceStateStore.shared,
             hasCommand = { d, command ->
                 d.source != "ir" || irDevicesById[d.deviceId]?.let { IrDatabaseRuntime.hasCommand(it, command) } == true
-            }
+            },
+            haState = { entityId -> client.entities.value[entityId]?.let { LiveHaState.of(it.state, it.attrString("source")) } },
+            keepOn = activityRuntime.keepOnDevices
         )
 
     /** Sends a plan, then records the devices' new power/input state —

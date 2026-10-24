@@ -41,7 +41,12 @@ data class AppConfig(
     /** Standby / battery tuning — see [PowerConfig]. */
     val power: PowerConfig = PowerConfig(),
     /** Built-in weather (1.3.2), no Home Assistant needed — see [WeatherConfig]. Null = off. */
-    val weather: WeatherConfig? = null
+    val weather: WeatherConfig? = null,
+    /** Activity device ids (IR/Harmony device id or HA entity id) never switched off when another
+     * Activity takes the room, whatever each Activity says (1.3.5) — e.g. the Android TV entity used
+     * to launch apps, which is the same TV as the one the next Activity uses. Stopping an Activity
+     * ("Off") still follows that Activity's own "power off when it ends". */
+    val keepOnDevices: Set<String> = emptySet()
 )
 
 /**

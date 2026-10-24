@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.floatOrNull
 import kotlinx.serialization.json.int
@@ -169,7 +170,23 @@ object DashboardLoader {
             val dock = (root["dock"] as? JsonObject)?.let { parseDock(it) } ?: DockConfig()
             val power = (root["power"] as? JsonObject)?.let { parsePower(it) } ?: PowerConfig()
             val weather = (root["weather"] as? JsonObject)?.let { parseWeather(it) }
-            AppConfig(pages, start.coerceIn(0, pages.size - 1), hotkeys, longHotkeys, irDevices, activities, theme, dock, power, weather)
+            val keepOn =
+                (root["keepOnDevices"] as? JsonArray).orEmpty()
+                    .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }
+                    .toSet()
+            AppConfig(
+                pages,
+                start.coerceIn(0, pages.size - 1),
+                hotkeys,
+                longHotkeys,
+                irDevices,
+                activities,
+                theme,
+                dock,
+                power,
+                weather,
+                keepOn
+            )
         }
         else -> error("top level must be an object or array")
     }
