@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astrion TV Helper</string>
+    <string name="code_label">Código que introducir en el mando (página web › Android TV › Asistente):</string>
+    <string name="code_hint">Permite al mando Astrion mostrar lo que se reproduce (título, carátula, progreso) y abrir cualquier app en este televisor.</string>
+    <string name="media_ok">✓ Lectura de lo que se reproduce: permitida</string>
+    <string name="media_missing">✗ Lectura de lo que se reproduce: aún no permitida (acceso a notificaciones)</string>
+    <string name="apps_ok">✓ Abrir apps: permitido</string>
+    <string name="apps_missing">✗ Abrir apps: aún no permitido (mostrar sobre otras apps)</string>
+    <string name="address">Este televisor: %1$s, puerto %2$d</string>
+    <string name="adb_title">Para permitirlos, ejecuta una vez desde un ordenador (antes adb connect &lt;este televisor&gt;:5555):</string>
+    <string name="open_settings">Abrir el acceso a notificaciones</string>
+    <string name="settings_unavailable">Este televisor no tiene esa pantalla: usa el comando ADB</string>
+</resources>

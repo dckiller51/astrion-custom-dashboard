@@ -562,7 +562,7 @@ private const val APPS_LABELLED_H = 62
  * holds other cards it simply scrolls, as before.
  */
 @Composable
-private fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = null): Int {
+internal fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = null): Int {
     val screen = LocalConfiguration.current.screenHeightDp
     val used = DASHBOARD_CHROME_H + CARD_PADDING * 2 + blocks.sum() + GAP * blocks.size
     val raw = screen - used
@@ -580,7 +580,7 @@ private fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = nu
  * Once per set of blocks: how far the card's bottom lands past (or short of) the bottom of the
  * screen minus the page dots, turned into a correction for [trackpadFor].
  */
-private fun measureFit(fit: AtvFit, coords: LayoutCoordinates, density: Density) {
+internal fun measureFit(fit: AtvFit, coords: LayoutCoordinates, density: Density) {
     val blocks = fit.blocks ?: return
     if (fit.errors.containsKey(blocks)) return
     val rootHeight = coords.findRootCoordinates().size.height

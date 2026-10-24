@@ -147,7 +147,8 @@ const TV_KNOWN_APPS = [
 const TV_COMMAND_KEYS = [
   ['power', 'POWER'], ['up', 'DPAD_UP'], ['down', 'DPAD_DOWN'], ['left', 'DPAD_LEFT'], ['right', 'DPAD_RIGHT'],
   ['center', 'DPAD_CENTER'], ['back', 'BACK'], ['home', 'HOME'], ['menu', 'MENU'],
-  ['volume_up', 'VOLUME_UP'], ['volume_down', 'VOLUME_DOWN'], ['mute', 'MUTE']
+  ['volume_up', 'VOLUME_UP'], ['volume_down', 'VOLUME_DOWN'], ['mute', 'MUTE'],
+  ['play_pause', 'MEDIA_PLAY_PAUSE'], ['rewind', 'MEDIA_REWIND'], ['fast_forward', 'MEDIA_FAST_FORWARD']
 ];
 
 function tvRemoteFormHtml() {
@@ -161,7 +162,21 @@ function tvRemoteFormHtml() {
     <label class="inline-check"><input type="checkbox" id="optTvShowVolume" checked> ${I18N.t('web_card_tv_show_volume')}</label>
     <label>${I18N.t('web_card_tv_volume_entity')}</label><input type="text" id="optMuteEntity" placeholder="remote.soundbar">
     <div class="hint">${I18N.t('web_card_tv_volume_hint')}</div>
+    <label>${I18N.t('web_card_layout')}</label>
+    <select id="optTvLayout">
+      <option value="classic">${I18N.t('web_card_tv_layout_classic')}</option>
+      <option value="full">${I18N.t('web_card_tv_layout_full')}</option>
+    </select>
+    <label class="inline-check"><input type="checkbox" id="optTvShowSkip" checked> ${I18N.t('web_card_tv_show_skip')}</label>
+    <label class="inline-check"><input type="checkbox" id="optTvNowPlaying" checked> ${I18N.t('web_card_tv_now_playing')}</label>
+    <label>${I18N.t('web_card_tv_now_playing_entity')}</label><input type="text" id="optTvNowPlayingEntity" placeholder="media_player.…">
+    <div class="hint">${I18N.t('web_card_tv_now_playing_hint')}</div>
+    <label class="inline-check"><input type="checkbox" id="optTvTransport"> ${I18N.t('web_card_tv_show_transport')}</label>
     <label>${I18N.t('web_card_tv_apps')}</label>
+    <select id="optTvAppsStyle">
+      <option value="buttons">${I18N.t('web_card_tv_apps_buttons')}</option>
+      <option value="icons">${I18N.t('web_card_tv_apps_icons')}</option>
+    </select>
     <datalist id="tvAppPackages">${TV_KNOWN_APPS.map(([n, p]) => `<option value="${p}">${n}</option>`).join('')}</datalist>
     <div id="tvAppsList"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -197,9 +212,16 @@ function renderTvApps() {
       ? `<span style="flex:5;min-width:0">${cxEsc(a.name || '')} <span style="color:#888">→ ${cxEsc(a.service)}</span></span>`
       : `<input type="text" class="tv-app-name" value="${cxEsc(a.name)}" placeholder="${I18N.t('web_card_monitor_name_ph')}" style="flex:2;min-width:0;margin:0">
          <input type="text" class="tv-app-pkg" list="tvAppPackages" value="${cxEsc(a.app)}" placeholder="com.netflix.ninja" style="flex:3;min-width:0;margin:0" onchange="onTvAppPackage(${i}, this.value)">`;
-    return `<div class="list-item tv-app-row" style="gap:6px;align-items:center">${main}
+    // Icon (1.3.6): shown when the card's apps are displayed as icons, and in the now-playing strip.
+    const thumb = typeof atvAppThumbUrl === 'function' ? atvAppThumbUrl(a.icon) : null;
+    const icon = `<div class="icon-field-row" style="margin:4px 0 0">
+        <input type="text" class="tv-app-icon" id="tvAppIcon${i}" value="${cxEsc(a.icon || '')}" placeholder="${I18N.t('web_card_tv_app_icon_ph')}" oninput="updateIconThumb('tvAppIcon${i}')">
+        <img class="icon-field-thumb${thumb ? ' shown' : ''}" id="tvAppIcon${i}Thumb" alt="" ${thumb ? `src="${cxEsc(thumb)}"` : ''} onerror="this.classList.remove('shown')">
+        <button type="button" class="secondary" onclick="openIconPicker('tvAppIcon${i}')">${I18N.t('web_icon_choose')}</button>
+      </div>`;
+    return `<div class="tv-app-row" style="margin-bottom:8px"><div class="list-item" style="gap:6px;align-items:center;margin:0">${main}
       ${cxMoveButtons('moveTvApp', i)}
-      <span class="remove" onclick="removeTvApp(${i})">✕</span></div>`;
+      <span class="remove" onclick="removeTvApp(${i})">✕</span></div>${icon}</div>`;
   }).join('');
 }
 
@@ -207,7 +229,10 @@ function syncTvApps() {
   const apps = window._pendingTvApps || [];
   document.querySelectorAll('#tvAppsList .tv-app-row').forEach((el, i) => {
     const a = apps[i];
-    if (!a || a.service) return;
+    if (!a) return;
+    const icon = el.querySelector('.tv-app-icon').value.trim();
+    if (icon) a.icon = icon; else delete a.icon;
+    if (a.service) return;
     a.name = el.querySelector('.tv-app-name').value.trim();
     a.app = el.querySelector('.tv-app-pkg').value.trim();
   });
@@ -231,11 +256,18 @@ function fillTvRemoteForm(o) {
   document.getElementById('optMediaEntity').value = o.media_entity || '';
   document.getElementById('optMuteEntity').value = o.mute_entity || '';
   document.getElementById('optTvShowVolume').checked = o.show_volume !== false;
+  document.getElementById('optTvNowPlaying').checked = o.show_now_playing !== false;
+  document.getElementById('optTvNowPlayingEntity').value = o.now_playing_entity || '';
+  document.getElementById('optTvTransport').checked = o.show_transport === true;
+  document.getElementById('optTvAppsStyle').value = o.apps_style === 'icons' ? 'icons' : 'buttons';
+  document.getElementById('optTvLayout').value = o.layout === 'full' ? 'full' : 'classic';
+  document.getElementById('optTvShowSkip').checked = o.show_skip !== false;
   // No "apps" in the card = the app's defaults: show them, so what's listed is what the remote shows.
   window._pendingTvApps = (Array.isArray(o.apps) ? o.apps : TV_DEFAULT_APPS).map(a => ({ ...a }));
   const cmds = o.commands || {};
   document.querySelectorAll('.tv-cmd').forEach(el => { el.value = cmds[el.dataset.key] || ''; });
-  window._tvExtra = cxWithout(o, ['name', 'remote_entity', 'media_entity', 'mute_entity', 'show_volume', 'apps', 'commands']);
+  window._tvExtra = cxWithout(o, ['name', 'remote_entity', 'media_entity', 'mute_entity', 'show_volume', 'apps', 'commands',
+    'show_now_playing', 'now_playing_entity', 'show_transport', 'apps_style', 'layout', 'show_skip']);
   // Command renames for keys this form doesn't list are kept too.
   window._tvExtraCommands = cxWithout(cmds, TV_COMMAND_KEYS.map(([k]) => k));
   renderTvApps();
@@ -258,6 +290,13 @@ function collectTvRemoteOptions() {
   const vol = document.getElementById('optMuteEntity').value.trim();
   if (vol) out.mute_entity = vol;
   if (!document.getElementById('optTvShowVolume').checked) out.show_volume = false;
+  if (!document.getElementById('optTvNowPlaying').checked) out.show_now_playing = false;
+  const npEntity = document.getElementById('optTvNowPlayingEntity').value.trim();
+  if (npEntity) out.now_playing_entity = npEntity;
+  if (document.getElementById('optTvTransport').checked) out.show_transport = true;
+  if (document.getElementById('optTvAppsStyle').value === 'icons') out.apps_style = 'icons';
+  if (document.getElementById('optTvLayout').value === 'full') out.layout = 'full';
+  if (!document.getElementById('optTvShowSkip').checked) out.show_skip = false;
   out.apps = (window._pendingTvApps || []).filter(a => a.service || a.app).map(a => {
     const r = { ...a };
     if (!r.name) r.name = tvAppLabel(r.app) || r.app;
@@ -621,13 +660,52 @@ function pictureElementsPreviewHtml(o) {
     : `<div style="position:relative;aspect-ratio:${o.aspect || 1.3};border-radius:12px;background:#1B2027">${dots}</div>`;
 }
 
+// The app row of the icons style: each app's icon, or its initials on a colored tile (as on the remote).
+const TV_TILE_COLORS = ['#B3261E', '#1F5FBF', '#3A3A40', '#B86E00', '#1E7A4A', '#5B3FA8'];
+function tvAppIconsPreviewHtml(apps) {
+  const tile = (a, i) => {
+    const url = a.icon ? atvAppThumbUrl(a.icon) : null;
+    const label = a.name || 'App';
+    const words = label.split(/[ +\-.]/).filter(Boolean);
+    const initials = (words.length >= 2 ? words[0][0] + words[1][0] : label.slice(0, 2)).toUpperCase();
+    const bg = /^#[0-9a-fA-F]{6}$/.test(a.color || '') ? a.color : TV_TILE_COLORS[i % TV_TILE_COLORS.length];
+    const face = url
+      ? `<img src="${cxEsc(url)}" alt="" style="width:100%;height:100%;object-fit:cover" onerror="this.replaceWith(document.createTextNode('${cxEsc(initials)}'))">`
+      : cxEsc(initials);
+    return `<div style="width:52px;text-align:center"><div style="width:44px;height:44px;margin:0 auto;border-radius:12px;overflow:hidden;background:${bg};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px">${face}</div>
+      <div style="color:#9AA8AD;font-size:10px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(label)}</div></div>`;
+  };
+  return `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:6px;margin-top:10px">${apps.map(tile).join('')}</div>`;
+}
+
 function tvRemotePreviewHtml(o) {
   const apps = Array.isArray(o.apps) ? o.apps : TV_DEFAULT_APPS;
   const btn = (t) => `<div style="width:40px;height:40px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">${t}</div>`;
-  return `
-    <div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#E6EEF2">${cxEsc(o.name || 'TV')}</b>${btn('⏻')}</div>
+  const header = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="color:#E6EEF2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(o.name || 'TV')}</b>${btn('⏻')}</div>`;
+  if (o.layout === 'full') {
+    // Like the remote: what's playing, the apps, then the D-pad between back/home/menu and the volume.
+    const col = (items) => `<div style="display:flex;flex-direction:column;gap:6px">${items.map(btn).join('')}</div>`;
+    return `${header}
+    ${o.show_now_playing === false ? '' : `<div style="display:flex;align-items:center;gap:12px;margin-top:10px">
+      <div style="width:64px;height:64px;border-radius:12px;background:#1B2027"></div>
+      <div style="flex:1;color:#9AA8AD;font-size:12px">${I18N.t('web_card_tv_np_preview')}</div></div>
+      <div style="height:6px;border-radius:3px;background:#1B2027;margin:10px 0"><div style="width:40%;height:100%;border-radius:3px;background:#8AB4FF"></div></div>
+      ${o.show_skip === false ? '' : `<div style="display:flex;justify-content:center;gap:18px">${btn('−10')}${btn('⏯')}${btn('+10')}</div>`}`}
+    ${tvAppIconsPreviewHtml(apps)}
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+      ${col(['↩', '⌂', '☰'])}
+      <div style="width:130px;height:130px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">OK</div>
+      ${o.show_volume === false ? '<div style="width:40px"></div>' : col(['+', '🔇', '−'])}
+    </div>`;
+  }
+  return `${header}
+    ${o.show_now_playing === false ? '' : `<div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:6px;border-radius:12px;background:#151A20">
+      <div style="width:36px;height:36px;border-radius:9px;background:#1B2027"></div>
+      <div style="flex:1;color:#9AA8AD;font-size:12px">${I18N.t('web_card_tv_np_preview')}</div>${btn('⏯')}</div>`}
     <div style="display:flex;justify-content:center;margin:10px 0"><div style="width:110px;height:110px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">OK</div></div>
     <div style="display:flex;justify-content:space-evenly">${btn('↩')}${btn('⌂')}${btn('☰')}</div>
+    ${o.show_transport ? `<div style="display:flex;justify-content:space-evenly;margin-top:8px">${btn('⏪')}${btn('⏯')}${btn('⏩')}</div>` : ''}
     ${o.show_volume === false ? '' : `<div style="display:flex;justify-content:space-evenly;margin-top:8px">${btn('−')}${btn('🔇')}${btn('+')}</div>`}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">${apps.map(a => `<div style="background:#1B2027;border-radius:10px;padding:8px;text-align:center;color:#E6EEF2;font-size:12px">${cxEsc(a.name || 'App')}</div>`).join('')}</div>`;
+    ${o.apps_style === 'icons' ? tvAppIconsPreviewHtml(apps)
+      : `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">${apps.map(a => `<div style="background:#1B2027;border-radius:10px;padding:8px;text-align:center;color:#E6EEF2;font-size:12px">${cxEsc(a.name || 'App')}</div>`).join('')}</div>`}`;
 }

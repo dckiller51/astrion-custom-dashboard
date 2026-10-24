@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 320×180 TV launcher banner: the Astrion "A" mark on dark, plus a play triangle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="320dp"
+    android:height="180dp"
+    android:viewportWidth="320"
+    android:viewportHeight="180">
+    <path
+        android:fillColor="#0E1217"
+        android:pathData="M0,0h320v180h-320z" />
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M110,140 L160,40 L210,140 L190,140 L160,80 L130,140 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M150,108 L150,132 L172,120 Z" />
+</vector>

@@ -39,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.custom.astrion.androidtv.AndroidTvRegistry
+import com.custom.astrion.androidtv.installAndroidTv
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.installAppleTv
 import com.custom.astrion.cards.DeviceSettingsState
@@ -384,6 +386,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var extenderRegistry: ExtenderRegistry
 
     private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
+    private lateinit var androidTvRegistry: AndroidTvRegistry // Android TV, direct (1.3.6)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -627,6 +630,8 @@ class MainActivity : ComponentActivity() {
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
         appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
+        // After the Apple TV one: it chains to its service handler.
+        androidTvRegistry = installAndroidTv(this, client, configServer, log = { Log.i("AndroidTv", it) })
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
     }
@@ -640,6 +645,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        androidTvRegistry.stop()
         appleTvRegistry.stop()
 
         initClientsAndServer()
@@ -929,8 +935,16 @@ class MainActivity : ComponentActivity() {
         hk.page != null || hk.openOverlay != null || hk.event != null || hk.harmonyActivity != null -> null
         hk.openCurrentActivityRoom != null || hk.stopActivity != null || hk.activity != null || hk.track -> null
         hk.irDevice != null || hk.harmonyCommand != null -> IR_REPEAT_MS
-        hk.service != null -> HA_REPEAT_MS
+        hk.service != null -> serviceRepeatMs(hk.service, hk.entityId)
         else -> null
+    }
+
+    private fun serviceRepeatMs(service: String, entityId: String?): Long? = when {
+        // Opening an app (1.3.6 Android TV hotkeys): once, not again and again while held.
+        service == "media_player.select_source" || service == "media_player.play_media" -> null
+        // An Android TV paired with Astrion answers directly, as fast as IR: smooth D-pad scrolling.
+        service == "remote.send_command" && entityId?.startsWith("remote.androidtv_") == true -> IR_REPEAT_MS
+        else -> HA_REPEAT_MS
     }
 
     /** `hk.openOverlay`'s handling, split out of [runHotkey] purely to keep
@@ -1502,6 +1516,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        androidTvRegistry.stop()
         appleTvRegistry.stop()
         super.onDestroy()
     }

@@ -49,6 +49,11 @@
                     <span class="tile-name" data-i18n="web_dev_apple_tv">Apple TV</span>
                     <span class="tile-count" id="tileAppleTvCount" data-i18n="web_dev_no_apple_tv_yet">No Apple TV yet</span>
                 </button>
+                <button type="button" class="tile tile-androidtv" onclick="showView('viewAndroidTv')">
+                    <span class="tile-icon">📺</span>
+                    <span class="tile-name" data-i18n="web_dev_android_tv">Android TV</span>
+                    <span class="tile-count" id="tileAndroidTvCount" data-i18n="web_dev_no_android_tv_yet">No Android TV yet</span>
+                </button>
                 <button type="button" class="tile tile-weather" onclick="showView('viewWeather')">
                     <span class="tile-icon">🌤️</span>
                     <span class="tile-name" data-i18n="web_dev_weather">Weather</span>
@@ -367,6 +372,53 @@
             </div>
         </div>
 
+        <!-- ---- Android TV (1.3.6, androidtv/*.kt + AndroidTvRoutes.kt) ------ -->
+        <div id="viewAndroidTv" class="category-view">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_dev_android_tv">Android TV</h2>
+            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_adtv_hint">
+                Control an Android TV / Google TV (NVIDIA SHIELD, Chromecast with Google TV, Sony, Philips…) directly over your network,
+                like the Google TV app does — no Home Assistant and no ADB needed.
+                Each paired TV shows up as a <code>media_player</code> entity (for example <code>media_player.androidtv_shield</code>)
+                plus a <code>remote</code> entity, usable by the TV remote card, media player / source cards, buttons, hotkeys and Activities.
+            </div>
+
+            <div id="androidTvsList" style="margin-bottom:14px"></div>
+            <div class="btn-row">
+                <button type="button" onclick="openDeviceForm('androidTv')" data-i18n="web_dev_add_android_tv">+ Add Android TV</button>
+            </div>
+
+            <div id="androidTvForm" class="section-box" style="display:none;margin-top:14px">
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_add_an_android_tv">Add an Android TV</h3>
+                <div id="androidTvScanBox">
+                    <div id="androidTvScanStatus" class="hint" data-i18n="web_dev_searching_your_network">Searching your network…</div>
+                    <div id="androidTvScanResults" style="margin-top:8px"></div>
+                    <label style="margin-top:12px" data-i18n="web_dev_adtv_manual_ip">Or enter its IP address</label>
+                    <div style="display:flex;gap:8px;align-items:center">
+                        <input type="text" id="androidTvManualHost" placeholder="192.168.1.50" autocomplete="off" style="flex:1">
+                        <button type="button" onclick="startAndroidTvPairingManual()" data-i18n="web_dev_pair">Pair</button>
+                    </div>
+                    <div class="btn-row" style="margin-top:10px">
+                        <button type="button" class="secondary" onclick="scanAndroidTvs()" data-i18n="web_dev_search_again">Search again</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    </div>
+                </div>
+                <div id="androidTvCodeBox" style="display:none">
+                    <div class="hint" style="margin-bottom:10px" data-i18n="web_dev_adtv_code_hint">
+                        A 6-character code (digits and letters A–F) is now showing on your TV screen. Enter it below to finish pairing.
+                    </div>
+                    <label data-i18n="web_dev_code_shown_on_the_tv">Code shown on the TV</label>
+                    <input type="text" id="androidTvCode" maxlength="6" placeholder="A1B2C3" autocomplete="off" autocapitalize="characters" style="text-transform:uppercase">
+                    <label data-i18n="web_config_harmony_name_label">Name</label>
+                    <input type="text" id="androidTvName" placeholder="e.g., Living Room" data-i18n-attr="placeholder:web_card_ph_name_room">
+                    <div class="btn-row" style="margin-top:10px">
+                        <button id="androidTvFinishBtn" type="button" onclick="finishAndroidTvPairing()" data-i18n="web_dev_pair">Pair</button>
+                        <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ---- Utilities: backup / ir-database / icons / ring ---------------- -->
         <div id="viewBackup" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
@@ -453,6 +505,7 @@
 
 <script src="js/i18n.js"></script>
 <script src="js/weather.js"></script>
+<script src="js/androidtv.js"></script>
 <script src="js/devices-page.js"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@ Files checked, each language against its English file:
   - app/src/main/assets/docs/i18n/<lang>.json   web page and builder (+ its nested "ha" labels)
   - app/src/main/assets/ha_labels/<lang>.json   Home Assistant states shown on the remote
   - app/src/*/res/values-<lang>/strings.xml     the app (main and debug)
+  - tvhelper/src/main/res/values-<lang>/strings.xml   the TV helper app (1.3.6)
 
 Errors (the job fails), because they break something on screen:
   - a file that isn't valid JSON / XML;
@@ -26,6 +27,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 APP = ROOT / "app" / "src"
+TVHELPER = ROOT / "tvhelper" / "src"
 
 PLACEHOLDER = re.compile(r"%(?:\d+\$)?[sd]|%%")
 TAG = re.compile(r"</?([a-zA-Z][a-zA-Z0-9]*)[^>]*>")
@@ -130,9 +132,9 @@ def load_strings(path):
     return dict(STRING_ELEMENT.findall(path.read_text(encoding="utf-8")))
 
 
-def check_strings_xml():
-    english = load_strings(APP / "main" / "res" / "values" / "strings.xml") or {}
-    for path in sorted(APP.glob("*/res/values-*/strings.xml")):
+def check_strings_xml(src=APP):
+    english = load_strings(src / "main" / "res" / "values" / "strings.xml") or {}
+    for path in sorted(src.glob("*/res/values-*/strings.xml")):
         local = load_strings(path)
         if local is None:
             continue
@@ -150,6 +152,8 @@ def main():
     check_json_folder(APP / "main" / "assets" / "docs" / "i18n", nested_key="ha")
     check_json_folder(APP / "main" / "assets" / "ha_labels")
     check_strings_xml()
+    if TVHELPER.exists():
+        check_strings_xml(TVHELPER)
     print(f"\nTranslations: {len(errors)} error(s), {len(warnings)} warning(s).")
     for line in errors:
         print("  ✗", line)

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astrion TV Helper</string>
+    <string name="code_label">Code à saisir sur la télécommande (page web › Android TV › Utilitaire) :</string>
+    <string name="code_hint">Il permet à la télécommande Astrion d\'afficher ce qui passe (titre, jaquette, progression) et d\'ouvrir n\'importe quelle app sur cette TV.</string>
+    <string name="media_ok">✓ Lecture de ce qui passe : autorisée</string>
+    <string name="media_missing">✗ Lecture de ce qui passe : pas encore autorisée (accès aux notifications)</string>
+    <string name="apps_ok">✓ Ouverture des apps : autorisée</string>
+    <string name="apps_missing">✗ Ouverture des apps : pas encore autorisée (superposition)</string>
+    <string name="address">Cette TV : %1$s, port %2$d</string>
+    <string name="adb_title">Pour les autoriser, lancez une fois depuis un ordinateur (d\'abord adb connect &lt;cette TV&gt;:5555) :</string>
+    <string name="open_settings">Ouvrir l\'accès aux notifications</string>
+    <string name="settings_unavailable">Cette TV n\'a pas cet écran de réglages : utilisez la commande ADB</string>
+</resources>

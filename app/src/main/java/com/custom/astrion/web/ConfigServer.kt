@@ -19,6 +19,7 @@ import com.custom.astrion.BuildConfig
 import com.custom.astrion.FindMyRemote
 import com.custom.astrion.R
 import com.custom.astrion.RemoteIdentity
+import com.custom.astrion.androidtv.AndroidTvRegistry
 import com.custom.astrion.appletv.AppleTvCredentials
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.AppleTvServiceKind
@@ -233,6 +234,12 @@ class ConfigServer(
     @Volatile
     var appleTvRegistry: AppleTvRegistry? = null
 
+    /** Android TVs paired directly (1.3.6), set by MainActivity like [appleTvRegistry]. */
+    @Volatile
+    var androidTvRegistry: AndroidTvRegistry? = null
+
+    private val androidTvRoutes = AndroidTvRoutes(context) { androidTvRegistry }
+
     /** Called after POST /remote-name — the activity refreshes what shows the name. */
     @Volatile
     var onRemoteRenamed: () -> Unit = {}
@@ -261,7 +268,8 @@ class ConfigServer(
 
     override fun serve(session: IHTTPSession): Response = try {
         val method = session.method
-        when (val uri = session.uri) {
+        val uri = session.uri
+        androidTvRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -381,7 +389,9 @@ class ConfigServer(
                 "No dashboard.json yet"
             )
         }
-        val content = runCatching { reconcileAppleTvHaDevices(file.readText()) }.getOrElse { file.readText() }
+        val content =
+            runCatching { androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())) }
+                .getOrElse { file.readText() }
         return newFixedLengthResponse(Response.Status.OK, "application/json", content)
     }
 
@@ -554,6 +564,7 @@ class ConfigServer(
                     }
                 )
                 put("appleTvs", appleTvsJson())
+                put("androidTvs", androidTvRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1130,6 +1141,7 @@ class ConfigServer(
         if (params["atv_present"]?.firstOrNull() == "1") {
             RemoteSettings.saveAppleTvs(context, parseAppleTvRows(params))
         }
+        androidTvRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
