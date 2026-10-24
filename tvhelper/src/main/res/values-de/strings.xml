@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astrion TV Helper</string>
+    <string name="code_label">Code für die Fernbedienung (Webseite › Android TV › Helfer):</string>
+    <string name="code_hint">Damit zeigt die Astrion-Fernbedienung, was läuft (Titel, Cover, Fortschritt), und öffnet jede App auf diesem Fernseher.</string>
+    <string name="media_ok">✓ Lesen, was läuft: erlaubt</string>
+    <string name="media_missing">✗ Lesen, was läuft: noch nicht erlaubt (Benachrichtigungszugriff)</string>
+    <string name="apps_ok">✓ Apps öffnen: erlaubt</string>
+    <string name="apps_missing">✗ Apps öffnen: noch nicht erlaubt (über anderen Apps einblenden)</string>
+    <string name="address">Dieser Fernseher: %1$s, Port %2$d</string>
+    <string name="adb_title">Zum Erlauben einmal am Computer ausführen (zuerst adb connect &lt;dieser Fernseher&gt;:5555):</string>
+    <string name="open_settings">Benachrichtigungszugriff öffnen</string>
+    <string name="settings_unavailable">Dieser Fernseher hat diesen Bildschirm nicht: nutze den ADB-Befehl</string>
+</resources>

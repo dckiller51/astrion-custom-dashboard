@@ -3,6 +3,34 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.6-beta] - 2026-10-24
+
+### Added
+
+- **Android TV / Google TV paired directly, without Home Assistant.** New **Android TV** tile on the remote's web page: Astrion finds the TV on your network (or takes its IP address), the TV shows a 6-character code, and it's paired, like with the Google TV app. Works with NVIDIA SHIELD, Chromecast with Google TV, Sony, Philips, TCL… (not Fire TV). No ADB and no Home Assistant needed. Beta, tested on an NVIDIA SHIELD so far.
+  - Each TV becomes a `media_player.androidtv_<name>` and a `remote.androidtv_<name>` entity, named like Home Assistant's *Android TV Remote* integration, so the **TV remote card** works with it as is (D-pad, back, home, menu, volume, power, app buttons).
+  - The entities report whether the TV is on, the **app in front** and the volume. `select_source` / `play_media` launch an app by name (Netflix, YouTube, Disney+…) or package name; `remote.send_command` sends any Android key, with repeats and long presses.
+  - The TV is added to the device catalogue, so media player and source cards, hotkeys and **Activities** (new *Android TV (network)* section of the wizard: on at start, off at the end, can open an app) offer it too.
+  - **Opening apps**: since a Google Play Store update (August 2026), many Android TVs refuse to open an app by its package name, whatever the remote (Home Assistant too). YouTube, Netflix, Prime Video, Disney+, Plex, Twitch and myCANAL are opened through their deep link instead, which still works; any app can be given its own deep link (`https://…`, `app://…`) in place of the package. The wiki explains how to find one.
+  - The connection is encrypted and pinned to the paired TV. When the TV's IP changes, Astrion finds it again on the network by itself.
+  - Wiki: [Android TV (direct)](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Android-TV).
+- **TV remote card: app icons, now playing, playback keys.**
+  - **Apps as icons**: choose *Icons with their name* in the builder and give each app an icon (one uploaded to the remote, or a URL). Without an icon, the app's initials on a colored tile. The text buttons stay the default.
+  - **Now playing strip**: the app in front with its icon, and Play/Pause. Hidden on the TV's home screen. A player that knows more (Cast, Plex, Kodi… from Home Assistant, set in *Now playing from*) adds title, cover and progress. The Android TV protocol itself doesn't give titles.
+  - **Playback buttons** (optional): rewind / play-pause / fast forward.
+  - **Full layout**, like the Apple TV card's: large cover, title and state, a **progress bar you can drag** to move in the video, −10 s / Play-Pause / +10 s, the apps, then a round D-pad between back/home/menu and the volume buttons, sized so the whole card fits on the screen. The −10 s / Play-Pause / +10 s row can be turned off (the bar still seeks) to give the D-pad more room. The one-line strip's bar can be dragged too. Moving in the video needs a player that can seek (the Astrion TV Helper, or Plex/Cast… from Home Assistant); otherwise ±10 s sends the TV's rewind / fast-forward keys.
+  - A long TV name no longer runs under the power button.
+- **Astrion TV Helper: what's playing on an Android TV, and any app opens.** A small new app (`astrion-tv-helper.apk`) to install on the TV itself, once, with ADB (the wiki gives the 4 commands). Linked from the web page with the 6-character code it shows, it gives the TV's `media_player` the **title, artist/episode, cover, duration and position**, and *playing* / *paused*, for every app that shares them with Android (Plex, Netflix, YouTube, Spotify…; myCANAL only shares playing/paused). It also **opens any installed app** (Google's protocol only opens apps with a known deep link, see below) and allows **seeking**. The TV remote card's strip, the media player card, the dock clock and Activities use it with nothing else to set. The helper has no ads, no account and never contacts the Internet: a local web server (port 6470) that only answers a remote with its code.
+- **Hotkeys for an Android TV**: the new action **Android TV key or app** in the builder's **1. Hotkeys** sends a key to the TV (e.g. CH+ / CH−, arrows, Play/Pause) or opens an app (Netflix, myCANAL…). A held key repeats as fast as an IR one; an app opens once.
+
+### Fixed
+
+- **Renaming or removing an Apple TV on the web page blanked the page** (it was saved, but the page showed nothing until reloaded).
+
+### Development
+
+- 14 tests of the Android TV protocol and entities (messages checked byte for byte against Google's protocol definitions, pairing code check, power logic, keys, apps).
+
 ## [1.3.5-beta] - 2026-10-24
 
 ### Added
@@ -47,7 +75,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **The beta has its own name: "Astrion Custom β".** It used to be called "Astrion Custom" like the official app, so the two looked the same in Android's "choose a Home app" prompt.
 
-## [1.3.2] - 2026-10-19
+## [1.3.2-beta] - 2026-10-19
 
 ### Added
 

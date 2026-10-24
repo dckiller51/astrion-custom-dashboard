@@ -143,7 +143,12 @@ object UpdateChecker {
                 root["assets"]
                     ?.jsonArray
                     ?.map { it.jsonObject }
-                    ?.firstOrNull { it["name"]?.jsonPrimitive?.content?.endsWith(".apk") == true }
+                    // The app's own APK: never the Astrion TV Helper's (an app for the TV, not this remote),
+                    // should it ever be attached to the same release.
+                    ?.firstOrNull { asset ->
+                        val file = asset["name"]?.jsonPrimitive?.content.orEmpty()
+                        file.endsWith(".apk") && !file.contains("tv-helper")
+                    }
             val apkUrl = apk?.get("browser_download_url")?.jsonPrimitive?.content
             val apkUploadedAt = apk?.get("updated_at")?.jsonPrimitive?.content
             val body = root["body"]?.jsonPrimitive?.content.orEmpty()

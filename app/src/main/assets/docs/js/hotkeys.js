@@ -81,6 +81,65 @@ const ATV_ALL_COMMANDS = [
   { id: 'ChannelDown', labelKey: 'web_atv_cmd_channel_down' }
 ];
 
+// ---- Android TV (1.3.6): a key or an app on a TV paired with Astrion ---------------------
+//
+// Stored as plain Home Assistant-style calls on the TV's own entities, which the remote answers
+// itself: a key = remote.send_command on remote.androidtv_…, an app = media_player.select_source
+// on media_player.androidtv_…. So the hotkey keeps working as is if the TV ever moves to HA.
+
+/** The hotkey's Android TV, kind (key/app) and value, or null when it isn't an Android TV hotkey. */
+function androidTvHotkeyParts(h) {
+  if (h.service === 'remote.send_command' && /^remote\.androidtv_/.test(h.entityId || '')) {
+    return { tv: h.entityId.replace(/^remote\./, 'media_player.'), kind: 'key', value: (h.data && h.data.command) || '' };
+  }
+  if (h.service === 'media_player.select_source' && /^media_player\.androidtv_/.test(h.entityId || '')) {
+    return { tv: h.entityId, kind: 'app', value: (h.data && h.data.source) || '' };
+  }
+  return null;
+}
+
+async function loadNativeAndroidTvs() {
+  try {
+    const res = await fetch('/devices-config');
+    const data = await res.json();
+    return Array.isArray(data.androidTvs) ? data.androidTvs : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/** Fills the TV picker with every paired Android TV, keeping [selected] even when it isn't listed. */
+async function populateHkAndroidTvSelect(selected) {
+  const select = document.getElementById('hkAndroidTv');
+  if (!select) return;
+  const tvs = await loadNativeAndroidTvs();
+  select.innerHTML = tvs.length
+    ? tvs.map(tv => `<option value="${escapeAttr(tv.entityId)}">${escapeAttr(tv.name)} (${escapeAttr(tv.entityId)})</option>`).join('')
+    : `<option value="">${I18N.t('web_hotkey_adtv_none')}</option>`;
+  if (selected) {
+    if (![...select.options].some(o => o.value === selected)) {
+      const missing = document.createElement('option');
+      missing.value = selected;
+      missing.textContent = selected;
+      select.appendChild(missing);
+    }
+    select.value = selected;
+  }
+}
+
+/** Key names or app names as suggestions, depending on the chosen kind. */
+function onHkAndroidTvKindChange() {
+  const kind = document.getElementById('hkAndroidTvKind').value;
+  const input = document.getElementById('hkAndroidTvValue');
+  const list = document.getElementById('hkAndroidTvValues');
+  const apps = typeof TV_KNOWN_APPS !== 'undefined' ? TV_KNOWN_APPS : [];
+  list.innerHTML = kind === 'app'
+    ? apps.map(([n, p]) => `<option value="${escapeAttr(p)}">${escapeAttr(n)}</option>`).join('')
+    : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('');
+  input.placeholder = kind === 'app' ? 'com.canal.android.canal' : 'CHANNEL_UP';
+  document.getElementById('hkAndroidTvHint').textContent = I18N.t(kind === 'app' ? 'web_hotkey_adtv_app_hint' : 'web_hotkey_adtv_key_hint');
+}
+
 /** Populates the Apple TV picker for the hotkey form with every paired Apple TV, selecting [selectedEntityId] if given. */
 async function populateHkAppleTvSelect(selectedEntityId) {
   const select = document.getElementById('hkAppleTv');
@@ -219,6 +278,21 @@ function updateHotkeyActionInputs(preselect) {
       </select>
     `;
     populateHkAppleTvSelect(preselect && preselect.appleTvEntityId);
+  } else if (action === 'androidTvCommand') {
+    container.innerHTML = `
+      <label>${I18N.t('web_hotkey_adtv_tv')}</label>
+      <select id="hkAndroidTv"></select>
+      <label>${I18N.t('web_hotkey_adtv_kind')}</label>
+      <select id="hkAndroidTvKind" onchange="onHkAndroidTvKindChange()">
+        <option value="key">${I18N.t('web_hotkey_adtv_kind_key')}</option>
+        <option value="app">${I18N.t('web_hotkey_adtv_kind_app')}</option>
+      </select>
+      <input type="text" id="hkAndroidTvValue" list="hkAndroidTvValues" style="margin-top:6px" autocomplete="off">
+      <datalist id="hkAndroidTvValues"></datalist>
+      <div class="hint" id="hkAndroidTvHint"></div>
+    `;
+    onHkAndroidTvKindChange();
+    populateHkAndroidTvSelect(preselect && preselect.androidTv);
   } else if (action === 'irCommand') {
     const devices = dashboardData.irDevices || [];
     container.innerHTML = `
@@ -280,6 +354,12 @@ function describeHotkey(h) {
   }
   if (h.stopActivity) return h.stopActivity === '*' ? I18N.t('web_hotkey_desc_off_all') : I18N.t('web_hotkey_desc_off_room', h.stopActivity);
   if (h.event) return I18N.t('web_hotkey_desc_event', h.event);
+  const adtv = androidTvHotkeyParts(h);
+  if (adtv) {
+    const tvName = (typeof haFriendlyName === 'function' && haFriendlyName(adtv.tv)) || adtv.tv;
+    const appName = adtv.kind === 'app' && typeof tvAppLabel === 'function' ? tvAppLabel(adtv.value) || adtv.value : adtv.value;
+    return I18N.t(adtv.kind === 'app' ? 'web_hotkey_desc_adtv_app' : 'web_hotkey_desc_adtv_key', tvName, appName);
+  }
   if (h.service === 'remote.send_command') {
     const cmd = h.data && h.data.command ? h.data.command : '?';
     return I18N.t('web_hotkey_desc_remote', h.entityId || '?', cmd);
@@ -375,9 +455,10 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
   document.getElementById('hkKey').value = h.key;
-  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.activity ? 'startActivity' : h.event ? 'haEvent' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
+  const adtv = androidTvHotkeyParts(h);
+  const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.activity ? 'startActivity' : h.event ? 'haEvent' : adtv ? 'androidTvCommand' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
-  updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : undefined);
+  updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : adtv ? { androidTv: adtv.tv } : undefined);
 
   if (action === 'page') {
     document.getElementById('hkPage').value = h.page || '';
@@ -403,6 +484,10 @@ async function editHotkey(scope, listType, i) {
     refreshRemoteCommandDatalist();
   } else if (action === 'appleTvCommand') {
     document.getElementById('hkAppleTvCommand').value = (h.data && h.data.command) || '';
+  } else if (action === 'androidTvCommand') {
+    document.getElementById('hkAndroidTvKind').value = adtv.kind;
+    onHkAndroidTvKindChange();
+    document.getElementById('hkAndroidTvValue').value = adtv.value;
   } else if (action === 'irCommand') {
     document.getElementById('hkIrDevice').value = h.irDevice || '';
     onHkIrDeviceChange();
@@ -505,6 +590,20 @@ function addHotkey() {
     hkObj.service = 'astrion_appletv.send_command';
     hkObj.entityId = appleTv;
     hkObj.data = { command };
+  } else if (action === 'androidTvCommand') {
+    const tv = document.getElementById('hkAndroidTv').value.trim();
+    const kind = document.getElementById('hkAndroidTvKind').value;
+    const value = document.getElementById('hkAndroidTvValue').value.trim();
+    if (!tv || !value) { alert(I18N.t('web_hotkey_err_adtv')); return; }
+    if (kind === 'app') {
+      hkObj.service = 'media_player.select_source';
+      hkObj.entityId = tv;
+      hkObj.data = { source: value };
+    } else {
+      hkObj.service = 'remote.send_command';
+      hkObj.entityId = tv.replace(/^media_player\./, 'remote.');
+      hkObj.data = { command: value };
+    }
   } else if (action === 'irCommand') {
     const irDevice = document.getElementById('hkIrDevice').value;
     const irCommand = document.getElementById('hkIrCommand').value.trim();

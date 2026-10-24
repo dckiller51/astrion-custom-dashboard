@@ -136,6 +136,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .tile.tile-ir .tile-icon { background: rgba(255,79,163,0.14); color: #FF4FA3; }
   .tile.tile-appletv { border-color: #333; } .tile.tile-appletv:hover, .tile.tile-appletv:focus-visible { border-color: #d8d8d8; }
   .tile.tile-appletv .tile-icon { background: rgba(216,216,216,0.1); color: #d8d8d8; }
+  .tile.tile-androidtv { border-color: #24452f; } .tile.tile-androidtv:hover, .tile.tile-androidtv:focus-visible { border-color: #3DDC84; }
+  .tile.tile-androidtv .tile-icon { background: rgba(61,220,132,0.12); color: #3DDC84; }
 
   .utility-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 28px; }
   .utility-row a, .utility-row button.link-btn {

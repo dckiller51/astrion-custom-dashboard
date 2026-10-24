@@ -21,7 +21,6 @@
     <ID>CyclomaticComplexMethod:SceneGridCard.kt$SceneGridCard$@Suppress("UNCHECKED_CAST") @Composable override fun Render(config: CardConfig, ctx: CardContext)</ID>
     <ID>CyclomaticComplexMethod:SpeakerGroupCard.kt$SpeakerGroupCard$@Composable private fun SpeakerRow(ctx: CardContext, entityId: String, name: String?, isMaster: Boolean, master: String)</ID>
     <ID>CyclomaticComplexMethod:TitleCard.kt$TitleCard$@Composable override fun Render(config: CardConfig, ctx: CardContext)</ID>
-    <ID>CyclomaticComplexMethod:TvRemoteCard.kt$TvRemoteCard$@Suppress("UNCHECKED_CAST") @Composable override fun Render(config: CardConfig, ctx: CardContext)</ID>
     <ID>CyclomaticComplexMethod:VacuumCard.kt$@Suppress("UNCHECKED_CAST") @Composable fun VacuumPanelContent(options: Map&lt;String, Any?&gt;, ctx: CardContext)</ID>
     <ID>EmptyFunctionBlock:MainActivity.kt$MainActivity.&lt;no name provided&gt;${}</ID>
     <ID>LargeClass:ConfigServer.kt$ConfigServer : NanoHTTPD</ID>
@@ -54,9 +53,8 @@
     <ID>SpreadOperator:ButtonGridCard.kt$ButtonGridCard$(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())</ID>
     <ID>SpreadOperator:MediaPlayerCard.kt$MediaPlayerCard$(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())</ID>
     <ID>SpreadOperator:MediaPlayerDetailDialog.kt$("media_player", service, entityId, *data)</ID>
-    <ID>SpreadOperator:TvRemoteCard.kt$TvRemoteCard$(domain, svc, entity, *data.entries.map { it.key to it.value }.toTypedArray())</ID>
+    <ID>SpreadOperator:TvRemoteCard.kt$TvRemoteCard.TvRender$( service.substringBefore('.'), service.substringAfter('.'), app["entity_id"] as? String, *data.entries.map { it.key to it.value }.toTypedArray() )</ID>
     <ID>SwallowedException:Theme.kt$e: Exception</ID>
     <ID>UnusedPrivateProperty:DashboardConfig.kt$DashboardConfig$/** Big "turn everything off" target list, from the original dashboard. */ private val ALL_LIGHTS = listOf( "light.apollo_r_pro_1_f5c680_rgb_light", "light.art_pendanta", "light.art_pendants", "light.bar_lights", "light.bathroom_downlights", "light.bathroom_mirror_led", "light.bed_lamp_left", "light.bed_lamp_right", "light.bedroom_lights", "light.club_accent_lights", "light.club_led_group", "light.philips_hue_omniglow_lightstrip", "light.downlights", "light.hue_play", "light.hue_records", "light.kitchen", "light.office_hue_lightstrip_solo", "light.office_lights", "light.play_art", "light.play_tv", "light.tv_art_light", "light.couch", "light.wardrobe" )</ID>
-    <ID>UnusedPrivateProperty:TvRemoteCard.kt$TvRemoteCard$val muteEntity = config.string("mute_entity") ?: remoteEntity</ID>
   </CurrentIssues>
 </SmellBaseline>

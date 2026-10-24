@@ -51,6 +51,13 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
+      - name: Upload the TV helper APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: astrion-tv-helper
+          path: tvhelper/build/outputs/apk/debug/*.apk
+          retention-days: 14
+
       - name: Upload reports on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -60,4 +67,5 @@ jobs:
             app/build/reports/ktlint/
             app/build/reports/detekt/
             app/build/reports/lint-results-debug.html
+            tvhelper/build/reports/
           retention-days: 14

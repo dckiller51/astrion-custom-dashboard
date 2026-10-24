@@ -23,6 +23,9 @@ let appleTvScanResults = []; // last /appletv-scan result
 let appleTvPairing = null;  // { sessionId, device } while waiting for the PIN
 let appleTvMrpPairing = null; // { sessionId, device, localId } while waiting for the second (MRP) PIN
 let appleTvMrpScanResults = []; // last /appletv-mrp-scan result
+let androidTvs = [];       // full [{localId, name, entityId, host, serviceName, mac, certSha256}] (1.3.6)
+let androidTvScanResults = []; // last /androidtv-scan result
+let androidTvPairing = null; // { sessionId, device: {host, serviceName, name} } while waiting for the code
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
 
@@ -69,6 +72,7 @@ async function loadAll() {
     harmonyHubs = Array.isArray(data.harmonyHubs) ? data.harmonyHubs : [];
     extenders = Array.isArray(data.extenders) ? data.extenders : [];
     appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
+    androidTvs = Array.isArray(data.androidTvs) ? data.androidTvs : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -96,8 +100,9 @@ async function loadAll() {
 async function reconcileAppleTvHaDevices() {
   dashboardData.haDevices = dashboardData.haDevices || [];
   let changed = false;
-  appleTvs.forEach(tv => {
-    const id = 'appletv_' + tv.localId;
+  const paired = appleTvs.map(tv => ({ id: 'appletv_' + tv.localId, tv }))
+    .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })));
+  paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
       dashboardData.haDevices.push({ id, domain: 'media_player', entityId: tv.entityId, name: tv.name });
@@ -200,6 +205,8 @@ function renderDevicesList() {
       : `<div class="hint">${I18N.t('web_dev_list_no_atv')}</div>`;
   }
 
+  renderAndroidTvs();
+
   const tileIrCount = document.getElementById('tileIrCount');
   if (tileIrCount) {
     tileIrCount.textContent = dashboardData.irDevices.length
@@ -252,6 +259,8 @@ function closeDeviceForms() {
   setDisplay('appleTvForm', 'none');
   appleTvPairing = null;
   appleTvMrpPairing = null;
+  setDisplay('androidTvForm', 'none');
+  androidTvPairing = null;
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -297,6 +306,10 @@ async function openDeviceForm(type) {
     document.getElementById('appleTvForm').style.display = '';
     document.getElementById('appleTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     scanAppleTvs();
+  } else if (type === 'androidTv') {
+    document.getElementById('androidTvForm').style.display = '';
+    document.getElementById('androidTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    scanAndroidTvs();
   } else if (type === 'ir') {
     document.getElementById('irForm').style.display = '';
     renderIrTargetOptions();
@@ -360,11 +373,13 @@ async function removeHa() {
   await persistHaAndHubs();
 }
 
-/** Always resends the full Harmony hub, extender AND Apple TV lists alongside HA
+/** Always resends the full Harmony hub, extender, Apple TV AND Android TV lists alongside HA
  * fields — /save-connection replaces all three together, so omitting
  * either here would wipe it even though this form never touched it. */
 async function persistHaAndHubs() {
-  const btn = document.activeElement;
+  // Only a real button gets the "Saving…" label: after a click on a ✎/✕ span, a prompt() or a
+  // disabled button, activeElement is <body>, and setting its text would wipe the whole page.
+  const btn = document.activeElement && document.activeElement.tagName === 'BUTTON' ? document.activeElement : null;
   const originalText = btn ? btn.textContent : null;
   if (btn) { btn.textContent = I18N.t('web_device_saving'); btn.disabled = true; }
   try {
@@ -398,6 +413,17 @@ async function persistHaAndHubs() {
       body.append('atv_mrpservice[]', tv.mrpServiceName || '');
       body.append('atv_mrpcredentials[]', tv.mrpCredentials || '');
       body.append('atv_mrptransport[]', tv.mrpTransport || 'airplay');
+    });
+    body.set('adtv_present', '1'); // same for the Android TV list (1.3.6)
+    androidTvs.forEach(tv => {
+      body.append('adtv_localid[]', tv.localId || '');
+      body.append('adtv_name[]', tv.name || '');
+      body.append('adtv_entityid[]', tv.entityId || '');
+      body.append('adtv_host[]', tv.host || '');
+      body.append('adtv_service[]', tv.serviceName || '');
+      body.append('adtv_mac[]', tv.mac || '');
+      body.append('adtv_cert[]', tv.certSha256 || '');
+      body.append('adtv_helper[]', tv.helperCode || '');
     });
     const res = await fetch('/save-connection', {
       method: 'POST',

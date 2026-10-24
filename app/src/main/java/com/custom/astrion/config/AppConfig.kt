@@ -549,14 +549,15 @@ data class ActivityConfig(
     val muteCommand: String? = null,
     /** The `media_player` the dock clock's "Now playing" follows while this Activity is the active
      * one (see DockConfig.room) — the content source among the Activity's devices (Apple TV, not
-     * the TV or AVR). Null: a network Apple TV among [devices] if there is one, else the dock's own
+     * the TV or AVR). Null: a network Apple TV (or Android TV, 1.3.6) among [devices] if there is one, else the dock's own
      * `media_entities` logic. */
     val nowPlayingEntity: String? = null
 ) {
-    /** [nowPlayingEntity], or the first Apple TV paired directly with Astrion among [devices]. */
+    /** [nowPlayingEntity], or the first Apple TV / Android TV paired directly with Astrion among [devices]. */
     val effectiveNowPlayingEntity: String?
         get() =
             nowPlayingEntity ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.appletv_") }?.deviceId
+                ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.androidtv_") }?.deviceId
 }
 
 /**
