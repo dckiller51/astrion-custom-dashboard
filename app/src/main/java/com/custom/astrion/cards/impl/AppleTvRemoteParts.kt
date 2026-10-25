@@ -114,7 +114,7 @@ private fun initialsOf(label: String): String {
  * [CardContext.client], anything else as a local file.
  */
 @Composable
-private fun rememberImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
+internal fun rememberImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
     val image by produceState<ImageBitmap?>(initialValue = null, path, targetPx) {
         value =
             when {
