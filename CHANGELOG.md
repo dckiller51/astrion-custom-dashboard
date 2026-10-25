@@ -3,6 +3,30 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.7-beta] - 2026-10-25
+
+### Added
+
+- **Xbox card (`xbox`)**: the game you're playing and your counters, with two sources to choose from in the builder:
+  - **Xbox**, the official Home Assistant integration: gamerpic, gamertag and online status, the game (cover, platform · publisher, achievements, gamerscore with its bar, progress), and counters (gamerscore, friends, followers…);
+  - **TrueAchievements**, the custom component (needs a TA Pro account): the game with achievements, gamerscore and TA score as bars, completion, ratio and time played; counters such as Gamerscore, TA score, completion and games finished; and the last sync, red when the component reports a problem.
+  - **The builder finds your accounts** in Home Assistant and fills every field in one click, for either source. Up to **8 counters, 1 to 4 per row**, in the order you choose; each can get its own label, icon (built-in, none, or your own uploaded icon) and icon colour, and icons can be hidden for the whole card. Each part (profile, game, counters, sync) can be turned off.
+  - **A long press on the game or on a counter** opens all its details, like Home Assistant's "more info": genres, developer, release date, description, TA points, ratio, guide links…
+  - Console off: "Xbox off" / "No game running" instead of the game.
+  - **Game cover with the Xbox integration**: taken from its `image.<gamertag>_now_playing` entity (`picture_entity`, filled in by the builder), since the game sensor's own picture may be missing.
+- **Several IR commands in one tap**: a button, tile or title action can send a sequence of IR commands, e.g. channel 801 as `8, 0, 1` for channel favourites. In the builder, type the commands separated by commas, with an optional delay between them (otherwise the device's own, else 300 ms). In JSON: `"irCommands": ["8", "0", "1"]` with optional `"irDelayMs"`. Works with the remote's blaster and with extenders.
+- **Button and tile size, empty cells**: the button grid gets a **button height** and both grids a **text size**, for big keys such as a channel keypad. **Empty cells** (`{ "spacer": true }`, **+ Empty cell** in the builder) place the others where you want, e.g. the 0 under the 8; or **center an incomplete last row** with one option. The builder's preview shows all of it.
+- **Android TV page**: where to download the Astrion TV Helper (`astrion-tv-helper.apk`, GitHub release `tv-helper`) and a link to its setup steps in the wiki.
+
+### Fixed
+
+- **Scene grid tile height**: `tile_height` now also applies to tiles without an icon. The builder's preview showed the new height, but the remote kept them at 58 dp.
+
+### Development
+
+- 7 tests of how the card reads the Xbox integration's and TrueAchievements' entities.
+- 2 tests of the `irCommands` list (list, comma-separated text, numbers).
+
 ## [1.3.6-beta] - 2026-10-24
 
 ### Added

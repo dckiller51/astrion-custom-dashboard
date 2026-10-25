@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapCombinedClickable
@@ -193,11 +194,7 @@ class SceneGridCard : CardRenderer {
             if (harmonyDevice != null && harmonyCommand != null) {
                 ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
             }
-            val irDevice = scene["irDevice"] as? String
-            val irCommand = scene["irCommand"] as? String
-            if (irDevice != null && irCommand != null) {
-                ctx.sendIrCommand(irDevice, irCommand)
-            }
+            ctx.sendIrAction(scene)
             // "stopActivity": "<room>" (or "*") — the Harmony-style Off button.
             (scene["stopActivity"] as? String)?.let(ctx.stopActivity)
             val activityId = scene["activity"] as? String
@@ -262,10 +259,15 @@ class SceneGridCard : CardRenderer {
         // Decided once for the whole grid (not per-tile) so every tile in a
         // row/grid shares the same height — a mix of icon (74dp) and
         // text-only (58dp) tiles side by side looked uneven.
-        val hasIcon = remember(scenes) { scenes.any { !iconOf(it).isNullOrBlank() } }
+        val hasIcon = remember(scenes) { scenes.any { !isGridSpacer(it) && !iconOf(it).isNullOrBlank() } }
         val showLabels = remember(config) { config.options["show_labels"] as? Boolean ?: true }
         val iconFill = remember(config) { config.options["icon_fill"] as? Boolean ?: false }
-        val tileHeight = remember(config) { config.int("tile_height", if (iconFill) 120 else 74) }
+        // Text-only grids default to 58dp; `tile_height` applies to them too (1.3.7:
+        // it used to be ignored there, while the builder's preview showed it).
+        val tileHeight =
+            remember(config, hasIcon) {
+                config.int("tile_height", if (iconFill) 120 else if (hasIcon) 74 else TEXT_TILE_HEIGHT_DP)
+            }
 
         // Combines both highlighting mechanisms into the one border+background
         // every tile shape below draws — the state-entity one (background AND
@@ -294,6 +296,7 @@ class SceneGridCard : CardRenderer {
             )
         }
 
+        val layout = TileLayout(iconFill, tileHeight, iconPosition, config.int("font_size").takeIf { it > 0 })
         if (row) {
             Row(
                 modifier = Modifier
@@ -302,29 +305,26 @@ class SceneGridCard : CardRenderer {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 scenes.forEach { scene ->
-                    SceneButton(
-                        state = stateFor(scene),
-                        layout = TileLayout(iconFill, tileHeight, iconPosition),
-                        modifier = Modifier.width(104.dp),
-                        onLongClick = onLongPressOf(scene)
-                    ) { onTap(scene) }
+                    if (isGridSpacer(scene)) {
+                        Spacer(Modifier.width(104.dp))
+                    } else {
+                        SceneButton(
+                            state = stateFor(scene),
+                            layout = layout,
+                            modifier = Modifier.width(104.dp),
+                            onLongClick = onLongPressOf(scene)
+                        ) { onTap(scene) }
+                    }
                 }
             }
         } else {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                scenes.chunked(columns).forEach { chunk ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        chunk.forEach { scene ->
-                            SceneButton(
-                                state = stateFor(scene),
-                                layout = TileLayout(iconFill, tileHeight, iconPosition),
-                                modifier = Modifier.weight(1f),
-                                onLongClick = onLongPressOf(scene)
-                            ) { onTap(scene) }
-                        }
-                        repeat(columns - chunk.size) { Spacer(Modifier.weight(1f)) }
-                    }
-                }
+            GridRows(scenes, columns, config.bool("center_last_row")) { scene ->
+                SceneButton(
+                    state = stateFor(scene),
+                    layout = layout,
+                    modifier = Modifier.weight(1f),
+                    onLongClick = onLongPressOf(scene)
+                ) { onTap(scene) }
             }
         }
     }
@@ -336,7 +336,13 @@ class SceneGridCard : CardRenderer {
      * threshold. [iconPosition] only affects the icon+label tile shape
      * (see [SceneButton]) — [iconFill] tiles have no label to position
      * the icon against. */
-    private data class TileLayout(val iconFill: Boolean, val tileHeight: Int, val iconPosition: IconPosition)
+    private data class TileLayout(
+        val iconFill: Boolean,
+        val tileHeight: Int,
+        val iconPosition: IconPosition,
+        /** `font_size` (1.3.7); null keeps 12 sp under an icon, 15 sp alone. */
+        val fontSize: Int? = null
+    )
 
     private data class SceneButtonState(
         val name: String,
@@ -408,7 +414,7 @@ class SceneGridCard : CardRenderer {
                         Text(
                             text = state.name,
                             color = textColor,
-                            fontSize = 12.sp,
+                            fontSize = (layout.fontSize ?: 12).sp,
                             fontWeight = FontWeight.Medium,
                             textAlign = TextAlign.Center,
                             maxLines = 1
@@ -432,7 +438,7 @@ class SceneGridCard : CardRenderer {
         } else {
             Box(
                 modifier = modifier
-                    .height(58.dp)
+                    .height(layout.tileHeight.dp)
                     .clip(RoundedCornerShape(14.dp))
                     .background(state.color)
                     .then(activeBorderModifier(state.active, state.borderColor))
@@ -443,7 +449,7 @@ class SceneGridCard : CardRenderer {
                 Text(
                     text = state.name,
                     color = textColor,
-                    fontSize = 15.sp,
+                    fontSize = (layout.fontSize ?: 15).sp,
                     fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center
                 )
@@ -531,3 +537,6 @@ class SceneGridCard : CardRenderer {
         }
     }
 }
+
+/** Height of a text-only tile when the card sets no `tile_height`. */
+private const val TEXT_TILE_HEIGHT_DP = 58

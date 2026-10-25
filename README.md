@@ -21,7 +21,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 
 ## Features
 
-- **Swipeable pages of cards**: lights, covers, climate, media, cameras, vacuums, Plex, scenes, remotes… ([card reference](https://github.com/dckiller51/astrion-custom-dashboard/wiki)).
+- **Swipeable pages of cards**: lights, covers, climate, media, cameras, vacuums, Plex, Xbox, scenes, remotes… ([card reference](https://github.com/dckiller51/astrion-custom-dashboard/wiki)).
 - **Browser-based builder** at `http://<remote-ip>:8080/builder/`. You edit visually with a live preview of the remote, and no hand-written JSON is needed. Available in English, French, German, Italian and Spanish.
 - **Undo and version history**: undo / redo in the builder (Ctrl+Z / Ctrl+Y), and the remote keeps every saved version of its dashboard. Open, restore, pin or annotate any of them ([details](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Builder#undo-and-version-history-since-130)).
 - **Physical keys**: every hardware key, short or long press, can be bound to a page, a popup, a Home Assistant service or event, a Harmony or IR command, an Apple TV command, an Android TV key or app, or an Activity. Bindings can be global or per page.
@@ -59,6 +59,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | [`clock_weather`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-ClockWeather) | Time, weather, forecast, calendar | ✅ | | | | |
 | [`monitor`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Monitor) | Read-only sensor values (vertical / scrolling for long text) | ✅ | | | | |
 | [`plex`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex) | On Deck / recently added browser | ✅ | | | | |
+| [`xbox`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Xbox) | Game being played, gamerscore, achievements (Xbox integration or TrueAchievements) | ✅ | | | | |
 | [`picture_elements`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-PictureElements) | Interactive floor plan, mmWave radar | ✅ | | | | |
 | [`title`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Title) | Section header, optionally tappable | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [`row`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Row) | Puts several cards side by side | ✅ | ✅ | ✅ | ✅ | ✅ |
