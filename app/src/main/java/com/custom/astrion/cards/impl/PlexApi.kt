@@ -46,8 +46,13 @@ internal object PlexApi {
         val addedAt: Long,
         /** This item's Plex library section — lets a long-press open that whole library. Null if the server didn't report one. */
         val sectionKey: String? = null,
-        val sectionTitle: String? = null
+        val sectionTitle: String? = null,
+        /** Plex `type`: "movie", "show", "season", "episode", "clip"… (1.3.8: shapes search results). */
+        val type: String? = null
     )
+
+    /** One group of search results (1.3.8): a Plex search hub — films, shows, episodes or clips. */
+    data class PlexSearchGroup(val type: String, val hubTitle: String?, val items: List<PlexItem>)
 
     data class PlexRow(val title: String, val items: List<PlexItem>)
 
@@ -73,7 +78,9 @@ internal object PlexApi {
         val art: String?,
         val thumb: String?,
         /** Episodes of the current season, only set when [type] == "episode". */
-        val episodes: List<PlexEpisodeSummary>?
+        val episodes: List<PlexEpisodeSummary>?,
+        /** A show's seasons (1.3.8), only set when [type] == "show"; each opens its first episode to watch. */
+        val seasons: List<PlexEpisodeSummary>? = null
     )
 
     fun posterUrl(host: String, token: String, thumb: String?, width: Int = 140, height: Int = 210): String? = thumb?.let {
@@ -175,13 +182,77 @@ internal object PlexApi {
         return PlexLibraryPage(items, container.intOf("totalSize") ?: items.size)
     }
 
-    /** Full details for one item (movie or episode), plus its season's episode list when it's an episode. */
-    suspend fun fetchDetail(host: String, token: String, ratingKey: String): PlexDetail? {
-        val meta = get(apiUrl(host, token, ratingKey))?.mc()?.get("Metadata") as? JsonArray ?: return null
+    /**
+     * Full details for one item, plus its season's episodes for an episode. 1.3.8: a show (its key
+     * ends in `/children`, e.g. from search) gets its seasons; a season opens its first episode not
+     * yet watched, with the rest of that season.
+     */
+    suspend fun fetchDetail(host: String, token: String, ratingKey: String): PlexDetail? = fetchDetail(host, token, ratingKey, true)
+
+    private suspend fun fetchDetail(host: String, token: String, ratingKey: String, followSeason: Boolean): PlexDetail? {
+        val path = ratingKey.removeSuffix("/children")
+        val meta = get(apiUrl(host, token, path))?.mc()?.get("Metadata") as? JsonArray ?: return null
         val o = meta.firstOrNull() as? JsonObject ?: return null
-        val key = o.strOf("key") ?: return null
-        return if (o.strOf("type") == "episode") episodeDetail(host, token, o, key) else movieDetail(o, key)
+        val key = o.strOf("key")?.removeSuffix("/children") ?: return null
+        return when (o.strOf("type")) {
+            "episode" -> episodeDetail(host, token, o, key)
+            "show" -> showDetail(host, token, o, path)
+            "season" -> if (followSeason) nextEpisodeKey(host, token, path)?.let { fetchDetail(host, token, it, false) } else null
+            else -> movieDetail(o, key)
+        }
     }
+
+    /** A show: its own details and its seasons. Play opens the show on the TV. */
+    private suspend fun showDetail(host: String, token: String, o: JsonObject, path: String): PlexDetail {
+        val seasons =
+            (get(apiUrl(host, token, "$path/children"))?.mc()?.get("Metadata") as? JsonArray).orEmpty().mapNotNull { el ->
+                val s = el as? JsonObject ?: return@mapNotNull null
+                val key = s.strOf("key") ?: return@mapNotNull null
+                PlexEpisodeSummary(key, s.strOf("title") ?: "?", s.intOf("index"), s.strOf("thumb"))
+            }
+        val rating = o.doubleOf("rating") ?: o.doubleOf("audienceRating")
+        return PlexDetail(
+            ratingKey = path,
+            type = "show",
+            headerTitle = o.strOf("title") ?: "?",
+            subheading = "",
+            metaLine = listOfNotNull(o.intOf("year")?.toString(), rating?.let { "★%.1f".format(it) }).joinToString(" · "),
+            summary = o.strOf("summary") ?: "",
+            genres = o.genreTags(),
+            art = o.strOf("art"),
+            thumb = o.strOf("thumb"),
+            episodes = null,
+            seasons = seasons
+        )
+    }
+
+    /** A season's first episode not watched yet (else its first one). */
+    private suspend fun nextEpisodeKey(host: String, token: String, seasonPath: String): String? {
+        val episodes = (get(apiUrl(host, token, "$seasonPath/children"))?.mc()?.get("Metadata") as? JsonArray).orEmpty()
+            .mapNotNull { it as? JsonObject }
+        val next = episodes.firstOrNull { (it.intOf("viewCount") ?: 0) == 0 } ?: episodes.firstOrNull()
+        return next?.strOf("key")
+    }
+
+    /**
+     * Plex search (1.3.8): `/hubs/search` across every library, kept to what can be watched —
+     * films, shows, episodes and clips (music videos). Null when the server can't be reached.
+     */
+    suspend fun search(host: String, token: String, query: String, limit: Int = SEARCH_LIMIT): List<PlexSearchGroup>? {
+        val path = "/hubs/search?query=${URLEncoder.encode(query, "UTF-8")}&limit=$limit"
+        return get(apiUrl(host, token, path))?.let(::parseSearch)
+    }
+
+    /** The search answer → groups, in Plex's order, without empty or non-video hubs. */
+    fun parseSearch(response: JsonObject): List<PlexSearchGroup> = (response.mc()?.get("Hub") as? JsonArray).orEmpty().mapNotNull { h ->
+        val hub = h as? JsonObject ?: return@mapNotNull null
+        val type = hub.strOf("type")?.takeIf { it in SEARCH_TYPES } ?: return@mapNotNull null
+        val items = (hub["Metadata"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.toPlexItem() }
+        items.takeIf { it.isNotEmpty() }?.let { PlexSearchGroup(type, hub.strOf("title"), it) }
+    }
+
+    private const val SEARCH_LIMIT = 10
+    private val SEARCH_TYPES = setOf("movie", "show", "season", "episode", "clip")
 
     private fun movieDetail(o: JsonObject, key: String): PlexDetail {
         val year = o.intOf("year")
@@ -259,18 +330,21 @@ internal object PlexApi {
             thumb = strOf("grandparentThumb") ?: strOf("thumb"),
             addedAt = addedAt,
             sectionKey = strOf("librarySectionID"),
-            sectionTitle = strOf("librarySectionTitle")
+            sectionTitle = strOf("librarySectionTitle"),
+            type = "episode"
         )
     }
 
     private fun JsonObject.movieOrShowItem(key: String, addedAt: Long): PlexItem = PlexItem(
         key = key,
         title = strOf("title") ?: "?",
-        subtitle = intOf("year")?.toString() ?: strOf("type").orEmpty(),
-        thumb = strOf("thumb"),
+        // A season (search) names its show; otherwise the year.
+        subtitle = (if (strOf("type") == "season") strOf("parentTitle") else null) ?: intOf("year")?.toString() ?: strOf("type").orEmpty(),
+        thumb = strOf("thumb") ?: strOf("parentThumb"),
         addedAt = addedAt,
         sectionKey = strOf("librarySectionID"),
-        sectionTitle = strOf("librarySectionTitle")
+        sectionTitle = strOf("librarySectionTitle"),
+        type = strOf("type")
     )
 
     private fun JsonObject.genreTags(): List<String> =

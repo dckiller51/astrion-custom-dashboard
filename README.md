@@ -58,7 +58,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | [`vacuum`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Vacuum) | Robot vacuum, rooms, map | ✅ | | | | |
 | [`clock_weather`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-ClockWeather) | Time, weather, forecast, calendar | ✅ | | | | |
 | [`monitor`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Monitor) | Read-only sensor values (vertical / scrolling for long text) | ✅ | | | | |
-| [`plex`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex) | On Deck / recently added browser | ✅ | | | | |
+| [`plex`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex) | On Deck / recently added browser, search | ✅ | | | | |
 | [`xbox`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Xbox) | Game being played, gamerscore, achievements (Xbox integration or TrueAchievements) | ✅ | | | | |
 | [`picture_elements`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-PictureElements) | Interactive floor plan, mmWave radar | ✅ | | | | |
 | [`title`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Title) | Section header, optionally tappable | ✅ | ✅ | ✅ | ✅ | ✅ |

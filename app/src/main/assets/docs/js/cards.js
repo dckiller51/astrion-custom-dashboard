@@ -508,6 +508,8 @@ function updateCardFormInputs() {
       </div>
       <label>${I18N.t('web_card_plex_items_per_row')}</label><input type="number" id="optPlexItemsPerRow" value="12" min="1" max="30">
       <div class="hint">${I18N.t('web_card_plex_rows_hint')}</div>
+      <label class="inline-check"><input type="checkbox" id="optPlexShowSearch" checked> ${I18N.t('web_card_plex_show_search')}</label>
+      <div class="hint">${I18N.t('web_card_plex_search_hint')}</div>
     `;
   } else {
     // Advanced / custom: raw options JSON, and free type name if "custom"
@@ -1531,6 +1533,7 @@ function fillCardForm(card) {
     document.getElementById('optPlexShowMovies').checked = o.show_recently_added_movies !== false;
     document.getElementById('optPlexShowShows').checked = o.show_recently_added_shows !== false;
     document.getElementById('optPlexItemsPerRow').value = o.items_per_row ?? 12;
+    document.getElementById('optPlexShowSearch').checked = o.show_search !== false;
   } else {
     const customField = document.getElementById('optCustomType');
     if (customField) customField.value = type;
@@ -1823,6 +1826,7 @@ function addCardToPage() {
     newCard.options.show_recently_added_shows = document.getElementById('optPlexShowShows').checked;
     const plexItemsPerRow = parseInt(document.getElementById('optPlexItemsPerRow').value, 10);
     if (!isNaN(plexItemsPerRow) && plexItemsPerRow !== 12) newCard.options.items_per_row = plexItemsPerRow;
+    if (!document.getElementById('optPlexShowSearch').checked) newCard.options.show_search = false;
   } else {
     if (type === 'custom') newCard.type = document.getElementById('optCustomType').value.trim() || 'custom';
     try {

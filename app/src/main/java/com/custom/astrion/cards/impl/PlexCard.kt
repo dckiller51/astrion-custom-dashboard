@@ -8,14 +8,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
@@ -40,6 +46,7 @@ import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
+import com.custom.astrion.ui.tapClickable
 
 /**
  * Native Plex browser — the lightweight answer to the plex-meets-homeassistant
@@ -88,7 +95,8 @@ import com.custom.astrion.ui.ThemeColors
  *       "show_on_deck": true,                             // optional, defaults to true
  *       "show_recently_added_movies": true,               // optional, defaults to true
  *       "show_recently_added_shows": true,                // optional, defaults to true
- *       "items_per_row": 12                                // optional, defaults to 12
+ *       "items_per_row": 12,                               // optional, defaults to 12
+ *       "show_search": true                                // optional (1.3.8), the 🔍 next to "Plex"
  *   } }
  */
 class PlexCard : CardRenderer {
@@ -104,7 +112,8 @@ class PlexCard : CardRenderer {
         val showOnDeck: Boolean,
         val showMovies: Boolean,
         val showShows: Boolean,
-        val itemsPerRow: Int
+        val itemsPerRow: Int,
+        val showSearch: Boolean
     )
 
     private class PlexUiState {
@@ -115,6 +124,7 @@ class PlexCard : CardRenderer {
         var detail by mutableStateOf<PlexApi.PlexDetail?>(null)
         var librarySectionKey by mutableStateOf<String?>(null)
         var librarySectionTitle by mutableStateOf<String?>(null)
+        var searchOpen by mutableStateOf(false)
     }
 
     private fun readConfig(config: CardConfig): PlexConfig? {
@@ -140,7 +150,8 @@ class PlexCard : CardRenderer {
             showOnDeck = config.bool("show_on_deck", default = true),
             showMovies = config.bool("show_recently_added_movies", default = true),
             showShows = config.bool("show_recently_added_shows", default = true),
-            itemsPerRow = config.int("items_per_row", default = 12).coerceIn(1, 30)
+            itemsPerRow = config.int("items_per_row", default = 12).coerceIn(1, 30),
+            showSearch = config.bool("show_search", default = true)
         )
     }
 
@@ -209,6 +220,16 @@ class PlexCard : CardRenderer {
 
     @Composable
     private fun PlexDialogs(cfg: PlexConfig, state: PlexUiState, theme: ThemeColors, onPlay: (String) -> Unit) {
+        // Search first, so the details of a result open over it (closing them comes back to the results).
+        if (state.searchOpen) {
+            PlexSearchDialog(
+                host = cfg.host,
+                token = cfg.token,
+                theme = theme,
+                onSelectItem = { item -> state.detailItem = item },
+                onClose = { state.searchOpen = false }
+            )
+        }
         if (state.detailItem != null) {
             PlexDetailDialog(
                 host = cfg.host,
@@ -219,6 +240,7 @@ class PlexCard : CardRenderer {
                 onPlay = { key ->
                     onPlay(key)
                     state.detailItem = null
+                    state.searchOpen = false
                 },
                 onClose = { state.detailItem = null }
             )
@@ -252,8 +274,12 @@ class PlexCard : CardRenderer {
             token = cfg.token,
             rows = state.rows,
             error = state.error,
-            onTap = { item -> state.detailItem = item },
-            onLongPress = { item -> openLibrary(ctx.client, cfg, state, item) }
+            actions =
+            PlexRowActions(
+                onSearch = if (cfg.showSearch) ({ state.searchOpen = true }) else null,
+                onTap = { item -> state.detailItem = item },
+                onLongPress = { item -> openLibrary(ctx.client, cfg, state, item) }
+            )
         )
 
         PlexDialogs(cfg, state, ctx.theme) { key -> play(ctx.client, cfg, state.machineId, key) }
@@ -267,8 +293,7 @@ class PlexCard : CardRenderer {
         token: String,
         rows: List<PlexApi.PlexRow>?,
         error: String?,
-        onTap: (PlexApi.PlexItem) -> Unit,
-        onLongPress: (PlexApi.PlexItem) -> Unit
+        actions: PlexRowActions
     ) {
         Column(
             modifier =
@@ -279,13 +304,7 @@ class PlexCard : CardRenderer {
                 .padding(vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                "Plex",
-                color = theme.primaryText,
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 14.dp)
-            )
+            PlexHeader(theme, actions.onSearch)
             when {
                 rows == null ->
                     Text(
@@ -309,12 +328,42 @@ class PlexCard : CardRenderer {
                                     token = token,
                                     item = item,
                                     theme = theme,
-                                    onTap = { onTap(item) },
-                                    onLongPress = { onLongPress(item) }
+                                    onTap = { actions.onTap(item) },
+                                    onLongPress = { actions.onLongPress(item) }
                                 )
                             }
                         }
                     }
+            }
+        }
+    }
+
+    /** What the card does on the search button (null: hidden), a poster tap and a poster long press. */
+    private class PlexRowActions(
+        val onSearch: (() -> Unit)?,
+        val onTap: (PlexApi.PlexItem) -> Unit,
+        val onLongPress: (PlexApi.PlexItem) -> Unit
+    )
+
+    /** "Plex", and the search button (1.3.8) when the card shows it. */
+    @Composable
+    private fun PlexHeader(theme: ThemeColors, onSearch: (() -> Unit)?) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Plex", color = theme.primaryText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (onSearch != null) {
+                Row(
+                    modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(theme.controlBackground)
+                        .tapClickable(onClick = onSearch)
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(Icons.Filled.Search, contentDescription = null, tint = theme.accent, modifier = Modifier.size(18.dp))
+                    Text(stringResource(R.string.plex_search), color = theme.primaryText, fontSize = 13.sp)
+                }
             }
         }
     }

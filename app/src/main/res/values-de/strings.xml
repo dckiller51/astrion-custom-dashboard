@@ -76,6 +76,9 @@
     <string name="restart_app">App neu starten</string>
     <string name="about_logs">Protokolle</string>
     <string name="logs_server_off">Web-Konfiguration einschalten</string>
+    <string name="save_log">Protokoll auf der Fernbedienung speichern</string>
+    <string name="log_saved">Gespeichert: %1$s</string>
+    <string name="log_save_failed">Protokoll konnte nicht gespeichert werden (Speicher verweigert).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Lokale Konfiguration</string>
@@ -185,6 +188,15 @@
     <string name="plex_this_season">Diese Staffel</string>
     <string name="plex_play">Abspielen</string>
     <string name="plex_episode">F%1$s · %2$s</string>
+    <string name="plex_search">Suchen</string>
+    <string name="plex_search_hint">Filme, Serien, Episoden…</string>
+    <string name="plex_search_type">Gib mindestens 2 Buchstaben eines Titels ein.</string>
+    <string name="plex_search_none">Nichts gefunden für „%1$s“.</string>
+    <string name="plex_search_failed">Plex-Server nicht erreichbar.</string>
+    <string name="plex_movies">Filme</string>
+    <string name="plex_shows">Serien</string>
+    <string name="plex_seasons">Staffeln</string>
+    <string name="plex_episodes">Episoden</string>
 
     <!-- Select cards -->
     <string name="select_no_options">Keine Optionen</string>

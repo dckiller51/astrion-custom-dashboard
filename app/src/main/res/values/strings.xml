@@ -76,6 +76,9 @@
     <string name="restart_app">Restart the app</string>
     <string name="about_logs">Logs</string>
     <string name="logs_server_off">turn on Web configuration</string>
+    <string name="save_log">Save the log on the remote</string>
+    <string name="log_saved">Saved: %1$s</string>
+    <string name="log_save_failed">Couldn\'t save the log (storage refused).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Local configuration</string>
@@ -185,6 +188,15 @@
     <string name="plex_this_season">This season</string>
     <string name="plex_play">Play</string>
     <string name="plex_episode">E%1$s · %2$s</string>
+    <string name="plex_search">Search</string>
+    <string name="plex_search_hint">Films, shows, episodes…</string>
+    <string name="plex_search_type">Type at least 2 letters of a title.</string>
+    <string name="plex_search_none">Nothing found for “%1$s”.</string>
+    <string name="plex_search_failed">Can\'t reach the Plex server.</string>
+    <string name="plex_movies">Films</string>
+    <string name="plex_shows">Shows</string>
+    <string name="plex_seasons">Seasons</string>
+    <string name="plex_episodes">Episodes</string>
 
     <!-- Select cards -->
     <string name="select_no_options">No options</string>

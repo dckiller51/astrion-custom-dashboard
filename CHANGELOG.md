@@ -3,6 +3,29 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.8-beta] - 2026-10-26
+
+### Added
+
+- **Plex search**: a **Search** button next to "Plex" on the Plex card. Type a title and films, shows, seasons and episodes from every library appear as you type, grouped by kind. Tap one for its details and **Play**. Closing the details brings you back to the results. Can be hidden (`show_search: false`). Idea from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s Plex browser (MIT), rewritten for this card.
+- **Plex shows**: a show's details list its **seasons**; a season opens on its next episode to watch, with the rest of the season. Before, a show (e.g. in a row) opened on the wrong item.
+
+### Changed
+
+- **Logs**: Settings › About › **Save the log on the remote** writes it to `astrion/logs/` (last 5 kept), so a log can be taken even when the web page doesn't answer. Every log now starts with the network as the remote sees it: Wi-Fi signal, speed and band, IP, gateway, DNS, and whether Android sees internet.
+- **CI**: GitHub actions updated to their Node 24 versions; the TV helper's debug APK is no longer uploaded on every run (it is still built and checked).
+
+### Fixed
+
+- **Activities, "Power off when this Activity ends"**: the builder said it only applied when another Activity takes the room, but it also applies to **Off** and the Power key. Unticked on a shared amp, the Power key left it on. The wording now says both, and the wiki explains that a device shared by your Activities is never turned off when switching anyway.
+- **Web page and Home Assistant integration without internet**: the remote's web server asked the DNS for the name of every computer that connected to it (a built-in step of the server library). Without internet, or with a DNS that doesn't answer for local addresses, every connection waited for the DNS: the web page crawled or didn't load, and the Home Assistant integration (battery, pages, Activities) gave up and couldn't add the remote. That step is gone; nothing used the name.
+- **Xbox card details**: the Xbox store's placeholder release date (9998-12-30) and a minimum age of 0 are left out.
+
+### Development
+
+- 1 more Xbox card test (placeholder release date and age).
+- 3 tests of how Plex search answers are read.
+
 ## [1.3.7-beta] - 2026-10-25
 
 ### Added

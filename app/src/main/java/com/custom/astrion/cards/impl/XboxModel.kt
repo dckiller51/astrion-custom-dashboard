@@ -158,6 +158,17 @@ internal object XboxModel {
             "access_token", "supported_features", "options", "attribution"
         )
 
+    /** Values that only mean "unknown": the Xbox store's 9998-12-30 release date (unreleased or
+     * undated games), and a minimum age of 0. Left out of the details. */
+    fun isPlaceholder(key: String, value: String): Boolean = when (key) {
+        "release_date" -> value.take(YEAR_DIGITS).toIntOrNull()?.let { it >= PLACEHOLDER_YEAR } == true
+        "min_age" -> value == "0"
+        else -> false
+    }
+
+    private const val YEAR_DIGITS = 4
+    private const val PLACEHOLDER_YEAR = 9000
+
     private val SHORT_UNITS = setOf("G", "%")
     private const val GROUP = 3
 }

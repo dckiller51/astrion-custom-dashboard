@@ -1036,6 +1036,10 @@ function renderPreview() {
       cardEl.innerHTML = `
         <div class="card">
           <div class="card-title"><span>plex</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <b style="color:#E6EEF2">Plex</b>
+            ${o.show_search !== false ? `<span style="background:#2C4C58;border-radius:14px;padding:3px 10px;font-size:11px;color:#E6EEF2">🔍 ${I18N.t('web_card_plex_search_button')}</span>` : ''}
+          </div>
           ${rowsHtml}
           <div class="hint" style="margin-top:8px">${I18N.t('web_preview_plex_placeholder')} ${I18N.t('web_preview_server', o.host || I18N.t('web_preview_not_set'))} · ${I18N.t('web_preview_playback_entity', o.media_entity || I18N.t('web_preview_not_set'))}${o.play_entity ? ' · ' + I18N.t('web_preview_direct_client', o.play_entity) : ''} · ${I18N.t('web_preview_items_per_row', o.items_per_row ?? 12)}.</div>
         </div>`;
