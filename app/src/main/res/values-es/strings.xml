@@ -76,6 +76,9 @@
     <string name="restart_app">Reiniciar la app</string>
     <string name="about_logs">Registros</string>
     <string name="logs_server_off">activa la Configuración web</string>
+    <string name="save_log">Guardar el registro en el mando</string>
+    <string name="log_saved">Guardado: %1$s</string>
+    <string name="log_save_failed">No se pudo guardar el registro (almacenamiento denegado).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configuración local</string>
@@ -185,6 +188,15 @@
     <string name="plex_this_season">Esta temporada</string>
     <string name="plex_play">Reproducir</string>
     <string name="plex_episode">E%1$s · %2$s</string>
+    <string name="plex_search">Buscar</string>
+    <string name="plex_search_hint">Películas, series, episodios…</string>
+    <string name="plex_search_type">Escribe al menos 2 letras de un título.</string>
+    <string name="plex_search_none">Sin resultados para «%1$s».</string>
+    <string name="plex_search_failed">No se puede contactar con el servidor Plex.</string>
+    <string name="plex_movies">Películas</string>
+    <string name="plex_shows">Series</string>
+    <string name="plex_seasons">Temporadas</string>
+    <string name="plex_episodes">Episodios</string>
 
     <!-- Select cards -->
     <string name="select_no_options">Sin opciones</string>

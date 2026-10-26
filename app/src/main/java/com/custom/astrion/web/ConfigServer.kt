@@ -38,7 +38,6 @@ import com.custom.astrion.harmony.HarmonyHubDiscovery
 import com.custom.astrion.harmony.HarmonyHubRegistry
 import com.custom.astrion.update.UpdateChecker
 import com.custom.astrion.weather.LocalWeather
-import fi.iki.elonen.NanoHTTPD
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.UUID
@@ -225,7 +224,7 @@ class ConfigServer(
     private val onStartActivity: (activityId: String) -> Unit,
     /** Stops whichever Activity is active in a room. Backs POST /activities/stop. */
     private val onStopActivity: (room: String) -> Unit
-) : NanoHTTPD(8080) {
+) : LanHttpServer(8080) {
     /**
      * Backs the Devices page's Apple TV discovery/pairing endpoints. Assigned right after
      * construction (rather than passed to the constructor, which is already at the limit of
@@ -839,7 +838,7 @@ class ConfigServer(
 
     /** This app's recent log lines as a downloadable text file (see [AppLogs]) — bug reports without adb. */
     private fun serveLogs(): Response {
-        val response = newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", AppLogs.dump())
+        val response = newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", AppLogs.dump(context))
         response.addHeader("Content-Disposition", "attachment; filename=\"${AppLogs.fileName()}\"")
         return response
     }

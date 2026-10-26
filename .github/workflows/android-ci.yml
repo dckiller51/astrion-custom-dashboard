@@ -18,7 +18,7 @@ jobs:
       checks: write # lets the detekt/lint reports annotate the PR diff
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Fast, no build needed: every language against English (placeholders, tags, keys).
       - name: Translations
@@ -31,7 +31,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -51,16 +51,9 @@ jobs:
       - name: Build debug APK
         run: ./gradlew assembleDebug
 
-      - name: Upload the TV helper APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: astrion-tv-helper
-          path: tvhelper/build/outputs/apk/debug/*.apk
-          retention-days: 14
-
       - name: Upload reports on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: quality-reports
           path: |

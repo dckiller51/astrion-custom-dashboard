@@ -76,6 +76,9 @@
     <string name="restart_app">Riavvia l\'app</string>
     <string name="about_logs">Log</string>
     <string name="logs_server_off">attiva la Configurazione web</string>
+    <string name="save_log">Salva il registro sul telecomando</string>
+    <string name="log_saved">Salvato: %1$s</string>
+    <string name="log_save_failed">Impossibile salvare il registro (archiviazione rifiutata).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configurazione locale</string>
@@ -185,6 +188,15 @@
     <string name="plex_this_season">Questa stagione</string>
     <string name="plex_play">Riproduci</string>
     <string name="plex_episode">E%1$s · %2$s</string>
+    <string name="plex_search">Cerca</string>
+    <string name="plex_search_hint">Film, serie, episodi…</string>
+    <string name="plex_search_type">Digita almeno 2 lettere di un titolo.</string>
+    <string name="plex_search_none">Nessun risultato per “%1$s”.</string>
+    <string name="plex_search_failed">Server Plex non raggiungibile.</string>
+    <string name="plex_movies">Film</string>
+    <string name="plex_shows">Serie</string>
+    <string name="plex_seasons">Stagioni</string>
+    <string name="plex_episodes">Episodi</string>
 
     <!-- Select cards -->
     <string name="select_no_options">Nessuna opzione</string>

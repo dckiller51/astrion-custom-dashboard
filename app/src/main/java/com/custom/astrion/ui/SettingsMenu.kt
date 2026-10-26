@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.SettingsSuggest
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Timer
@@ -75,6 +76,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.custom.astrion.AppLanguage
+import com.custom.astrion.AppLogs
 import com.custom.astrion.BuildConfig
 import com.custom.astrion.R
 import com.custom.astrion.cards.CardContext
@@ -544,6 +546,7 @@ private fun AboutSection(ctx: CardContext, update: UpdateCheckState) {
             stringResource(R.string.about_logs),
             if (ctx.deviceSettings.configServerEnabled && ip != null) "http://$ip:8080/logs" else stringResource(R.string.logs_server_off)
         )
+        SaveLogRow()
     }
     SettingRow(icon = Icons.Filled.Refresh, label = stringResource(R.string.reload_dashboard)) { ctx.deviceSettings.reloadDashboard() }
     SettingRow(icon = Icons.Filled.RestartAlt, label = stringResource(R.string.restart_app)) { ctx.deviceSettings.restartApp() }
@@ -859,6 +862,30 @@ private fun TapFeedbackRow(ctx: CardContext) {
             fontSize = 11.sp
         )
     }
+}
+
+/**
+ * "Save the log" (1.3.8): writes the log to `astrion/logs/` on the remote itself, for when the
+ * web page (and its /logs) doesn't answer. Says where it went, or that storage refused it.
+ */
+@Composable
+private fun SaveLogRow() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var result by remember { mutableStateOf<String?>(null) }
+    var saving by remember { mutableStateOf(false) }
+    val savedAs = stringResource(R.string.log_saved)
+    val failed = stringResource(R.string.log_save_failed)
+    SettingRow(icon = Icons.Filled.Save, label = stringResource(R.string.save_log)) {
+        if (saving) return@SettingRow
+        saving = true
+        scope.launch {
+            val file = withContext(Dispatchers.IO) { AppLogs.save(context) }
+            result = if (file != null) savedAs.format(file.path) else failed
+            saving = false
+        }
+    }
+    result?.let { Hint(it) }
 }
 
 @Composable

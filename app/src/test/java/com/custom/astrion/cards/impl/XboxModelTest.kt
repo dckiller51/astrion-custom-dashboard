@@ -119,4 +119,13 @@ class XboxModelTest {
         assertEquals(XboxModel.StatIcon.None, XboxModel.statIcon("none", gs))
         assertEquals(XboxModel.StatIcon.File("/sdcard/astrion/icons/a.png"), XboxModel.statIcon("/sdcard/astrion/icons/a.png", gs))
     }
+
+    @Test
+    fun `unknown release date and age are placeholders`() {
+        assertTrue(XboxModel.isPlaceholder("release_date", "9998-12-30"))
+        assertFalse(XboxModel.isPlaceholder("release_date", "2026-05-19"))
+        assertTrue(XboxModel.isPlaceholder("min_age", "0"))
+        assertFalse(XboxModel.isPlaceholder("min_age", "12"))
+        assertFalse(XboxModel.isPlaceholder("platform", "0"))
+    }
 }

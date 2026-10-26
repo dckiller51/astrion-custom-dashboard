@@ -86,7 +86,23 @@ internal fun PlexDetailDialog(
                     Text(detail.summary, color = theme.primaryText, fontSize = 13.sp, lineHeight = 18.sp)
                 }
                 detail.episodes?.let { episodes ->
-                    EpisodeRow(host, token, episodes, detail.ratingKey, theme, onSelectEpisode)
+                    EpisodeRow(
+                        host,
+                        token,
+                        EpisodeList(stringResource(R.string.plex_this_season), episodes, detail.ratingKey),
+                        theme,
+                        onSelectEpisode
+                    )
+                }
+                // A show (1.3.8): its seasons; one opens its next episode to watch.
+                detail.seasons?.takeIf { it.isNotEmpty() }?.let { seasons ->
+                    EpisodeRow(
+                        host,
+                        token,
+                        EpisodeList(stringResource(R.string.plex_seasons), seasons, null, isSeasons = true),
+                        theme,
+                        onSelectEpisode
+                    )
                 }
                 PlayButton(theme) { onPlay(detail.ratingKey) }
             }
@@ -146,42 +162,66 @@ private fun DetailGenres(genres: List<String>, theme: ThemeColors) {
     }
 }
 
+/** A row of episodes (or of a show's seasons) under its heading; [selectedKey] is highlighted. */
+private class EpisodeList(
+    val heading: String,
+    val items: List<PlexApi.PlexEpisodeSummary>,
+    val selectedKey: String?,
+    val isSeasons: Boolean = false
+)
+
 @Composable
 private fun EpisodeRow(
     host: String,
     token: String,
-    episodes: List<PlexApi.PlexEpisodeSummary>,
-    selectedKey: String,
+    list: EpisodeList,
     theme: ThemeColors,
     onSelectEpisode: (PlexApi.PlexEpisodeSummary) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(stringResource(R.string.plex_this_season), color = theme.mutedText, fontSize = 13.sp)
+        Text(list.heading, color = theme.mutedText, fontSize = 13.sp)
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 2.dp)) {
-            items(episodes) { ep ->
-                EpisodeTile(host, token, ep, selected = ep.key == selectedKey, theme = theme) { onSelectEpisode(ep) }
+            items(list.items) { ep ->
+                EpisodeTile(host, token, ep, EpisodeLook(ep.key == list.selectedKey, list.isSeasons), theme) { onSelectEpisode(ep) }
             }
         }
     }
 }
+
+/** How a tile shows: highlighted or not, and a season (poster, its own title) rather than an episode (still, "E3 · title"). */
+private class EpisodeLook(val selected: Boolean, val season: Boolean)
 
 @Composable
 private fun EpisodeTile(
     host: String,
     token: String,
     ep: PlexApi.PlexEpisodeSummary,
-    selected: Boolean,
+    look: EpisodeLook,
     theme: ThemeColors,
     onClick: () -> Unit
 ) {
-    val thumbUrl = remember(ep.thumb) { PlexApi.posterUrl(host, token, ep.thumb, width = 160, height = 90) }
+    val selected = look.selected
+    val thumbUrl =
+        remember(ep.thumb, look.season) {
+            if (look.season) {
+                PlexApi.posterUrl(
+                    host,
+                    token,
+                    ep.thumb,
+                    width = 120,
+                    height = 180
+                )
+            } else {
+                PlexApi.posterUrl(host, token, ep.thumb, width = 160, height = 90)
+            }
+        }
     var bmp by remember(thumbUrl) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(thumbUrl) { bmp = thumbUrl?.let { PlexApi.loadBitmap(it) } }
-    Column(modifier = Modifier.width(96.dp).tapClickable(onClick = onClick)) {
+    Column(modifier = Modifier.width(if (look.season) SEASON_TILE_DP.dp else 96.dp).tapClickable(onClick = onClick)) {
         val mod =
             Modifier
                 .fillMaxWidth()
-                .height(54.dp)
+                .height(if (look.season) (SEASON_TILE_DP * 3 / 2).dp else 54.dp)
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (selected) theme.accent.copy(alpha = 0.25f) else theme.insetSurface)
         if (bmp != null) {
@@ -190,7 +230,7 @@ private fun EpisodeTile(
             Box(mod)
         }
         Text(
-            stringResource(R.string.plex_episode, ep.index?.toString() ?: "?", ep.title),
+            if (look.season) ep.title else stringResource(R.string.plex_episode, ep.index?.toString() ?: "?", ep.title),
             color = if (selected) theme.accent else theme.primaryText,
             fontSize = 10.sp,
             maxLines = 2,
@@ -222,3 +262,6 @@ private fun PlayButton(theme: ThemeColors, onClick: () -> Unit) {
         )
     }
 }
+
+/** Width of a season poster in a show's details (height 3:2). */
+private const val SEASON_TILE_DP = 72

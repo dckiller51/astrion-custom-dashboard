@@ -98,6 +98,7 @@ internal fun attributeRows(e: EntityState): List<Pair<String, String>> {
         e.attributes.entries
             .filter { (k, _) -> k !in XboxModel.HIDDEN_ATTRIBUTES && k != "name" }
             .mapNotNull { (k, v) -> (v as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }?.let { k to it } }
+            .filterNot { (k, v) -> XboxModel.isPlaceholder(k, v) }
             .toMap()
     val known = ATTRIBUTE_ORDER.filter { it in values }
     return (known + (values.keys - known.toSet()).sorted()).map { it to values.getValue(it) }
