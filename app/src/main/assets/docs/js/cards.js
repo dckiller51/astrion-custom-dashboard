@@ -164,6 +164,12 @@ function updateCardFormInputs() {
         <label class="inline-check"><input type="checkbox" id="optMediaVolSet"> ${I18N.t('web_card_media_vol_slider')}</label>
       </div>
       <div class="hint">${I18N.t('web_card_media_hint')}</div>
+      <label class="inline-check"><input type="checkbox" id="optMediaMusicSearch" onchange="updateMusicSearchFields()"> ${I18N.t('web_card_media_music_search')}</label>
+      <div id="mediaMusicSearchFields" style="display:none">
+        <label>${I18N.t('web_card_media_search_player')}</label>
+        <select id="optMediaSearchPlayer"></select>
+        <div class="hint">${I18N.t('web_card_media_music_search_hint')}</div>
+      </div>
       <div id="mediaTopButtonsField" style="display:none">
         <label>${I18N.t('web_card_media_top_buttons_label')}</label>
         <textarea id="optMediaTopButtons" rows="3" placeholder='[{"name":"Group","service":"media_player.join","entity_id":"media_player.salon","data":{"group_members":["media_player.cuisine"]}}]'>[]</textarea>
@@ -191,6 +197,7 @@ function updateCardFormInputs() {
     `;
     document.getElementById('optMediaVariant').addEventListener('change', updateMediaTopButtonsVisibility);
     updateMediaTopButtonsVisibility();
+    fillMusicSearchPlayers('');
   } else if (type === 'camera') {
     container.innerHTML = `
       <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_camera_name')}">
@@ -545,6 +552,33 @@ function updateCardFormInputs() {
 
 // media_player card: top_buttons only make sense on the "full" variant
 // (the compact tile has no room for them) — hide the field otherwise.
+/** Players Home Assistant can search (1.3.9): `supported_features` has SEARCH_MEDIA (Lyrion, Music Assistant…). */
+const HA_SEARCH_MEDIA = 4194304;
+function searchablePlayers() {
+  if (typeof haStates === 'undefined' || !haStates) return [];
+  return Object.entries(haStates)
+    .filter(([id, e]) => id.startsWith('media_player.') && e && e.attributes &&
+      Math.floor((e.attributes.supported_features || 0) / HA_SEARCH_MEDIA) % 2 === 1)
+    .map(([id, e]) => ({ id, name: (e.attributes.friendly_name || id) }));
+}
+
+/** The "player that searches" select: this card's player (default), or one that can search. */
+function fillMusicSearchPlayers(selected) {
+  const sel = document.getElementById('optMediaSearchPlayer');
+  if (!sel) return;
+  const players = searchablePlayers();
+  if (selected && !players.some(p => p.id === selected)) players.push({ id: selected, name: selected });
+  sel.innerHTML = `<option value="">${I18N.t('web_card_media_search_player_same')}</option>` +
+    players.map(p => `<option value="${p.id}">${p.name} (${p.id})</option>`).join('');
+  sel.value = selected || '';
+}
+
+function updateMusicSearchFields() {
+  const on = document.getElementById('optMediaMusicSearch')?.checked;
+  const box = document.getElementById('mediaMusicSearchFields');
+  if (box) box.style.display = on ? '' : 'none';
+}
+
 function updateMediaTopButtonsVisibility() {
   const variantEl = document.getElementById('optMediaVariant');
   const field = document.getElementById('mediaTopButtonsField');
@@ -1443,6 +1477,9 @@ function fillCardForm(card) {
     document.getElementById('optMediaArtworkFit').value = o.artwork_fit === 'contain' ? 'contain' : 'cover';
     document.getElementById('optMediaArtworkRatio').value = o.artwork_ratio === 'portrait' ? 'portrait' : 'square';
     updateMediaTopButtonsVisibility();
+    document.getElementById('optMediaMusicSearch').checked = o.music_search === true;
+    fillMusicSearchPlayers(o.search_player || '');
+    updateMusicSearchFields();
   } else if (type === 'camera') {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
@@ -1661,6 +1698,11 @@ function addCardToPage() {
     if (document.getElementById('optMediaVolButtons').checked) volumeControls.push('buttons');
     if (document.getElementById('optMediaVolSet').checked) volumeControls.push('set');
     if (volumeControls.join(',') !== 'mute,buttons') newCard.options.volume_controls = volumeControls.join(',');
+    if (document.getElementById('optMediaMusicSearch').checked) {
+      newCard.options.music_search = true;
+      const searchPlayer = document.getElementById('optMediaSearchPlayer').value;
+      if (searchPlayer) newCard.options.search_player = searchPlayer;
+    }
     if (mediaVariant === 'full') {
       try {
         const topButtons = JSON.parse(document.getElementById('optMediaTopButtons').value || '[]');

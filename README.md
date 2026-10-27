@@ -50,7 +50,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | [`switch`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Switch) | Simple on/off | ✅ | | | | |
 | [`climate`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Climate) | Thermostats, AC | ✅ | | | | |
 | [`fan`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Fan) | Speed, presets, oscillation | ✅ | | | | |
-| [`media_player`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-MediaPlayer) | Playback, volume, now playing (compact or full) | ✅ | | | ✅ | ✅ |
+| [`media_player`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-MediaPlayer) | Playback, volume, now playing (compact or full), music search | ✅ | | | ✅ | ✅ |
 | [`speaker_group`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SpeakerGroup) | Multiroom groups (e.g. Sonos) | ✅ | | | | |
 | [`source_select`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SourceSelect) | A media player's input / app list | ✅ | | | ✅ | ✅ |
 | [`select`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Select) | `input_select` / `select` dropdown | ✅ | | | | |

@@ -1434,7 +1434,9 @@ async function restoreDashboard() {
   const input = document.getElementById('dashboardFile');
   const file = input.files && input.files[0];
   if (!file) { alert(I18N.t('web_dev_err_choose_backup')); return; }
-  if (!confirm(I18N.t('web_dev_confirm_restore'))) return;
+  // A full backup (.zip, 1.3.9) goes to /restore and restarts the app; a dashboard.json as before.
+  const full = /\.zip$/i.test(file.name);
+  if (!confirm(I18N.t(full ? 'web_dev_confirm_restore_full' : 'web_dev_confirm_restore'))) return;
   const btn = document.getElementById('restoreDashboardBtn');
   const originalText = btn.textContent;
   btn.textContent = I18N.t('web_dev_restoring');
@@ -1442,10 +1444,13 @@ async function restoreDashboard() {
   try {
     const form = new FormData();
     form.append('file', file, file.name);
-    const res = await fetch('/dashboard.json', { method: 'POST', body: form });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    showToast(I18N.t('web_dev_restored'));
-    setTimeout(() => location.reload(), 800);
+    const res = await fetch(full ? '/restore' : '/dashboard.json', { method: 'POST', body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
+    showToast(I18N.t(full ? 'web_dev_restored_full' : 'web_dev_restored'));
+    setTimeout(() => location.reload(), full ? 8000 : 800);
   } catch (e) {
     showToast(I18N.t('web_dev_restore_failed', e), 'error');
     btn.textContent = originalText;

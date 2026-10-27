@@ -3,6 +3,28 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.3.9-beta] - 2026-10-28
+
+### Added
+
+- **Music search on the media player card**: a **Search music** button next to **Browse**, in the full variant and in the compact one's details (`music_search: true`). Type a title, an artist, an album: the player answers as you type, with filters for artists, albums, tracks and playlists. Tap a result to play it now, **+** to add it to the queue, **›** to open it. It uses Home Assistant's own media search, so it works with **Lyrion Music Server**, **Music Assistant** and any player that offers it, with nothing to set up. For a speaker that can't search (a Sonos taken over by Music Assistant…), `search_player` names the one that can; the builder lists them. Idea from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s music search (MIT), rewritten for this card.
+- **Full backup of the remote**: web page › **Backup & restore** › **Download the full backup**: one `.zip` with everything on the remote: the Home Assistant connection, Harmony hubs, IR extenders, Apple TV and Android TV pairings, the remote's name and settings, the Activities' device states, `dashboard.json`, icons, IR database and floor plan. Restoring it (same page, pick the `.zip`) puts everything back and restarts the app: after a firmware reflash, no need to set up or pair anything again. It holds the Home Assistant token and pairing keys: keep it private.
+- **Media browser**: can open on a given folder (a search result's artist or album).
+- **Remote tweaks (advanced, optional)**: a new `device/` folder with a small boot service installed once with adb (wiki: *adb over Wi-Fi & Wi-Fi latency*). **adb over Wi-Fi** comes back at every reboot, no more USB cable, reachable **only from your computer** (the firmware's adb asks no key, so a firewall keeps the rest of the network out). **Wi-Fi power save off**: the Wi-Fi driver's power save, on by default and back on at every boot, is kept off; ping to a test remote went from 40–50 ms to 11 ms. The app's "Keep Wi-Fi awake" can't do this (it needs root). Everything is removed with `uninstall.sh`. Layout from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s device hooks (MIT), rewritten.
+
+### Fixed
+
+- **Apple TV keys not working after a long sleep**: after hours with the screen off, the Apple TV link could be dead while still looking open, and every key waited for an answer that never came, until the app was restarted. Now, on wake after more than 5 minutes off, the remote checks that the Apple TV still answers and reconnects at once if not; and a key that gets no answer reconnects and is sent again.
+
+### Changed
+
+- **Logs**: **Restart app** (Settings) saves the log to `astrion/logs/` first, so what went wrong before the restart isn't lost (a log only holds the running app). The Apple TV connection's messages (connected, lost, command refused) now reach the log: they were written at a level the HA100 doesn't keep.
+
+### Development
+
+- 3 tests of how Home Assistant media search answers are read.
+- 4 tests of the full backup (types kept, files back, logs left out, unknown or newer backups refused, no file outside the folder).
+
 ## [1.3.8-beta] - 2026-10-26
 
 ### Added

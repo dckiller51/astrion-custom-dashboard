@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.CompletableDeferred
@@ -515,6 +516,20 @@ class HaClient(
                 ?.get("response")
                 ?.jsonObject ?: return null
         return response[entityId]?.jsonObject?.get("forecast")?.jsonArray
+    }
+
+    /**
+     * One websocket command: [type] plus [fields]. HA's whole reply (`success`, then `result` or
+     * `error`), or null when it didn't answer within [timeout] (1.3.9: the media search).
+     */
+    suspend fun request(type: String, fields: JsonObject = JsonObject(emptyMap()), timeout: Duration = RESPONSE_TIMEOUT): JsonObject? {
+        val id = idCounter.getAndIncrement()
+        val deferred = CompletableDeferred<JsonObject>()
+        pending[id] = deferred
+        send(JsonObject(fields + mapOf("id" to JsonPrimitive(id), "type" to JsonPrimitive(type))))
+        val reply = withTimeoutOrNull(timeout) { deferred.await() }
+        pending.remove(id)
+        return reply
     }
 
     /** Play a specific media item on a player. */

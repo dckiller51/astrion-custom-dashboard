@@ -19,6 +19,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   textarea { font-family: monospace; resize: vertical; }
   button { background: #00E5FF; color: #121212; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; margin-top: 0px; }
   button:hover { background: #00b8cc; }
+  /* A download link styled as a button (1.3.9: backup & restore). */
+  a.button-link { display: inline-block; background: #00E5FF; color: #121212; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; text-decoration: none; }
+  a.button-link:hover { background: #00b8cc; }
   button.secondary { background: #333; color: #eee; }
   button.secondary:hover { background: #444; }
   button.danger { background: #3a2222; color: #ff8a8a; }
