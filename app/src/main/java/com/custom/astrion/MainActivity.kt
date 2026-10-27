@@ -106,6 +106,12 @@ class MainActivity : ComponentActivity() {
         const val SCREEN_TAG = "ScreenTimeout"
         const val LONG_PRESS_MS = 1500L
 
+        /** Delay before restarting on a restored backup, so the web page gets its answer first (1.3.9). */
+        const val RESTORE_RESTART_MS = 1500L
+
+        /** Screen off at least this long: check the Apple TV link on wake (1.3.9). */
+        const val LONG_SLEEP_MS = 5 * 60_000L
+
         /** Held-key repeat pace: IR/Harmony are sent at once, Home Assistant goes through the
          * network and the integration (a networked amp can take a few hundred ms per step). */
         const val IR_REPEAT_MS = 150L
@@ -361,6 +367,8 @@ class MainActivity : ComponentActivity() {
                         val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
                         Log.i(SCREEN_TAG, "SCREEN_ON — was off for ${offFor}ms")
                         standby.onScreenOn()
+                        // A long sleep can leave the Apple TV link dead while it looks open (1.3.9).
+                        if (offFor >= LONG_SLEEP_MS && ::appleTvRegistry.isInitialized) appleTvRegistry.onWake()
                     }
                 }
             }
@@ -629,11 +637,15 @@ class MainActivity : ComponentActivity() {
                 onStartActivity = { id -> runOnUiThread { startActivityFn?.invoke(id) } },
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
-        appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
+        // Info level (1.3.9), like Android TV: the HA100 keeps no debug lines, so its Apple TV
+        // connection events (connected, lost, command refused) never reached a saved log.
+        appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.i("AppleTv", it) })
         // After the Apple TV one: it chains to its service handler.
         androidTvRegistry = installAndroidTv(this, client, configServer, log = { Log.i("AndroidTv", it) })
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
+        // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
+        configServer.onBackupRestored = { Handler(Looper.getMainLooper()).postDelayed({ AppLanguage.restart(this) }, RESTORE_RESTART_MS) }
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -731,7 +743,7 @@ class MainActivity : ComponentActivity() {
                             appLanguage = AppLanguage.get(this@MainActivity),
                             setAppLanguage = { tag -> setAppLanguage(tag) },
                             reloadDashboard = { reloadFromSettings() },
-                            restartApp = { AppLanguage.restart(this@MainActivity) },
+                            restartApp = { restartKeepingLog() },
                             testRing = { testRing() },
                             remoteId = RemoteIdentity.id(this@MainActivity),
                             remoteName = remoteName,
@@ -1423,6 +1435,17 @@ class MainActivity : ComponentActivity() {
 
     /** 1.2.4 kept the Settings choice in a local pref that overrode dashboard.json; 1.2.5 moves it
      * into the file once, so the two can't disagree any more. */
+    /**
+     * Settings › Restart app (1.3.9): saves the log first (astrion/logs/), since the log only holds
+     * the running process — whatever went wrong before a restart would otherwise be gone.
+     */
+    private fun restartKeepingLog() {
+        Thread {
+            AppLogs.save(this)?.let { Log.i("MainActivity", "log saved before restart: ${it.path}") }
+            runOnUiThread { AppLanguage.restart(this) }
+        }.start()
+    }
+
     private fun migrateDockModePref() {
         val old = prefs.getString("dock_mode", null) ?: return
         val moved =

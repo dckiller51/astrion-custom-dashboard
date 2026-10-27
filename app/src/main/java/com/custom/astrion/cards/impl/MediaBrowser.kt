@@ -157,9 +157,16 @@ private fun handleItemClick(
 }
 
 @Composable
-fun MediaBrowser(entityId: String, client: HaClient, theme: ThemeColors = ThemeColors.Default, onClose: () -> Unit) {
+fun MediaBrowser(
+    entityId: String,
+    client: HaClient,
+    theme: ThemeColors = ThemeColors.Default,
+    /** Open on this folder (contentId to contentType) instead of the root; Back still goes up to the root (1.3.9: a search result). */
+    start: Pair<String, String>? = null,
+    onClose: () -> Unit
+) {
     // Navigation stack of (contentId, contentType); root is (null, null).
-    val stack = remember { mutableStateListOf<Pair<String?, String?>>(null to null) }
+    val stack = remember { mutableStateListOf<Pair<String?, String?>>(null to null).apply { start?.let { add(it) } } }
     val state = remember { BrowserUiState() }
 
     // Reload whenever the depth changes (push/pop).

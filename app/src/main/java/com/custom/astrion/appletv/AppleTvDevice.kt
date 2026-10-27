@@ -42,6 +42,9 @@ class AppleTvDevice(
         private const val MAX_BACKOFF_MS = 60_000L
         private const val RESOLVE_TIMEOUT_MS = 3000L
         private const val COMMAND_WAIT_MS = 7000L
+
+        /** How long [checkAlive] waits for the Apple TV to answer before reconnecting. */
+        private const val ALIVE_TIMEOUT_MS = 2500L
         private const val SEEK_VERIFY_TIMEOUT_MS = 2500L
         private const val SEEK_VERIFY_POLL_MS = 150L
         private const val SEEK_TOLERANCE_SECONDS = 15.0
@@ -369,6 +372,45 @@ class AppleTvDevice(
                 action(c)
             } catch (e: Exception) {
                 log("[${spec.name}] $description failed: ${e.message}")
+                // No answer at all: the link is dead even if its socket looks open (typically after
+                // the remote slept for hours). Reconnect now and send it once more, instead of every
+                // following key timing out too until the app is restarted (1.3.9).
+                if (isTimeout(e)) retryAfterReconnect(description, c, action)
+            }
+        }
+    }
+
+    private fun retryAfterReconnect(description: String, dead: CompanionClient, action: (CompanionClient) -> Unit) {
+        log("[${spec.name}] no answer: reconnecting")
+        dropLink(dead)
+        val fresh = awaitClient()
+        if (fresh == null || fresh === dead) {
+            log("[${spec.name}] $description: not connected")
+            return
+        }
+        runCatching { action(fresh) }.onFailure { log("[${spec.name}] $description failed again: ${it.message}") }
+    }
+
+    /** Closes a dead link (its supervisor then reconnects) and asks for that reconnect right away. */
+    private fun dropLink(c: CompanionClient) {
+        runCatching { c.close() }
+        if (client === c) client = null
+        retryNow.release()
+    }
+
+    /**
+     * The remote's screen came back on after a long sleep (1.3.9): if the Apple TV doesn't answer
+     * any more, drop the dead link and reconnect before the first key press needs it.
+     */
+    fun checkAlive() {
+        if (!running.get()) return
+        commands.execute {
+            val c = client?.takeIf { it.isConnected }
+            if (c == null) {
+                retryNow.release()
+            } else if (!c.answers(ALIVE_TIMEOUT_MS)) {
+                log("[${spec.name}] no answer after the remote's sleep: reconnecting")
+                dropLink(c)
             }
         }
     }

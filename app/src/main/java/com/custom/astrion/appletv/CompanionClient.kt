@@ -1,6 +1,7 @@
 package com.custom.astrion.appletv
 
 import java.security.MessageDigest
+import java.util.concurrent.TimeoutException
 
 /** HID button codes understood by the Companion `_hidC` request. */
 enum class HidButton(val code: Int) {
@@ -228,6 +229,18 @@ class CompanionClient(
         link.exchange("_launchApp", mapOf(key to bundleIdOrUrl))
     }
 
+    /**
+     * True when the Apple TV answers at all within [timeoutMs], even with a refusal: the link is
+     * alive (1.3.9). False on no answer in time or a closed link — after a long sleep of the remote
+     * the socket can look open while the Apple TV dropped it long ago.
+     */
+    fun answers(timeoutMs: Long): Boolean = try {
+        link.exchange("FetchAttentionState", emptyMap(), timeoutMs)
+        true
+    } catch (e: CompanionException) {
+        !isTimeout(e) && link.isOpen
+    }
+
     /** Best-effort power/attention snapshot; newer tvOS releases may refuse the query, in which case Unknown is returned. */
     fun fetchAttention(): AttentionState = try {
         val content = link.exchange("FetchAttentionState", emptyMap())["_c"] as? Map<*, *>
@@ -236,3 +249,6 @@ class CompanionClient(
         AttentionState.Unknown
     }
 }
+
+/** True when [e] is a request that got no answer in time (rather than a refusal or a closed link). */
+internal fun isTimeout(e: Throwable): Boolean = e.cause is TimeoutException

@@ -152,6 +152,7 @@ import org.json.JSONObject
  *                        app's own version, static per build.
  *  GET  /battery         { level, charging } — this device's own battery
  *  GET  /logs            this app's recent log lines, as a .txt download (bug reports without adb)
+ *  GET  /backup          the whole remote as one zip; POST /restore puts one back (BackupRoutes, 1.3.9)
  *  GET  /info            { id, name, manufacturer, model, android, version, versionCode, webhook } — who this remote is
  *  POST /remote-name     name=… — renames this remote (blank = back to the default name)
  *                        status, for the companion HA integration
@@ -239,6 +240,12 @@ class ConfigServer(
 
     private val androidTvRoutes = AndroidTvRoutes(context) { androidTvRegistry }
 
+    /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
+    @Volatile
+    var onBackupRestored: () -> Unit = {}
+
+    private val backupRoutes = BackupRoutes(context) { onBackupRestored() }
+
     /** Called after POST /remote-name — the activity refreshes what shows the name. */
     @Volatile
     var onRemoteRenamed: () -> Unit = {}
@@ -268,7 +275,7 @@ class ConfigServer(
     override fun serve(session: IHTTPSession): Response = try {
         val method = session.method
         val uri = session.uri
-        androidTvRoutes.serve(uri, session) ?: when (uri) {
+        backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {

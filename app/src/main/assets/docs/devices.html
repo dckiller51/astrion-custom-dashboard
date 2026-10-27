@@ -62,8 +62,7 @@
             </div>
 
             <div class="utility-row">
-                <a href="/dashboard.json" download="dashboard.json" data-i18n="web_dev_download_backup">Download backup</a>
-                <button type="button" class="link-btn" onclick="showView('viewBackup')" data-i18n="web_dev_restore_backup">Restore backup</button>
+                <button type="button" class="link-btn" onclick="showView('viewBackup')" data-i18n="web_dev_backup_and_restore">Backup &amp; restore</button>
                 <a href="/builder/#history" data-i18n="web_history_title">Version history</a>
                 <button type="button" class="link-btn" onclick="showView('viewIrDatabase')" data-i18n="web_dev_ir_database">IR database</button>
                 <button type="button" class="link-btn" onclick="showView('viewIcons')" data-i18n="web_config_icons_heading">Icons</button>
@@ -428,15 +427,33 @@
         <!-- ---- Utilities: backup / ir-database / icons / ring ---------------- -->
         <div id="viewBackup" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_restore_a_backup">Restore a backup</h2>
+            <h2 style="margin-top:0" data-i18n="web_dev_backup_and_restore">Backup &amp; restore</h2>
+
+            <h3 class="subsection-title" data-i18n="web_dev_full_backup">Full backup of the remote</h3>
+            <div class="hint" data-i18n-html="web_dev_full_backup_hint">
+                Everything on this remote in one file: the Home Assistant connection, Harmony hubs, IR extenders,
+                Apple TV and Android TV pairings, the remote's name and settings, the dashboard, icons and IR database.
+                Keep one before updating the firmware: after a reflash, restoring it brings everything back.
+            </div>
+            <div class="hint" style="color:#e0a000" data-i18n="web_dev_full_backup_private">It contains your Home Assistant token and pairing keys: keep it private.</div>
+            <div class="btn-row" style="margin-top:8px">
+                <a class="button-link" href="/backup" data-i18n="web_dev_download_full_backup">Download the full backup</a>
+            </div>
+
+            <h3 class="subsection-title" style="margin-top:18px" data-i18n="web_dev_dashboard_only">Dashboard only</h3>
             <div class="hint" data-i18n-html="web_dev_backup_hint">
                 dashboard.json holds everything built in the
                 <a href="/builder/" style="color:#00E5FF">dashboard builder</a> — pages, cards,
                 hotkeys, Activities, theme, and this catalog's IR/Home Assistant devices.
             </div>
-            <label style="margin-top:14px" data-i18n="web_dev_choose_a_backup_file">Choose a backup file</label>
-            <input type="file" id="dashboardFile" accept="application/json,.json">
-            <div class="hint" style="color:#e0a000" data-i18n="web_dev_replaces_everything_currently_on_this_device">Replaces everything currently on this device — pages, cards, hotkeys, Activities, theme, and this catalog.</div>
+            <div class="btn-row" style="margin-top:8px">
+                <a class="button-link" href="/dashboard.json" download="dashboard.json" data-i18n="web_dev_download_dashboard">Download dashboard.json</a>
+            </div>
+
+            <h3 class="subsection-title" style="margin-top:18px" data-i18n="web_dev_restore_a_backup">Restore a backup</h3>
+            <label data-i18n="web_dev_choose_a_backup_file">Choose a backup file</label>
+            <input type="file" id="dashboardFile" accept="application/json,.json,application/zip,.zip">
+            <div class="hint" style="color:#e0a000" data-i18n="web_dev_restore_which">A full backup (.zip) replaces everything on this remote, then the app restarts. A dashboard.json replaces the pages, cards, hotkeys, Activities, theme and catalog.</div>
             <div class="btn-row" style="margin-top:10px">
                 <button id="restoreDashboardBtn" onclick="restoreDashboard()" data-i18n="web_dev_restore">Restore</button>
             </div>
