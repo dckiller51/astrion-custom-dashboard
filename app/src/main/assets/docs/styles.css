@@ -40,6 +40,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   .toast.error { border-left-color: #ff5252; }
+  /* 1.4.0: loading screen until dashboard.json is in, and the floating "Save to device". */
+  .loading-overlay { position: fixed; inset: 0; background: rgba(18,18,18,0.82); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  .loading-overlay.hidden { display: none; }
+  .loading-box { display: flex; align-items: center; gap: 14px; background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 18px 22px; font-size: 0.95rem; }
+  .spinner { width: 26px; height: 26px; border: 3px solid #333; border-top-color: #00E5FF; border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* 1.4.0: the preview's header (Save to device, undo, history…) stays on screen while the page scrolls. */
+  .preview-head { display: flex; align-items: center; gap: 8px; margin: -20px -20px 12px; padding: 14px 20px 10px; position: sticky; top: 0; z-index: 50; background: #181818; border-radius: 12px 12px 0 0; }
+  /* Grid scene/button form: "+ Add" in the accent colour; while editing one, a green "Save" and a red "Cancel". */
+  button.grid-add { background: #00E5FF; color: #121212; }
+  button.grid-add.editing { background: #2e7d32; color: #fff; }
+  button.grid-add.editing:hover { background: #388e3c; }
+  button.grid-cancel { background: #c62828; color: #fff; }
+  button.grid-cancel:hover { background: #d32f2f; }
+  .version-chip { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #2d2d2d; font-size: 0.8rem; }
   .section-box { background: #252525; padding: 14px; border-radius: 8px; border: 1px solid #383838; margin-bottom: 14px; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }

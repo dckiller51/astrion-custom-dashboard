@@ -491,7 +491,8 @@
                 Upload PNGs here to use as custom icons on scene_grid / button_grid
                 cards in the dashboard builder — pick "Choose…" on an icon field there.
             </div>
-            <input type="file" id="iconFile" accept="image/png,image/jpeg,image/webp">
+            <input type="file" id="iconFile" accept="image/png,image/jpeg,image/webp" multiple>
+            <div class="hint" data-i18n="web_dev_icons_multiple_hint">You can pick several icons at once (Ctrl / Shift + click, or select them all).</div>
             <div class="btn-row" style="margin-top:10px">
                 <button id="uploadIconBtn" onclick="uploadIcon()" data-i18n="web_dev_upload">Upload</button>
             </div>

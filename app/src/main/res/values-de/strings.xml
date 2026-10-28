@@ -194,6 +194,17 @@
     <string name="music_playing">Wiedergabe: %1$s</string>
     <string name="music_queued">Zur Warteschlange hinzugefügt: %1$s</string>
     <string name="music_add_to_queue">Zur Warteschlange hinzufügen</string>
+    <string name="music_queue">Warteschlange</string>
+    <string name="music_queue_position">Titel %1$d von %2$d</string>
+    <string name="music_queue_count">Titel in der Warteschlange: %1$d</string>
+    <string name="music_queue_more">Und %1$d weitere danach.</string>
+    <string name="music_queue_more_ma">Und %1$d weitere: Music Assistant teilt nur den aktuellen und den nächsten Titel.</string>
+    <string name="music_queue_empty">Die Warteschlange ist leer.</string>
+    <string name="music_queue_unsupported">Dieser Player teilt seine Warteschlange nicht.</string>
+    <string name="music_queue_clear">Warteschlange leeren</string>
+    <string name="music_queue_clear_confirm">Zum Leeren erneut tippen</string>
+    <string name="music_queue_remove">Aus der Warteschlange entfernen</string>
+    <string name="music_queue_refresh">Aktualisieren</string>
     <string name="media_power_toggle">Umschalten</string>
     <string name="media_browser_play">Abspielen</string>
     <string name="media_browser_add_to_queue">Zur Warteschlange</string>

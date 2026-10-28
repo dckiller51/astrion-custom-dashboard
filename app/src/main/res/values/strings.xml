@@ -194,6 +194,17 @@
     <string name="music_playing">Playing: %1$s</string>
     <string name="music_queued">Added to the queue: %1$s</string>
     <string name="music_add_to_queue">Add to the queue</string>
+    <string name="music_queue">Queue</string>
+    <string name="music_queue_position">Track %1$d of %2$d</string>
+    <string name="music_queue_count">Tracks in the queue: %1$d</string>
+    <string name="music_queue_more">And %1$d more after these.</string>
+    <string name="music_queue_more_ma">And %1$d more: Music Assistant only shares the current and next track.</string>
+    <string name="music_queue_empty">The queue is empty.</string>
+    <string name="music_queue_unsupported">This player doesn\'t share its queue.</string>
+    <string name="music_queue_clear">Clear the queue</string>
+    <string name="music_queue_clear_confirm">Tap again to clear</string>
+    <string name="music_queue_remove">Remove from the queue</string>
+    <string name="music_queue_refresh">Refresh</string>
     <string name="media_power_toggle">Toggle</string>
     <string name="media_browser_play">Play</string>
     <string name="media_browser_add_to_queue">Add to queue</string>

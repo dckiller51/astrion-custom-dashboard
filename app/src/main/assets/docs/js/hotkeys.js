@@ -671,18 +671,73 @@ function hwKeyLabel(key) {
   return title && title.toUpperCase() !== String(key).toUpperCase() ? `${title} (${key})` : key;
 }
 
-async function fetchReleaseBadge(url, icon) {
+// 1.4.0: the row reads "Installed: 1.3.9-beta · Official: v1.3.0 (older) · Beta: 1.4.0-beta ⬆️ Install".
+// A user took the old ✅ in front of the official release to mean "installed". Now each release
+// says how it compares with what this remote runs, and only a newer one offers to install.
+let installedVersion = null; // from the remote's /version; null outside the remote or before it answered
+
+/** The release's name/tag, its version (x.y.z, beta or not) and its APK link; null when GitHub didn't answer. */
+async function fetchRelease(url) {
   try {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
     const asset = (data.assets || []).find(a => a.name.endsWith('.apk'));
-    return `${icon} ${data.name || data.tag_name}` +
-      (asset ? ` — <a href="${asset.browser_download_url}">${I18N.t('web_release_download_apk')}</a>` : '');
+    const label = data.name || data.tag_name || '';
+    return { label, version: parseVersion(label) || parseVersion(data.tag_name), apk: asset ? asset.browser_download_url : null };
   } catch (e) {
     console.log('Release fetch failed', e);
     return null;
   }
+}
+
+/** "v1.3.9-beta" → { nums: [1,3,9], beta: true }; null without an x.y.z in it. */
+function parseVersion(text) {
+  const m = /(\d+)\.(\d+)\.(\d+)(-beta)?/i.exec(String(text || ''));
+  return m ? { nums: [+m[1], +m[2], +m[3]], beta: !!m[4] } : null;
+}
+
+/** <0: [a] is older than [b], 0: the same, >0: newer. A release beats its own beta. */
+function compareVersions(a, b) {
+  for (let i = 0; i < 3; i++) if (a.nums[i] !== b.nums[i]) return a.nums[i] - b.nums[i];
+  return (a.beta ? 0 : 1) - (b.beta ? 0 : 1);
+}
+
+/** One release's badge: its name, then installed / newer (+ install button) / older, or its APK link outside the remote. */
+function releaseBadgeHtml(prefix, release, installFn, installKey) {
+  const name = `<span class="version-chip">${escapeHtmlText(release.label)}</span>`;
+  const mine = installedVersion ? parseVersion(installedVersion) : null;
+  if (!mine || !release.version || typeof deviceModeAvailable === 'undefined' || !deviceModeAvailable) {
+    return `${prefix} ${name}` + (release.apk ? ` — <a href="${release.apk}">${I18N.t('web_release_download_apk')}</a>` : '');
+  }
+  const cmp = compareVersions(release.version, mine);
+  if (cmp === 0) return `${prefix} ${name} ✅ ${I18N.t('web_release_is_installed')}`;
+  if (cmp < 0) return `${prefix} ${name} <span style="color:#888">${I18N.t('web_release_older')}</span>`;
+  return `${prefix} ${name} ⬆️ <button type="button" onclick="${installFn}(this)" style="padding:4px 10px;font-size:0.8rem">${t(installKey)}</button>`;
+}
+
+function escapeHtmlText(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** "📱 Installed: 1.4.0-beta", from the remote itself; then the releases are compared with it. */
+async function loadInstalledVersion() {
+  await I18N.ready;
+  const badge = document.getElementById('installedBadge');
+  try {
+    const res = await fetch('/version');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    installedVersion = (await res.json()).version || null;
+  } catch (e) {
+    installedVersion = null;
+  }
+  if (badge) {
+    badge.innerHTML = installedVersion
+      ? `📱 ${I18N.t('web_release_installed')} <span class="version-chip">${escapeHtmlText(installedVersion)}</span>`
+      : '';
+  }
+  loadStableBadge();
+  if (document.getElementById('betaToggle')?.checked) toggleBetaBadge();
 }
 
 async function loadStableBadge() {
@@ -690,19 +745,10 @@ async function loadStableBadge() {
   const badge = document.getElementById('stableBadge');
   if (!badge) return;
   badge.textContent = I18N.t('web_release_loading');
-  const html = await fetchReleaseBadge(
-    'https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/latest', '✅'
-  );
-  if (!html) {
-    badge.innerHTML = t('stableUnavailable');
-    return;
-  }
-  if (typeof deviceModeAvailable !== 'undefined' && deviceModeAvailable) {
-    const label = html.replace(/ — <a[^>]*>.*?<\/a>/, '');
-    badge.innerHTML = `${label} — <button type="button" onclick="installStableUpdate(this)" style="padding:4px 10px;font-size:0.8rem">${t('installOfficial')}</button>`;
-  } else {
-    badge.innerHTML = html;
-  }
+  const release = await fetchRelease('https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/latest');
+  badge.innerHTML = release
+    ? releaseBadgeHtml(`🏷️ ${I18N.t('web_release_official')}`, release, 'installStableUpdate', 'installOfficial')
+    : t('stableUnavailable');
 }
 
 async function toggleBetaBadge() {
@@ -712,19 +758,10 @@ async function toggleBetaBadge() {
   if (!on) { badge.style.display = 'none'; return; }
   badge.textContent = I18N.t('web_release_loading');
   badge.style.display = 'inline-block';
-  const html = await fetchReleaseBadge(
-    'https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/tags/dev-latest', '🧪'
-  );
-  if (!html) {
-    badge.innerHTML = I18N.t('web_release_beta_unavailable');
-    return;
-  }
-  if (typeof deviceModeAvailable !== 'undefined' && deviceModeAvailable) {
-    const label = html.replace(/ — <a[^>]*>.*?<\/a>/, '');
-    badge.innerHTML = `${label} — <button type="button" onclick="installBetaUpdate(this)" style="padding:4px 10px;font-size:0.8rem">${t('installBeta')}</button>`;
-  } else {
-    badge.innerHTML = html;
-  }
+  const release = await fetchRelease('https://api.github.com/repos/dckiller51/astrion-custom-dashboard/releases/tags/dev-latest');
+  badge.innerHTML = release
+    ? releaseBadgeHtml(`🧪 ${I18N.t('web_release_beta')}`, release, 'installBetaUpdate', 'installBeta')
+    : I18N.t('web_release_beta_unavailable');
 }
 
 async function installStableUpdate(btn) {

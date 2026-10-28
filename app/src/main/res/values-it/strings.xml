@@ -194,6 +194,17 @@
     <string name="music_playing">In riproduzione: %1$s</string>
     <string name="music_queued">Aggiunto alla coda: %1$s</string>
     <string name="music_add_to_queue">Aggiungi alla coda</string>
+    <string name="music_queue">Coda</string>
+    <string name="music_queue_position">Brano %1$d di %2$d</string>
+    <string name="music_queue_count">Brani in coda: %1$d</string>
+    <string name="music_queue_more">E altri %1$d dopo questi.</string>
+    <string name="music_queue_more_ma">E altri %1$d: Music Assistant condivide solo il brano in corso e il successivo.</string>
+    <string name="music_queue_empty">La coda è vuota.</string>
+    <string name="music_queue_unsupported">Questo lettore non condivide la sua coda.</string>
+    <string name="music_queue_clear">Svuota la coda</string>
+    <string name="music_queue_clear_confirm">Tocca di nuovo per svuotare</string>
+    <string name="music_queue_remove">Rimuovi dalla coda</string>
+    <string name="music_queue_refresh">Aggiorna</string>
     <string name="media_power_toggle">Commuta</string>
     <string name="media_browser_play">Riproduci</string>
     <string name="media_browser_add_to_queue">Aggiungi alla coda</string>

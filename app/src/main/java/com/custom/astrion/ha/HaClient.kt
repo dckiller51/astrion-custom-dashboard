@@ -25,9 +25,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -698,10 +700,18 @@ class HaClient(
             }
             return
         }
-        val result = resultEl
-        for (el in result) {
-            val e = el.jsonObject
+        seedStates(resultEl)
+    }
+
+    /**
+     * A full `get_states` answer replaces every entity: one Home Assistant no longer has (renamed or
+     * deleted) is dropped (1.4.0 — it used to linger, so a renamed entity showed under both names).
+     */
+    private fun seedStates(result: JsonArray) {
+        val seen = HashSet<String>()
+        for (e in result.filterIsInstance<JsonObject>()) {
             val entityId = e["entity_id"]?.jsonPrimitive?.content ?: continue
+            seen += entityId
             entityStore[entityId] =
                 EntityState(
                     entityId = entityId,
@@ -711,8 +721,22 @@ class HaClient(
                     lastUpdated = e["last_updated"]?.jsonPrimitive?.content
                 )
         }
+        entityStore.keys.retainAll(seen)
         // Seed is important — publish immediately so the first frame has data.
         _entities.value = mergedEntities()
+    }
+
+    /**
+     * Re-reads every state from Home Assistant now (1.4.0), even while quiet (screen off, when only
+     * a few entities stay live): the builder asks for it on opening, so entities renamed or added
+     * in Home Assistant since show up. False when Home Assistant didn't answer.
+     */
+    suspend fun refreshStates(): Boolean {
+        if (_connection.value != ConnectionState.CONNECTED) return false
+        val reply = request("get_states") ?: return false
+        val result = reply["result"] as? JsonArray ?: return false
+        seedStates(result)
+        return true
     }
 
     /** state_changed events carry event.data.new_state; quiet-mode trigger events carry
@@ -720,6 +744,12 @@ class HaClient(
     private fun onEvent(obj: JsonObject) {
         // `as?` rather than `.jsonObject`: a removed entity sends new_state / to_state = null.
         val event = obj["event"] as? JsonObject ?: return
+        val data = event["data"] as? JsonObject
+        if (data != null && data["new_state"] is JsonNull) {
+            // Removed from Home Assistant (deleted, or renamed: the new id comes as its own event).
+            (data["entity_id"] as? JsonPrimitive)?.contentOrNull?.let { if (entityStore.remove(it) != null) markDirty() }
+            return
+        }
         val newState =
             (event["data"] as? JsonObject)?.get("new_state") as? JsonObject
                 ?: ((event["variables"] as? JsonObject)?.get("trigger") as? JsonObject)?.get("to_state") as? JsonObject

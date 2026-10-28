@@ -118,7 +118,9 @@ async function reconcileAppleTvHaDevices() {
 
 async function refreshHaStates() {
   try {
-    const res = await fetch('/ha-states');
+    // refresh=1 (1.4.0): the remote re-reads every entity from Home Assistant first, so renamed or
+    // new entities show up in the pickers even while the remote sleeps.
+    const res = await fetch('/ha-states?refresh=1');
     const data = await res.json();
     haStates = (data && data.states) ? data.states : null;
   } catch (e) {
@@ -1638,27 +1640,37 @@ async function deleteIcon(name) {
   await loadIconsList();
 }
 
+/** 1.4.0: several icons at once — sent one by one (same POST /icons), with progress and a summary. */
 async function uploadIcon() {
   const input = document.getElementById('iconFile');
-  const file = input.files && input.files[0];
-  if (!file) { alert(I18N.t('web_dev_err_choose_icon')); return; }
+  const files = input.files ? Array.from(input.files) : [];
+  if (!files.length) { alert(I18N.t('web_dev_err_choose_icon')); return; }
   const btn = document.getElementById('uploadIconBtn');
   const originalText = btn.textContent;
-  btn.textContent = I18N.t('web_dev_uploading');
   btn.disabled = true;
-  try {
-    const form = new FormData();
-    form.append('file', file, file.name);
-    const res = await fetch('/icons', { method: 'POST', body: form });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    showToast(I18N.t('web_dev_icon_uploaded'));
-    input.value = '';
-    await loadIconsList();
-  } catch (e) {
-    showToast(I18N.t('web_dev_upload_failed', e), 'error');
-  } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
+  const failed = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    btn.textContent = files.length > 1 ? I18N.t('web_dev_uploading_n', i + 1, files.length) : I18N.t('web_dev_uploading');
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const res = await fetch('/icons', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) {
+      console.error('Icon upload failed', file.name, e);
+      failed.push(file.name);
+    }
+  }
+  btn.textContent = originalText;
+  btn.disabled = false;
+  input.value = '';
+  await loadIconsList();
+  const done = files.length - failed.length;
+  if (!failed.length) {
+    showToast(files.length > 1 ? I18N.t('web_dev_icons_uploaded_n', done) : I18N.t('web_dev_icon_uploaded'));
+  } else {
+    showToast(I18N.t('web_dev_icons_upload_partial', done, files.length, failed.join(', ')), 'error');
   }
 }
 

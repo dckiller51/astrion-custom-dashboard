@@ -7,8 +7,8 @@ How to use them, step by step: wiki page
 | File | Where it goes | What it does |
 |---|---|---|
 | `astrion-tweaks.rc` | `/vendor/etc/init/` | Starts the two services below at boot (firewall as soon as the network is up) |
-| `astrion-tweaks.sh` | `/vendor/bin/` | `firewall`: adb on port 5555 reachable only from the allowed computers (IPv4 and IPv6). `boot`: adb over Wi-Fi on/off, then keeps the Wi-Fi driver's power save off (checked every 30 s) |
-| `/vendor/etc/astrion-tweaks.conf` | written by `install.sh` | `ADB_WIFI`, `ADB_ALLOW`, `WIFI_POWERSAVE_OFF` |
+| `astrion-tweaks.sh` | `/vendor/bin/` | `firewall`: adb on port 5555 reachable only from the allowed computers (IPv4 and IPv6). `boot`: adb over Wi-Fi on/off, the wake-key replay (optional), then keeps the Wi-Fi driver's power save off (checked every 30 s) |
+| `/vendor/etc/astrion-tweaks.conf` | written by `install.sh` | `ADB_WIFI`, `ADB_ALLOW`, `WIFI_POWERSAVE_OFF`, `WAKE_KEYS` |
 | `install.sh`, `uninstall.sh`, `status.sh` | run on the remote from `/data/local/tmp/astrion-device/` | install / remove / show what's running |
 
 The scripts run **on the remote** (`adb shell sh …`), so the same commands work
@@ -16,6 +16,7 @@ from Windows, macOS and Linux:
 
 ```sh
 adb root
+adb shell rm -rf /data/local/tmp/astrion-device
 adb push device /data/local/tmp/astrion-device
 adb shell sh /data/local/tmp/astrion-device/install.sh --adb-allow <your computer's IP>
 adb reboot
@@ -36,6 +37,13 @@ adb connect <remote IP>:5555
   and turns it back on at every boot. With it off, a ping to the remote went from
   40–50 ms to 11 ms. The app's "Keep Wi-Fi awake" setting doesn't change it (it
   only takes an Android lock), and the app can't: it needs root.
+- **Wake keys** (`--wake-keys`, optional, 1.4.0): with the screen off, Android uses the
+  key press to wake the screen and drops it before any app sees it (even an
+  accessibility service), so the key has to be pressed twice. The service reads the
+  keys at the source (`getevent`); a key pressed while the backlight is off is sent
+  again (`sendevent`, same input device) once the screen is on, and Android delivers
+  it to Astrion like any other. Screen on, it does nothing: no key is ever doubled.
+  The real power key (Linux `KEY_POWER`) is left out. Idea from a user's report.
 
 ## Safety
 

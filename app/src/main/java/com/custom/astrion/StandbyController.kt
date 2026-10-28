@@ -5,12 +5,15 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import com.custom.astrion.config.PowerConfig
 import com.custom.astrion.ha.HaClient
+import java.io.File
+import java.util.concurrent.Executors
 
 /**
  * What the remote does to save battery around the screen going off — kept out of MainActivity so
@@ -30,6 +33,9 @@ import com.custom.astrion.ha.HaClient
  *    an undocked remote lit until its battery is flat.
  *  - **Network-aware reconnect.** HA reconnects as soon as Wi-Fi is back, and doesn't retry in
  *    a loop while there is none.
+ *  - **Screen state file** (1.4.0): `/sdcard/astrion/.screen` holds `on` or `off`, for the
+ *    optional "wake keys" remote tweak (device/astrion-tweaks.sh). It replays the key that woke
+ *    the screen once this says `on`; the HA100's backlight level can't tell (it stays at 255).
  */
 class StandbyController(
     private val activity: Activity,
@@ -74,6 +80,7 @@ class StandbyController(
         runCatching { connectivity?.registerDefaultNetworkCallback(networkCallback) }
             .onFailure { Log.w(TAG, "network callback unavailable", it) }
         applyScreenTimeout()
+        writeScreenState(true)
     }
 
     fun stop() {
@@ -88,6 +95,7 @@ class StandbyController(
 
     fun onScreenOff() {
         screenOn = false
+        writeScreenState(false)
         handler.removeCallbacks(goQuiet)
         handler.removeCallbacks(stopMotion)
         val filter = config.screenOffFilterSeconds
@@ -101,6 +109,7 @@ class StandbyController(
 
     fun onScreenOn() {
         screenOn = true
+        writeScreenState(true)
         handler.removeCallbacks(goQuiet)
         handler.removeCallbacks(stopMotion)
         client()?.setQuiet(false)
@@ -129,8 +138,21 @@ class StandbyController(
             .onFailure { Log.w(TAG, "couldn't set the screen timeout", it) }
     }
 
+    /** Off the main thread, one write at a time and in order (a quick off/on can't end up "off"). */
+    private fun writeScreenState(on: Boolean) {
+        fileWriter.execute {
+            runCatching {
+                val dir = File(Environment.getExternalStorageDirectory(), "astrion").apply { mkdirs() }
+                File(dir, SCREEN_FILE).writeText(if (on) "on\n" else "off\n")
+            }.onFailure { Log.w(TAG, "screen state file not written", it) }
+        }
+    }
+
+    private val fileWriter = Executors.newSingleThreadExecutor()
+
     private companion object {
         const val TAG = "Standby"
+        const val SCREEN_FILE = ".screen"
         const val SECOND_MS = 1000L
         const val MINUTE_MS = 60_000L
     }

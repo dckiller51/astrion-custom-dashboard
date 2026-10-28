@@ -1,5 +1,5 @@
-# Astrion remote tweaks: adb over Wi-Fi (behind a firewall) and the Wi-Fi
-# driver's power save turned off. Installed by device/install.sh from
+# Astrion remote tweaks: adb over Wi-Fi (behind a firewall), the Wi-Fi
+# driver's power save turned off, and (optional) the screen-waking key replayed. Installed by device/install.sh from
 # astrion-custom-dashboard; settings in /vendor/etc/astrion-tweaks.conf.
 #
 # A NEW file, no existing service touched: if init can't read it, it skips it
@@ -23,11 +23,11 @@ service astrion_adbfw /system/bin/sh /vendor/bin/astrion-tweaks.sh firewall
     oneshot
     seclabel u:r:su:s0
 
-# The firewall again, adb over Wi-Fi on or off, then (if enabled) the Wi-Fi
-# power save watch, which keeps running.
+# The firewall again, adb over Wi-Fi on or off, then (if enabled) the wake-key
+# replay and the Wi-Fi power save watch, which keep running.
 service astrion_tweaks /system/bin/sh /vendor/bin/astrion-tweaks.sh boot
     user root
-    group root net_admin net_raw wifi
+    group root net_admin net_raw wifi input
     disabled
     oneshot
     seclabel u:r:su:s0

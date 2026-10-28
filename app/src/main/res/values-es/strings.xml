@@ -194,6 +194,17 @@
     <string name="music_playing">Reproduciendo: %1$s</string>
     <string name="music_queued">Añadido a la cola: %1$s</string>
     <string name="music_add_to_queue">Añadir a la cola</string>
+    <string name="music_queue">Cola</string>
+    <string name="music_queue_position">Pista %1$d de %2$d</string>
+    <string name="music_queue_count">Pistas en la cola: %1$d</string>
+    <string name="music_queue_more">Y %1$d más después de estas.</string>
+    <string name="music_queue_more_ma">Y %1$d más: Music Assistant solo comparte la pista actual y la siguiente.</string>
+    <string name="music_queue_empty">La cola está vacía.</string>
+    <string name="music_queue_unsupported">Este reproductor no comparte su cola.</string>
+    <string name="music_queue_clear">Vaciar la cola</string>
+    <string name="music_queue_clear_confirm">Toca otra vez para vaciar</string>
+    <string name="music_queue_remove">Quitar de la cola</string>
+    <string name="music_queue_refresh">Actualizar</string>
     <string name="media_power_toggle">Alternar</string>
     <string name="media_browser_play">Reproducir</string>
     <string name="media_browser_add_to_queue">Añadir a la cola</string>

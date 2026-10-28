@@ -23,30 +23,58 @@ function showToast(msg, type) {
   _toastTimer = setTimeout(() => el.classList.remove('show'), type === 'error' ? 5000 : 3000);
 }
 
+/**
+ * 1.4.0: dashboard.json first, behind a loading screen that blocks editing (a change made on the
+ * empty default page used to be lost when the real one arrived); Home Assistant's states come
+ * after, freshly re-read from Home Assistant, and only redraw the preview.
+ */
 async function loadDashboardFromDevice() {
   await I18N.ready; // the preview's mock/state labels render during init, so strings must be in first
+  let loaded = false;
   try {
     const res = await fetch('/dashboard.json');
     deviceModeAvailable = true; // reaching this line at all means the app answered — even a 404 (no dashboard.json saved yet) still confirms device mode
-    await loadHaStates(); // best-effort: lets the preview render with live HA data instead of the static mocks
     if (res.ok) {
       const parsed = await res.json();
       applyParsedDashboard(parsed);
       initEditor();
       if (typeof resetUndo === 'function') { resetUndo(); recordUndo(document.getElementById('jsonOutput').value); }
       console.log('Loaded dashboard.json from this device.');
-    } else {
-      // No dashboard.json yet — the inline initEditor() already ran with the
-      // default empty page; just refresh the preview now that haStates is loaded.
-      renderPreview();
     }
+    // No dashboard.json yet: the inline initEditor() already ran with the default empty page.
+    loaded = true;
   } catch (e) {
     deviceModeAvailable = false;
     showToast(I18N.t('web_device_unreachable'), 'error');
     console.error('Failed to load dashboard.json from this device.', e);
   }
+  hideLoadingOverlay();
   updateDeviceModeUi();
   if (typeof openFromHash === 'function') openFromHash(); // deep links: #history, #page=…, #activity=…, #hotkeys
+  if (typeof loadInstalledVersion === 'function') loadInstalledVersion(); // js/hotkeys.js
+  if (loaded) {
+    await loadHaStates(true); // best-effort: lets the preview render with live HA data instead of the static mocks
+    renderPreview();
+  }
+}
+
+function hideLoadingOverlay() {
+  const el = document.getElementById('loadingOverlay');
+  if (el) el.classList.add('hidden');
+}
+
+/** The 🔄 button (1.4.0): re-reads every entity from Home Assistant (renamed or new ones show up). */
+async function reloadHaStates() {
+  const btn = document.getElementById('haReloadBtn');
+  if (btn) btn.disabled = true;
+  const ok = await loadHaStates(true);
+  if (btn) btn.disabled = false;
+  renderPreview();
+  if (ok) {
+    showToast(I18N.t('web_device_ha_reloaded', Object.keys(haStates || {}).length));
+  } else {
+    showToast(I18N.t('web_device_ha_reload_failed'), 'error');
+  }
 }
 
 /**
@@ -57,17 +85,21 @@ async function loadDashboardFromDevice() {
  * configured or isn't reachable right now, haStates stays null and the
  * preview quietly falls back to the mocks + prettyEntityName().
  */
-async function loadHaStates() {
+async function loadHaStates(refresh) {
   try {
-    const res = await fetch('/ha-states');
-    if (!res.ok) return;
+    // refresh: the remote re-reads every state from Home Assistant first (1.4.0).
+    const res = await fetch(refresh ? '/ha-states?refresh=1' : '/ha-states');
+    if (!res.ok) return false;
     const data = await res.json();
     haStates = (data && data.states) ? data.states : null;
     if (data && data.connected === false) {
       console.log('HA not connected — preview will use example data.');
+      return false;
     }
+    return true;
   } catch (e) {
     haStates = null; // not device mode, or older app build without the endpoint
+    return false;
   }
 }
 
@@ -89,10 +121,10 @@ async function saveDashboardToDevice() {
     showToast(I18N.t('web_page_invalid_json', e.message), 'error');
     return;
   }
-  const btn = document.getElementById('saveToDeviceBtn');
-  const originalText = btn.textContent;
-  btn.textContent = I18N.t('web_device_saving');
-  btn.disabled = true;
+  // Both "Save to device" buttons: the one under the JSON and the floating one, top right (1.4.0).
+  const buttons = ['saveToDeviceBtn', 'saveToDeviceFab'].map(id => document.getElementById(id)).filter(Boolean);
+  const originals = buttons.map(b => b.textContent);
+  buttons.forEach(b => { b.textContent = I18N.t('web_device_saving'); b.disabled = true; });
   try {
     const form = new FormData();
     form.append('file', new Blob([jsonText], { type: 'application/json' }), 'dashboard.json');
@@ -108,8 +140,7 @@ async function saveDashboardToDevice() {
   } catch (e) {
     showToast(I18N.t('web_device_save_failed', e), 'error');
   } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
+    buttons.forEach((b, i) => { b.textContent = originals[i]; b.disabled = false; });
   }
 }
 
@@ -139,6 +170,10 @@ function updateDeviceModeUi() {
       : I18N.t('web_device_connecting');
   }
   if (saveBtn) saveBtn.style.display = deviceModeAvailable ? 'inline-block' : 'none';
+  const fab = document.getElementById('saveToDeviceFab');
+  if (fab) fab.style.display = deviceModeAvailable ? '' : 'none';
+  const reloadBtn = document.getElementById('haReloadBtn');
+  if (reloadBtn) reloadBtn.style.display = deviceModeAvailable ? '' : 'none';
   const noteEl = document.getElementById('saveNote');
   if (noteEl) noteEl.style.display = deviceModeAvailable ? '' : 'none';
   const histBtn = document.getElementById('historyBtn');

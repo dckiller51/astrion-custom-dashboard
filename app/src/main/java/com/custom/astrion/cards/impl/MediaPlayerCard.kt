@@ -88,7 +88,8 @@ import kotlinx.coroutines.delay
  *       "volume_controls": "mute,buttons",               // comma list, see VOLUME_CONTROL_KEYS
  *       "top_buttons": [ { "name": "Group", "service": "...", "entity_id": "...", "data": {} } ],
  *       "music_search": true,               // 1.3.9: "Search music" (Home Assistant's media search)
- *       "search_player": "media_player.club_2"  // optional: the player that searches and plays (default: entity_id)
+ *       "search_player": "media_player.club_2", // optional: the player that searches, plays and holds the queue (default: entity_id)
+ *       "show_queue": false                 // 1.4.0: hide the "Queue" button (shown when the player shares its queue or can clear it)
  *   } }
  *
  * All controls are filtered live against the entity's `supported_features`
@@ -104,7 +105,11 @@ class MediaPlayerCard : CardRenderer {
     override fun Render(config: CardConfig, ctx: CardContext) {
         val entityId = config.string("entity_id") ?: return
         val full = config.string("variant") == "full"
-        val playerConfig = resolveMediaPlayerConfig(config, entityId)
+        // The Queue button (1.4.0) only shows when its player shares a queue or can clear it.
+        val playerConfig =
+            resolveMediaPlayerConfig(config, entityId).let { pc ->
+                pc.copy(queuePlayer = pc.queuePlayer?.takeIf { MediaQueue.available(ctx.entities[it]) })
+            }
 
         val e = ctx.entities[entityId]
         val isOff = e == null || e.state == "off" || e.isUnavailable
@@ -159,7 +164,8 @@ class MediaPlayerCard : CardRenderer {
             volumeControls = volumeControls,
             artworkFit = if (config.string("artwork_fit") == "contain") ContentScale.Fit else ContentScale.Crop,
             artworkAspectRatio = if (config.string("artwork_ratio") == "portrait") 2f / 3f else 1.2f,
-            musicSearch = if (config.bool("music_search")) config.string("search_player") ?: entityId else null
+            musicSearch = if (config.bool("music_search")) config.string("search_player") ?: entityId else null,
+            queuePlayer = if (config.bool("show_queue", true)) config.string("search_player") ?: entityId else null
         )
     }
 
@@ -192,6 +198,7 @@ class MediaPlayerCard : CardRenderer {
         // to launch apps / browse content at all.
         var showBrowse by remember { mutableStateOf(false) }
         var showSearch by remember { mutableStateOf(false) }
+        var showQueue by remember { mutableStateOf(false) }
         Box(
             modifier =
             Modifier
@@ -214,7 +221,8 @@ class MediaPlayerCard : CardRenderer {
                     mp = actions::fire,
                     playerConfig = playerConfig,
                     onBrowse = { showBrowse = true },
-                    onSearch = playerConfig.musicSearch?.let { { showSearch = true } }
+                    onSearch = playerConfig.musicSearch?.let { { showSearch = true } },
+                    onQueue = playerConfig.queuePlayer?.let { { showQueue = true } }
                 )
             )
         }
@@ -224,6 +232,10 @@ class MediaPlayerCard : CardRenderer {
         val search = playerConfig.musicSearch
         if (showSearch && search != null) {
             MusicSearchDialog(ctx.client, search, ctx.theme) { showSearch = false }
+        }
+        val queue = playerConfig.queuePlayer
+        if (showQueue && queue != null) {
+            MediaQueueDialog(ctx.client, queue, ctx.theme) { showQueue = false }
         }
     }
 
@@ -250,7 +262,7 @@ class MediaPlayerCard : CardRenderer {
                 e = data.e,
                 client = data.client,
                 theme = data.theme,
-                musicSearch = data.playerConfig.musicSearch,
+                library = MediaLibraryPlayers(data.playerConfig.musicSearch, data.playerConfig.queuePlayer),
                 onClose = { showDetail = false }
             )
         }
@@ -490,7 +502,8 @@ class MediaPlayerCard : CardRenderer {
         val mp: (String, Array<out Pair<String, Any?>>) -> Unit,
         val playerConfig: MediaPlayerConfig,
         val onBrowse: () -> Unit,
-        val onSearch: (() -> Unit)? = null
+        val onSearch: (() -> Unit)? = null,
+        val onQueue: (() -> Unit)? = null
     )
 
     @Composable
@@ -515,7 +528,8 @@ class MediaPlayerCard : CardRenderer {
             MediaLibraryButtons(
                 ctx.theme,
                 onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) data.onBrowse else null,
-                onSearch = data.onSearch
+                onSearch = data.onSearch,
+                onQueue = data.onQueue
             )
             if (e?.attrDouble("media_duration") != null) {
                 MediaProgressBar(e, ctx.theme)
@@ -763,7 +777,9 @@ private data class MediaPlayerConfig(
      * config switches this to 2/3, a closer fit for movie/TV posters. */
     val artworkAspectRatio: Float = 1.2f,
     /** `music_search` (1.3.9): the player that searches and plays the results; null without the option. */
-    val musicSearch: String? = null
+    val musicSearch: String? = null,
+    /** The Queue button's player (1.4.0): `search_player` or the card's own; null when hidden or the player has no queue. */
+    val queuePlayer: String? = null
 )
 
 private data class MediaText(val title: String, val subtitle: String?, val finalState: String)
