@@ -62,7 +62,8 @@ import kotlinx.coroutines.delay
  * feature-gated set [MediaPlayerCard] uses for its own rows, just always
  * requesting every key so nothing is hidden here by a compact-card config.
  *
- * [musicSearch]: the card's `music_search` player (1.3.9), a "Search music" button next to Browse.
+ * [library]: the card's `music_search` player (1.3.9, a "Search music" button next to Browse) and
+ * the player whose queue a "Queue" button opens (1.4.0).
  */
 @Composable
 fun MediaPlayerDetailDialog(
@@ -71,7 +72,7 @@ fun MediaPlayerDetailDialog(
     e: EntityState?,
     client: HaClient,
     theme: ThemeColors = ThemeColors.Default,
-    musicSearch: String? = null,
+    library: MediaLibraryPlayers = MediaLibraryPlayers(),
     onClose: () -> Unit
 ) {
     val mediaButtons = remember(e) { computeMediaButtons(e, MediaPlayerCard.MEDIA_CONTROL_KEYS) }
@@ -88,8 +89,6 @@ fun MediaPlayerDetailDialog(
     val artPath = e?.attrString("entity_picture")
     var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(artPath) { art = artPath?.let { client.fetchBitmap(it) } }
-    var showBrowser by remember { mutableStateOf(false) }
-    var showSearch by remember { mutableStateOf(false) }
 
     fun mp(service: String, data: Array<out Pair<String, Any?>> = emptyArray()) {
         client.callService(ServiceCall.of("media_player", service, entityId, *data))
@@ -141,11 +140,7 @@ fun MediaPlayerDetailDialog(
                 )
             }
 
-            MediaLibraryButtons(
-                theme,
-                onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) ({ showBrowser = true }) else null,
-                onSearch = musicSearch?.let { { showSearch = true } }
-            )
+            DetailLibraryButtons(entityId, e, client, theme, library)
 
             if (e != null && e.attrDouble("media_duration") != null) {
                 DialogProgressBar(e, theme)
@@ -202,13 +197,28 @@ fun MediaPlayerDetailDialog(
             }
         }
     }
+}
 
+/** The music players behind the detail dialog's library buttons: `music_search` (1.3.9) and the queue (1.4.0). */
+data class MediaLibraryPlayers(val musicSearch: String? = null, val queue: String? = null)
+
+/** Browse, Search music and Queue, each opening its own window. */
+@Composable
+private fun DetailLibraryButtons(entityId: String, e: EntityState?, client: HaClient, theme: ThemeColors, library: MediaLibraryPlayers) {
+    var showBrowser by remember { mutableStateOf(false) }
+    var showSearch by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
+    MediaLibraryButtons(
+        theme,
+        onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) ({ showBrowser = true }) else null,
+        onSearch = library.musicSearch?.let { { showSearch = true } },
+        onQueue = library.queue?.let { { showQueue = true } }
+    )
     if (showBrowser) {
         MediaBrowser(entityId = entityId, client = client, theme = theme) { showBrowser = false }
     }
-    if (showSearch && musicSearch != null) {
-        MusicSearchDialog(client, musicSearch, theme) { showSearch = false }
-    }
+    library.musicSearch?.takeIf { showSearch }?.let { MusicSearchDialog(client, it, theme) { showSearch = false } }
+    library.queue?.takeIf { showQueue }?.let { MediaQueueDialog(client, it, theme) { showQueue = false } }
 }
 
 @Composable

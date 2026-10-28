@@ -32,6 +32,14 @@ echo "== Wi-Fi"
 iface=$(getprop wifi.interface); [ -n "$iface" ] || iface=wlan0
 line "power save" "$(iw dev "$iface" get power_save 2>/dev/null || echo 'unknown (needs adb root)')"
 
+echo "== Wake keys"
+if grep -q '^WAKE_KEYS=1' /vendor/etc/astrion-tweaks.conf 2>/dev/null; then
+    line "replay" "on"
+    line "getevent running" "$(pgrep -f '^getevent' >/dev/null 2>&1 && echo yes || echo 'no (see the log)')"
+else
+    line "replay" "off (install.sh --wake-keys)"
+fi
+
 echo "== Log (/data/local/tmp/astrion-tweaks.log)"
 tail -n 15 /data/local/tmp/astrion-tweaks.log 2>/dev/null | sed 's/^/  /'
 exit 0

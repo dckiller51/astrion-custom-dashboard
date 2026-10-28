@@ -194,6 +194,17 @@
     <string name="music_playing">Lecture : %1$s</string>
     <string name="music_queued">Ajouté à la file : %1$s</string>
     <string name="music_add_to_queue">Ajouter à la file</string>
+    <string name="music_queue">File d\'attente</string>
+    <string name="music_queue_position">Morceau %1$d sur %2$d</string>
+    <string name="music_queue_count">Morceaux dans la file : %1$d</string>
+    <string name="music_queue_more">Et %1$d de plus après ceux-ci.</string>
+    <string name="music_queue_more_ma">Et %1$d de plus : Music Assistant ne partage que le morceau en cours et le suivant.</string>
+    <string name="music_queue_empty">La file d\'attente est vide.</string>
+    <string name="music_queue_unsupported">Ce lecteur ne partage pas sa file d\'attente.</string>
+    <string name="music_queue_clear">Vider la file</string>
+    <string name="music_queue_clear_confirm">Touchez encore pour vider</string>
+    <string name="music_queue_remove">Retirer de la file</string>
+    <string name="music_queue_refresh">Actualiser</string>
     <string name="media_power_toggle">Basculer</string>
     <string name="media_browser_play">Lire</string>
     <string name="media_browser_add_to_queue">Ajouter à la file</string>

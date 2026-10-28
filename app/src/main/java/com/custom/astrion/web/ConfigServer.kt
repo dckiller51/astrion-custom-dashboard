@@ -296,7 +296,7 @@ class ConfigServer(
             "/appletv-mrp-pair-start" -> if (method == Method.POST) handleAppleTvMrpPairStart(session) else methodNotAllowed()
             "/appletv-mrp-pair-finish" -> if (method == Method.POST) handleAppleTvMrpPairFinish(session) else methodNotAllowed()
             "/camera-snapshot" -> if (method == Method.GET) serveCameraSnapshot(session) else methodNotAllowed()
-            "/ha-states" -> if (method == Method.GET) serveHaStates() else methodNotAllowed()
+            "/ha-states" -> if (method == Method.GET) serveHaStates(session) else methodNotAllowed()
             "/icons-list" -> if (method == Method.GET) serveIconsList() else methodNotAllowed()
             "/check-update" -> if (method == Method.GET) handleCheckUpdate() else methodNotAllowed()
             "/save-connection" -> if (method == Method.POST) handleSaveConnection(session) else methodNotAllowed()
@@ -1100,8 +1100,13 @@ class ConfigServer(
      * yet on first load). Attributes are passed through
      * verbatim (the same kotlinx JsonObject the cards read), so each card's
      * preview can pull whatever domain-specific fields it needs.
+     *
+     * `?refresh=1` (1.4.0, the builder on opening and its "Reload from Home Assistant") re-reads
+     * them all from Home Assistant first, so entities renamed or added there show up even while
+     * the remote sleeps (screen off, only a few entities live).
      */
-    private fun serveHaStates(): Response {
+    private fun serveHaStates(session: IHTTPSession): Response {
+        if (session.parameters["refresh"]?.firstOrNull() == "1") runBlocking { haClient.refreshStates() }
         val connected = haClient.connection.value == ConnectionState.CONNECTED
         val entities = haClient.entities.value
         val json =

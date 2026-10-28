@@ -76,6 +76,7 @@ import com.custom.astrion.ui.tapCombinedClickable
  *   { "type": "button_grid", "options": {
  *       "columns": 3,
  *       "iconPosition": "left",
+ *       "show_labels": false,              // 1.4.0: buttons with an icon show only the icon
  *       "buttons": [
  *         { "name": "Group",   "service": "script.group",
  *           "long_press": { "service": "script.ungroup" } },
@@ -109,7 +110,8 @@ class ButtonGridCard : CardRenderer {
             GridStyle(
                 iconPosition = IconPosition.from(config.string("iconPosition")),
                 tileHeight = config.int("tile_height").takeIf { it > 0 },
-                fontSize = config.int("font_size").takeIf { it > 0 }
+                fontSize = config.int("font_size").takeIf { it > 0 },
+                showLabels = config.bool("show_labels", true)
             )
 
         GridRows(buttons, columns, config.bool("center_last_row")) { b ->
@@ -203,7 +205,11 @@ class ButtonGridCard : CardRenderer {
     private class GridButtonActions(val onClick: () -> Unit, val onLongClick: (() -> Unit)?)
 
     /** Card-wide look of every button: icon position, and the optional height / text size. */
-    private class GridStyle(val iconPosition: IconPosition, val tileHeight: Int?, val fontSize: Int?)
+    /** [showLabels] false (1.4.0): a button with an icon shows the icon only; its name stays for accessibility. */
+    private class GridStyle(val iconPosition: IconPosition, val tileHeight: Int?, val fontSize: Int?, val showLabels: Boolean = true) {
+        /** A button's name shows when it has one, unless the label is hidden and the button has an icon. */
+        fun showsLabel(name: String?, hasIcon: Boolean): Boolean = !name.isNullOrBlank() && (showLabels || !hasIcon)
+    }
 
     @Composable
     private fun GridButton(
@@ -222,7 +228,7 @@ class ButtonGridCard : CardRenderer {
                 iconPath?.let { decodeIconSampled(it, targetPx) }
             }
         val hasIcon = bitmap != null
-        val hasName = !name.isNullOrBlank()
+        val hasName = style.showsLabel(name, hasIcon)
         val active = isConditionActive(b, entities)
         // left/right lay the icon and label side by side, so the tile doesn't
         // need the extra vertical room top/bottom do to fit both.

@@ -13,7 +13,13 @@
 <div class="subtitle" data-i18n="web_ui_subtitle">Build your dashboard visually, no hand-written JSON required. Matches the exact schema the app reads.</div>
 <div id="deviceModeBanner" class="note" style="display:none"></div>
 
+<!-- 1.4.0: blocks editing until the remote's dashboard.json has loaded (see js/device.js). -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-box"><div class="spinner"></div><span data-i18n="web_device_loading_dashboard">Loading your dashboard from the remote…</span></div>
+</div>
+
 <div class="release-info-row" style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
+    <span id="installedBadge"></span>
     <span id="stableBadge"></span>
     <label class="beta-switch">
         <input type="checkbox" id="betaToggle" onchange="toggleBetaBadge()">
@@ -129,10 +135,13 @@
 
     <!-- RIGHT PANE -->
     <div class="preview-pane" id="preview-container">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div class="preview-head">
             <h2 style="margin:0;flex:1" data-i18n="web_ui_preview">Preview</h2>
+            <!-- 1.4.0: "Save to device" next to the preview, which stays on screen while scrolling. -->
+            <button type="button" id="saveToDeviceFab" style="display:none" onclick="saveDashboardToDevice()" data-i18n="web_ui_save_to_device">Save to device</button>
             <button type="button" id="undoBtn" class="ha-icon-btn" disabled onclick="undoChange()" data-i18n-attr="title:web_history_undo" title="Undo (Ctrl+Z)">↶</button>
             <button type="button" id="redoBtn" class="ha-icon-btn" disabled onclick="redoChange()" data-i18n-attr="title:web_history_redo" title="Redo (Ctrl+Y)">↷</button>
+            <button type="button" id="haReloadBtn" class="ha-icon-btn" style="display:none" onclick="reloadHaStates()" data-i18n-attr="title:web_device_reload_ha" title="Reload from Home Assistant">🔄</button>
             <button type="button" id="historyBtn" class="ha-icon-btn" style="display:none" onclick="openHistory()" data-i18n-attr="title:web_history_title" title="Version history">🕘</button>
         </div>
         <div class="ha-toolbar">
@@ -462,6 +471,6 @@
 <script src="js/export.js"></script>
 <script src="js/preview.js"></script>
 <script src="js/device.js"></script>
-<script>I18N.ready.then(() => { initEditor(); loadStableBadge(); applyUiI18n(); });</script>
+<script>I18N.ready.then(() => { initEditor(); applyUiI18n(); });</script>
 </body>
 </html>

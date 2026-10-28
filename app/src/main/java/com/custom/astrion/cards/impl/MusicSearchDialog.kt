@@ -6,6 +6,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -134,13 +136,22 @@ internal fun MusicSearchDialog(client: HaClient, player: String, theme: ThemeCol
 /** What a result does: [pick] plays it (now, or added to the queue), [open] browses into it. */
 private class ResultActions(val pick: (MediaSearch.Item, Boolean) -> Unit, val open: (MediaSearch.Item) -> Unit)
 
-/** "Browse" (when the player supports it) and "Search music" (when the card has `music_search`), side by side. */
+/**
+ * "Browse" (when the player supports it), "Search music" (when the card has `music_search`) and
+ * "Queue" (1.4.0, when the player shares its queue or can clear it), side by side, wrapping to a
+ * second line when they don't fit.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun MediaLibraryButtons(theme: ThemeColors, onBrowse: (() -> Unit)?, onSearch: (() -> Unit)?) {
-    if (onBrowse == null && onSearch == null) return
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+internal fun MediaLibraryButtons(theme: ThemeColors, onBrowse: (() -> Unit)?, onSearch: (() -> Unit)?, onQueue: (() -> Unit)? = null) {
+    if (onBrowse == null && onSearch == null && onQueue == null) return
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         onBrowse?.let { LibraryPill(theme, Icons.AutoMirrored.Filled.List, stringResource(R.string.media_browse), it) }
         onSearch?.let { LibraryPill(theme, Icons.Filled.Search, stringResource(R.string.music_search_button), it) }
+        onQueue?.let { LibraryPill(theme, QueueIcon, stringResource(R.string.music_queue), it) }
     }
 }
 

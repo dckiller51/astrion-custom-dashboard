@@ -3,6 +3,37 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.0-beta] - 2026-10-28
+
+### Added
+
+- **Queue on the media player card**: a **Queue** button next to **Browse** and **Search music**, in the full variant and in the compact one's details. It only shows when the player shares its queue or can clear it, and can be hidden (`show_queue: false`).
+  - **Lyrion Music Server**: the current track and the next ones (up to 100), with "Track 5 of 32". Tap a track to play it, **✕** to remove it.
+  - **Music Assistant**: the current and next track, and how many follow (Home Assistant shares no more of it). Tap the next one to skip to it.
+  - Every player that can: **Clear the queue** (tap twice, so it can't happen by mistake).
+  - The list follows the player: it reloads when the track changes, and after each action.
+  - `search_player` now also names the player whose queue is shown (a Sonos taken over by Music Assistant: pick its Music Assistant twin). The builder shows the player list when either option is on.
+- **Web page › Icons**: pick **several icons at once** (every channel logo of a set-top box…); a summary says which ones failed, if any.
+- **Builder: versions in the header** read **Installed** · **Official** · **Beta**, and each release says how it compares with the installed one: **✅ installed**, **⬆️** with its install button when newer, or *older than the installed version*. The ✅ in front of the official release used to look like "installed".
+- **Builder: Save to device** also sits in the preview's header, which now stays on screen while scrolling, so no scrolling down to save.
+- **Builder: grids**: **+ Add … to this card** is in the accent colour; while editing a scene or button, **Save** is green and **Cancel edit** red.
+- **Builder: 🔄 Reload from Home Assistant** above the preview.
+- **Picking the remote up wakes it faster**: about half a second instead of over a second (motion sensor read ~15 times a second instead of 5, steadier detection). With the screen off, Android uses the first key press to wake the screen and never passes it on to an app, so a remote already lit by the pick-up catches that first press. Only while *motion wake* listens (5 minutes after the screen goes off, by default).
+- **Remote tweaks: wake keys** (optional, `device/install.sh --wake-keys`): with the screen off, the first key press now works instead of only waking the screen. Android drops that press before any app sees it; the boot service reads the keys before Android and, when one was pressed screen off, sends it again once the screen is on. Screen on, it does nothing, so no key is doubled. Idea from a user's report. Wiki: *adb over Wi-Fi & Wi-Fi latency*, which also explains the two optional adb commands more simply.
+- **Button grid**: `show_labels: false` (builder: untick **Show the name under the icon**) shows only the icon on buttons that have one.
+
+### Fixed
+
+- **Entities renamed in Home Assistant** showed under their old ID (and the new one only appeared after saving the HA connection again): an entity removed from Home Assistant stayed in the remote's list, and while the remote slept (screen off) it didn't hear about new ones. Removed entities are now dropped, and the builder and web page re-read every entity from Home Assistant when they open.
+- **Builder: Copy JSON** never copied: browsers only allow the clipboard on HTTPS pages and the remote serves plain HTTP. It now copies (and, if a browser still refuses, selects the JSON for Ctrl+C).
+- **Builder: "Hotkeys active on this page"** listed a global key and the page key that overrides it; only the one that applies is shown now.
+- **Builder: loading**: the dashboard is loaded first, behind a **Loading…** screen that blocks editing. A change made before it arrived was lost, and the dashboard used to wait for every Home Assistant entity before showing.
+- **Builder: grids**: **Save changes** with a scene or button filled in but not added with **+ Add … to this card** silently left it out. It now asks whether to add it first.
+
+### Development
+
+- 5 tests of how the queue is read (Lyrion's `status`, Music Assistant's `get_queue`, which players get the button).
+
 ## [1.3.9-beta] - 2026-10-28
 
 ### Added

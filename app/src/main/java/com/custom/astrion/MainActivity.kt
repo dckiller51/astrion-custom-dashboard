@@ -119,12 +119,18 @@ class MainActivity : ComponentActivity() {
 
         const val TILT_WAKE_DEG = 30f
         const val LIN_ACC_WAKE = 2.5f
-        const val MOTION_CONSECUTIVE_N = 3
+
+        // 1.4.0: picking the remote up wakes it sooner (~0.3–0.5 s instead of ~1–1.2 s), so a key
+        // pressed right after lands on a lit screen — Android drops the key that wakes the screen.
+        // Sampled ~15/s (SENSOR_DELAY_UI) instead of 5/s; 4 samples in a row (~0.27 s of motion)
+        // instead of 3 at 5/s (0.6 s); baseline after a sensor pause settled in 0.25 s, not 0.4 s.
+        const val MOTION_SENSOR_DELAY = SensorManager.SENSOR_DELAY_UI
+        const val MOTION_CONSECUTIVE_N = 4
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
         const val BUTTON_EVENT = "astrion_button"
         const val MOTION_GAP_MS = 1000L
-        const val MOTION_SETTLE_MS = 400L
+        const val MOTION_SETTLE_MS = 250L
         const val MOTION_SETTLE_MIN_SAMPLES = 3
         const val HOLD_SCREEN_INTERVAL_MS = 1000L
         const val KEEP_SCREEN_HOLD_MS = 10000L
@@ -206,7 +212,14 @@ class MainActivity : ComponentActivity() {
                 val cosT = (x * gravX + y * gravY + z * gravZ) / (mag * gmag)
                 val tilt = Math.toDegrees(acos(cosT.coerceIn(-1f, 1f)).toDouble()).toFloat()
                 val moving = tilt > TILT_WAKE_DEG || lin > LIN_ACC_WAKE
-                if (moving) {
+                if (moving && screenOn) {
+                    // Already lit: only keep it on while in hand (no wake to detect, no log per sample).
+                    overCount = 0
+                    gravX = x
+                    gravY = y
+                    gravZ = z
+                    holdScreenWhileInHand()
+                } else if (moving) {
                     ambientOverThreshold++
                     overCount++
                     if (overCount >= MOTION_CONSECUTIVE_N) {
@@ -1336,8 +1349,8 @@ class MainActivity : ComponentActivity() {
     private fun registerMotionListener() {
         val sm = sensorManager ?: return
         motionSensor?.let { sensor ->
-            sm.registerListener(motionListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-            Log.i(MOTION_TAG, "listener registered on '${sensor.name}' (SENSOR_DELAY_NORMAL)")
+            sm.registerListener(motionListener, sensor, MOTION_SENSOR_DELAY)
+            Log.i(MOTION_TAG, "listener registered on '${sensor.name}' (SENSOR_DELAY_UI)")
         }
     }
 

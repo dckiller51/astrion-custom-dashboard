@@ -165,10 +165,13 @@ function updateCardFormInputs() {
       </div>
       <div class="hint">${I18N.t('web_card_media_hint')}</div>
       <label class="inline-check"><input type="checkbox" id="optMediaMusicSearch" onchange="updateMusicSearchFields()"> ${I18N.t('web_card_media_music_search')}</label>
-      <div id="mediaMusicSearchFields" style="display:none">
+      <div id="mediaMusicSearchHint" class="hint" style="display:none">${I18N.t('web_card_media_music_search_hint')}</div>
+      <label class="inline-check"><input type="checkbox" id="optMediaQueue" checked onchange="updateMusicSearchFields()"> ${I18N.t('web_card_media_queue')}</label>
+      <div id="mediaQueueHint" class="hint">${I18N.t('web_card_media_queue_hint')}</div>
+      <div id="mediaMusicSearchFields">
         <label>${I18N.t('web_card_media_search_player')}</label>
         <select id="optMediaSearchPlayer"></select>
-        <div class="hint">${I18N.t('web_card_media_music_search_hint')}</div>
+        <div class="hint">${I18N.t('web_card_media_search_player_hint')}</div>
       </div>
       <div id="mediaTopButtonsField" style="display:none">
         <label>${I18N.t('web_card_media_top_buttons_label')}</label>
@@ -278,7 +281,7 @@ function updateCardFormInputs() {
         <option value="right">${I18N.t('web_card_right_beside_label')}</option>
       </select>
       ${type === 'scene_grid' ? `<div class="hint">${I18N.t('web_card_only_affects_tiles_that_show_both')}</div>` : ''}
-      ${type === 'scene_grid' ? `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_labels')}</label><label><input type="checkbox" id="optIconFill"> ${I18N.t('web_card_grid_icon_fill')}</label>` : ''}
+      ${type === 'scene_grid' ? `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_labels')}</label><label><input type="checkbox" id="optIconFill"> ${I18N.t('web_card_grid_icon_fill')}</label>` : `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_button_labels')}</label>`}
       <label>${I18N.t('web_card_grid_tile_height')}</label><input type="number" id="optTileHeight" min="30" max="300" placeholder="${I18N.t(type === 'scene_grid' ? 'web_card_ph_tile_height' : 'web_card_ph_button_height')}">
       <label>${I18N.t('web_card_grid_font_size')}</label><input type="number" id="optFontSize" min="8" max="60" placeholder="${I18N.t('web_card_ph_font_size')}">
       <label class="inline-check"><input type="checkbox" id="optCenterLastRow"> ${I18N.t('web_card_grid_center_last_row')}</label>
@@ -378,8 +381,8 @@ function updateCardFormInputs() {
         <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
         <div class="hint">${I18N.t('web_card_long_press_hint', type)}</div>
         ${iconFieldHtml('giIcon')}
-        <button type="button" class="secondary" onclick="addGridItem('${type}')" id="giSubmitBtn" data-add-key="${type === 'button_grid' ? 'web_card_grid_add_button' : 'web_card_grid_add_scene'}">${type === 'button_grid' ? I18N.t('web_card_grid_add_button') : I18N.t('web_card_grid_add_scene')}</button>
-        <button type="button" class="secondary" onclick="cancelGridItemEdit()" id="giCancelBtn" style="display:none">${I18N.t('web_cancel_edit')}</button>
+        <button type="button" class="grid-add" onclick="addGridItem('${type}')" id="giSubmitBtn" data-add-key="${type === 'button_grid' ? 'web_card_grid_add_button' : 'web_card_grid_add_scene'}">${type === 'button_grid' ? I18N.t('web_card_grid_add_button') : I18N.t('web_card_grid_add_scene')}</button>
+        <button type="button" class="grid-cancel" onclick="cancelGridItemEdit()" id="giCancelBtn" style="display:none">${I18N.t('web_cancel_edit')}</button>
         <button type="button" class="secondary" onclick="addGridSpacer('${type}')">${I18N.t('web_card_grid_add_spacer')}</button>
         <div class="hint">${I18N.t('web_card_grid_spacer_hint')}</div>
       </div>
@@ -573,10 +576,14 @@ function fillMusicSearchPlayers(selected) {
   sel.value = selected || '';
 }
 
+/** The search hint follows "Music search", the queue hint "Queue"; the player select shows with either (1.4.0). */
 function updateMusicSearchFields() {
-  const on = document.getElementById('optMediaMusicSearch')?.checked;
-  const box = document.getElementById('mediaMusicSearchFields');
-  if (box) box.style.display = on ? '' : 'none';
+  const search = !!document.getElementById('optMediaMusicSearch')?.checked;
+  const queue = !!document.getElementById('optMediaQueue')?.checked;
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('mediaMusicSearchHint', search);
+  show('mediaQueueHint', queue);
+  show('mediaMusicSearchFields', search || queue);
 }
 
 function updateMediaTopButtonsVisibility() {
@@ -1066,7 +1073,9 @@ async function editGridItem(type, i) {
   const item = window._pendingGridItems[i];
   fillGridItemForm(type, item);
   await fillGiHarmonySection(item);
-  document.getElementById('giSubmitBtn').textContent = `Save ${type === 'button_grid' ? 'button' : 'scene'}`;
+  const submit = document.getElementById('giSubmitBtn');
+  submit.textContent = I18N.t(type === 'button_grid' ? 'web_card_grid_save_button' : 'web_card_grid_save_scene');
+  submit.classList.add('editing'); // 1.4.0: green "Save scene" next to a red "Cancel edit" while editing one
   document.getElementById('giCancelBtn').style.display = '';
 }
 
@@ -1093,6 +1102,7 @@ function cancelGridItemEdit() {
   if (harmonyModeSel) { harmonyModeSel.value = ''; onGiHarmonyModeChange(); }
   const btn = document.getElementById('giSubmitBtn');
   if (btn && btn.dataset.addKey) btn.textContent = I18N.t(btn.dataset.addKey);
+  if (btn) btn.classList.remove('editing');
   document.getElementById('giCancelBtn').style.display = 'none';
 }
 
@@ -1478,6 +1488,7 @@ function fillCardForm(card) {
     document.getElementById('optMediaArtworkRatio').value = o.artwork_ratio === 'portrait' ? 'portrait' : 'square';
     updateMediaTopButtonsVisibility();
     document.getElementById('optMediaMusicSearch').checked = o.music_search === true;
+    document.getElementById('optMediaQueue').checked = o.show_queue !== false;
     fillMusicSearchPlayers(o.search_player || '');
     updateMusicSearchFields();
   } else if (type === 'camera') {
@@ -1513,10 +1524,8 @@ function fillCardForm(card) {
   } else if (type === 'button_grid' || type === 'scene_grid') {
     document.getElementById('optColumns').value = o.columns || 2;
     document.getElementById('optIconPosition').value = ['top', 'bottom', 'left', 'right'].includes(o.iconPosition) ? o.iconPosition : 'top';
-    if (type === 'scene_grid') {
-      document.getElementById('optShowLabels').checked = o.show_labels !== false;
-      document.getElementById('optIconFill').checked = o.icon_fill === true;
-    }
+    document.getElementById('optShowLabels').checked = o.show_labels !== false;
+    if (type === 'scene_grid') document.getElementById('optIconFill').checked = o.icon_fill === true;
     document.getElementById('optTileHeight').value = o.tile_height || '';
     document.getElementById('optFontSize').value = o.font_size || '';
     document.getElementById('optCenterLastRow').checked = o.center_last_row === true;
@@ -1607,9 +1616,28 @@ function reorderCard(fromIdx, toIdx) {
   renderPreview(); updateJsonOutput();
 }
 
+/**
+ * 1.4.0: a grid button/scene filled in but not added with "+ Add …" was silently left out when the
+ * card was saved. Now: offer to add it first (OK), or go back to the form (Cancel). True to go on.
+ */
+function confirmPendingGridItems() {
+  const type = document.getElementById('cardTypeSelect')?.value;
+  if (type !== 'button_grid' && type !== 'scene_grid') return true;
+  const name = document.getElementById('giName');
+  const icon = document.getElementById('giIcon');
+  const pending = (name && name.value.trim()) || (icon && icon.value.trim()) || editingGridItem !== null;
+  if (!pending) return true;
+  const what = (name && name.value.trim()) || I18N.t(type === 'button_grid' ? 'web_card_grid_this_button' : 'web_card_grid_this_scene');
+  if (!confirm(I18N.t('web_card_grid_pending_confirm', what))) return false;
+  addGridItem(type);
+  // addGridItem clears the form once the item is in; still filled = it refused it (and said why).
+  return !(name && name.value.trim()) && editingGridItem === null;
+}
+
 function addCardToPage() {
   const pageIndex = currentActivePage;
   const type = document.getElementById('cardTypeSelect').value;
+  if (!confirmPendingGridItems()) return;
   let newCard = { type: type, options: {} };
 
   if (NAME_ENTITY_TYPES.includes(type)) {
@@ -1698,8 +1726,11 @@ function addCardToPage() {
     if (document.getElementById('optMediaVolButtons').checked) volumeControls.push('buttons');
     if (document.getElementById('optMediaVolSet').checked) volumeControls.push('set');
     if (volumeControls.join(',') !== 'mute,buttons') newCard.options.volume_controls = volumeControls.join(',');
-    if (document.getElementById('optMediaMusicSearch').checked) {
-      newCard.options.music_search = true;
+    const musicSearch = document.getElementById('optMediaMusicSearch').checked;
+    const showQueue = document.getElementById('optMediaQueue').checked;
+    if (musicSearch) newCard.options.music_search = true;
+    if (!showQueue) newCard.options.show_queue = false;
+    if (musicSearch || showQueue) {
       const searchPlayer = document.getElementById('optMediaSearchPlayer').value;
       if (searchPlayer) newCard.options.search_player = searchPlayer;
     }
@@ -1751,6 +1782,7 @@ function addCardToPage() {
     const iconPosition = document.getElementById('optIconPosition').value;
     if (iconPosition && iconPosition !== 'top') newCard.options.iconPosition = iconPosition;
     newCard.options.buttons = window._pendingGridItems || [];
+    if (!document.getElementById('optShowLabels').checked) newCard.options.show_labels = false;
     collectGridSizeOptions(newCard.options);
     window._pendingGridItems = [];
   } else if (type === 'scene_grid') {
