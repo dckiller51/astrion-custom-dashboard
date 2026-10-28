@@ -1,6 +1,7 @@
 package com.custom.astrion.cards.impl
 
 import com.custom.astrion.cards.CardContext
+import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.config.JsonPlain
 import com.custom.astrion.ha.ServiceCall
 
@@ -79,9 +80,5 @@ private fun fireDeviceActions(ctx: CardContext, action: Map<String, Any?>, hub: 
     if (harmonyDevice != null && harmonyCommand != null) {
         ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
     }
-    val irDevice = action["irDevice"] as? String
-    val irCommand = action["irCommand"] as? String
-    if (irDevice != null && irCommand != null) {
-        ctx.sendIrCommand(irDevice, irCommand)
-    }
+    ctx.sendIrAction(action)
 }

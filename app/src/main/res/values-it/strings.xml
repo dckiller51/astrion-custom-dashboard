@@ -76,6 +76,9 @@
     <string name="restart_app">Riavvia l\'app</string>
     <string name="about_logs">Log</string>
     <string name="logs_server_off">attiva la Configurazione web</string>
+    <string name="save_log">Salva il registro sul telecomando</string>
+    <string name="log_saved">Salvato: %1$s</string>
+    <string name="log_save_failed">Impossibile salvare il registro (archiviazione rifiutata).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configurazione locale</string>
@@ -155,7 +158,7 @@
     <string name="web_config_update_none">Già aggiornato</string>
     <string name="web_config_install_update_button">Scarica &amp; installa</string>
     <string name="web_config_update_installing">Programma di installazione avviato — approva il prompt di installazione sullo schermo del pannello</string>
-    <string name="web_config_update_needs_permission">Consenti "Installa app sconosciute" per questa app nella schermata che si è appena aperta, quindi tocca di nuovo Scarica &amp; installa.</string>
+    <string name="web_config_update_needs_permission">Consenti \"Installa app sconosciute\" per questa app nella schermata che si è appena aperta, quindi tocca di nuovo Scarica &amp; installa.</string>
     <string name="web_config_update_failed">Controllo aggiornamento fallito: %1$s</string>
 
     <!-- Connection status -->
@@ -164,7 +167,7 @@
     <string name="connection_error_retrying">Errore di connessione — nuovo tentativo in corso</string>
 
     <!-- Unknown card -->
-    <string name="unknown_card_type">Tipo di carta sconosciuto: "%1$s"</string>
+    <string name="unknown_card_type">Tipo di carta sconosciuto: \"%1$s\"</string>
 
     <!-- Media (player, Plex, browser) -->
     <string name="media_loading">Caricamento…</string>
@@ -176,6 +179,32 @@
     <string name="media_load_timeout">Impossibile caricare media (timeout)</string>
     <string name="media_load_failed">Impossibile caricare media</string>
     <string name="media_browse">Sfoglia</string>
+    <string name="music_search">Ricerca musicale</string>
+    <string name="music_search_button">Cerca musica</string>
+    <string name="music_search_hint">Titolo, artista, album…</string>
+    <string name="music_search_type">Digita almeno 2 lettere.</string>
+    <string name="music_search_none">Nessun risultato per “%1$s”.</string>
+    <string name="music_search_failed">Il lettore non ha risposto.</string>
+    <string name="music_search_unsupported">Questo lettore non può cercare (Home Assistant offre la ricerca per Lyrion Music Server, Music Assistant…). Scegli un altro lettore per la ricerca nella scheda.</string>
+    <string name="music_all">Tutto</string>
+    <string name="music_artists">Artisti</string>
+    <string name="music_albums">Album</string>
+    <string name="music_tracks">Brani</string>
+    <string name="music_playlists">Playlist</string>
+    <string name="music_playing">In riproduzione: %1$s</string>
+    <string name="music_queued">Aggiunto alla coda: %1$s</string>
+    <string name="music_add_to_queue">Aggiungi alla coda</string>
+    <string name="music_queue">Coda</string>
+    <string name="music_queue_position">Brano %1$d di %2$d</string>
+    <string name="music_queue_count">Brani in coda: %1$d</string>
+    <string name="music_queue_more">E altri %1$d dopo questi.</string>
+    <string name="music_queue_more_ma">E altri %1$d: Music Assistant condivide solo il brano in corso e il successivo.</string>
+    <string name="music_queue_empty">La coda è vuota.</string>
+    <string name="music_queue_unsupported">Questo lettore non condivide la sua coda.</string>
+    <string name="music_queue_clear">Svuota la coda</string>
+    <string name="music_queue_clear_confirm">Tocca di nuovo per svuotare</string>
+    <string name="music_queue_remove">Rimuovi dalla coda</string>
+    <string name="music_queue_refresh">Aggiorna</string>
     <string name="media_power_toggle">Commuta</string>
     <string name="media_browser_play">Riproduci</string>
     <string name="media_browser_add_to_queue">Aggiungi alla coda</string>
@@ -185,6 +214,15 @@
     <string name="plex_this_season">Questa stagione</string>
     <string name="plex_play">Riproduci</string>
     <string name="plex_episode">E%1$s · %2$s</string>
+    <string name="plex_search">Cerca</string>
+    <string name="plex_search_hint">Film, serie, episodi…</string>
+    <string name="plex_search_type">Digita almeno 2 lettere di un titolo.</string>
+    <string name="plex_search_none">Nessun risultato per “%1$s”.</string>
+    <string name="plex_search_failed">Server Plex non raggiungibile.</string>
+    <string name="plex_movies">Film</string>
+    <string name="plex_shows">Serie</string>
+    <string name="plex_seasons">Stagioni</string>
+    <string name="plex_episodes">Episodi</string>
 
     <!-- Select cards -->
     <string name="select_no_options">Nessuna opzione</string>
@@ -243,4 +281,28 @@
     <string name="speaker_ungroup">Separa</string>
     <string name="setup_banner_title">Configura questo telecomando da un browser</string>
     <string name="connection_web_page_hint">Pagina web del telecomando: %1$s</string>
+    <string name="xbox_online">Online</string>
+    <string name="xbox_offline">Offline</string>
+    <string name="xbox_console_off">Xbox spenta</string>
+    <string name="xbox_no_game">Nessun gioco in corso</string>
+    <string name="xbox_no_game_hint">Il gioco appare qui appena giochi.</string>
+    <string name="xbox_ratio">rapporto %1$s</string>
+    <string name="xbox_achievements">Obiettivi</string>
+    <string name="xbox_gamerscore">Gamerscore</string>
+    <string name="xbox_ta_score">Punteggio TA</string>
+    <string name="xbox_last_sync">Ultima sincronizzazione</string>
+    <string name="xbox_sync_problem">Problema di sincronizzazione</string>
+    <string name="xbox_attr_platform">Piattaforma</string>
+    <string name="xbox_attr_publisher">Editore</string>
+    <string name="xbox_attr_developer">Sviluppatore</string>
+    <string name="xbox_attr_genres">Generi</string>
+    <string name="xbox_attr_release_date">Data di uscita</string>
+    <string name="xbox_attr_min_age">Età minima</string>
+    <string name="xbox_attr_completion">Completamento</string>
+    <string name="xbox_attr_ratio">Rapporto</string>
+    <string name="xbox_attr_hours">Tempo di gioco</string>
+    <string name="xbox_attr_description">Descrizione</string>
+    <string name="xbox_attr_game_url">Gioco su TrueAchievements</string>
+    <string name="xbox_attr_walkthrough_url">Guida agli obiettivi</string>
+    <string name="xbox_attr_location">Luogo</string>
 </resources>

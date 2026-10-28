@@ -76,6 +76,9 @@
     <string name="restart_app">Redémarrer l\'app</string>
     <string name="about_logs">Logs</string>
     <string name="logs_server_off">activer la Configuration web</string>
+    <string name="save_log">Enregistrer le journal sur la télécommande</string>
+    <string name="log_saved">Enregistré : %1$s</string>
+    <string name="log_save_failed">Impossible d\'enregistrer le journal (stockage refusé).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configuration locale</string>
@@ -164,7 +167,7 @@
     <string name="connection_error_retrying">Erreur de connexion — nouvelle tentative</string>
 
     <!-- Unknown card -->
-    <string name="unknown_card_type">Type de carte inconnu : "%1$s"</string>
+    <string name="unknown_card_type">Type de carte inconnu : \"%1$s\"</string>
 
     <!-- Media (player, Plex, browser) -->
     <string name="media_loading">Chargement…</string>
@@ -176,6 +179,32 @@
     <string name="media_load_timeout">Impossible de charger les médias (délai dépassé)</string>
     <string name="media_load_failed">Impossible de charger les médias</string>
     <string name="media_browse">Parcourir</string>
+    <string name="music_search">Recherche musicale</string>
+    <string name="music_search_button">Rechercher</string>
+    <string name="music_search_hint">Titre, artiste, album…</string>
+    <string name="music_search_type">Tapez au moins 2 lettres.</string>
+    <string name="music_search_none">Aucun résultat pour « %1$s ».</string>
+    <string name="music_search_failed">Le lecteur n\'a pas répondu.</string>
+    <string name="music_search_unsupported">Ce lecteur ne sait pas chercher (Home Assistant propose la recherche pour Lyrion Music Server, Music Assistant…). Choisissez un autre lecteur pour la recherche dans la carte.</string>
+    <string name="music_all">Tout</string>
+    <string name="music_artists">Artistes</string>
+    <string name="music_albums">Albums</string>
+    <string name="music_tracks">Titres</string>
+    <string name="music_playlists">Playlists</string>
+    <string name="music_playing">Lecture : %1$s</string>
+    <string name="music_queued">Ajouté à la file : %1$s</string>
+    <string name="music_add_to_queue">Ajouter à la file</string>
+    <string name="music_queue">File d\'attente</string>
+    <string name="music_queue_position">Morceau %1$d sur %2$d</string>
+    <string name="music_queue_count">Morceaux dans la file : %1$d</string>
+    <string name="music_queue_more">Et %1$d de plus après ceux-ci.</string>
+    <string name="music_queue_more_ma">Et %1$d de plus : Music Assistant ne partage que le morceau en cours et le suivant.</string>
+    <string name="music_queue_empty">La file d\'attente est vide.</string>
+    <string name="music_queue_unsupported">Ce lecteur ne partage pas sa file d\'attente.</string>
+    <string name="music_queue_clear">Vider la file</string>
+    <string name="music_queue_clear_confirm">Touchez encore pour vider</string>
+    <string name="music_queue_remove">Retirer de la file</string>
+    <string name="music_queue_refresh">Actualiser</string>
     <string name="media_power_toggle">Basculer</string>
     <string name="media_browser_play">Lire</string>
     <string name="media_browser_add_to_queue">Ajouter à la file</string>
@@ -185,6 +214,15 @@
     <string name="plex_this_season">Cette saison</string>
     <string name="plex_play">Lire</string>
     <string name="plex_episode">Ép. %1$s · %2$s</string>
+    <string name="plex_search">Rechercher</string>
+    <string name="plex_search_hint">Films, séries, épisodes…</string>
+    <string name="plex_search_type">Tapez au moins 2 lettres d\'un titre.</string>
+    <string name="plex_search_none">Aucun résultat pour « %1$s ».</string>
+    <string name="plex_search_failed">Serveur Plex injoignable.</string>
+    <string name="plex_movies">Films</string>
+    <string name="plex_shows">Séries</string>
+    <string name="plex_seasons">Saisons</string>
+    <string name="plex_episodes">Épisodes</string>
 
     <!-- Select cards -->
     <string name="select_no_options">Aucune option</string>
@@ -243,4 +281,28 @@
     <string name="speaker_ungroup">Dégrouper</string>
     <string name="setup_banner_title">Configurez cette télécommande depuis un navigateur</string>
     <string name="connection_web_page_hint">Page web de la télécommande : %1$s</string>
+    <string name="xbox_online">En ligne</string>
+    <string name="xbox_offline">Hors ligne</string>
+    <string name="xbox_console_off">Xbox éteinte</string>
+    <string name="xbox_no_game">Aucun jeu en cours</string>
+    <string name="xbox_no_game_hint">Le jeu s\'affiche ici dès que vous jouez.</string>
+    <string name="xbox_ratio">ratio %1$s</string>
+    <string name="xbox_achievements">Succès</string>
+    <string name="xbox_gamerscore">Gamerscore</string>
+    <string name="xbox_ta_score">Score TA</string>
+    <string name="xbox_last_sync">Dernière synchro</string>
+    <string name="xbox_sync_problem">Problème de synchro</string>
+    <string name="xbox_attr_platform">Plateforme</string>
+    <string name="xbox_attr_publisher">Éditeur</string>
+    <string name="xbox_attr_developer">Développeur</string>
+    <string name="xbox_attr_genres">Genres</string>
+    <string name="xbox_attr_release_date">Date de sortie</string>
+    <string name="xbox_attr_min_age">Âge minimum</string>
+    <string name="xbox_attr_completion">Progression</string>
+    <string name="xbox_attr_ratio">Ratio</string>
+    <string name="xbox_attr_hours">Temps de jeu</string>
+    <string name="xbox_attr_description">Description</string>
+    <string name="xbox_attr_game_url">Jeu sur TrueAchievements</string>
+    <string name="xbox_attr_walkthrough_url">Guide des succès</string>
+    <string name="xbox_attr_location">Lieu</string>
 </resources>

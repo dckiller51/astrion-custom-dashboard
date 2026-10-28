@@ -33,6 +33,7 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.HaLabels
 import com.custom.astrion.ui.ThemeColors
+import com.custom.astrion.weather.LocalWeather
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -87,9 +88,11 @@ class ClockWeatherCard : CardRenderer {
             }
         val dateFmt = remember { SimpleDateFormat("EEE, d MMM", Locale.getDefault()) }
 
-        // Fetch the forecast via the service; refresh every 30 min.
+        // Fetch the forecast via the service; refresh every 30 min. The built-in weather (1.3.2) is
+        // re-read each time the remote fetches it, so the first forecast shows without waiting.
         var forecast by remember { mutableStateOf<List<Forecast>>(emptyList()) }
-        LaunchedEffect(entityId) {
+        val localUpdate = if (entityId == LocalWeather.ENTITY_ID) e?.lastUpdated else null
+        LaunchedEffect(entityId, localUpdate) {
             while (true) {
                 val arr = ctx.client.getForecast(entityId)
                 val parsed = arr?.let { parseForecast(it) }.orEmpty()
@@ -280,7 +283,8 @@ class ClockWeatherCard : CardRenderer {
         "clear-night" -> "🌙"
         "partlycloudy" -> "⛅"
         "cloudy" -> "☁️"
-        "fog" -> "🌫️"
+        // Not 🌫️: Android 8.1's emoji font (the HA100's) draws it as a plain grey square.
+        "fog" -> "☁️"
         "rainy", "pouring" -> "🌧️"
         "lightning", "lightning-rainy" -> "⛈️"
         "snowy", "snowy-rainy" -> "❄️"

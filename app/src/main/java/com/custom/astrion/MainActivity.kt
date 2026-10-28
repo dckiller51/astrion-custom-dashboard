@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.KeyEvent
@@ -38,6 +39,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import com.custom.astrion.androidtv.AndroidTvRegistry
+import com.custom.astrion.androidtv.installAndroidTv
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.installAppleTv
 import com.custom.astrion.cards.DeviceSettingsState
@@ -72,6 +75,7 @@ import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.RingFoundOverlay
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
+import com.custom.astrion.weather.LocalWeather
 import com.custom.astrion.web.ConfigServer
 import java.util.concurrent.TimeUnit
 import kotlin.math.acos
@@ -101,14 +105,32 @@ class MainActivity : ComponentActivity() {
         const val MOTION_TAG = "MotionWake"
         const val SCREEN_TAG = "ScreenTimeout"
         const val LONG_PRESS_MS = 1500L
+
+        /** Delay before restarting on a restored backup, so the web page gets its answer first (1.3.9). */
+        const val RESTORE_RESTART_MS = 1500L
+
+        /** Screen off at least this long: check the Apple TV link on wake (1.3.9). */
+        const val LONG_SLEEP_MS = 5 * 60_000L
+
+        /** Held-key repeat pace: IR/Harmony are sent at once, Home Assistant goes through the
+         * network and the integration (a networked amp can take a few hundred ms per step). */
+        const val IR_REPEAT_MS = 150L
+        const val HA_REPEAT_MS = 350L
+
         const val TILT_WAKE_DEG = 30f
         const val LIN_ACC_WAKE = 2.5f
-        const val MOTION_CONSECUTIVE_N = 3
+
+        // 1.4.0: picking the remote up wakes it sooner (~0.3–0.5 s instead of ~1–1.2 s), so a key
+        // pressed right after lands on a lit screen — Android drops the key that wakes the screen.
+        // Sampled ~15/s (SENSOR_DELAY_UI) instead of 5/s; 4 samples in a row (~0.27 s of motion)
+        // instead of 3 at 5/s (0.6 s); baseline after a sensor pause settled in 0.25 s, not 0.4 s.
+        const val MOTION_SENSOR_DELAY = SensorManager.SENSOR_DELAY_UI
+        const val MOTION_CONSECUTIVE_N = 4
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
         const val BUTTON_EVENT = "astrion_button"
         const val MOTION_GAP_MS = 1000L
-        const val MOTION_SETTLE_MS = 400L
+        const val MOTION_SETTLE_MS = 250L
         const val MOTION_SETTLE_MIN_SAMPLES = 3
         const val HOLD_SCREEN_INTERVAL_MS = 1000L
         const val KEEP_SCREEN_HOLD_MS = 10000L
@@ -133,6 +155,9 @@ class MainActivity : ComponentActivity() {
     private var pendingLong: Runnable? = null
     private var activeLongKey = -1
     private var longFired = false
+
+    /** When the held short-press key last ran its action (see [repeatDue]). */
+    private var lastRepeatAt = 0L
 
     private var sensorManager: SensorManager? = null
     private var motionSensor: Sensor? = null
@@ -187,7 +212,14 @@ class MainActivity : ComponentActivity() {
                 val cosT = (x * gravX + y * gravY + z * gravZ) / (mag * gmag)
                 val tilt = Math.toDegrees(acos(cosT.coerceIn(-1f, 1f)).toDouble()).toFloat()
                 val moving = tilt > TILT_WAKE_DEG || lin > LIN_ACC_WAKE
-                if (moving) {
+                if (moving && screenOn) {
+                    // Already lit: only keep it on while in hand (no wake to detect, no log per sample).
+                    overCount = 0
+                    gravX = x
+                    gravY = y
+                    gravZ = z
+                    holdScreenWhileInHand()
+                } else if (moving) {
                     ambientOverThreshold++
                     overCount++
                     if (overCount >= MOTION_CONSECUTIVE_N) {
@@ -348,6 +380,8 @@ class MainActivity : ComponentActivity() {
                         val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
                         Log.i(SCREEN_TAG, "SCREEN_ON — was off for ${offFor}ms")
                         standby.onScreenOn()
+                        // A long sleep can leave the Apple TV link dead while it looks open (1.3.9).
+                        if (offFor >= LONG_SLEEP_MS && ::appleTvRegistry.isInitialized) appleTvRegistry.onWake()
                     }
                 }
             }
@@ -373,6 +407,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var extenderRegistry: ExtenderRegistry
 
     private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
+    private lateinit var androidTvRegistry: AndroidTvRegistry // Android TV, direct (1.3.6)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -495,6 +530,9 @@ class MainActivity : ComponentActivity() {
     /** Pushes the battery level to Home Assistant through the webhook — see BatteryReporter.kt. */
     private val batteryReporter by lazy { BatteryReporter(this) { if (::client.isInitialized) client else null } }
 
+    /** Built-in weather (1.3.2): `weather.astrion`, fetched only while the screen is on. */
+    private val localWeather by lazy { LocalWeather(client = { if (::client.isInitialized) client else null }, screenOn = { screenOn }) }
+
     private val storagePermission =
         registerForActivityResult(
             ActivityResultContracts.RequestMultiplePermissions()
@@ -563,6 +601,7 @@ class MainActivity : ComponentActivity() {
         batteryReporter.start()
         standby.start()
         applyPowerConfig()
+        localWeather.start(lifecycleScope)
         chargeDockMonitor.sunIsDown = { client.entities.value["sun.sun"]?.state?.let { it == "below_horizon" } }
         wifiKeepAwakeEnabled = prefs.getBoolean("wifi_keep_awake_enabled", false)
         if (wifiKeepAwakeEnabled) acquireWifiLock()
@@ -611,8 +650,15 @@ class MainActivity : ComponentActivity() {
                 onStartActivity = { id -> runOnUiThread { startActivityFn?.invoke(id) } },
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
             )
-        appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.d("AppleTv", it) })
+        // Info level (1.3.9), like Android TV: the HA100 keeps no debug lines, so its Apple TV
+        // connection events (connected, lost, command refused) never reached a saved log.
+        appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.i("AppleTv", it) })
+        // After the Apple TV one: it chains to its service handler.
+        androidTvRegistry = installAndroidTv(this, client, configServer, log = { Log.i("AndroidTv", it) })
+        localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
+        // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
+        configServer.onBackupRestored = { Handler(Looper.getMainLooper()).postDelayed({ AppLanguage.restart(this) }, RESTORE_RESTART_MS) }
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -624,6 +670,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        androidTvRegistry.stop()
         appleTvRegistry.stop()
 
         initClientsAndServer()
@@ -709,7 +756,7 @@ class MainActivity : ComponentActivity() {
                             appLanguage = AppLanguage.get(this@MainActivity),
                             setAppLanguage = { tag -> setAppLanguage(tag) },
                             reloadDashboard = { reloadFromSettings() },
-                            restartApp = { AppLanguage.restart(this@MainActivity) },
+                            restartApp = { restartKeepingLog() },
                             testRing = { testRing() },
                             remoteId = RemoteIdentity.id(this@MainActivity),
                             remoteName = remoteName,
@@ -831,8 +878,10 @@ class MainActivity : ComponentActivity() {
         applyPowerConfig()
     }
 
-    /** Hands dashboard.json's `power` block to the standby policy and the dock detector. */
+    /** Hands dashboard.json's `power` block to the standby policy and the dock detector,
+     * and its `weather` block to the built-in weather. */
     private fun applyPowerConfig() {
+        localWeather.config = dashboard.config.weather
         val power = dashboard.config.power
         standby.config = power
         chargeDockMonitor.dockDebounceMs = TimeUnit.SECONDS.toMillis(power.dockDebounceSeconds.toLong())
@@ -892,7 +941,7 @@ class MainActivity : ComponentActivity() {
             val key =
                 runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
                     ?: return@forEach
-            keyRouter.on(key) { runHotkey(hk) }
+            keyRouter.on(key, repeatIntervalFor(hk)) { runHotkey(hk) }
         }
         long.forEach { hk ->
             val key =
@@ -900,6 +949,27 @@ class MainActivity : ComponentActivity() {
                     ?: return@forEach
             keyRouter.onLong(key) { runHotkey(hk, long = true) }
         }
+    }
+
+    /**
+     * Held key: only a command (volume, channel, arrows…) repeats, and at a pace the target keeps
+     * up with. Android repeats a held key about 20 times a second; each repeat used to send a
+     * command, so a Home Assistant amp kept turning the volume down for seconds after release.
+     */
+    private fun repeatIntervalFor(hk: HotkeyConfig): Long? = when {
+        hk.page != null || hk.openOverlay != null || hk.event != null || hk.harmonyActivity != null -> null
+        hk.openCurrentActivityRoom != null || hk.stopActivity != null || hk.activity != null || hk.track -> null
+        hk.irDevice != null || hk.harmonyCommand != null -> IR_REPEAT_MS
+        hk.service != null -> serviceRepeatMs(hk.service, hk.entityId)
+        else -> null
+    }
+
+    private fun serviceRepeatMs(service: String, entityId: String?): Long? = when {
+        // Opening an app (1.3.6 Android TV hotkeys): once, not again and again while held.
+        service == "media_player.select_source" || service == "media_player.play_media" -> null
+        // An Android TV paired with Astrion answers directly, as fast as IR: smooth D-pad scrolling.
+        service == "remote.send_command" && entityId?.startsWith("remote.androidtv_") == true -> IR_REPEAT_MS
+        else -> HA_REPEAT_MS
     }
 
     /** `hk.openOverlay`'s handling, split out of [runHotkey] purely to keep
@@ -924,7 +994,15 @@ class MainActivity : ComponentActivity() {
         hk.openOverlay != null -> openOverlayHotkey(hk.openOverlay)
         hk.openCurrentActivityRoom != null -> openCurrentActivityHotkey(hk.openCurrentActivityRoom)
         hk.stopActivity != null -> stopActivityHotkey(hk.stopActivity)
+        hk.activity != null -> startActivityHotkey(hk.activity)
         else -> null
+    }
+
+    /** `"activity"`: starts that composed Activity, as its scene tile would (devices, then its page). */
+    private fun startActivityHotkey(id: String): Boolean {
+        val start = startActivityFn ?: return false
+        start(id)
+        return true
     }
 
     /**
@@ -1188,8 +1266,11 @@ class MainActivity : ComponentActivity() {
                         pendingLong = r
                         keyHandler.postDelayed(r, LONG_PRESS_MS)
                     }
-                } else {
+                } else if (event.repeatCount == 0) {
+                    lastRepeatAt = SystemClock.uptimeMillis()
                     fireButtonTap()
+                    shortH?.invoke()
+                } else if (repeatDue(code)) {
                     shortH?.invoke()
                 }
                 return true
@@ -1207,6 +1288,15 @@ class MainActivity : ComponentActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** A held key's next repeat, once its interval has passed (see [repeatIntervalFor]). */
+    private fun repeatDue(code: Int): Boolean {
+        val every = keyRouter.repeatInterval(code) ?: return false
+        val now = SystemClock.uptimeMillis()
+        if (now - lastRepeatAt < every) return false
+        lastRepeatAt = now
+        return true
     }
 
     private fun cancelPendingLong() {
@@ -1259,8 +1349,8 @@ class MainActivity : ComponentActivity() {
     private fun registerMotionListener() {
         val sm = sensorManager ?: return
         motionSensor?.let { sensor ->
-            sm.registerListener(motionListener, sensor, SensorManager.SENSOR_DELAY_NORMAL)
-            Log.i(MOTION_TAG, "listener registered on '${sensor.name}' (SENSOR_DELAY_NORMAL)")
+            sm.registerListener(motionListener, sensor, MOTION_SENSOR_DELAY)
+            Log.i(MOTION_TAG, "listener registered on '${sensor.name}' (SENSOR_DELAY_UI)")
         }
     }
 
@@ -1358,6 +1448,17 @@ class MainActivity : ComponentActivity() {
 
     /** 1.2.4 kept the Settings choice in a local pref that overrode dashboard.json; 1.2.5 moves it
      * into the file once, so the two can't disagree any more. */
+    /**
+     * Settings › Restart app (1.3.9): saves the log first (astrion/logs/), since the log only holds
+     * the running process — whatever went wrong before a restart would otherwise be gone.
+     */
+    private fun restartKeepingLog() {
+        Thread {
+            AppLogs.save(this)?.let { Log.i("MainActivity", "log saved before restart: ${it.path}") }
+            runOnUiThread { AppLanguage.restart(this) }
+        }.start()
+    }
+
     private fun migrateDockModePref() {
         val old = prefs.getString("dock_mode", null) ?: return
         val moved =
@@ -1445,11 +1546,13 @@ class MainActivity : ComponentActivity() {
         runCatching { unregisterReceiver(screenStateReceiver) }
         standby.stop()
         batteryReporter.stop()
+        localWeather.stop()
         chargeDockMonitor.stop()
         releaseWifiLock()
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        androidTvRegistry.stop()
         appleTvRegistry.stop()
         super.onDestroy()
     }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astrion TV Helper</string>
+    <string name="code_label">Code to type on the remote (web page › Android TV › Helper):</string>
+    <string name="code_hint">It lets the Astrion remote show what\'s playing (title, cover, progress) and open any app on this TV.</string>
+    <string name="media_ok">✓ Reading what\'s playing: allowed</string>
+    <string name="media_missing">✗ Reading what\'s playing: not allowed yet (notification access)</string>
+    <string name="apps_ok">✓ Opening apps: allowed</string>
+    <string name="apps_missing">✗ Opening apps: not allowed yet (display over other apps)</string>
+    <string name="address">This TV: %1$s, port %2$d</string>
+    <string name="adb_title">To allow them, run once from a computer (adb connect &lt;this TV&gt;:5555 first):</string>
+    <string name="open_settings">Open notification access settings</string>
+    <string name="settings_unavailable">This TV has no such settings screen: use the ADB command</string>
+</resources>

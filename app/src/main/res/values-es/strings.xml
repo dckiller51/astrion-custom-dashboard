@@ -76,6 +76,9 @@
     <string name="restart_app">Reiniciar la app</string>
     <string name="about_logs">Registros</string>
     <string name="logs_server_off">activa la Configuración web</string>
+    <string name="save_log">Guardar el registro en el mando</string>
+    <string name="log_saved">Guardado: %1$s</string>
+    <string name="log_save_failed">No se pudo guardar el registro (almacenamiento denegado).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Configuración local</string>
@@ -176,6 +179,32 @@
     <string name="media_load_timeout">No se pudo cargar multimedia (tiempo agotado)</string>
     <string name="media_load_failed">No se pudo cargar multimedia</string>
     <string name="media_browse">Explorar</string>
+    <string name="music_search">Búsqueda musical</string>
+    <string name="music_search_button">Buscar música</string>
+    <string name="music_search_hint">Título, artista, álbum…</string>
+    <string name="music_search_type">Escribe al menos 2 letras.</string>
+    <string name="music_search_none">Sin resultados para «%1$s».</string>
+    <string name="music_search_failed">El reproductor no respondió.</string>
+    <string name="music_search_unsupported">Este reproductor no puede buscar (Home Assistant ofrece búsqueda para Lyrion Music Server, Music Assistant…). Elige otro reproductor para la búsqueda en la tarjeta.</string>
+    <string name="music_all">Todo</string>
+    <string name="music_artists">Artistas</string>
+    <string name="music_albums">Álbumes</string>
+    <string name="music_tracks">Canciones</string>
+    <string name="music_playlists">Listas</string>
+    <string name="music_playing">Reproduciendo: %1$s</string>
+    <string name="music_queued">Añadido a la cola: %1$s</string>
+    <string name="music_add_to_queue">Añadir a la cola</string>
+    <string name="music_queue">Cola</string>
+    <string name="music_queue_position">Pista %1$d de %2$d</string>
+    <string name="music_queue_count">Pistas en la cola: %1$d</string>
+    <string name="music_queue_more">Y %1$d más después de estas.</string>
+    <string name="music_queue_more_ma">Y %1$d más: Music Assistant solo comparte la pista actual y la siguiente.</string>
+    <string name="music_queue_empty">La cola está vacía.</string>
+    <string name="music_queue_unsupported">Este reproductor no comparte su cola.</string>
+    <string name="music_queue_clear">Vaciar la cola</string>
+    <string name="music_queue_clear_confirm">Toca otra vez para vaciar</string>
+    <string name="music_queue_remove">Quitar de la cola</string>
+    <string name="music_queue_refresh">Actualizar</string>
     <string name="media_power_toggle">Alternar</string>
     <string name="media_browser_play">Reproducir</string>
     <string name="media_browser_add_to_queue">Añadir a la cola</string>
@@ -185,6 +214,15 @@
     <string name="plex_this_season">Esta temporada</string>
     <string name="plex_play">Reproducir</string>
     <string name="plex_episode">E%1$s · %2$s</string>
+    <string name="plex_search">Buscar</string>
+    <string name="plex_search_hint">Películas, series, episodios…</string>
+    <string name="plex_search_type">Escribe al menos 2 letras de un título.</string>
+    <string name="plex_search_none">Sin resultados para «%1$s».</string>
+    <string name="plex_search_failed">No se puede contactar con el servidor Plex.</string>
+    <string name="plex_movies">Películas</string>
+    <string name="plex_shows">Series</string>
+    <string name="plex_seasons">Temporadas</string>
+    <string name="plex_episodes">Episodios</string>
 
     <!-- Select cards -->
     <string name="select_no_options">Sin opciones</string>
@@ -243,4 +281,28 @@
     <string name="speaker_ungroup">Desagrupar</string>
     <string name="setup_banner_title">Configura este mando desde un navegador</string>
     <string name="connection_web_page_hint">Página web del mando: %1$s</string>
+    <string name="xbox_online">En línea</string>
+    <string name="xbox_offline">Desconectado</string>
+    <string name="xbox_console_off">Xbox apagada</string>
+    <string name="xbox_no_game">Ningún juego en curso</string>
+    <string name="xbox_no_game_hint">El juego aparece aquí en cuanto juegas.</string>
+    <string name="xbox_ratio">ratio %1$s</string>
+    <string name="xbox_achievements">Logros</string>
+    <string name="xbox_gamerscore">Gamerscore</string>
+    <string name="xbox_ta_score">Puntuación TA</string>
+    <string name="xbox_last_sync">Última sincronización</string>
+    <string name="xbox_sync_problem">Problema de sincronización</string>
+    <string name="xbox_attr_platform">Plataforma</string>
+    <string name="xbox_attr_publisher">Editor</string>
+    <string name="xbox_attr_developer">Desarrollador</string>
+    <string name="xbox_attr_genres">Géneros</string>
+    <string name="xbox_attr_release_date">Fecha de lanzamiento</string>
+    <string name="xbox_attr_min_age">Edad mínima</string>
+    <string name="xbox_attr_completion">Progreso</string>
+    <string name="xbox_attr_ratio">Ratio</string>
+    <string name="xbox_attr_hours">Tiempo de juego</string>
+    <string name="xbox_attr_description">Descripción</string>
+    <string name="xbox_attr_game_url">Juego en TrueAchievements</string>
+    <string name="xbox_attr_walkthrough_url">Guía de logros</string>
+    <string name="xbox_attr_location">Ubicación</string>
 </resources>

@@ -19,6 +19,7 @@ import com.custom.astrion.BuildConfig
 import com.custom.astrion.FindMyRemote
 import com.custom.astrion.R
 import com.custom.astrion.RemoteIdentity
+import com.custom.astrion.androidtv.AndroidTvRegistry
 import com.custom.astrion.appletv.AppleTvCredentials
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.appletv.AppleTvServiceKind
@@ -36,7 +37,7 @@ import com.custom.astrion.ha.HaClient
 import com.custom.astrion.harmony.HarmonyHubDiscovery
 import com.custom.astrion.harmony.HarmonyHubRegistry
 import com.custom.astrion.update.UpdateChecker
-import fi.iki.elonen.NanoHTTPD
+import com.custom.astrion.weather.LocalWeather
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.UUID
@@ -115,8 +116,10 @@ import org.json.JSONObject
  *  POST /dashboard.json  replace dashboard.json, then live-reload the dashboard
  *                        — also how the Devices page (/) saves IR device
  *                        add/edit/remove, re-posting the whole file with only
- *                        "irDevices" changed
- *  POST /icons           upload a PNG into /sdcard/astrion/icons/
+ *                        "irDevices" changed. Optional field `note`; the reply
+ *                        carries `X-Astrion-Version-Id`, the history version
+ *                        it created (see /history)
+ *  POST /icons          upload a PNG into /sdcard/astrion/icons/
  *  GET  /icons-list       list every uploaded icon's filename, as JSON — feeds
  *                        the dashboard editor's icon picker
  *  DELETE /icons/<file>  delete an uploaded icon (Devices page → Icons)
@@ -149,6 +152,7 @@ import org.json.JSONObject
  *                        app's own version, static per build.
  *  GET  /battery         { level, charging } — this device's own battery
  *  GET  /logs            this app's recent log lines, as a .txt download (bug reports without adb)
+ *  GET  /backup          the whole remote as one zip; POST /restore puts one back (BackupRoutes, 1.3.9)
  *  GET  /info            { id, name, manufacturer, model, android, version, versionCode, webhook } — who this remote is
  *  POST /remote-name     name=… — renames this remote (blank = back to the default name)
  *                        status, for the companion HA integration
@@ -221,7 +225,7 @@ class ConfigServer(
     private val onStartActivity: (activityId: String) -> Unit,
     /** Stops whichever Activity is active in a room. Backs POST /activities/stop. */
     private val onStopActivity: (room: String) -> Unit
-) : NanoHTTPD(8080) {
+) : LanHttpServer(8080) {
     /**
      * Backs the Devices page's Apple TV discovery/pairing endpoints. Assigned right after
      * construction (rather than passed to the constructor, which is already at the limit of
@@ -229,6 +233,18 @@ class ConfigServer(
      */
     @Volatile
     var appleTvRegistry: AppleTvRegistry? = null
+
+    /** Android TVs paired directly (1.3.6), set by MainActivity like [appleTvRegistry]. */
+    @Volatile
+    var androidTvRegistry: AndroidTvRegistry? = null
+
+    private val androidTvRoutes = AndroidTvRoutes(context) { androidTvRegistry }
+
+    /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
+    @Volatile
+    var onBackupRestored: () -> Unit = {}
+
+    private val backupRoutes = BackupRoutes(context) { onBackupRestored() }
 
     /** Called after POST /remote-name — the activity refreshes what shows the name. */
     @Volatile
@@ -258,7 +274,8 @@ class ConfigServer(
 
     override fun serve(session: IHTTPSession): Response = try {
         val method = session.method
-        when (val uri = session.uri) {
+        val uri = session.uri
+        backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -279,7 +296,7 @@ class ConfigServer(
             "/appletv-mrp-pair-start" -> if (method == Method.POST) handleAppleTvMrpPairStart(session) else methodNotAllowed()
             "/appletv-mrp-pair-finish" -> if (method == Method.POST) handleAppleTvMrpPairFinish(session) else methodNotAllowed()
             "/camera-snapshot" -> if (method == Method.GET) serveCameraSnapshot(session) else methodNotAllowed()
-            "/ha-states" -> if (method == Method.GET) serveHaStates() else methodNotAllowed()
+            "/ha-states" -> if (method == Method.GET) serveHaStates(session) else methodNotAllowed()
             "/icons-list" -> if (method == Method.GET) serveIconsList() else methodNotAllowed()
             "/check-update" -> if (method == Method.GET) handleCheckUpdate() else methodNotAllowed()
             "/save-connection" -> if (method == Method.POST) handleSaveConnection(session) else methodNotAllowed()
@@ -298,6 +315,7 @@ class ConfigServer(
             "/battery" -> if (method == Method.GET) serveBattery() else methodNotAllowed()
             "/logs" -> if (method == Method.GET) serveLogs() else methodNotAllowed()
             "/info" -> if (method == Method.GET) serveInfo() else methodNotAllowed()
+            "/weather-search" -> if (method == Method.GET) serveWeatherSearch(session) else methodNotAllowed()
             "/remote-name" -> if (method == Method.POST) handleRemoteName(session) else methodNotAllowed()
             "/set-page" -> if (method == Method.POST) handleSetPage(session) else methodNotAllowed()
             "/activities" -> if (method == Method.GET) serveActivities() else methodNotAllowed()
@@ -377,7 +395,9 @@ class ConfigServer(
                 "No dashboard.json yet"
             )
         }
-        val content = runCatching { reconcileAppleTvHaDevices(file.readText()) }.getOrElse { file.readText() }
+        val content =
+            runCatching { androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())) }
+                .getOrElse { file.readText() }
         return newFixedLengthResponse(Response.Status.OK, "application/json", content)
     }
 
@@ -550,6 +570,7 @@ class ConfigServer(
                     }
                 )
                 put("appleTvs", appleTvsJson())
+                put("androidTvs", androidTvRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -805,9 +826,26 @@ class ConfigServer(
         return serveInfo()
     }
 
+    /**
+     * Place search for the web page's built-in weather (1.3.2), proxied through the remote so the
+     * page needs no direct access to Open-Meteo: `?q=<name or postcode>&lang=fr`.
+     */
+    private fun serveWeatherSearch(session: IHTTPSession): Response {
+        val query = session.parameters["q"]?.firstOrNull()?.trim().orEmpty()
+        if (query.length < 2) return jsonResponse(Response.Status.BAD_REQUEST, buildJsonObject { put("error", "query too short") })
+        val lang = session.parameters["lang"]?.firstOrNull()?.take(2).orEmpty()
+        return runCatching { LocalWeather.search(query, lang) }
+            .fold(
+                onSuccess = { jsonResponse(Response.Status.OK, buildJsonObject { put("results", it) }) },
+                onFailure = {
+                    jsonResponse(Response.Status.SERVICE_UNAVAILABLE, buildJsonObject { put("error", it.message ?: "search failed") })
+                }
+            )
+    }
+
     /** This app's recent log lines as a downloadable text file (see [AppLogs]) — bug reports without adb. */
     private fun serveLogs(): Response {
-        val response = newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", AppLogs.dump())
+        val response = newFixedLengthResponse(Response.Status.OK, "text/plain; charset=utf-8", AppLogs.dump(context))
         response.addHeader("Content-Disposition", "attachment; filename=\"${AppLogs.fileName()}\"")
         return response
     }
@@ -1062,8 +1100,13 @@ class ConfigServer(
      * yet on first load). Attributes are passed through
      * verbatim (the same kotlinx JsonObject the cards read), so each card's
      * preview can pull whatever domain-specific fields it needs.
+     *
+     * `?refresh=1` (1.4.0, the builder on opening and its "Reload from Home Assistant") re-reads
+     * them all from Home Assistant first, so entities renamed or added there show up even while
+     * the remote sleeps (screen off, only a few entities live).
      */
-    private fun serveHaStates(): Response {
+    private fun serveHaStates(session: IHTTPSession): Response {
+        if (session.parameters["refresh"]?.firstOrNull() == "1") runBlocking { haClient.refreshStates() }
         val connected = haClient.connection.value == ConnectionState.CONNECTED
         val entities = haClient.entities.value
         val json =
@@ -1109,6 +1152,7 @@ class ConfigServer(
         if (params["atv_present"]?.firstOrNull() == "1") {
             RemoteSettings.saveAppleTvs(context, parseAppleTvRows(params))
         }
+        androidTvRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
@@ -1401,16 +1445,21 @@ class ConfigServer(
                 )
         // Version history (1.3.0): the new content is kept, with the optional note sent along.
         val note = session.parameters["note"]?.firstOrNull()
-        runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }
+        val versionId = runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }.getOrNull()
         File(tmpPath).copyTo(DashboardLoader.configFile, overwrite = true)
         onDashboardUpdated()
-        return redirectHome(context.getString(R.string.web_config_dashboard_updated))
+        // 1.3.1: tools pushing a dashboard (Astrion Config Manager…) learn which version they created,
+        // e.g. to pin it, without reading /history. The HTML body stays for browsers.
+        return redirectHome(context.getString(R.string.web_config_dashboard_updated)).apply {
+            if (versionId != null) addHeader(VERSION_ID_HEADER, versionId)
+        }
     }
 
     /**
      * dashboard.json version history (1.3.0), see [DashboardHistory]:
      *  GET  /history/<id>      that version's content (download / open in the builder)
-     *  POST /history/restore   id → writes it back to dashboard.json and reloads the dashboard
+     *  POST /history/restore   id → writes it back to dashboard.json and reloads the dashboard;
+     *                          replies {"ok":true,"versionId":…} + X-Astrion-Version-Id (1.3.3)
      *  POST /history/pin       id, pinned=true|false → never deleted automatically while pinned
      *  POST /history/note      id, note
      *  POST /history/delete    id
@@ -1429,9 +1478,9 @@ class ConfigServer(
         session.parseBody(HashMap())
         val id = session.parameters["id"]?.firstOrNull()?.trim().orEmpty()
         if (!DashboardHistory.isValidId(id)) return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", "bad id"))
+        if (action == "restore") return handleHistoryRestore(id)
         val ok =
             when (action) {
-                "restore" -> DashboardHistory.restore(id).also { if (it) onDashboardUpdated() }
                 "pin" -> DashboardHistory.setPinned(id, session.parameters["pinned"]?.firstOrNull() == "true")
                 "note" -> DashboardHistory.setNote(id, session.parameters["note"]?.firstOrNull().orEmpty())
                 "delete" -> DashboardHistory.delete(id)
@@ -1441,6 +1490,18 @@ class ConfigServer(
             jsonResponse(Response.Status.OK, JSONObject().put("ok", true))
         } else {
             jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+        }
+    }
+
+    /** Like a save, a restore tells which version it created: `versionId` in the body and the header. */
+    private fun handleHistoryRestore(id: String): Response {
+        val restored =
+            DashboardHistory.restore(id)
+                ?: return jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "no such version"))
+        onDashboardUpdated()
+        val body = JSONObject().put("ok", true).apply { restored.versionId?.let { put("versionId", it) } }
+        return jsonResponse(Response.Status.OK, body).apply {
+            restored.versionId?.let { addHeader(VERSION_ID_HEADER, it) }
         }
     }
 
@@ -1947,3 +2008,6 @@ class ConfigServer(
 
     private fun sanitize(name: String) = name.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
 }
+
+/** Response header of `POST /dashboard.json`: id of the version it created in the history (1.3.1). */
+private const val VERSION_ID_HEADER = "X-Astrion-Version-Id"

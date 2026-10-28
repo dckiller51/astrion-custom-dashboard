@@ -39,8 +39,38 @@ data class AppConfig(
     /** What the screen shows while the remote sits on its charging dock — see [DockConfig]. */
     val dock: DockConfig = DockConfig(),
     /** Standby / battery tuning — see [PowerConfig]. */
-    val power: PowerConfig = PowerConfig()
+    val power: PowerConfig = PowerConfig(),
+    /** Built-in weather (1.3.2), no Home Assistant needed — see [WeatherConfig]. Null = off. */
+    val weather: WeatherConfig? = null,
+    /** Activity device ids (IR/Harmony device id or HA entity id) never switched off when another
+     * Activity takes the room, whatever each Activity says (1.3.5) — e.g. the Android TV entity used
+     * to launch apps, which is the same TV as the one the next Activity uses. Stopping an Activity
+     * ("Off") still follows that Activity's own "power off when it ends". */
+    val keepOnDevices: Set<String> = emptySet()
 )
+
+/**
+ * The `weather` block: where the built-in weather is fetched for (Open-Meteo, no key). When set,
+ * the remote publishes [com.custom.astrion.weather.LocalWeather.ENTITY_ID] like a Home Assistant
+ * weather entity, so the clock & weather card and the dock clock use it unchanged.
+ */
+data class WeatherConfig(
+    val latitude: Double,
+    val longitude: Double,
+    /** Place name shown as the entity's friendly name ("Saint-Martin-sur-le-Pré"). */
+    val name: String = "",
+    /** [MODEL_AUTO] (best model for the place, 7 days) or [MODEL_METEOFRANCE] (Météo-France, 4 days). */
+    val model: String = MODEL_AUTO,
+    /** [UNIT_CELSIUS] or [UNIT_FAHRENHEIT]. */
+    val unit: String = UNIT_CELSIUS
+) {
+    companion object {
+        const val MODEL_AUTO = "auto"
+        const val MODEL_METEOFRANCE = "meteofrance"
+        const val UNIT_CELSIUS = "celsius"
+        const val UNIT_FAHRENHEIT = "fahrenheit"
+    }
+}
 
 /**
  * The `power` block: how the remote saves battery while its screen is off. Every key is optional.
@@ -357,7 +387,10 @@ data class HotkeyConfig(
     val pageMode: String? = null,
     /** For a `"track": true` hotkey: the `media_player` the dock clock's "Now playing" follows while
      * this Activity is active — see ActivityConfig.nowPlayingEntity. */
-    val nowPlayingEntity: String? = null
+    val nowPlayingEntity: String? = null,
+    /** Starts the composed Activity with this id ([ActivityConfig.id]), exactly like a scene tile's
+     * `"activity"`: its devices, then its page. Checked with [openOverlay]. */
+    val activity: String? = null
 ) {
     val opensPopup: Boolean get() = pageMode.equals("popup", ignoreCase = true)
 
@@ -516,14 +549,15 @@ data class ActivityConfig(
     val muteCommand: String? = null,
     /** The `media_player` the dock clock's "Now playing" follows while this Activity is the active
      * one (see DockConfig.room) — the content source among the Activity's devices (Apple TV, not
-     * the TV or AVR). Null: a network Apple TV among [devices] if there is one, else the dock's own
+     * the TV or AVR). Null: a network Apple TV (or Android TV, 1.3.6) among [devices] if there is one, else the dock's own
      * `media_entities` logic. */
     val nowPlayingEntity: String? = null
 ) {
-    /** [nowPlayingEntity], or the first Apple TV paired directly with Astrion among [devices]. */
+    /** [nowPlayingEntity], or the first Apple TV / Android TV paired directly with Astrion among [devices]. */
     val effectiveNowPlayingEntity: String?
         get() =
             nowPlayingEntity ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.appletv_") }?.deviceId
+                ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.androidtv_") }?.deviceId
 }
 
 /**

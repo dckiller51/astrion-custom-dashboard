@@ -17,8 +17,8 @@ android {
         applicationId = "com.custom.astrion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 40
-        versionName = "1.3.0"
+        versionCode = 50
+        versionName = "1.4.0"
     }
 
     buildTypes {
@@ -111,4 +111,7 @@ dependencies {
     // Android platform before API 33 (minSdk is 26). Only the lightweight
     // org.bouncycastle.crypto.* API is used, so it never touches the platform BC provider.
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
+
+    // Plain JVM unit tests (app/src/test): Activity planning, run by CI's testDebugUnitTest.
+    testImplementation("junit:junit:4.13.2")
 }

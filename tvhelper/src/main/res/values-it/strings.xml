@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astrion TV Helper</string>
+    <string name="code_label">Codice da inserire sul telecomando (pagina web › Android TV › Helper):</string>
+    <string name="code_hint">Permette al telecomando Astrion di mostrare cosa è in riproduzione (titolo, copertina, avanzamento) e di aprire qualsiasi app su questa TV.</string>
+    <string name="media_ok">✓ Lettura di cosa è in riproduzione: consentita</string>
+    <string name="media_missing">✗ Lettura di cosa è in riproduzione: non ancora consentita (accesso alle notifiche)</string>
+    <string name="apps_ok">✓ Apertura delle app: consentita</string>
+    <string name="apps_missing">✗ Apertura delle app: non ancora consentita (sovrapposizione)</string>
+    <string name="address">Questa TV: %1$s, porta %2$d</string>
+    <string name="adb_title">Per consentirli, esegui una volta da un computer (prima adb connect &lt;questa TV&gt;:5555):</string>
+    <string name="open_settings">Apri l\'accesso alle notifiche</string>
+    <string name="settings_unavailable">Questa TV non ha questa schermata: usa il comando ADB</string>
+</resources>

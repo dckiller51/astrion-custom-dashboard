@@ -151,6 +151,10 @@ constructor(
     val irDevices: Map<String, IrDeviceConfig> = emptyMap(),
     /** Sends one command directly through the local IR blaster. */
     val sendIrCommand: (deviceId: String, command: String) -> Unit = { _, _ -> },
+    /** Sends several commands of one IR device in a row (`irCommands`, 1.3.7),
+     * spaced by the given delay (null: the device's inter-key delay). */
+    val sendIrSequence: (deviceId: String, commands: List<String>, delayMs: Int?) -> Unit =
+        { d, cmds, _ -> cmds.forEach { sendIrCommand(d, it) } },
     /** Every composed Activity (id -> config), resolved once from
      * AppConfig.activities — see ActivityConfig doc for what "composed" means
      * (more than one device, Astrion itself orchestrates the switch). */

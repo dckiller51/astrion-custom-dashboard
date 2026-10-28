@@ -3,7 +3,6 @@ package com.custom.astrion.ui
 import android.hardware.ConsumerIrManager
 import android.util.Log
 import com.custom.astrion.config.ActivityConfig
-import com.custom.astrion.config.ActivityDeviceConfig
 import com.custom.astrion.config.ActivityPlan
 import com.custom.astrion.config.ActivityPlanner
 import com.custom.astrion.config.ActivityRuntime
@@ -11,6 +10,7 @@ import com.custom.astrion.config.DeviceStateStore
 import com.custom.astrion.config.IrDatabaseRuntime
 import com.custom.astrion.config.IrDeviceConfig
 import com.custom.astrion.config.IrTarget
+import com.custom.astrion.config.LiveHaState
 import com.custom.astrion.config.PlannedAction
 import com.custom.astrion.extender.ExtenderBatchCommand
 import com.custom.astrion.extender.ExtenderRegistry
@@ -21,6 +21,8 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** The two [CoroutineScope]s [ActivityDispatcher] needs, bundled purely to
  * keep its constructor under detekt's `LongParameterList` threshold — see
@@ -30,6 +32,9 @@ data class ActivityDispatcherScopes(
     val scope: CoroutineScope,
     val extenderScope: CoroutineScope
 )
+
+/** Logcat tag of what an Activity sends to Home Assistant (shown in the remote's /logs). */
+private const val ACTIVITY_TAG = "AstrionActivity"
 
 /**
  * "Send a command somewhere" and "switch/stop an Activity" — extracted out
@@ -131,14 +136,16 @@ class ActivityDispatcher(
                 is PlannedAction.HaPower -> this.steps += DispatchStep.Immediate(gap) {
                     val domain = d.deviceId.substringBefore('.')
                     val service = if (action.on) "turn_on" else "turn_off"
+                    Log.i(ACTIVITY_TAG, "$service ${d.deviceId}")
                     client.callService(ServiceCall(domain = domain, service = service, entityId = d.deviceId))
                 }
                 is PlannedAction.HaSource -> this.steps += DispatchStep.Immediate(gap) {
                     val domain = d.deviceId.substringBefore('.')
+                    Log.i(ACTIVITY_TAG, "select_source ${d.deviceId} \"${action.source}\"")
                     client.callService(ServiceCall.of(domain, "select_source", d.deviceId, "source" to action.source))
                 }
                 is PlannedAction.Command -> when (d.source) {
-                    "ir" -> this.addIrCommand(d, action.command, gap)
+                    "ir" -> this.addIrCommand(d.deviceId, action.command, gap)
                     "harmony" -> this.steps += DispatchStep.Immediate(gap) {
                         harmonyRegistry.client(d.hub)?.sendCommand(d.deviceId, action.command)
                             ?: Log.w("Dashboard", "activity device ${d.deviceId}: hub ${d.hub} not configured")
@@ -151,23 +158,23 @@ class ActivityDispatcher(
             }
         }
 
-        private fun addIrCommand(d: ActivityDeviceConfig, command: String, gap: Int) {
-            val device = irDevicesById[d.deviceId]
+        fun addIrCommand(deviceId: String, command: String, gap: Int) {
+            val device = irDevicesById[deviceId]
             val resolved = device?.let { IrDatabaseRuntime.resolve(it, command) }
             when {
                 device == null -> {
-                    Log.w("Dashboard", "activity device ${d.deviceId}: unknown irDevice")
+                    Log.w("Dashboard", "IR device $deviceId: unknown irDevice")
                     this.keepGap(gap)
                 }
                 resolved == null -> {
-                    Log.w("Dashboard", "activity device ${d.deviceId}: command \"$command\" not found")
+                    Log.w("Dashboard", "IR device $deviceId: command \"$command\" not found")
                     this.keepGap(gap)
                 }
                 else -> when (val target = device.target) {
                     // Unchanged from before this device gained a `target` field —
                     // every dashboard.json without one defaults here.
                     IrTarget.Local -> this.steps += DispatchStep.Immediate(gap) {
-                        IrTransmit.local(irManager, d.deviceId, command, resolved)
+                        IrTransmit.local(irManager, deviceId, command, resolved)
                     }
                     is IrTarget.Extender -> {
                         val pronto = resolved.pronto
@@ -178,12 +185,12 @@ class ActivityDispatcher(
                             // can target an extender for now. See IrStepConfig's kdoc.
                             Log.w(
                                 "Dashboard",
-                                "activity device ${d.deviceId}/$command targets an extender but has no raw " +
+                                "IR device $deviceId/$command targets an extender but has no raw " +
                                     "Pronto string (Inline-sourced IR devices can't target an extender yet)"
                             )
                             this.keepGap(gap)
                         } else {
-                            IrTransmit.extender(d.deviceId, command, target.extenderId, pronto)
+                            IrTransmit.extender(deviceId, command, target.extenderId, pronto)
                             this.steps += DispatchStep.Extender(target.extenderId, pronto, gap)
                         }
                     }
@@ -268,6 +275,34 @@ class ActivityDispatcher(
         }
     }
 
+    /** Serializes [sendIrSequence]s: two favourite buttons tapped quickly
+     * send 8-0-1 then 2-0-5, never 8-2-0-0-1-5. */
+    private val sequenceLock = Mutex()
+
+    /**
+     * Several commands of one IR device in a row (1.3.7) — a button's
+     * `irCommands`, e.g. a channel favourite `["8", "0", "1"]`. Keys are spaced
+     * by [delayMs], else the device profile's inter-key delay, else
+     * [DEFAULT_SEQUENCE_GAP_MS]; extender-bound keys still go as one batch.
+     */
+    fun sendIrSequence(deviceId: String, commands: List<String>, delayMs: Int?) {
+        if (commands.size == 1) return sendIrCommand(deviceId, commands[0])
+        val gap =
+            delayMs
+                ?: irDevicesById[deviceId]?.let(IrDatabaseRuntime::profile)?.timing?.interKeyDelayMs?.takeIf { it > 0 }
+                ?: DEFAULT_SEQUENCE_GAP_MS
+        val plan = StepPlan()
+        commands.forEachIndexed { i, c -> plan.addIrCommand(deviceId, c, if (i == 0) 0 else gap) }
+        scope.launch {
+            sequenceLock.withLock {
+                runSteps(plan.steps)
+                // An extender batch plays out on the extender itself: wait for it
+                // (and one gap more) before the next sequence may start.
+                delay((gap.toLong() * commands.size).milliseconds)
+            }
+        }
+    }
+
     /** The [IrTarget.Extender] branch of [sendIrCommand], split out purely
      * to keep that function under detekt's NestedBlockDepth threshold. */
     private fun sendIrCommandViaExtender(deviceId: String, command: String, pronto: String?, target: IrTarget.Extender) {
@@ -301,7 +336,9 @@ class ActivityDispatcher(
             states = DeviceStateStore.shared,
             hasCommand = { d, command ->
                 d.source != "ir" || irDevicesById[d.deviceId]?.let { IrDatabaseRuntime.hasCommand(it, command) } == true
-            }
+            },
+            haState = { entityId -> client.entities.value[entityId]?.let { LiveHaState.of(it.state, it.attrString("source")) } },
+            keepOn = activityRuntime.keepOnDevices
         )
 
     /** Sends a plan, then records the devices' new power/input state —
@@ -406,3 +443,6 @@ class ActivityDispatcher(
         }
     }
 }
+
+/** Gap between the keys of an `irCommands` sequence when neither the button nor the device profile sets one. */
+private const val DEFAULT_SEQUENCE_GAP_MS = 300

@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "AstrionCustom"
 include(":app")
+include(":tvhelper")

@@ -1,0 +1,33 @@
+# Astrion remote tweaks: adb over Wi-Fi (behind a firewall), the Wi-Fi
+# driver's power save turned off, and (optional) the screen-waking key replayed. Installed by device/install.sh from
+# astrion-custom-dashboard; settings in /vendor/etc/astrion-tweaks.conf.
+#
+# A NEW file, no existing service touched: if init can't read it, it skips it
+# and the remote boots as before. Comments MUST start with '#'.
+# The service/property layout follows baes-cloud/astrion-dashboard's device/
+# hooks (MIT).
+
+# netd starts well before boot completes and adbd may already listen on Wi-Fi
+# then (persist.adb.tcp.port): put the firewall up as early as possible.
+on property:init.svc.netd=running
+    start astrion_adbfw
+
+on property:sys.boot_completed=1
+    start astrion_tweaks
+
+# The adb firewall. iptables rules live in memory only: re-applied every boot.
+service astrion_adbfw /system/bin/sh /vendor/bin/astrion-tweaks.sh firewall
+    user root
+    group root net_admin net_raw
+    disabled
+    oneshot
+    seclabel u:r:su:s0
+
+# The firewall again, adb over Wi-Fi on or off, then (if enabled) the wake-key
+# replay and the Wi-Fi power save watch, which keep running.
+service astrion_tweaks /system/bin/sh /vendor/bin/astrion-tweaks.sh boot
+    user root
+    group root net_admin net_raw wifi input
+    disabled
+    oneshot
+    seclabel u:r:su:s0

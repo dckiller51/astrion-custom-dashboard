@@ -113,6 +113,16 @@ function isNetworkAppleTv(entityId) {
   return /^media_player\.appletv_/.test(entityId || '');
 }
 
+/** An Android TV paired in Astrion (1.3.6, media_player.androidtv_…): same idea —
+ * turn_on/turn_off = its power key, select_source = launch an app. */
+function isNetworkAndroidTv(entityId) {
+  return /^media_player\.androidtv_/.test(entityId || '');
+}
+
+function isNetworkTv(entityId) {
+  return isNetworkAppleTv(entityId) || isNetworkAndroidTv(entityId);
+}
+
 /** [{entityId, name, domain}] — the Devices catalog first, then every live
  * HA entity of a domain an Activity can switch on/off (when /ha-states is
  * reachable, i.e. the builder is opened from the remote). */
@@ -146,6 +156,7 @@ function deviceRefLabel(ref) {
   if (ref.source === 'ir') return `${irDevicesById()[ref.deviceId]?.name || ref.deviceId} (IR)`;
   if (ref.source === 'harmony') return `${ref.deviceLabel || ref.deviceId} (Harmony)`;
   if (isNetworkAppleTv(ref.deviceId)) return I18N.t('web_activity_ref_atv', haEntityName(ref.deviceId));
+  if (isNetworkAndroidTv(ref.deviceId)) return I18N.t('web_activity_ref_adtv', haEntityName(ref.deviceId));
   return `${haEntityName(ref.deviceId)} (HA — ${ref.deviceId})`;
 }
 
@@ -183,6 +194,9 @@ function startActivityWizard(editId) {
       delayAfterMs: d.delayAfterMs || 0,
     })) : [],
     configureIndex: 0,
+    // Device ids kept on between Activities (dashboardData.keepOnDevices) — a setting of the device,
+    // shared by every Activity, edited here and written back on save.
+    keepOn: new Set(dashboardData.keepOnDevices || []),
     volumeDeviceId: existing?.volumeDeviceId || null,
     volumeUpCommand: existing?.volumeUpCommand || null,
     volumeDownCommand: existing?.volumeDownCommand || null,
@@ -281,6 +295,11 @@ function saveCurrentDeviceConfig() {
     powerOffOnExit: document.getElementById('wizPowerOffOnExit')?.checked !== false,
     delayAfterMs: parseInt(document.getElementById('wizDelay')?.value, 10) || 0,
   };
+  const keepOnBox = document.getElementById('wizKeepOn');
+  if (keepOnBox) {
+    const id = wizard.deviceRefs[wizard.configureIndex].deviceId;
+    if (keepOnBox.checked) wizard.keepOn.add(id); else wizard.keepOn.delete(id);
+  }
 }
 
 // ---- rendering each phase --------------------------------------------------
@@ -335,7 +354,8 @@ function renderWizardDevices() {
   const selectedHaIds = new Set(wizard.deviceRefs.filter(r => r.source === 'ha').map(r => r.deviceId));
   const allHa = haEntityChoices();
   const appleTvs = allHa.filter(c => isNetworkAppleTv(c.entityId));
-  const haChoices = allHa.filter(c => !isNetworkAppleTv(c.entityId));
+  const androidTvs = allHa.filter(c => isNetworkAndroidTv(c.entityId));
+  const haChoices = allHa.filter(c => !isNetworkTv(c.entityId));
   return `
     <div class="hint">${I18N.t('web_activity_devices_hint')}</div>
 
@@ -359,6 +379,15 @@ function renderWizardDevices() {
           ${c.name}
         </label>
       `).join('') + `<div class="hint">${I18N.t('web_activity_atv_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_adtv_heading')}</h3>
+    ${androidTvs.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_adtv')}</div>` :
+      androidTvs.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_adtv_hint')}</div>`}
 
     <h3 style="margin-top:14px">${I18N.t('web_activity_ha_heading')}</h3>
     <select id="wizHaEntitySelect">
@@ -426,8 +455,8 @@ function renderWizardConfigure() {
     <div class="hint">${I18N.t('web_activity_device_n_of_m', n, total)} <strong>${deviceRefLabel(ref)}</strong></div>
 
     ${ref.source === 'ha' ? `
-      <label>${isNetworkAppleTv(ref.deviceId) ? 'App to launch (optional — e.g. Netflix)' : 'Source (optional, passed to media_player.select_source)'}</label>
-      <input type="text" id="wizInputText" value="${cfg.inputCommand || ''}" list="wizInputTextHints" placeholder="${isNetworkAppleTv(ref.deviceId) ? 'e.g. Netflix' : 'e.g. Apple TV'}">
+      <label>${isNetworkTv(ref.deviceId) ? 'App to launch (optional — e.g. Netflix)' : 'Source (optional, passed to media_player.select_source)'}</label>
+      <input type="text" id="wizInputText" value="${cfg.inputCommand || ''}" list="wizInputTextHints" placeholder="${isNetworkTv(ref.deviceId) ? 'e.g. Netflix' : 'e.g. Apple TV'}">
       <datalist id="wizInputTextHints">${haSourceEntries(ref.deviceId).map(([v]) => `<option value="${v}"></option>`).join('')}</datalist>
     ` : `
       <div id="wizProfileHint"></div>
@@ -438,6 +467,8 @@ function renderWizardConfigure() {
 
     <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="wizPowerOnFirst" ${cfg.powerOnFirst !== false ? 'checked' : ''}> ${I18N.t('web_activity_power_on_first')}</label>
     <label class="inline-check"><input type="checkbox" id="wizPowerOffOnExit" ${cfg.powerOffOnExit !== false ? 'checked' : ''}> ${I18N.t('web_activity_power_off_on_exit')}</label>
+    <label class="inline-check"><input type="checkbox" id="wizKeepOn" ${wizard.keepOn.has(ref.deviceId) ? 'checked' : ''}> ${I18N.t('web_activity_keep_on')}</label>
+    <div class="hint">${I18N.t('web_activity_keep_on_hint')}</div>
     <label>${I18N.t('web_activity_delay_label')}</label>
     <input type="number" id="wizDelay" value="${cfg.delayAfterMs || 0}" min="0">
   `;
@@ -627,6 +658,7 @@ function renderWizardReviewList() {
     if (cfg.powerOnCommand) parts.push(I18N.t('web_activity_review_on', cfg.powerOnCommand));
     if (cfg.powerOffCommand) parts.push(I18N.t('web_activity_review_off', cfg.powerOffCommand));
     if (cfg.inputCommand) parts.push(I18N.t('web_activity_review_input', cfg.inputCommand));
+    if (wizard.keepOn.has(ref.deviceId)) parts.push(I18N.t('web_activity_review_keep_on'));
     const isVolume = wizard.volumeDeviceId === ref.deviceId;
     const el = document.createElement('div');
     el.className = 'list-item';
@@ -707,6 +739,8 @@ function removeDeviceRef(i) {
 
 function saveActivityWizard() {
   dashboardData.activities = dashboardData.activities || [];
+  if (wizard.keepOn.size) dashboardData.keepOnDevices = [...wizard.keepOn].sort();
+  else delete dashboardData.keepOnDevices;
   const devices = wizard.deviceRefs.map((ref, i) => {
     const cfg = wizard.deviceConfig[i] || {};
     return {

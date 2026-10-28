@@ -13,7 +13,13 @@
 <div class="subtitle" data-i18n="web_ui_subtitle">Build your dashboard visually, no hand-written JSON required. Matches the exact schema the app reads.</div>
 <div id="deviceModeBanner" class="note" style="display:none"></div>
 
+<!-- 1.4.0: blocks editing until the remote's dashboard.json has loaded (see js/device.js). -->
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-box"><div class="spinner"></div><span data-i18n="web_device_loading_dashboard">Loading your dashboard from the remote…</span></div>
+</div>
+
 <div class="release-info-row" style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
+    <span id="installedBadge"></span>
     <span id="stableBadge"></span>
     <label class="beta-switch">
         <input type="checkbox" id="betaToggle" onchange="toggleBetaBadge()">
@@ -42,7 +48,7 @@
             everything below just references them by name.
         </div>
 
-        <h2 data-i18n="web_ui_section_hotkeys">1. Hotkeys</h2>
+        <h2 id="hotkeysSection" data-i18n="web_ui_section_hotkeys">1. Hotkeys</h2>
         <div class="section-box">
             <label data-i18n="web_ui_scope_label">Scope</label>
             <select id="hkScope">
@@ -72,11 +78,14 @@
                 <option value="page" data-i18n="web_ui_action_page">Go to page</option>
                 <option value="openOverlay" data-i18n="web_ui_action_open_overlay">Open overlay (Settings / Active Activities)</option>
                 <option value="openCurrentActivity" data-i18n="web_ui_action_return_activity">Return to current Activity (for one room)</option>
+                <option value="startActivity" data-i18n="web_ui_action_start_activity">Start an Activity</option>
                 <option value="stopActivity" data-i18n="web_ui_turn_off_a_room_s_activity">Turn off a room's Activity ("Off", like Harmony's -1)</option>
                 <option value="haEvent" data-i18n="web_ui_home_assistant_event_tells_ha_which">Home Assistant event (tells HA which remote &amp; button)</option>
                 <option value="service" data-i18n="web_ui_action_service">Home Assistant service call</option>
                 <option value="remoteCommand" data-i18n="web_ui_action_remote_command">Home Assistant remote command</option>
                 <option value="appleTvCommand" data-i18n="web_ui_apple_tv_command_direct_no_home">Apple TV command (direct — no Home Assistant needed)</option>
+                <option value="androidTvCommand" data-i18n="web_ui_action_android_tv">Android TV key or app (direct — no Home Assistant needed)</option>
+                <option value="irCommand" data-i18n="web_ui_action_ir_command">IR command (remote's own blaster or IR extender)</option>
                 <option value="harmonyCommand" data-i18n="web_ui_action_harmony_command">Harmony IR command (direct to hub)</option>
                 <option value="harmonyActivity" data-i18n="web_ui_action_harmony_activity">Harmony activity (direct to hub)</option>
             </select>
@@ -125,11 +134,14 @@
     </div>
 
     <!-- RIGHT PANE -->
-    <div class="preview-pane">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+    <div class="preview-pane" id="preview-container">
+        <div class="preview-head">
             <h2 style="margin:0;flex:1" data-i18n="web_ui_preview">Preview</h2>
+            <!-- 1.4.0: "Save to device" next to the preview, which stays on screen while scrolling. -->
+            <button type="button" id="saveToDeviceFab" style="display:none" onclick="saveDashboardToDevice()" data-i18n="web_ui_save_to_device">Save to device</button>
             <button type="button" id="undoBtn" class="ha-icon-btn" disabled onclick="undoChange()" data-i18n-attr="title:web_history_undo" title="Undo (Ctrl+Z)">↶</button>
             <button type="button" id="redoBtn" class="ha-icon-btn" disabled onclick="redoChange()" data-i18n-attr="title:web_history_redo" title="Redo (Ctrl+Y)">↷</button>
+            <button type="button" id="haReloadBtn" class="ha-icon-btn" style="display:none" onclick="reloadHaStates()" data-i18n-attr="title:web_device_reload_ha" title="Reload from Home Assistant">🔄</button>
             <button type="button" id="historyBtn" class="ha-icon-btn" style="display:none" onclick="openHistory()" data-i18n-attr="title:web_history_title" title="Version history">🕘</button>
         </div>
         <div class="ha-toolbar">
@@ -287,6 +299,7 @@
                     <option value="speaker_group" data-i18n="web_modal_type_speaker_group">Speaker group (speaker_group)</option>
                     <option value="camera" data-i18n="web_modal_type_camera">Camera (camera)</option>
                     <option value="plex" data-i18n="web_modal_type_plex">Plex (plex)</option>
+                    <option value="xbox" data-i18n="web_modal_type_xbox">Xbox / TrueAchievements (xbox)</option>
                 </optgroup>
                 <optgroup data-i18n-attr="label:web_modal_optgroup_grids" label="Grids">
                     <option value="button_grid" data-i18n="web_modal_type_button_grid">Button grid (button_grid)</option>
@@ -371,7 +384,7 @@
                 </select>
                 <div id="pageDialogOpenPopupHint" style="display:none" class="hint" data-i18n="web_ui_uses_the_same_width_height_position">Uses the same width/height/position settings as "Linked page" above (a page's popup shape is one setting, however it gets opened). Ideal for something like an intercom/doorbell call: it shows over whatever you're doing without losing your place, and closes itself the same way full-page mode would — the entity leaving the "open" state above.</div>
             </div>
-            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogTilePopup" onchange="onPageDialogTilePopupChange()"> <span data-i18n="web_ui_opened_as_a_popup_from_a">Opened as a popup from a tile elsewhere on the dashboard</span></label>
+            <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogTilePopup" onchange="onPageDialogTilePopupChange()"> <span data-i18n="web_ui_opened_as_a_popup_from_a">Opened as a popup by a tile or a key</span></label>
             <div class="hint" style="margin-top:4px" data-i18n="web_ui_check_this_if_some_tile_s">Check this if some tile's own "Page to open" (a scene_grid item's "pageMode": "popup", or a title's "..._pageMode": "popup") points at THIS page — the page dialog otherwise has no way to know a tile somewhere else opens it, so it wouldn't show or save the size below. Not needed when "Linked page"/"Auto-open" above are already set to popup — this page's popup shape is one setting shared by all three, however it gets opened.</div>
             <div id="pageDialogPopupRow" style="display:none">
                 <label style="margin-top:10px" data-i18n="web_ui_popup_size_amp_position">Popup size &amp; position</label>
@@ -445,16 +458,19 @@
 <script src="js/pages.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/cards-extra.js"></script>
+<script src="js/cards-xbox.js"></script>
 <script src="js/history.js"></script>
+<script src="js/deeplink.js"></script>
 <script src="js/harmony.js"></script>
 <script src="js/hotkeys.js"></script>
 <script src="js/activities.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/dock.js"></script>
 <script src="js/power.js"></script>
+<script src="js/weather.js"></script>
 <script src="js/export.js"></script>
 <script src="js/preview.js"></script>
 <script src="js/device.js"></script>
-<script>I18N.ready.then(() => { initEditor(); loadStableBadge(); applyUiI18n(); });</script>
+<script>I18N.ready.then(() => { initEditor(); applyUiI18n(); });</script>
 </body>
 </html>

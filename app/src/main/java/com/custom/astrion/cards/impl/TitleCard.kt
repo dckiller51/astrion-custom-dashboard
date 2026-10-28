@@ -26,6 +26,7 @@ import androidx.core.graphics.toColorInt
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
@@ -141,11 +142,7 @@ class TitleCard : CardRenderer {
             if (harmonyDevice != null && harmonyCommand != null) {
                 ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
             }
-            val irDevice = o["${prefix}_irDevice"] as? String
-            val irCommand = o["${prefix}_irCommand"] as? String
-            if (irDevice != null && irCommand != null) {
-                ctx.sendIrCommand(irDevice, irCommand)
-            }
+            ctx.sendIrAction(o, "${prefix}_")
             (o["${prefix}_activity"] as? String)?.let(ctx.startActivity)
             (o["${prefix}_page"] as? String)?.let { page ->
                 // "${prefix}_pageMode": "popup" opens `page` as a floating

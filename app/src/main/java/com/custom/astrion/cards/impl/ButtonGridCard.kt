@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
@@ -76,6 +76,7 @@ import com.custom.astrion.ui.tapCombinedClickable
  *   { "type": "button_grid", "options": {
  *       "columns": 3,
  *       "iconPosition": "left",
+ *       "show_labels": false,              // 1.4.0: buttons with an icon show only the icon
  *       "buttons": [
  *         { "name": "Group",   "service": "script.group",
  *           "long_press": { "service": "script.ungroup" } },
@@ -104,24 +105,21 @@ class ButtonGridCard : CardRenderer {
         // Card-wide — every button in the grid shares one layout, same idea as
         // "columns". Unrecognized/missing values fall back to "top", the
         // original (and only, before this) behavior.
-        val iconPosition = IconPosition.from(config.string("iconPosition"))
+        // 1.3.7: tile_height (dp) and font_size (sp) for bigger buttons, e.g. a keypad.
+        val style =
+            GridStyle(
+                iconPosition = IconPosition.from(config.string("iconPosition")),
+                tileHeight = config.int("tile_height").takeIf { it > 0 },
+                fontSize = config.int("font_size").takeIf { it > 0 },
+                showLabels = config.bool("show_labels", true)
+            )
 
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            buttons.chunked(columns).forEach { row ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    row.forEach { b ->
-                        // Optional separate "long_press" block — see GridLongPress.kt.
-                        // Null when absent, so a hold stays a plain tap (unchanged).
-                        val onLongPress = longPressActionOf(b)?.let { lp -> { fireGridLongPress(ctx, lp, b["hub"] as? String) } }
-                        val actions = GridButtonActions(onClick = { fire(ctx, b) }, onLongClick = onLongPress)
-                        GridButton(b, Modifier.weight(1f), ctx.theme, iconPosition, ctx.entities, actions)
-                    }
-                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                }
-            }
+        GridRows(buttons, columns, config.bool("center_last_row")) { b ->
+            // Optional separate "long_press" block — see GridLongPress.kt.
+            // Null when absent, so a hold stays a plain tap (unchanged).
+            val onLongPress = longPressActionOf(b)?.let { lp -> { fireGridLongPress(ctx, lp, b["hub"] as? String) } }
+            val actions = GridButtonActions(onClick = { fire(ctx, b) }, onLongClick = onLongPress)
+            GridButton(b, Modifier.weight(1f), ctx.theme, style, ctx.entities, actions)
         }
     }
 
@@ -159,11 +157,7 @@ class ButtonGridCard : CardRenderer {
         }
         (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
         (b["stopActivity"] as? String)?.let(ctx.stopActivity)
-        val irDevice = b["irDevice"] as? String
-        val irCommand = b["irCommand"] as? String
-        if (irDevice != null && irCommand != null) {
-            ctx.sendIrCommand(irDevice, irCommand)
-        }
+        ctx.sendIrAction(b)
         if (b["closePopup"] == true) ctx.closePopup()
     }
 
@@ -210,12 +204,19 @@ class ButtonGridCard : CardRenderer {
      * threshold. [onLongClick] is null when the button has no "long_press". */
     private class GridButtonActions(val onClick: () -> Unit, val onLongClick: (() -> Unit)?)
 
+    /** Card-wide look of every button: icon position, and the optional height / text size. */
+    /** [showLabels] false (1.4.0): a button with an icon shows the icon only; its name stays for accessibility. */
+    private class GridStyle(val iconPosition: IconPosition, val tileHeight: Int?, val fontSize: Int?, val showLabels: Boolean = true) {
+        /** A button's name shows when it has one, unless the label is hidden and the button has an icon. */
+        fun showsLabel(name: String?, hasIcon: Boolean): Boolean = !name.isNullOrBlank() && (showLabels || !hasIcon)
+    }
+
     @Composable
     private fun GridButton(
         b: Map<String, Any?>,
         modifier: Modifier,
         theme: ThemeColors,
-        iconPosition: IconPosition,
+        style: GridStyle,
         entities: EntityMap,
         actions: GridButtonActions
     ) {
@@ -227,10 +228,11 @@ class ButtonGridCard : CardRenderer {
                 iconPath?.let { decodeIconSampled(it, targetPx) }
             }
         val hasIcon = bitmap != null
-        val hasName = !name.isNullOrBlank()
+        val hasName = style.showsLabel(name, hasIcon)
         val active = isConditionActive(b, entities)
         // left/right lay the icon and label side by side, so the tile doesn't
         // need the extra vertical room top/bottom do to fit both.
+        val iconPosition = style.iconPosition
         val sideBySide = iconPosition.sideBySide
 
         val icon: @Composable () -> Unit = {
@@ -241,7 +243,7 @@ class ButtonGridCard : CardRenderer {
                 Text(
                     name!!,
                     color = theme.primaryText,
-                    fontSize = if (hasIcon) 12.sp else 15.sp,
+                    fontSize = (style.fontSize ?: if (hasIcon) 12 else 15).sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -252,7 +254,7 @@ class ButtonGridCard : CardRenderer {
 
         val boxModifier =
             modifier
-                .height(if (hasIcon && !sideBySide) 68.dp else 48.dp)
+                .height((style.tileHeight ?: if (hasIcon && !sideBySide) 68 else 48).dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(tileBackground(b, active, theme))
                 .then(activeBorderModifier(b, active, theme))

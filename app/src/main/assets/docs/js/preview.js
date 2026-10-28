@@ -362,15 +362,22 @@ function renderPreview() {
 
   updateStatusBarClock();
 
-  const globalKeys = (dashboardData.hotkeys || []).length + (dashboardData.longHotkeys || []).length;
+  // 1.4.0: only the keys that really apply on this page. A page key overrides the global key of
+  // the same press type, so that global one is left out (it used to be listed as well).
+  const effective = (globalList, pageList) => {
+    const overridden = new Set((pageList || []).map(h => String(h.key).toUpperCase()));
+    return (globalList || []).filter(h => !overridden.has(String(h.key).toUpperCase()));
+  };
+  const globalShort = effective(dashboardData.hotkeys, page.hotkeys);
+  const globalLong = effective(dashboardData.longHotkeys, page.longHotkeys);
   const pageKeys = (page.hotkeys || []).length + (page.longHotkeys || []).length;
   const hkInfo = document.getElementById('hotkeysInfo');
   if (hkInfo) {
-    if (globalKeys + pageKeys > 0) {
+    if (globalShort.length + globalLong.length + pageKeys > 0) {
       let hkHtml = `<div class="hotkeys-badge"><strong>${I18N.t('web_preview_hotkeys_active')}</strong><br>`;
       const hkRow = (scopeKey, h) => `• [${I18N.t(scopeKey)}] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`;
-      (dashboardData.hotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_global', h));
-      (dashboardData.longHotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_global_long', h));
+      globalShort.forEach(h => hkHtml += hkRow('web_hotkey_scope_global', h));
+      globalLong.forEach(h => hkHtml += hkRow('web_hotkey_scope_global_long', h));
       (page.hotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page', h));
       (page.longHotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page_long', h));
       hkHtml += `</div>`;
@@ -390,6 +397,7 @@ function renderPreview() {
 
     const extraPreview = {
       tv_remote: typeof tvRemotePreviewHtml === 'function' ? tvRemotePreviewHtml : null,
+      xbox: typeof xboxPreviewHtml === 'function' ? xboxPreviewHtml : null,
       row: typeof rowPreviewHtml === 'function' ? rowPreviewHtml : null,
       speaker_group: typeof speakerGroupPreviewHtml === 'function' ? speakerGroupPreviewHtml : null,
       picture_elements: typeof pictureElementsPreviewHtml === 'function' ? pictureElementsPreviewHtml : null
@@ -922,12 +930,14 @@ function renderPreview() {
       const isRow = isScene && card.options?.layout === 'row';
       const showLabels = card.options?.show_labels !== false;
       const iconFill = isScene && card.options?.icon_fill === true;
-      const tileHeight = isScene ? (card.options?.tile_height || (iconFill ? 120 : 0)) : 0;
+      const tileHeight = card.options?.tile_height || (isScene && iconFill ? 120 : 0);
+      const fontSize = card.options?.font_size || 0;
+      const fontStyle = fontSize ? ` style="font-size:${fontSize}px"` : '';
       // Mirrors SceneGridCard.kt: once ANY scene in the grid has an icon,
       // every tile in that grid uses the taller icon layout (74dp) so they
       // stay a uniform height — even tiles with no icon of their own get a
       // blank spacer instead of dropping to the shorter 58dp layout.
-      const hasIconGrid = isScene && items.some(i => i.icon);
+      const hasIconGrid = isScene && items.some(i => !i.spacer && i.icon);
 
       const tileHtml = (item) => {
         const label = item.name || '?';
@@ -947,27 +957,36 @@ function renderPreview() {
                 : '');
           return `<div class="preview-scene-tile ${tileClass}" style="background:${bg}; color:${textColor};${heightStyle}">
             ${iconCell}
-            ${showLabels ? `<div class="st-label">${label}</div>` : ''}
+            ${showLabels ? `<div class="st-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
         } else {
           const hasIcon = !!src;
           const iconCell = hasIcon
             ? `<img class="bt-icon" src="${src}" alt="" onerror="onButtonIconError(this)">`
             : '';
-          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}">
+          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${tileHeight ? ` style="height:${tileHeight}px"` : ''}>
             ${iconCell}
-            ${label ? `<div class="bt-label">${label}</div>` : ''}
+            ${label && (showLabels || !hasIcon) ? `<div class="bt-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
         }
       };
 
       let gridHtml;
       if (isRow) {
-        const tiles = items.map(i => `<div style="flex:0 0 104px; width:104px;">${tileHtml(i)}</div>`).join('');
+        const tiles = items.map(i => `<div style="flex:0 0 104px; width:104px;">${i.spacer ? '' : tileHtml(i)}</div>`).join('');
         gridHtml = `<div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:2px;">${tiles}</div>`;
       } else {
-        const tiles = items.map(tileHtml).join('');
-        gridHtml = `<div class="preview-grid" style="grid-template-columns: repeat(${cols}, minmax(0, 1fr))">${tiles}</div>`;
+        // Same rows as GridRows (GridLayout.kt): spacer cells, and the last row centred with center_last_row.
+        const center = card.options?.center_last_row === true;
+        const rows = [];
+        for (let r = 0; r < items.length; r += cols) rows.push(items.slice(r, r + cols));
+        const cellHtml = (i) => `<div style="flex:1 1 0; min-width:0">${i.spacer ? '' : tileHtml(i)}</div>`;
+        const pad = (w) => w > 0 ? `<div style="flex:${w} 1 0"></div>` : '';
+        gridHtml = `<div style="display:flex; flex-direction:column; gap:8px">` + rows.map(row => {
+          const missing = cols - row.length;
+          const lead = center ? missing / 2 : 0;
+          return `<div style="display:flex; gap:8px">${pad(lead)}${row.map(cellHtml).join('')}${pad(missing - lead)}</div>`;
+        }).join('') + `</div>`;
       }
 
       cardEl.innerHTML = `
@@ -1024,6 +1043,10 @@ function renderPreview() {
       cardEl.innerHTML = `
         <div class="card">
           <div class="card-title"><span>plex</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <b style="color:#E6EEF2">Plex</b>
+            ${o.show_search !== false ? `<span style="background:#2C4C58;border-radius:14px;padding:3px 10px;font-size:11px;color:#E6EEF2">🔍 ${I18N.t('web_card_plex_search_button')}</span>` : ''}
+          </div>
           ${rowsHtml}
           <div class="hint" style="margin-top:8px">${I18N.t('web_preview_plex_placeholder')} ${I18N.t('web_preview_server', o.host || I18N.t('web_preview_not_set'))} · ${I18N.t('web_preview_playback_entity', o.media_entity || I18N.t('web_preview_not_set'))}${o.play_entity ? ' · ' + I18N.t('web_preview_direct_client', o.play_entity) : ''} · ${I18N.t('web_preview_items_per_row', o.items_per_row ?? 12)}.</div>
         </div>`;

@@ -17,7 +17,7 @@ import kotlin.system.exitProcess
  */
 object AppLanguage {
     /** Language tag → its own name (shown as is, whatever the current language). */
-    val CHOICES = linkedMapOf("en" to "English", "fr" to "Français", "it" to "Italiano", "es" to "Español")
+    val CHOICES = linkedMapOf("en" to "English", "fr" to "Français", "de" to "Deutsch", "it" to "Italiano", "es" to "Español")
 
     private const val PREFS = "astrion_settings"
     private const val KEY = "app_language"

@@ -23,6 +23,9 @@ let appleTvScanResults = []; // last /appletv-scan result
 let appleTvPairing = null;  // { sessionId, device } while waiting for the PIN
 let appleTvMrpPairing = null; // { sessionId, device, localId } while waiting for the second (MRP) PIN
 let appleTvMrpScanResults = []; // last /appletv-mrp-scan result
+let androidTvs = [];       // full [{localId, name, entityId, host, serviceName, mac, certSha256}] (1.3.6)
+let androidTvScanResults = []; // last /androidtv-scan result
+let androidTvPairing = null; // { sessionId, device: {host, serviceName, name} } while waiting for the code
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
 
@@ -69,6 +72,7 @@ async function loadAll() {
     harmonyHubs = Array.isArray(data.harmonyHubs) ? data.harmonyHubs : [];
     extenders = Array.isArray(data.extenders) ? data.extenders : [];
     appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
+    androidTvs = Array.isArray(data.androidTvs) ? data.androidTvs : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -83,6 +87,7 @@ async function loadAll() {
   dashboardData.irDevices = fullDashboard.irDevices || [];
   dashboardData.haDevices = fullDashboard.haDevices || [];
   dashboardData.harmonyAliases = fullDashboard.harmonyAliases || {};
+  dashboardData.weather = fullDashboard.weather && typeof fullDashboard.weather === 'object' ? fullDashboard.weather : undefined;
   await reconcileAppleTvHaDevices();
   await refreshHaStates();
   renderDevicesList();
@@ -95,8 +100,9 @@ async function loadAll() {
 async function reconcileAppleTvHaDevices() {
   dashboardData.haDevices = dashboardData.haDevices || [];
   let changed = false;
-  appleTvs.forEach(tv => {
-    const id = 'appletv_' + tv.localId;
+  const paired = appleTvs.map(tv => ({ id: 'appletv_' + tv.localId, tv }))
+    .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })));
+  paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
       dashboardData.haDevices.push({ id, domain: 'media_player', entityId: tv.entityId, name: tv.name });
@@ -112,7 +118,9 @@ async function reconcileAppleTvHaDevices() {
 
 async function refreshHaStates() {
   try {
-    const res = await fetch('/ha-states');
+    // refresh=1 (1.4.0): the remote re-reads every entity from Home Assistant first, so renamed or
+    // new entities show up in the pickers even while the remote sleeps.
+    const res = await fetch('/ha-states?refresh=1');
     const data = await res.json();
     haStates = (data && data.states) ? data.states : null;
   } catch (e) {
@@ -121,6 +129,9 @@ async function refreshHaStates() {
 }
 
 function renderDevicesList() {
+  const tileWeather = document.getElementById('tileWeatherCount');
+  if (tileWeather) tileWeather.textContent = dashboardData.weather ? (dashboardData.weather.name || '📍') : I18N.t('web_dev_weather_not_set');
+  if (typeof renderWeatherForm === 'function') renderWeatherForm();
   const haSummary = document.getElementById('haConnectionSummary');
   if (haSummary) {
     haSummary.textContent = haConfig.url ? I18N.t('web_dev_connected_to', haConfig.url) : I18N.t('web_dev_not_connected_yet');
@@ -196,6 +207,8 @@ function renderDevicesList() {
       : `<div class="hint">${I18N.t('web_dev_list_no_atv')}</div>`;
   }
 
+  renderAndroidTvs();
+
   const tileIrCount = document.getElementById('tileIrCount');
   if (tileIrCount) {
     tileIrCount.textContent = dashboardData.irDevices.length
@@ -248,6 +261,8 @@ function closeDeviceForms() {
   setDisplay('appleTvForm', 'none');
   appleTvPairing = null;
   appleTvMrpPairing = null;
+  setDisplay('androidTvForm', 'none');
+  androidTvPairing = null;
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -293,6 +308,10 @@ async function openDeviceForm(type) {
     document.getElementById('appleTvForm').style.display = '';
     document.getElementById('appleTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     scanAppleTvs();
+  } else if (type === 'androidTv') {
+    document.getElementById('androidTvForm').style.display = '';
+    document.getElementById('androidTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    scanAndroidTvs();
   } else if (type === 'ir') {
     document.getElementById('irForm').style.display = '';
     renderIrTargetOptions();
@@ -356,11 +375,13 @@ async function removeHa() {
   await persistHaAndHubs();
 }
 
-/** Always resends the full Harmony hub, extender AND Apple TV lists alongside HA
+/** Always resends the full Harmony hub, extender, Apple TV AND Android TV lists alongside HA
  * fields — /save-connection replaces all three together, so omitting
  * either here would wipe it even though this form never touched it. */
 async function persistHaAndHubs() {
-  const btn = document.activeElement;
+  // Only a real button gets the "Saving…" label: after a click on a ✎/✕ span, a prompt() or a
+  // disabled button, activeElement is <body>, and setting its text would wipe the whole page.
+  const btn = document.activeElement && document.activeElement.tagName === 'BUTTON' ? document.activeElement : null;
   const originalText = btn ? btn.textContent : null;
   if (btn) { btn.textContent = I18N.t('web_device_saving'); btn.disabled = true; }
   try {
@@ -394,6 +415,17 @@ async function persistHaAndHubs() {
       body.append('atv_mrpservice[]', tv.mrpServiceName || '');
       body.append('atv_mrpcredentials[]', tv.mrpCredentials || '');
       body.append('atv_mrptransport[]', tv.mrpTransport || 'airplay');
+    });
+    body.set('adtv_present', '1'); // same for the Android TV list (1.3.6)
+    androidTvs.forEach(tv => {
+      body.append('adtv_localid[]', tv.localId || '');
+      body.append('adtv_name[]', tv.name || '');
+      body.append('adtv_entityid[]', tv.entityId || '');
+      body.append('adtv_host[]', tv.host || '');
+      body.append('adtv_service[]', tv.serviceName || '');
+      body.append('adtv_mac[]', tv.mac || '');
+      body.append('adtv_cert[]', tv.certSha256 || '');
+      body.append('adtv_helper[]', tv.helperCode || '');
     });
     const res = await fetch('/save-connection', {
       method: 'POST',
@@ -1376,6 +1408,25 @@ async function persistIrDevices() {
   }
 }
 
+// ---- Built-in weather (1.3.2): js/weather.js edits dashboardData.weather and calls this. ---------
+// Saved right away like everything else on this page: dashboard.json with only "weather" changed.
+async function weatherChanged() {
+  try {
+    const payload = { ...fullDashboard };
+    if (dashboardData.weather) payload.weather = dashboardData.weather; else delete payload.weather;
+    const form = new FormData();
+    form.append('file', new Blob([JSON.stringify(payload)], { type: 'application/json' }), 'dashboard.json');
+    form.append('note', I18N.t('web_dev_weather_note'));
+    const res = await fetch('/dashboard.json', { method: 'POST', body: form });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    fullDashboard = payload;
+    showToast(I18N.t('web_dev_saved'));
+    renderDevicesList();
+  } catch (e) {
+    showToast(I18N.t('web_device_save_failed', e), 'error');
+  }
+}
+
 // ---- Dashboard backup (restore) — POST /dashboard.json with a raw file,
 // same endpoint the builder's "Save to device" already uses; unlike that
 // one this replaces the whole file wholesale, so reload after success
@@ -1385,7 +1436,9 @@ async function restoreDashboard() {
   const input = document.getElementById('dashboardFile');
   const file = input.files && input.files[0];
   if (!file) { alert(I18N.t('web_dev_err_choose_backup')); return; }
-  if (!confirm(I18N.t('web_dev_confirm_restore'))) return;
+  // A full backup (.zip, 1.3.9) goes to /restore and restarts the app; a dashboard.json as before.
+  const full = /\.zip$/i.test(file.name);
+  if (!confirm(I18N.t(full ? 'web_dev_confirm_restore_full' : 'web_dev_confirm_restore'))) return;
   const btn = document.getElementById('restoreDashboardBtn');
   const originalText = btn.textContent;
   btn.textContent = I18N.t('web_dev_restoring');
@@ -1393,10 +1446,13 @@ async function restoreDashboard() {
   try {
     const form = new FormData();
     form.append('file', file, file.name);
-    const res = await fetch('/dashboard.json', { method: 'POST', body: form });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    showToast(I18N.t('web_dev_restored'));
-    setTimeout(() => location.reload(), 800);
+    const res = await fetch(full ? '/restore' : '/dashboard.json', { method: 'POST', body: form });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
+    showToast(I18N.t(full ? 'web_dev_restored_full' : 'web_dev_restored'));
+    setTimeout(() => location.reload(), full ? 8000 : 800);
   } catch (e) {
     showToast(I18N.t('web_dev_restore_failed', e), 'error');
     btn.textContent = originalText;
@@ -1584,27 +1640,37 @@ async function deleteIcon(name) {
   await loadIconsList();
 }
 
+/** 1.4.0: several icons at once — sent one by one (same POST /icons), with progress and a summary. */
 async function uploadIcon() {
   const input = document.getElementById('iconFile');
-  const file = input.files && input.files[0];
-  if (!file) { alert(I18N.t('web_dev_err_choose_icon')); return; }
+  const files = input.files ? Array.from(input.files) : [];
+  if (!files.length) { alert(I18N.t('web_dev_err_choose_icon')); return; }
   const btn = document.getElementById('uploadIconBtn');
   const originalText = btn.textContent;
-  btn.textContent = I18N.t('web_dev_uploading');
   btn.disabled = true;
-  try {
-    const form = new FormData();
-    form.append('file', file, file.name);
-    const res = await fetch('/icons', { method: 'POST', body: form });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    showToast(I18N.t('web_dev_icon_uploaded'));
-    input.value = '';
-    await loadIconsList();
-  } catch (e) {
-    showToast(I18N.t('web_dev_upload_failed', e), 'error');
-  } finally {
-    btn.textContent = originalText;
-    btn.disabled = false;
+  const failed = [];
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    btn.textContent = files.length > 1 ? I18N.t('web_dev_uploading_n', i + 1, files.length) : I18N.t('web_dev_uploading');
+    try {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      const res = await fetch('/icons', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) {
+      console.error('Icon upload failed', file.name, e);
+      failed.push(file.name);
+    }
+  }
+  btn.textContent = originalText;
+  btn.disabled = false;
+  input.value = '';
+  await loadIconsList();
+  const done = files.length - failed.length;
+  if (!failed.length) {
+    showToast(files.length > 1 ? I18N.t('web_dev_icons_uploaded_n', done) : I18N.t('web_dev_icon_uploaded'));
+  } else {
+    showToast(I18N.t('web_dev_icons_upload_partial', done, files.length, failed.join(', ')), 'error');
   }
 }
 

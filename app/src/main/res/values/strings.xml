@@ -76,6 +76,9 @@
     <string name="restart_app">Restart the app</string>
     <string name="about_logs">Logs</string>
     <string name="logs_server_off">turn on Web configuration</string>
+    <string name="save_log">Save the log on the remote</string>
+    <string name="log_saved">Saved: %1$s</string>
+    <string name="log_save_failed">Couldn\'t save the log (storage refused).</string>
 
     <!-- Web Config: Header & General -->
     <string name="web_config_title">Astrion Custom — Local configuration</string>
@@ -155,7 +158,7 @@
     <string name="web_config_update_none">Already up to date</string>
     <string name="web_config_install_update_button">Download &amp; install</string>
     <string name="web_config_update_installing">Installer launched — approve the install prompt on the panel screen</string>
-    <string name="web_config_update_needs_permission">Allow "Install unknown apps" for this app on the screen that just opened, then tap Download &amp; install again.</string>
+    <string name="web_config_update_needs_permission">Allow \"Install unknown apps\" for this app on the screen that just opened, then tap Download &amp; install again.</string>
     <string name="web_config_update_failed">Update check failed: %1$s</string>
 
     <!-- Connection status -->
@@ -164,7 +167,7 @@
     <string name="connection_error_retrying">Connection error — retrying</string>
 
     <!-- Unknown card -->
-    <string name="unknown_card_type">Unknown card type: "%1$s"</string>
+    <string name="unknown_card_type">Unknown card type: \"%1$s\"</string>
 
     <!-- Media (player, Plex, browser) -->
     <string name="media_loading">Loading…</string>
@@ -176,6 +179,32 @@
     <string name="media_load_timeout">Couldn\'t load media (timeout)</string>
     <string name="media_load_failed">Couldn\'t load media</string>
     <string name="media_browse">Browse</string>
+    <string name="music_search">Music search</string>
+    <string name="music_search_button">Search music</string>
+    <string name="music_search_hint">Title, artist, album…</string>
+    <string name="music_search_type">Type at least 2 letters.</string>
+    <string name="music_search_none">Nothing found for “%1$s”.</string>
+    <string name="music_search_failed">The player didn\'t answer.</string>
+    <string name="music_search_unsupported">This player can\'t search (Home Assistant offers search for Lyrion Music Server, Music Assistant…). Choose another player for the search in the card.</string>
+    <string name="music_all">All</string>
+    <string name="music_artists">Artists</string>
+    <string name="music_albums">Albums</string>
+    <string name="music_tracks">Tracks</string>
+    <string name="music_playlists">Playlists</string>
+    <string name="music_playing">Playing: %1$s</string>
+    <string name="music_queued">Added to the queue: %1$s</string>
+    <string name="music_add_to_queue">Add to the queue</string>
+    <string name="music_queue">Queue</string>
+    <string name="music_queue_position">Track %1$d of %2$d</string>
+    <string name="music_queue_count">Tracks in the queue: %1$d</string>
+    <string name="music_queue_more">And %1$d more after these.</string>
+    <string name="music_queue_more_ma">And %1$d more: Music Assistant only shares the current and next track.</string>
+    <string name="music_queue_empty">The queue is empty.</string>
+    <string name="music_queue_unsupported">This player doesn\'t share its queue.</string>
+    <string name="music_queue_clear">Clear the queue</string>
+    <string name="music_queue_clear_confirm">Tap again to clear</string>
+    <string name="music_queue_remove">Remove from the queue</string>
+    <string name="music_queue_refresh">Refresh</string>
     <string name="media_power_toggle">Toggle</string>
     <string name="media_browser_play">Play</string>
     <string name="media_browser_add_to_queue">Add to queue</string>
@@ -185,6 +214,15 @@
     <string name="plex_this_season">This season</string>
     <string name="plex_play">Play</string>
     <string name="plex_episode">E%1$s · %2$s</string>
+    <string name="plex_search">Search</string>
+    <string name="plex_search_hint">Films, shows, episodes…</string>
+    <string name="plex_search_type">Type at least 2 letters of a title.</string>
+    <string name="plex_search_none">Nothing found for “%1$s”.</string>
+    <string name="plex_search_failed">Can\'t reach the Plex server.</string>
+    <string name="plex_movies">Films</string>
+    <string name="plex_shows">Shows</string>
+    <string name="plex_seasons">Seasons</string>
+    <string name="plex_episodes">Episodes</string>
 
     <!-- Select cards -->
     <string name="select_no_options">No options</string>
@@ -243,4 +281,28 @@
     <string name="speaker_ungroup">Ungroup</string>
     <string name="setup_banner_title">Set up this remote from a browser</string>
     <string name="connection_web_page_hint">Remote\'s web page: %1$s</string>
+    <string name="xbox_online">Online</string>
+    <string name="xbox_offline">Offline</string>
+    <string name="xbox_console_off">Xbox off</string>
+    <string name="xbox_no_game">No game running</string>
+    <string name="xbox_no_game_hint">The game shows here as soon as you play.</string>
+    <string name="xbox_ratio">ratio %1$s</string>
+    <string name="xbox_achievements">Achievements</string>
+    <string name="xbox_gamerscore">Gamerscore</string>
+    <string name="xbox_ta_score">TA score</string>
+    <string name="xbox_last_sync">Last sync</string>
+    <string name="xbox_sync_problem">Sync problem</string>
+    <string name="xbox_attr_platform">Platform</string>
+    <string name="xbox_attr_publisher">Publisher</string>
+    <string name="xbox_attr_developer">Developer</string>
+    <string name="xbox_attr_genres">Genres</string>
+    <string name="xbox_attr_release_date">Release date</string>
+    <string name="xbox_attr_min_age">Minimum age</string>
+    <string name="xbox_attr_completion">Completion</string>
+    <string name="xbox_attr_ratio">Ratio</string>
+    <string name="xbox_attr_hours">Time played</string>
+    <string name="xbox_attr_description">Description</string>
+    <string name="xbox_attr_game_url">Game on TrueAchievements</string>
+    <string name="xbox_attr_walkthrough_url">Achievement guide</string>
+    <string name="xbox_attr_location">Location</string>
 </resources>

@@ -72,6 +72,24 @@ data class AppleTvConfig(
 )
 
 /**
+ * One Android TV paired directly (1.3.6) — Android TV Remote v2, no Home Assistant. Published as
+ * [entityId] (`media_player.androidtv_…`) plus the matching `remote.androidtv_…`.
+ */
+data class AndroidTvConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    /** mDNS instance name, to find the TV again if its IP changes. Blank when added by IP. */
+    val serviceName: String = "",
+    /** From the TV's certificate: its MAC address, and the certificate's SHA-256 (only that TV is accepted). */
+    val mac: String = "",
+    val certSha256: String = "",
+    /** The code of the Astrion TV Helper app installed on that TV (title, cover, opening apps), blank without it. */
+    val helperCode: String = ""
+)
+
+/**
  * A single Harmony Hub the app can talk to directly, bypassing Home
  * Assistant. [localId] is a stable app-generated key (independent of the
  * hub's own numeric [hubId]) used to reference this hub from dashboard.json
@@ -103,6 +121,8 @@ object RemoteSettings {
     private const val KEY_HARMONY_HUBS = "harmony_hubs" // JSON array, see HarmonyHubConfig
     private const val KEY_EXTENDERS = "ir_extenders" // JSON array, see ExtenderConfig
     private const val KEY_APPLE_TVS = "apple_tvs" // JSON array, see AppleTvConfig
+    private const val KEY_ANDROID_TVS = "android_tvs" // JSON array, see AndroidTvConfig
+    private const val KEY_ANDROID_TV_IDENTITY = "android_tv_identity" // key:cert, see AndroidTvIdentity
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -295,5 +315,56 @@ object RemoteSettings {
                 }
             }
         prefs(context).edit { putString(KEY_APPLE_TVS, array.toString()) }
+    }
+
+    /** All Android TVs paired directly, in the order they were added. */
+    fun androidTvs(context: Context): List<AndroidTvConfig> {
+        val raw = prefs(context).getString(KEY_ANDROID_TVS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                AndroidTvConfig(
+                    localId,
+                    str("name").ifBlank { "Android TV" },
+                    entityId,
+                    str("host"),
+                    str("serviceName"),
+                    str("mac"),
+                    str("certSha256"),
+                    str("helperCode")
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveAndroidTvs(context: Context, androidTvs: List<AndroidTvConfig>) {
+        val array =
+            buildJsonArray {
+                androidTvs.forEach { tv ->
+                    addJsonObject {
+                        put("localId", tv.localId)
+                        put("name", tv.name)
+                        put("entityId", tv.entityId)
+                        put("host", tv.host)
+                        put("serviceName", tv.serviceName)
+                        put("mac", tv.mac)
+                        put("certSha256", tv.certSha256)
+                        put("helperCode", tv.helperCode)
+                    }
+                }
+            }
+        prefs(context).edit { putString(KEY_ANDROID_TVS, array.toString()) }
+    }
+
+    /** This remote's key and certificate for Android TVs (`key:cert`, see AndroidTvIdentity), blank until first needed. */
+    fun androidTvIdentity(context: Context): String = prefs(context).getString(KEY_ANDROID_TV_IDENTITY, "") ?: ""
+
+    fun saveAndroidTvIdentity(context: Context, serialized: String) {
+        prefs(context).edit(commit = true) { putString(KEY_ANDROID_TV_IDENTITY, serialized) }
     }
 }

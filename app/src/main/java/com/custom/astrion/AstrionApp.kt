@@ -25,6 +25,7 @@ import com.custom.astrion.cards.impl.SwitchCard
 import com.custom.astrion.cards.impl.TitleCard
 import com.custom.astrion.cards.impl.TvRemoteCard
 import com.custom.astrion.cards.impl.VacuumCard
+import com.custom.astrion.cards.impl.XboxCard
 import com.custom.astrion.config.ActiveActivityStore
 import com.custom.astrion.config.DeviceStateStore
 import com.custom.astrion.ha.HaLabels
@@ -75,6 +76,7 @@ class AstrionApp : Application() {
             SwitchCard(),
             TitleCard(),
             TvRemoteCard(),
+            XboxCard(),
             VacuumCard()
             // ← Register your own card types here
         )

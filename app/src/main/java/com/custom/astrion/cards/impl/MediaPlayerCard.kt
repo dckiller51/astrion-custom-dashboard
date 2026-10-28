@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -87,7 +86,10 @@ import kotlinx.coroutines.delay
  *       "show_volume_level": false,          // append " ⸱ N%" to the state line
  *       "media_controls": "previous,play_pause,next",   // comma list, see MEDIA_CONTROL_KEYS
  *       "volume_controls": "mute,buttons",               // comma list, see VOLUME_CONTROL_KEYS
- *       "top_buttons": [ { "name": "Group", "service": "...", "entity_id": "...", "data": {} } ]
+ *       "top_buttons": [ { "name": "Group", "service": "...", "entity_id": "...", "data": {} } ],
+ *       "music_search": true,               // 1.3.9: "Search music" (Home Assistant's media search)
+ *       "search_player": "media_player.club_2", // optional: the player that searches, plays and holds the queue (default: entity_id)
+ *       "show_queue": false                 // 1.4.0: hide the "Queue" button (shown when the player shares its queue or can clear it)
  *   } }
  *
  * All controls are filtered live against the entity's `supported_features`
@@ -103,7 +105,11 @@ class MediaPlayerCard : CardRenderer {
     override fun Render(config: CardConfig, ctx: CardContext) {
         val entityId = config.string("entity_id") ?: return
         val full = config.string("variant") == "full"
-        val playerConfig = resolveMediaPlayerConfig(config)
+        // The Queue button (1.4.0) only shows when its player shares a queue or can clear it.
+        val playerConfig =
+            resolveMediaPlayerConfig(config, entityId).let { pc ->
+                pc.copy(queuePlayer = pc.queuePlayer?.takeIf { MediaQueue.available(ctx.entities[it]) })
+            }
 
         val e = ctx.entities[entityId]
         val isOff = e == null || e.state == "off" || e.isUnavailable
@@ -138,7 +144,7 @@ class MediaPlayerCard : CardRenderer {
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun resolveMediaPlayerConfig(config: CardConfig): MediaPlayerConfig {
+    private fun resolveMediaPlayerConfig(config: CardConfig, entityId: String): MediaPlayerConfig {
         val topButtons = (config.options["top_buttons"] as? List<Map<String, Any?>>) ?: emptyList()
         val mediaControls =
             (config.string("media_controls") ?: DEFAULT_MEDIA_CONTROLS)
@@ -157,7 +163,9 @@ class MediaPlayerCard : CardRenderer {
             mediaControls = mediaControls,
             volumeControls = volumeControls,
             artworkFit = if (config.string("artwork_fit") == "contain") ContentScale.Fit else ContentScale.Crop,
-            artworkAspectRatio = if (config.string("artwork_ratio") == "portrait") 2f / 3f else 1.2f
+            artworkAspectRatio = if (config.string("artwork_ratio") == "portrait") 2f / 3f else 1.2f,
+            musicSearch = if (config.bool("music_search")) config.string("search_player") ?: entityId else null,
+            queuePlayer = if (config.bool("show_queue", true)) config.string("search_player") ?: entityId else null
         )
     }
 
@@ -189,6 +197,8 @@ class MediaPlayerCard : CardRenderer {
         // as the detail dialog — gives dedicated media pages (built with variant: "full") a way
         // to launch apps / browse content at all.
         var showBrowse by remember { mutableStateOf(false) }
+        var showSearch by remember { mutableStateOf(false) }
+        var showQueue by remember { mutableStateOf(false) }
         Box(
             modifier =
             Modifier
@@ -210,12 +220,22 @@ class MediaPlayerCard : CardRenderer {
                     art = art,
                     mp = actions::fire,
                     playerConfig = playerConfig,
-                    onBrowse = { showBrowse = true }
+                    onBrowse = { showBrowse = true },
+                    onSearch = playerConfig.musicSearch?.let { { showSearch = true } },
+                    onQueue = playerConfig.queuePlayer?.let { { showQueue = true } }
                 )
             )
         }
         if (showBrowse) {
             MediaBrowser(entityId = entityId, client = ctx.client, theme = ctx.theme) { showBrowse = false }
+        }
+        val search = playerConfig.musicSearch
+        if (showSearch && search != null) {
+            MusicSearchDialog(ctx.client, search, ctx.theme) { showSearch = false }
+        }
+        val queue = playerConfig.queuePlayer
+        if (showQueue && queue != null) {
+            MediaQueueDialog(ctx.client, queue, ctx.theme) { showQueue = false }
         }
     }
 
@@ -242,6 +262,7 @@ class MediaPlayerCard : CardRenderer {
                 e = data.e,
                 client = data.client,
                 theme = data.theme,
+                library = MediaLibraryPlayers(data.playerConfig.musicSearch, data.playerConfig.queuePlayer),
                 onClose = { showDetail = false }
             )
         }
@@ -480,7 +501,9 @@ class MediaPlayerCard : CardRenderer {
         val art: ImageBitmap?,
         val mp: (String, Array<out Pair<String, Any?>>) -> Unit,
         val playerConfig: MediaPlayerConfig,
-        val onBrowse: () -> Unit
+        val onBrowse: () -> Unit,
+        val onSearch: (() -> Unit)? = null,
+        val onQueue: (() -> Unit)? = null
     )
 
     @Composable
@@ -502,44 +525,17 @@ class MediaPlayerCard : CardRenderer {
             FullTopButtons(ctx, playerConfig.topButtons)
             FullArtwork(ctx, e, data.art, playerConfig)
             FullTitleArtist(ctx.theme, data.title, data.artist)
-            if (e?.supports(Feature.BROWSE_MEDIA) == true) {
-                FullBrowseButton(ctx.theme, data.onBrowse)
-            }
+            MediaLibraryButtons(
+                ctx.theme,
+                onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) data.onBrowse else null,
+                onSearch = data.onSearch,
+                onQueue = data.onQueue
+            )
             if (e?.attrDouble("media_duration") != null) {
                 MediaProgressBar(e, ctx.theme)
             }
             FullMediaButtonsRow(ctx.theme, mediaButtons, data.mp)
             FullVolumeRow(FullVolumeRowData(data.entityId, e, data.mp, volumeButtons, hasVolumeSlider, ctx.theme))
-        }
-    }
-
-    /** The "Browse" button shown in the full variant when the entity supports BROWSE_MEDIA —
-     * mirrors the one in MediaPlayerDetailDialog, since "full" has no long-press affordance to
-     * reach that dialog and top_buttons/button_grid can only fire HA services, not open
-     * MediaBrowser. See [FullTopButtons]'s doc comment for why this is split out. */
-    @Composable
-    private fun FullBrowseButton(theme: ThemeColors, onBrowse: () -> Unit) {
-        Row(
-            modifier =
-            Modifier
-                .clip(RoundedCornerShape(12.dp))
-                .background(theme.controlBackground)
-                .tapClickable(onClick = onBrowse)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                Icons.AutoMirrored.Filled.List,
-                contentDescription = null,
-                tint = theme.primaryText,
-                modifier = Modifier.size(16.dp)
-            )
-            Text(
-                stringResource(R.string.media_browse),
-                color = theme.primaryText,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(start = 6.dp)
-            )
         }
     }
 
@@ -779,7 +775,11 @@ private data class MediaPlayerConfig(
     /** Aspect ratio (width / height) of the artwork area in [MediaFullVariant].
      * Defaults to 1.2 (the original near-square shape). `"portrait"` in the
      * config switches this to 2/3, a closer fit for movie/TV posters. */
-    val artworkAspectRatio: Float = 1.2f
+    val artworkAspectRatio: Float = 1.2f,
+    /** `music_search` (1.3.9): the player that searches and plays the results; null without the option. */
+    val musicSearch: String? = null,
+    /** The Queue button's player (1.4.0): `search_player` or the card's own; null when hidden or the player has no queue. */
+    val queuePlayer: String? = null
 )
 
 private data class MediaText(val title: String, val subtitle: String?, val finalState: String)

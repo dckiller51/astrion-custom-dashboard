@@ -19,6 +19,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   textarea { font-family: monospace; resize: vertical; }
   button { background: #00E5FF; color: #121212; border: none; padding: 8px 14px; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; margin-top: 0px; }
   button:hover { background: #00b8cc; }
+  /* A download link styled as a button (1.3.9: backup & restore). */
+  a.button-link { display: inline-block; background: #00E5FF; color: #121212; padding: 8px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; text-decoration: none; }
+  a.button-link:hover { background: #00b8cc; }
   button.secondary { background: #333; color: #eee; }
   button.secondary:hover { background: #444; }
   button.danger { background: #3a2222; color: #ff8a8a; }
@@ -37,6 +40,21 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   }
   .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
   .toast.error { border-left-color: #ff5252; }
+  /* 1.4.0: loading screen until dashboard.json is in, and the floating "Save to device". */
+  .loading-overlay { position: fixed; inset: 0; background: rgba(18,18,18,0.82); z-index: 9000; display: flex; align-items: center; justify-content: center; }
+  .loading-overlay.hidden { display: none; }
+  .loading-box { display: flex; align-items: center; gap: 14px; background: #1e1e1e; border: 1px solid #333; border-radius: 12px; padding: 18px 22px; font-size: 0.95rem; }
+  .spinner { width: 26px; height: 26px; border: 3px solid #333; border-top-color: #00E5FF; border-radius: 50%; animation: spin 0.8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  /* 1.4.0: the preview's header (Save to device, undo, history…) stays on screen while the page scrolls. */
+  .preview-head { display: flex; align-items: center; gap: 8px; margin: -20px -20px 12px; padding: 14px 20px 10px; position: sticky; top: 0; z-index: 50; background: #181818; border-radius: 12px 12px 0 0; }
+  /* Grid scene/button form: "+ Add" in the accent colour; while editing one, a green "Save" and a red "Cancel". */
+  button.grid-add { background: #00E5FF; color: #121212; }
+  button.grid-add.editing { background: #2e7d32; color: #fff; }
+  button.grid-add.editing:hover { background: #388e3c; }
+  button.grid-cancel { background: #c62828; color: #fff; }
+  button.grid-cancel:hover { background: #d32f2f; }
+  .version-chip { display: inline-block; padding: 2px 8px; border-radius: 10px; background: #2d2d2d; font-size: 0.8rem; }
   .section-box { background: #252525; padding: 14px; border-radius: 8px; border: 1px solid #383838; margin-bottom: 14px; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
@@ -136,6 +154,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .tile.tile-ir .tile-icon { background: rgba(255,79,163,0.14); color: #FF4FA3; }
   .tile.tile-appletv { border-color: #333; } .tile.tile-appletv:hover, .tile.tile-appletv:focus-visible { border-color: #d8d8d8; }
   .tile.tile-appletv .tile-icon { background: rgba(216,216,216,0.1); color: #d8d8d8; }
+  .tile.tile-androidtv { border-color: #24452f; } .tile.tile-androidtv:hover, .tile.tile-androidtv:focus-visible { border-color: #3DDC84; }
+  .tile.tile-androidtv .tile-icon { background: rgba(61,220,132,0.12); color: #3DDC84; }
 
   .utility-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 28px; }
   .utility-row a, .utility-row button.link-btn {
@@ -647,3 +667,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .secondary-link { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 6px; background: #2d2d2d; color: #eee; text-decoration: none; font-size: 0.85rem; border: 1px solid #444; }
   .ha-icon-btn:disabled { opacity: 0.35; cursor: default; }
   #historyList button:disabled { opacity: 0.35; cursor: default; }
+
+/* Deep link target (#hotkeys…): a short highlight once scrolled to. */
+.deeplink-flash { animation: deeplinkFlash 1.6s ease-out; border-radius: 6px; }
+@keyframes deeplinkFlash { 0%, 40% { background: rgba(0, 229, 255, .22); box-shadow: 0 0 0 6px rgba(0, 229, 255, .22); } 100% { background: transparent; box-shadow: none; } }
+
+/* Built-in weather (js/weather.js) */
+.tile.tile-weather { border-color: #2a3550; } .tile.tile-weather:hover, .tile.tile-weather:focus-visible { border-color: #8AB4FF; }
+.tile.tile-weather .tile-icon { background: rgba(138,180,255,0.14); color: #8AB4FF; }
+.weather-place { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.weather-place button { margin-left: auto; }
+.weather-result { display: block; width: 100%; text-align: left; margin-top: 6px; }
