@@ -41,7 +41,9 @@ class StandbyController(
     private val activity: Activity,
     private val client: () -> HaClient?,
     private val isDocked: () -> Boolean,
-    private val motion: MotionHooks
+    private val motion: MotionHooks,
+    /** Quiet mode on/off for what else polls the network (the TV Helpers, 1.4.0). */
+    private val onQuiet: (Boolean) -> Unit = {}
 ) {
     /** Turns the motion-wake sensor listener on/off; [enabled] says whether the user wants it at all. */
     class MotionHooks(val enabled: () -> Boolean, val register: () -> Unit, val unregister: () -> Unit)
@@ -57,7 +59,10 @@ class StandbyController(
 
     private val goQuiet =
         Runnable {
-            if (!screenOn && !isDocked()) client()?.setQuiet(true, config.screenOffEntities.toSet())
+            if (!screenOn && !isDocked()) {
+                client()?.setQuiet(true, config.screenOffEntities.toSet())
+                onQuiet(true)
+            }
         }
     private val stopMotion =
         Runnable {
@@ -113,6 +118,7 @@ class StandbyController(
         handler.removeCallbacks(goQuiet)
         handler.removeCallbacks(stopMotion)
         client()?.setQuiet(false)
+        onQuiet(false)
         if (motion.enabled()) motion.register()
         applyScreenTimeout()
     }

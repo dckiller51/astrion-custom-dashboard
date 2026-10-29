@@ -712,6 +712,10 @@ function releaseBadgeHtml(prefix, release, installFn, installKey) {
   }
   const cmp = compareVersions(release.version, mine);
   if (cmp === 0) return `${prefix} ${name} ✅ ${I18N.t('web_release_is_installed')}`;
+  // Same numbers, beta build installed (e.g. 1.4.0-beta vs v1.4.0): the same version, not an update (1.4.1).
+  if (release.version.nums.join('.') === mine.nums.join('.')) {
+    return `${prefix} ${name} ✅ ${I18N.t('web_release_same_beta')}`;
+  }
   if (cmp < 0) return `${prefix} ${name} <span style="color:#888">${I18N.t('web_release_older')}</span>`;
   return `${prefix} ${name} ⬆️ <button type="button" onclick="${installFn}(this)" style="padding:4px 10px;font-size:0.8rem">${t(installKey)}</button>`;
 }

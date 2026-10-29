@@ -3,198 +3,118 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.4.0-beta] - 2026-10-28
+## [1.4.1-beta] - 2026-10-29
 
 ### Added
 
-- **Queue on the media player card**: a **Queue** button next to **Browse** and **Search music**, in the full variant and in the compact one's details. It only shows when the player shares its queue or can clear it, and can be hidden (`show_queue: false`).
-  - **Lyrion Music Server**: the current track and the next ones (up to 100), with "Track 5 of 32". Tap a track to play it, **✕** to remove it.
-  - **Music Assistant**: the current and next track, and how many follow (Home Assistant shares no more of it). Tap the next one to skip to it.
-  - Every player that can: **Clear the queue** (tap twice, so it can't happen by mistake).
-  - The list follows the player: it reloads when the track changes, and after each action.
-  - `search_player` now also names the player whose queue is shown (a Sonos taken over by Music Assistant: pick its Music Assistant twin). The builder shows the player list when either option is on.
-- **Web page › Icons**: pick **several icons at once** (every channel logo of a set-top box…); a summary says which ones failed, if any.
-- **Builder: versions in the header** read **Installed** · **Official** · **Beta**, and each release says how it compares with the installed one: **✅ installed**, **⬆️** with its install button when newer, or *older than the installed version*. The ✅ in front of the official release used to look like "installed".
-- **Builder: Save to device** also sits in the preview's header, which now stays on screen while scrolling, so no scrolling down to save.
-- **Builder: grids**: **+ Add … to this card** is in the accent colour; while editing a scene or button, **Save** is green and **Cancel edit** red.
-- **Builder: 🔄 Reload from Home Assistant** above the preview.
-- **Picking the remote up wakes it faster**: about half a second instead of over a second (motion sensor read ~15 times a second instead of 5, steadier detection). With the screen off, Android uses the first key press to wake the screen and never passes it on to an app, so a remote already lit by the pick-up catches that first press. Only while *motion wake* listens (5 minutes after the screen goes off, by default).
-- **Remote tweaks: wake keys** (optional, `device/install.sh --wake-keys`): with the screen off, the first key press now works instead of only waking the screen. Android drops that press before any app sees it; the boot service reads the keys before Android and, when one was pressed screen off, sends it again once the screen is on. Screen on, it does nothing, so no key is doubled. Idea from a user's report. Wiki: *adb over Wi-Fi & Wi-Fi latency*, which also explains the two optional adb commands more simply.
-- **Button grid**: `show_labels: false` (builder: untick **Show the name under the icon**) shows only the icon on buttons that have one.
-
-### Fixed
-
-- **Entities renamed in Home Assistant** showed under their old ID (and the new one only appeared after saving the HA connection again): an entity removed from Home Assistant stayed in the remote's list, and while the remote slept (screen off) it didn't hear about new ones. Removed entities are now dropped, and the builder and web page re-read every entity from Home Assistant when they open.
-- **Builder: Copy JSON** never copied: browsers only allow the clipboard on HTTPS pages and the remote serves plain HTTP. It now copies (and, if a browser still refuses, selects the JSON for Ctrl+C).
-- **Builder: "Hotkeys active on this page"** listed a global key and the page key that overrides it; only the one that applies is shown now.
-- **Builder: loading**: the dashboard is loaded first, behind a **Loading…** screen that blocks editing. A change made before it arrived was lost, and the dashboard used to wait for every Home Assistant entity before showing.
-- **Builder: grids**: **Save changes** with a scene or button filled in but not added with **+ Add … to this card** silently left it out. It now asks whether to add it first.
-
-### Development
-
-- 5 tests of how the queue is read (Lyrion's `status`, Music Assistant's `get_queue`, which players get the button).
-
-## [1.3.9-beta] - 2026-10-28
-
-### Added
-
-- **Music search on the media player card**: a **Search music** button next to **Browse**, in the full variant and in the compact one's details (`music_search: true`). Type a title, an artist, an album: the player answers as you type, with filters for artists, albums, tracks and playlists. Tap a result to play it now, **+** to add it to the queue, **›** to open it. It uses Home Assistant's own media search, so it works with **Lyrion Music Server**, **Music Assistant** and any player that offers it, with nothing to set up. For a speaker that can't search (a Sonos taken over by Music Assistant…), `search_player` names the one that can; the builder lists them. Idea from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s music search (MIT), rewritten for this card.
-- **Full backup of the remote**: web page › **Backup & restore** › **Download the full backup**: one `.zip` with everything on the remote: the Home Assistant connection, Harmony hubs, IR extenders, Apple TV and Android TV pairings, the remote's name and settings, the Activities' device states, `dashboard.json`, icons, IR database and floor plan. Restoring it (same page, pick the `.zip`) puts everything back and restarts the app: after a firmware reflash, no need to set up or pair anything again. It holds the Home Assistant token and pairing keys: keep it private.
-- **Media browser**: can open on a given folder (a search result's artist or album).
-- **Remote tweaks (advanced, optional)**: a new `device/` folder with a small boot service installed once with adb (wiki: *adb over Wi-Fi & Wi-Fi latency*). **adb over Wi-Fi** comes back at every reboot, no more USB cable, reachable **only from your computer** (the firmware's adb asks no key, so a firewall keeps the rest of the network out). **Wi-Fi power save off**: the Wi-Fi driver's power save, on by default and back on at every boot, is kept off; ping to a test remote went from 40–50 ms to 11 ms. The app's "Keep Wi-Fi awake" can't do this (it needs root). Everything is removed with `uninstall.sh`. Layout from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s device hooks (MIT), rewritten.
-
-### Fixed
-
-- **Apple TV keys not working after a long sleep**: after hours with the screen off, the Apple TV link could be dead while still looking open, and every key waited for an answer that never came, until the app was restarted. Now, on wake after more than 5 minutes off, the remote checks that the Apple TV still answers and reconnects at once if not; and a key that gets no answer reconnects and is sent again.
+- **Button grid: "Only on a long press"** (`long_press_only: true`): a tap does nothing, holding the button sends its action. For a key you don't want to press by mistake, like **Record** next to a number pad. Suggested by a user.
 
 ### Changed
 
-- **Logs**: **Restart app** (Settings) saves the log to `astrion/logs/` first, so what went wrong before the restart isn't lost (a log only holds the running app). The Apple TV connection's messages (connected, lost, command refused) now reach the log: they were written at a level the HA100 doesn't keep.
-
-### Development
-
-- 3 tests of how Home Assistant media search answers are read.
-- 4 tests of the full backup (types kept, files back, logs left out, unknown or newer backups refused, no file outside the folder).
-
-## [1.3.8-beta] - 2026-10-26
-
-### Added
-
-- **Plex search**: a **Search** button next to "Plex" on the Plex card. Type a title and films, shows, seasons and episodes from every library appear as you type, grouped by kind. Tap one for its details and **Play**. Closing the details brings you back to the results. Can be hidden (`show_search: false`). Idea from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s Plex browser (MIT), rewritten for this card.
-- **Plex shows**: a show's details list its **seasons**; a season opens on its next episode to watch, with the rest of the season. Before, a show (e.g. in a row) opened on the wrong item.
-
-### Changed
-
-- **Logs**: Settings › About › **Save the log on the remote** writes it to `astrion/logs/` (last 5 kept), so a log can be taken even when the web page doesn't answer. Every log now starts with the network as the remote sees it: Wi-Fi signal, speed and band, IP, gateway, DNS, and whether Android sees internet.
-- **CI**: GitHub actions updated to their Node 24 versions; the TV helper's debug APK is no longer uploaded on every run (it is still built and checked).
+- **Builder**: the banner says which remote you're on (*Connected to Living room*), and the browser tab starts with its name, handy with several remotes. The page settings open with **✎** on the page's tab, like the cards (⚙ looked like a dot on some screens); it shows a hand pointer, not the tab's drag cursor. The beta switch is just **Beta**.
+- **Builder: title cards** show their real title and subtitle in the preview, aligned as on the remote (they said "title").
+- **Builder: versions**: on a beta build, the official release with the same number (e.g. 1.4.0-beta and v1.4.0) shows as the same version, without an install button.
 
 ### Fixed
 
-- **Activities, "Power off when this Activity ends"**: the builder said it only applied when another Activity takes the room, but it also applies to **Off** and the Power key. Unticked on a shared amp, the Power key left it on. The wording now says both, and the wiki explains that a device shared by your Activities is never turned off when switching anyway.
-- **Web page and Home Assistant integration without internet**: the remote's web server asked the DNS for the name of every computer that connected to it (a built-in step of the server library). Without internet, or with a DNS that doesn't answer for local addresses, every connection waited for the DNS: the web page crawled or didn't load, and the Home Assistant integration (battery, pages, Activities) gave up and couldn't add the remote. That step is gone; nothing used the name.
-- **Xbox card details**: the Xbox store's placeholder release date (9998-12-30) and a minimum age of 0 are left out.
+- **The TV Helper kept the remote awake all night**: during playback the helper answers every few seconds (the position moves), and the remote kept asking with its screen off: 776 requests in 51 minutes on a test remote, each one waking its Wi-Fi and processor. The helper is now paused with Home Assistant's quiet mode (after *Go quiet with Home Assistant after the screen is off*, never on the dock) and resumes the moment the screen comes on. The TV connection itself stays, so keys and Activities work as before.
+- **Updating from the remote's Settings**: each tap on *Update available* started another download into the same file, with nothing on screen; a few taps and Android answered "App not installed". The line now shows the download's progress and ignores taps meanwhile, a failure says so, and the file is only handed to Android once complete. The web page's install buttons answer "already downloading" too.
+- **Builder: "… is filled in but not added to the card yet"** showed up with nothing filled in: a button opened with ✎ on a card closed earlier was still considered being edited. Every card form now starts fresh, and the question only comes when something was really typed (any field of a new button or scene, or a change to the one being edited).
+- **Motion wake missed real pick-ups** (since 1.4.0): it waited for 4 moving samples in a row, and a hand moves in jolts, so one calm sample reset the count (a test remote logged "move 1, 1, 2, 3/4" and stayed dark). It now wakes on 3 moving samples within 0.45 s, a calm one in between allowed; a knock on the table is still too short to wake it.
+- **Waking up after a long sleep**: Android can tell the app that the screen is on several seconds late (3.8 s seen after 51 minutes off), and Home Assistant only went live again then. The app now wakes up as soon as it's back on screen.
 
-### Development
+## [1.4.0] - 2026-10-28
 
-- 1 more Xbox card test (placeholder release date and age).
-- 3 tests of how Plex search answers are read.
+Everything since 1.3.0, from the 1.3.1 to 1.3.9 betas and the 1.4.0 beta.
 
-## [1.3.7-beta] - 2026-10-25
-
-### Added
-
-- **Xbox card (`xbox`)**: the game you're playing and your counters, with two sources to choose from in the builder:
-  - **Xbox**, the official Home Assistant integration: gamerpic, gamertag and online status, the game (cover, platform · publisher, achievements, gamerscore with its bar, progress), and counters (gamerscore, friends, followers…);
-  - **TrueAchievements**, the custom component (needs a TA Pro account): the game with achievements, gamerscore and TA score as bars, completion, ratio and time played; counters such as Gamerscore, TA score, completion and games finished; and the last sync, red when the component reports a problem.
-  - **The builder finds your accounts** in Home Assistant and fills every field in one click, for either source. Up to **8 counters, 1 to 4 per row**, in the order you choose; each can get its own label, icon (built-in, none, or your own uploaded icon) and icon colour, and icons can be hidden for the whole card. Each part (profile, game, counters, sync) can be turned off.
-  - **A long press on the game or on a counter** opens all its details, like Home Assistant's "more info": genres, developer, release date, description, TA points, ratio, guide links…
-  - Console off: "Xbox off" / "No game running" instead of the game.
-  - **Game cover with the Xbox integration**: taken from its `image.<gamertag>_now_playing` entity (`picture_entity`, filled in by the builder), since the game sensor's own picture may be missing.
-- **Several IR commands in one tap**: a button, tile or title action can send a sequence of IR commands, e.g. channel 801 as `8, 0, 1` for channel favourites. In the builder, type the commands separated by commas, with an optional delay between them (otherwise the device's own, else 300 ms). In JSON: `"irCommands": ["8", "0", "1"]` with optional `"irDelayMs"`. Works with the remote's blaster and with extenders.
-- **Button and tile size, empty cells**: the button grid gets a **button height** and both grids a **text size**, for big keys such as a channel keypad. **Empty cells** (`{ "spacer": true }`, **+ Empty cell** in the builder) place the others where you want, e.g. the 0 under the 8; or **center an incomplete last row** with one option. The builder's preview shows all of it.
-- **Android TV page**: where to download the Astrion TV Helper (`astrion-tv-helper.apk`, GitHub release `tv-helper`) and a link to its setup steps in the wiki.
-
-### Fixed
-
-- **Scene grid tile height**: `tile_height` now also applies to tiles without an icon. The builder's preview showed the new height, but the remote kept them at 58 dp.
-
-### Development
-
-- 7 tests of how the card reads the Xbox integration's and TrueAchievements' entities.
-- 2 tests of the `irCommands` list (list, comma-separated text, numbers).
-
-## [1.3.6-beta] - 2026-10-24
+> ⚠️ **Good to know when updating from 1.3.0**
+>
+> - **Activities follow what Home Assistant reports** for Home Assistant devices: `turn_on` only if the device is off, `select_source` only if it isn't on that source already, no `turn_off` for a device already off. When Home Assistant doesn't know the state, the command is sent anyway. IR and Harmony devices keep Astrion's own memory.
+> - **Held keys repeat at a pace the target can follow** (Home Assistant: about 3 per second, IR and Harmony: about 7) and stop on release. Keys that open a page, a popup or an overlay, start or stop an Activity, or send an event no longer repeat when held.
+> - **Media player cards get a Queue button** when the player shares its queue or can clear it (Lyrion, Music Assistant, Sonos…). Hide it with `show_queue: false`.
+> - **Entities removed or renamed in Home Assistant disappear from the remote.** A card still pointing at an old entity ID shows it as unavailable: edit it to the new ID.
+> - **Builder**: **Save to device** is also next to *Preview* (its header stays on screen while scrolling), and editing waits for a short **Loading…** screen.
 
 ### Added
 
-- **Android TV / Google TV paired directly, without Home Assistant.** New **Android TV** tile on the remote's web page: Astrion finds the TV on your network (or takes its IP address), the TV shows a 6-character code, and it's paired, like with the Google TV app. Works with NVIDIA SHIELD, Chromecast with Google TV, Sony, Philips, TCL… (not Fire TV). No ADB and no Home Assistant needed. Beta, tested on an NVIDIA SHIELD so far.
-  - Each TV becomes a `media_player.androidtv_<name>` and a `remote.androidtv_<name>` entity, named like Home Assistant's *Android TV Remote* integration, so the **TV remote card** works with it as is (D-pad, back, home, menu, volume, power, app buttons).
-  - The entities report whether the TV is on, the **app in front** and the volume. `select_source` / `play_media` launch an app by name (Netflix, YouTube, Disney+…) or package name; `remote.send_command` sends any Android key, with repeats and long presses.
-  - The TV is added to the device catalogue, so media player and source cards, hotkeys and **Activities** (new *Android TV (network)* section of the wizard: on at start, off at the end, can open an app) offer it too.
-  - **Opening apps**: since a Google Play Store update (August 2026), many Android TVs refuse to open an app by its package name, whatever the remote (Home Assistant too). YouTube, Netflix, Prime Video, Disney+, Plex, Twitch and myCANAL are opened through their deep link instead, which still works; any app can be given its own deep link (`https://…`, `app://…`) in place of the package. The wiki explains how to find one.
-  - The connection is encrypted and pinned to the paired TV. When the TV's IP changes, Astrion finds it again on the network by itself.
-  - Wiki: [Android TV (direct)](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Android-TV).
-- **TV remote card: app icons, now playing, playback keys.**
-  - **Apps as icons**: choose *Icons with their name* in the builder and give each app an icon (one uploaded to the remote, or a URL). Without an icon, the app's initials on a colored tile. The text buttons stay the default.
-  - **Now playing strip**: the app in front with its icon, and Play/Pause. Hidden on the TV's home screen. A player that knows more (Cast, Plex, Kodi… from Home Assistant, set in *Now playing from*) adds title, cover and progress. The Android TV protocol itself doesn't give titles.
-  - **Playback buttons** (optional): rewind / play-pause / fast forward.
-  - **Full layout**, like the Apple TV card's: large cover, title and state, a **progress bar you can drag** to move in the video, −10 s / Play-Pause / +10 s, the apps, then a round D-pad between back/home/menu and the volume buttons, sized so the whole card fits on the screen. The −10 s / Play-Pause / +10 s row can be turned off (the bar still seeks) to give the D-pad more room. The one-line strip's bar can be dragged too. Moving in the video needs a player that can seek (the Astrion TV Helper, or Plex/Cast… from Home Assistant); otherwise ±10 s sends the TV's rewind / fast-forward keys.
-  - A long TV name no longer runs under the power button.
-- **Astrion TV Helper: what's playing on an Android TV, and any app opens.** A small new app (`astrion-tv-helper.apk`) to install on the TV itself, once, with ADB (the wiki gives the 4 commands). Linked from the web page with the 6-character code it shows, it gives the TV's `media_player` the **title, artist/episode, cover, duration and position**, and *playing* / *paused*, for every app that shares them with Android (Plex, Netflix, YouTube, Spotify…; myCANAL only shares playing/paused). It also **opens any installed app** (Google's protocol only opens apps with a known deep link, see below) and allows **seeking**. The TV remote card's strip, the media player card, the dock clock and Activities use it with nothing else to set. The helper has no ads, no account and never contacts the Internet: a local web server (port 6470) that only answers a remote with its code.
-- **Hotkeys for an Android TV**: the new action **Android TV key or app** in the builder's **1. Hotkeys** sends a key to the TV (e.g. CH+ / CH−, arrows, Play/Pause) or opens an app (Netflix, myCANAL…). A held key repeats as fast as an IR one; an app opens once.
+#### Media & TV
 
-### Fixed
+- **Android TV / Google TV paired directly, without Home Assistant** (beta). New **Android TV** tile on the remote's web page: Astrion finds the TV, the TV shows a 6-character code, and it's paired, like with the Google TV app. Works with NVIDIA SHIELD, Chromecast with Google TV, Sony, Philips, TCL… (not Fire TV). No ADB, no Home Assistant.
+  - Each TV becomes `media_player.androidtv_<name>` and `remote.androidtv_<name>`, named like Home Assistant's *Android TV Remote* integration, so the TV remote card works with it as is. They report power, the **app in front** and the volume; `select_source` / `play_media` open an app by name or package; `remote.send_command` sends any Android key, with repeats and long presses.
+  - The TV joins the device catalogue: media player and source cards, hotkeys and **Activities** (*Android TV (network)* in the wizard) offer it.
+  - **Opening apps**: since an August 2026 Play Store update, many Android TVs refuse to open an app by its package name. YouTube, Netflix, Prime Video, Disney+, Plex, Twitch and myCANAL open through their deep link instead; any app can get its own (`https://…`, `app://…`).
+  - Encrypted, pinned to the paired TV, found again when its IP changes. Wiki: [Android TV (direct)](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Android-TV).
+- **Astrion TV Helper**, a small app installed once on the TV with ADB (`astrion-tv-helper.apk`, GitHub release `tv-helper`). Linked with its 6-character code, it gives the TV's `media_player` the **title, artist/episode, cover, duration, position** and playing/paused for every app that shares them (Plex, Netflix, YouTube, Spotify…), **opens any installed app** and allows **seeking**. No ads, no account, never contacts the Internet: a local server (port 6470) that only answers a remote with its code.
+- **TV remote card**: apps as **icons** (uploaded or URL, initials otherwise), a **now playing** strip (app, Play/Pause; title, cover and progress from the helper or a Home Assistant player), optional **playback buttons**, and a **full layout** like the Apple TV card's (large cover, draggable progress bar, −10 s / Play-Pause / +10 s, apps, round D-pad, volume).
+- **Hotkeys for an Android TV**: the action **Android TV key or app** sends a key (CH+/CH−, arrows, Play/Pause…) or opens an app.
+- **Xbox card (`xbox`)**, from the official **Xbox** integration or the **TrueAchievements** custom component: the game you're playing (cover, achievements, gamerscore, progress, TA score…), up to 8 counters (1 to 4 per row, each with its own label and icon) and the last sync. The builder finds your accounts and fills every field in one click. A long press on the game or a counter opens all its details.
+- **Plex search**: a **Search** button on the Plex card; films, shows, seasons and episodes of every library appear as you type (`show_search: false` to hide it). A show's details list its **seasons**; a season opens on its next episode to watch. Idea from [baes-cloud/astrion-dashboard](https://github.com/baes-cloud/astrion-dashboard)'s Plex browser (MIT), rewritten.
+- **Music search on the media player card** (`music_search: true`): **Search music** next to **Browse**; the player answers as you type, with filters for artists, albums, tracks and playlists. Tap to play, **+** to add to the queue, **›** to open. Uses Home Assistant's own media search: **Lyrion Music Server**, **Music Assistant**… For a speaker that can't search, `search_player` names the one that can. Idea from baes-cloud/astrion-dashboard's music search (MIT), rewritten.
+- **Queue on the media player card**: **Lyrion** shows the current track and the next ones (up to 100; tap one to play it, **✕** to remove it), **Music Assistant** the current and next track; every player that can gets **Clear the queue** (tap twice). The list follows the player. `search_player` also names the player whose queue is shown.
+- **Media browser** can open on a given folder (a search result's artist or album).
 
-- **Renaming or removing an Apple TV on the web page blanked the page** (it was saved, but the page showed nothing until reloaded).
+#### Dashboard & builder
 
-### Development
+- **German**: the app, the web page and the builder, and Home Assistant's states.
+- **Weather without Home Assistant**: the remote fetches the forecast from [Open-Meteo](https://open-meteo.com) (free, no key) and publishes `weather.astrion` for the clock & weather card and the dock clock. Web page › **Weather**: find your town, pick **Automatic** (7 days) or **Météo-France** (4 days), °C or °F.
+- **Several IR commands in one tap** (`"irCommands": ["8", "0", "1"]`, optional `"irDelayMs"`), e.g. a channel number; commas in the builder.
+- **Grid sizes**: button height and text size for big keys (a channel keypad), **empty cells** (`{ "spacer": true }`), **center an incomplete last row**.
+- **Button grid**: `show_labels: false` shows only the icon on buttons that have one.
+- **New hotkey actions**: **Start an Activity**, **IR command** (remote's blaster or IR extender), **Android TV key or app**.
+- **Builder header**: **Installed** · **Official** · **Beta** versions, each saying whether it's installed, newer (with its install button) or older.
+- **Builder: 🔄 Reload from Home Assistant**, and entities are re-read from Home Assistant when the builder or the web page opens.
+- **Web page › Icons**: several icons at once.
+- **Grids in the builder**: **Save changes** offers to add a scene or button filled in but not added yet; while editing one, **Save** is green and **Cancel edit** red.
 
-- 14 tests of the Android TV protocol and entities (messages checked byte for byte against Google's protocol definitions, pairing code check, power logic, keys, apps).
+#### Activities
 
-## [1.3.5-beta] - 2026-10-24
+- **"Keep this device on when switching to another Activity"**, per device, shared by every Activity (e.g. a TV seen as two entities in Home Assistant). Stored as `keepOnDevices`.
+- What an Activity sends to Home Assistant shows in the logs (`AstrionActivity`).
 
-### Added
+#### Backup & logs
 
-- **"Keep this device on when switching to another Activity".** A new box in the Activity wizard, for each device. It is a setting of the device, shared by every Activity that uses it: the device is never switched off when another Activity takes the room. Made for a TV that Home Assistant sees as two entities (e.g. Bravia for power and HDMI, Android TV/ADB to launch apps): going from Netflix back to Watch TV no longer switches the TV off through its Android TV entity. "Off" still switches it off when "Power off when this Activity ends" is ticked. Stored as `keepOnDevices` in `dashboard.json`.
-- **What an Activity sends to Home Assistant shows in the remote's logs** (`AstrionActivity`: `turn_on …`, `select_source …`), like IR commands already did.
+- **Full backup of the remote**: web page › **Backup & restore** › **Download the full backup**, one `.zip` with the Home Assistant connection, Harmony hubs, IR extenders, Apple TV and Android TV pairings, the remote's name and settings, Activity states, `dashboard.json`, icons, IR database and floor plan. Restoring it puts everything back and restarts the app: after a firmware reflash, nothing to set up or pair again. It holds the token and pairing keys: keep it private.
+- **Save the log on the remote** (Settings › About), in `astrion/logs/` (last 5), even when the web page doesn't answer. **Restart app** saves it first. Every log starts with the network as the remote sees it (Wi-Fi signal, band, IP, gateway, DNS, internet).
+
+#### The remote itself
+
+- **Picking the remote up wakes it faster** (about half a second instead of over a second), so a key pressed right after already lands on a lit screen. With the screen off, Android uses the first key press to wake the screen and never passes it on to an app.
+- **Remote tweaks** (advanced, optional, installed once with adb; wiki: *adb over Wi-Fi & Wi-Fi latency*): a `device/` boot service for **adb over Wi-Fi** at every boot, reachable only from your computer (firewall), **Wi-Fi power save off** (ping 40–50 ms → 11 ms on a test remote), and **wake keys** (`--wake-keys`): the key pressed with the screen off is sent again once the screen is on, so the first press works. Layout from baes-cloud/astrion-dashboard's device hooks (MIT), rewritten; wake keys from a user's idea.
+
+#### For tools (Web API)
+
+- **Links into the builder**: `#page=<name>`, `&card=<index>`, `#activity=<id>`, `#hotkeys`, `#history`.
+- `POST /dashboard.json` and `POST /history/restore` return the new version's id (`X-Astrion-Version-Id`); the builder tells the page that opened it after each save or restore (`{ type: "astrion-saved", versionId, reason }`). For the [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) by [@dvbit](https://github.com/dvbit). Wiki: [Web API](../../wiki/Web-API).
+- `/ha-states?refresh=1` re-reads every entity from Home Assistant first.
 
 ### Changed
 
-- **Activities follow the state Home Assistant reports** for Home Assistant devices, instead of always resending (1.3.4): `turn_on` only if the device is off, `select_source` only if it isn't on that source already, no `turn_off` for a device already off. When Home Assistant doesn't know the state (entity unavailable, disconnected), the command is sent anyway. IR and Harmony devices keep Astrion's own memory, which toggle-only devices need. Suggested by the user who reported the 1.3.4 bug: "the state should be remembered by the control system".
-
-### Development
-
-- 9 more Activity tests (22 in all): Home Assistant live state, devices kept on between Activities.
-
-## [1.3.4-beta] - 2026-10-23
-
-### Added
-
-- **Start an Activity from a physical key.** In the builder's **1. Hotkeys**, the new action **Start an Activity** starts a composed Activity exactly like its scene tile (devices on, inputs, then its page). No more adding a tile just to bind a key to it.
+- **Activities** follow Home Assistant's live state, and **held keys** repeat at the target's pace (see *Good to know*).
+- **Popup size easier to find**: "Opened as a popup" ticks itself when a tile, button or key opens the page as a popup (reported by Wolfgang, [@Coyotex1](https://github.com/Coyotex1)).
+- **Clock & weather card**: fog shows ☁️ (🌫️ was a grey square on Android 8.1).
+- **Plex card**: a "How to find my token" link; the wiki warns about short-lived `claim-…` tokens.
+- **"Power off when this Activity ends"** says it also applies to **Off** and the Power key.
+- **The beta is called "Astrion Custom β"**, so it can't be mistaken for the official app.
+- **Apple TV**: its connection messages reach the log.
 
 ### Fixed
 
-- **Composed Activities didn't turn on Home Assistant devices anymore** (since 1.3.0). Astrion remembers whether each device is on, and a Home Assistant TV or amp switched off from Home Assistant or its own remote was still believed on, so its `turn_on` was skipped and nothing happened. A Home Assistant entity now always gets its `turn_on` and `select_source` (both harmless to repeat), as before 1.3.0. IR and Harmony devices keep the memory, which toggle-only devices need.
-- **Holding Volume (or any command key) kept going for seconds after release.** Android repeats a held key about 20 times a second and each repeat sent a command, faster than Home Assistant and the amp could follow. A held key now repeats at a pace the target keeps up with (Home Assistant: about 3 per second, IR and Harmony: about 7) and stops on release. Keys that open a page, a popup or an overlay, start or stop an Activity, or send an event no longer repeat at all when held.
-- **Quotes missing on screen** in two messages of the app (unknown card type, "Install unknown apps"): Android drops a bare `"` in its text files.
+- **Web page and Home Assistant integration without internet**: the remote's web server asked the DNS for the name of every computer that connected. Without internet, every connection waited: the page crawled and the integration couldn't add the remote.
+- **Apple TV keys not working after a long sleep**: the link could be dead while looking open. It's checked on wake and reconnected, and a key without answer is sent again.
+- **Composed Activities didn't turn on Home Assistant devices** switched off outside Astrion (since 1.3.0).
+- **Holding Volume kept going for seconds after release.**
+- **Entities renamed in Home Assistant** showed under their old ID.
+- **Builder**: **Copy JSON** never copied (plain HTTP); "Hotkeys active on this page" listed a global key its page overrides; a change made before the dashboard loaded was lost; a grid item not added with **+ Add** was silently left out on save.
+- **Scene grid**: `tile_height` also applies to tiles without an icon.
+- **Plex**: a show opened on the wrong item.
+- **Xbox card**: placeholder release date (9998-12-30) and age 0 left out.
+- **Renaming or removing an Apple TV on the web page blanked the page.**
+- **Quotes missing** in two app messages.
 
 ### Development
 
-- **Automatic tests for Activities**: 13 tests of what a composed Activity sends (Home Assistant devices, toggle-only and discrete IR devices, inputs, power-on delays, switching Activities in a room, stopping). They run on every push and pull request, and would have caught the Home Assistant bug above.
-- **Translation check on every push and pull request** (`.github/scripts/check_translations.py`, also runnable locally): every language is compared with English. A wrong placeholder (`%1$s`), HTML tag, line break, unknown key or unescaped apostrophe fails the build; keys not translated yet are only reported.
-
-## [1.3.3-beta] - 2026-10-21
-
-### Added
-
-- **German.** The app (Settings › Language › Deutsch), the remote's web page and the dashboard builder are now in German too, as are Home Assistant's states (climate, covers, vacuums, weather).
-- **The builder tells the tool that opened it when you save.** When the builder was opened by another page (the [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) add-on, a script…), it sends that page `{ type: "astrion-saved", versionId, reason }` after each **Save to device** (`reason: "save"`) and each restore from the 🕘 history (`reason: "restore"`), so the tool picks up the change right away. `POST /history/restore` now also replies with the new version's id (`versionId` in the body and the `X-Astrion-Version-Id` header), like a save. Suggested by [@dvbit](https://github.com/dvbit).
-- **IR commands on the physical keys.** In the builder's **1. Hotkeys**, the new action **IR command** sends a command of one of your IR devices (through the remote's own blaster or its IR extender), e.g. Channel +/- of a set-top box on the CH keys. The remote already understood it; only the builder had no way to set it.
-
-### Changed
-
-- **The beta has its own name: "Astrion Custom β".** It used to be called "Astrion Custom" like the official app, so the two looked the same in Android's "choose a Home app" prompt.
-
-## [1.3.2-beta] - 2026-10-19
-
-### Added
-
-- **Weather without Home Assistant.** The remote fetches the forecast itself from [Open-Meteo](https://open-meteo.com) (free, no account, no key) and publishes it as `weather.astrion`, which the clock & weather card and the dock clock use like any Home Assistant weather entity. On the remote's web page, the new **Weather** tile finds your town by name or postcode (searched by the remote, `GET /weather-search`) and offers two forecasts: **Automatic** (best model for the place, 7 days) or **Météo-France** (France and Europe, 4 days), in °C or °F. Then pick **Built-in weather** in the builder's weather fields. Updated every 30 minutes, only while the screen is on. Stored as a `weather` block in `dashboard.json` (`name`, `latitude`, `longitude`, `model`, `unit`).
-
-### Changed
-
-- **Popup size easier to find.** In a page's settings, "Opened as a popup by a tile or a key" now ticks itself when a tile, a button or a key of the dashboard opens that page as a popup, so *Popup size & position* shows right away. It used to stay hidden for a popup opened by a key (reported by Wolfgang, [@Coyotex1](https://github.com/Coyotex1)).
-- **Clock & weather card**: fog now shows a cloud ☁️. The fog emoji 🌫️ looked like a grey square on the remote's Android 8.1.
-- **Plex card**: a "How to find my token" link under the token field. The wiki now gives the simplest way (the browser console on app.plex.tv) and warns about `claim-…` tokens, which stop working after a few minutes.
-
-## [1.3.1-beta] - 2026-10-19
-
-For tools that manage a remote's dashboard, such as the [Astrion Config Manager](https://github.com/dvbit/ha-astrion-config-manager) add-on by [@dvbit](https://github.com/dvbit). The whole contract is on the new wiki page [Web API](../../wiki/Web-API).
-
-### Added
-
-- **Links straight to a place in the builder.** `/builder/#page=<name>` opens that page, `#page=<name>&card=<index>` that card's form (index from 0), `#activity=<id>` that Activity's wizard, `#hotkeys` the physical keys section, and `#history` the version history as before. Names are URL-encoded; an unknown page, card or Activity just opens the builder. Changing the hash in an open builder tab works too.
-- **`POST /dashboard.json` says which version it created**: header `X-Astrion-Version-Id: <id>`, the id in the version history. A tool can pin or annotate its own push without reading `/history` first. The reply's body doesn't change.
+- Automatic tests for Activities (22), the Android TV protocol (14), the Xbox card (8), Plex and music search, the full backup, `irCommands` and the media player queue; a translation check on every push and pull request (`.github/scripts/check_translations.py`).
+- CI actions on Node 24.
 
 ## [1.3.0] - 2026-10-17
 

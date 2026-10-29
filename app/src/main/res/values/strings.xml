@@ -58,6 +58,8 @@
     <string name="update_up_to_date">Up to date</string>
     <string name="update_check_failed">Couldn\'t check</string>
     <string name="update_available_short">Available</string>
+    <string name="update_downloading">Downloading the update… %1$d%%</string>
+    <string name="update_download_failed">The update couldn\'t be downloaded or opened. Check Wi-Fi and try again.</string>
     <string name="about_device">Device</string>
     <string name="about_battery">Battery</string>
     <string name="about_package">Package</string>

@@ -7,7 +7,9 @@
   <img src="docs/banner_astrion_custom_dashboard.png" alt="Astrion Custom Dashboard Banner">
 </p>
 
-[![GH-release](https://img.shields.io/github/v/release/dckiller51/astrion-custom-dashboard.svg?style=flat-square)](https://github.com/dckiller51/astrion-custom-dashboard/releases)
+[![GH-release](https://img.shields.io/github/v/release/dckiller51/astrion-custom-dashboard.svg?style=flat-square&label=stable)](https://github.com/dckiller51/astrion-custom-dashboard/releases/latest)
+[![Stable downloads](https://img.shields.io/github/downloads/dckiller51/astrion-custom-dashboard/latest/total?style=flat-square&label=stable%20downloads)](https://github.com/dckiller51/astrion-custom-dashboard/releases/latest)
+[![Beta downloads](https://img.shields.io/github/downloads/dckiller51/astrion-custom-dashboard/dev-latest/total?style=flat-square&label=beta%20downloads&color=orange)](https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/dev-latest)
 [![Wiki](https://img.shields.io/badge/Docs-Wiki-blue?style=flat-square)](https://github.com/dckiller51/astrion-custom-dashboard/wiki)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-Buy_me_a_coffee-F16061?style=flat-square&logo=ko-fi&logoColor=white)](https://ko-fi.com/dckiller)
 
@@ -23,7 +25,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 
 - **Swipeable pages of cards**: lights, covers, climate, media, cameras, vacuums, Plex, Xbox, scenes, remotes… ([card reference](https://github.com/dckiller51/astrion-custom-dashboard/wiki)).
 - **Browser-based builder** at `http://<remote-ip>:8080/builder/`. You edit visually with a live preview of the remote, and no hand-written JSON is needed. Available in English, French, German, Italian and Spanish.
-- **Undo and version history**: undo / redo in the builder (Ctrl+Z / Ctrl+Y), and the remote keeps every saved version of its dashboard. Open, restore, pin or annotate any of them ([details](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Builder#undo-and-version-history-since-130)).
+- **Undo and version history**: undo / redo in the builder (Ctrl+Z / Ctrl+Y), and the remote keeps every saved version of its dashboard. Open, restore, pin or annotate any of them ([details](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Builder#undo-and-version-history)).
 - **Physical keys**: every hardware key, short or long press, can be bound to a page, a popup, a Home Assistant service or event, a Harmony or IR command, an Apple TV command, an Android TV key or app, or an Activity. Bindings can be global or per page.
 - **Activities**: "Watch Apple TV", "Listen to music"… One tap powers on the right devices, switches inputs, binds the volume keys and opens the right page. Activities are tracked per room, and the "Off" button works like Harmony's.
 - **Many ways to control your devices**:

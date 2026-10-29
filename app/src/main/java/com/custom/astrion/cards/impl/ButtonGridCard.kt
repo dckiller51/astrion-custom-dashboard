@@ -67,6 +67,9 @@ import com.custom.astrion.ui.tapCombinedClickable
  * where each source button here sends its IR/Harmony command and closes
  * the popup in the same tap.
  *
+ * "long_press_only": true (1.4.1) makes a tap do nothing: the button's action is sent only when
+ * it's held (and its "long_press" block, if any, is not used).
+ *
  * "long_press": { ... } adds a separate action fired when the button is
  * held (touch long-press or held D-pad CENTER) instead of tapped — same
  * action fields as a button, see GridLongPress.kt. Without it, a hold is
@@ -118,7 +121,14 @@ class ButtonGridCard : CardRenderer {
             // Optional separate "long_press" block — see GridLongPress.kt.
             // Null when absent, so a hold stays a plain tap (unchanged).
             val onLongPress = longPressActionOf(b)?.let { lp -> { fireGridLongPress(ctx, lp, b["hub"] as? String) } }
-            val actions = GridButtonActions(onClick = { fire(ctx, b) }, onLongClick = onLongPress)
+            // "long_press_only" (1.4.1): a tap does nothing, holding sends the button's action — for
+            // a key that must not go off by mistake (Record next to a number pad).
+            val actions =
+                if (b["long_press_only"] == true) {
+                    GridButtonActions(onClick = {}, onLongClick = { fire(ctx, b) })
+                } else {
+                    GridButtonActions(onClick = { fire(ctx, b) }, onLongClick = onLongPress)
+                }
             GridButton(b, Modifier.weight(1f), ctx.theme, style, ctx.entities, actions)
         }
     }

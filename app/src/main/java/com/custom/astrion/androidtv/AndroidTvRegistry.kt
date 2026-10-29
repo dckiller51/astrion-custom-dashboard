@@ -92,6 +92,19 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         }
     }
 
+    /**
+     * Quiet (screen off a while, like Home Assistant's quiet mode — 1.4.0): the TV Helpers' long
+     * polls stop. During playback the helper answers every few seconds (the position moves), which
+     * kept the remote's Wi-Fi and processor awake all night for nobody. Back on with the screen.
+     * The TV connections themselves stay (they only talk when something happens).
+     */
+    fun setQuiet(quiet: Boolean) {
+        val helpers = devices.values.mapNotNull { it.helper }
+        if (helpers.isEmpty()) return
+        log(if (quiet) "quiet: TV Helper polling paused" else "awake: TV Helper polling resumed")
+        helpers.forEach { if (quiet) it.stop() else it.start() }
+    }
+
     fun stop() {
         devices.values.forEach {
             it.connection.stop()
