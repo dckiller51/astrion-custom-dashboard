@@ -515,7 +515,10 @@ class MainActivity : ComponentActivity() {
                 register = ::registerMotionListener,
                 unregister = ::unregisterMotionListener
             ),
-            onQuiet = { quiet -> if (::androidTvRegistry.isInitialized) androidTvRegistry.setQuiet(quiet) }
+            onQuiet = { quiet ->
+                if (::androidTvRegistry.isInitialized) androidTvRegistry.setQuiet(quiet)
+                if (::appleTvRegistry.isInitialized) appleTvRegistry.setQuiet(quiet)
+            }
         )
     }
 

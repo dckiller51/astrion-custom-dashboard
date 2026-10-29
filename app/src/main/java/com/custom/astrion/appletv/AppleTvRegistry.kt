@@ -99,6 +99,11 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
         RemoteSettings.saveAppleTvs(appContext, updated)
     }
 
+    /** Quiet mode on/off (1.4.1): see [AppleTvDevice.setQuiet]. */
+    fun setQuiet(quiet: Boolean) {
+        devices.values.forEach { it.setQuiet(quiet) }
+    }
+
     /** The remote's screen came back on after a long sleep (1.3.9): each Apple TV checks its link. */
     fun onWake() {
         devices.values.forEach { it.checkAlive() }

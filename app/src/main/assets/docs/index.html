@@ -144,10 +144,9 @@
             <button type="button" id="haReloadBtn" class="ha-icon-btn" style="display:none" onclick="reloadHaStates()" data-i18n-attr="title:web_device_reload_ha" title="Reload from Home Assistant">🔄</button>
             <button type="button" id="historyBtn" class="ha-icon-btn" style="display:none" onclick="openHistory()" data-i18n-attr="title:web_history_title" title="Version history">🕘</button>
         </div>
-        <div class="ha-toolbar">
-            <div id="tabs" class="tabs"></div>
-            <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
-        </div>
+        <!-- 1.4.2: the remote on the left, the pages as a tree on the right (above it on a narrow pane). -->
+        <div class="preview-body">
+        <div class="preview-remote-col">
         <div class="remote-frame-scale-wrap">
             <div class="remote-frame">
 
@@ -265,6 +264,16 @@
             </div>
         </div>
         <div class="remote-tap-hint" data-i18n="web_ui_tap_hint">🔍 Tap the screen to edit at full size</div>
+        </div>
+        <div class="page-tree-col">
+            <div class="page-tree-head">
+                <span data-i18n="web_tree_pages">Pages</span>
+                <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
+            </div>
+            <div id="pageTree" class="page-tree"></div>
+            <div class="hint page-tree-hint" data-i18n="web_tree_hint">Click a page to show it. Drag it to reorder, or onto another page to make it a sub-page.</div>
+        </div>
+        </div>
         <div id="hotkeysInfo"></div>
     </div>
 </div>
