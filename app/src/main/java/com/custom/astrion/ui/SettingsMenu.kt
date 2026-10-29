@@ -8,6 +8,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -634,13 +635,17 @@ private fun UpdateRow(context: Context, scope: CoroutineScope, info: UpdateCheck
         } else {
             stringResource(R.string.settings_update_available, info.version)
         }
-    SettingRow(icon = Icons.Filled.SystemUpdate, label = label) {
+    // 1.4.1: the row shows the download's progress and ignores taps meanwhile; a failure says so.
+    val progress by UpdateChecker.downloadProgress.collectAsState()
+    val downloading = progress?.let { stringResource(R.string.update_downloading, it) }
+    val failed = stringResource(R.string.update_download_failed)
+    SettingRow(icon = Icons.Filled.SystemUpdate, label = downloading ?: label) {
+        if (UpdateChecker.isDownloading) return@SettingRow
         scope.launch(Dispatchers.IO) {
             val file = UpdateChecker.download(context, info.apkUrl)
-            if (file != null) {
-                withContext(Dispatchers.Main) {
-                    UpdateChecker.promptInstall(context, file)
-                }
+            withContext(Dispatchers.Main) {
+                val shown = file != null && runCatching { UpdateChecker.promptInstall(context, file) }.isSuccess
+                if (!shown) Toast.makeText(context, failed, Toast.LENGTH_LONG).show()
             }
         }
     }

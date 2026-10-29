@@ -120,12 +120,14 @@ class MainActivity : ComponentActivity() {
         const val TILT_WAKE_DEG = 30f
         const val LIN_ACC_WAKE = 2.5f
 
-        // 1.4.0: picking the remote up wakes it sooner (~0.3–0.5 s instead of ~1–1.2 s), so a key
-        // pressed right after lands on a lit screen — Android drops the key that wakes the screen.
-        // Sampled ~15/s (SENSOR_DELAY_UI) instead of 5/s; 4 samples in a row (~0.27 s of motion)
-        // instead of 3 at 5/s (0.6 s); baseline after a sensor pause settled in 0.25 s, not 0.4 s.
+        // Picking the remote up wakes it sooner, so a key pressed right after lands on a lit screen
+        // (Android drops the key that wakes the screen). Sampled ~15/s (SENSOR_DELAY_UI, 1.4.0);
+        // baseline after a sensor pause settled in 0.25 s. 1.4.1: 3 moving samples within 0.45 s,
+        // a calm one in between allowed — 1.4.0's "4 in a row" missed real pick-ups (a hand moves
+        // in jolts: move 1, 1, 2, 3/4 then nothing), and a knock on the table is only 1–2 samples.
         const val MOTION_SENSOR_DELAY = SensorManager.SENSOR_DELAY_UI
-        const val MOTION_CONSECUTIVE_N = 4
+        const val MOTION_SAMPLES_N = 3
+        const val MOTION_WINDOW_MS = 450L
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
         const val BUTTON_EVENT = "astrion_button"
@@ -177,7 +179,7 @@ class MainActivity : ComponentActivity() {
     private var gravY = 0f
     private var gravZ = 0f
     private var lastSampleMs = 0L
-    private var overCount = 0
+    private val moveTimes = ArrayDeque<Long>() // moving samples within MOTION_WINDOW_MS (screen off)
     private val motionListener =
         object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
@@ -214,16 +216,17 @@ class MainActivity : ComponentActivity() {
                 val moving = tilt > TILT_WAKE_DEG || lin > LIN_ACC_WAKE
                 if (moving && screenOn) {
                     // Already lit: only keep it on while in hand (no wake to detect, no log per sample).
-                    overCount = 0
+                    moveTimes.clear()
                     gravX = x
                     gravY = y
                     gravZ = z
                     holdScreenWhileInHand()
                 } else if (moving) {
                     ambientOverThreshold++
-                    overCount++
-                    if (overCount >= MOTION_CONSECUTIVE_N) {
-                        overCount = 0
+                    moveTimes.addLast(now)
+                    while (moveTimes.isNotEmpty() && now - moveTimes.first() > MOTION_WINDOW_MS) moveTimes.removeFirst()
+                    if (moveTimes.size >= MOTION_SAMPLES_N) {
+                        moveTimes.clear()
                         gravX = x
                         gravY = y
                         gravZ = z
@@ -236,12 +239,11 @@ class MainActivity : ComponentActivity() {
                     } else {
                         Log.i(
                             MOTION_TAG,
-                            "move $overCount/$MOTION_CONSECUTIVE_N x=${f2(x)} y=${f2(y)} z=${f2(z)} " +
+                            "move ${moveTimes.size}/$MOTION_SAMPLES_N x=${f2(x)} y=${f2(y)} z=${f2(z)} " +
                                 "tilt=${f1(tilt)} lin=${f2(lin)}"
                         )
                     }
                 } else {
-                    overCount = 0
                     gravX = 0.9f * gravX + 0.1f * x
                     gravY = 0.9f * gravY + 0.1f * y
                     gravZ = 0.9f * gravZ + 0.1f * z
@@ -275,7 +277,7 @@ class MainActivity : ComponentActivity() {
             settleX = 0f
             settleY = 0f
             settleZ = 0f
-            overCount = 0
+            moveTimes.clear()
         }
         if (settleUntilMs == 0L) return false
         settleN++
@@ -374,15 +376,7 @@ class MainActivity : ComponentActivity() {
                         Log.i(SCREEN_TAG, "SCREEN_OFF — was on for ${onFor}ms, system timeout=${timeoutMs}ms")
                         standby.onScreenOff()
                     }
-                    Intent.ACTION_SCREEN_ON -> {
-                        screenOn = true
-                        screenOnSinceMs = now
-                        val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
-                        Log.i(SCREEN_TAG, "SCREEN_ON — was off for ${offFor}ms")
-                        standby.onScreenOn()
-                        // A long sleep can leave the Apple TV link dead while it looks open (1.3.9).
-                        if (offFor >= LONG_SLEEP_MS && ::appleTvRegistry.isInitialized) appleTvRegistry.onWake()
-                    }
+                    Intent.ACTION_SCREEN_ON -> markScreenOn("SCREEN_ON")
                 }
             }
         }
@@ -520,7 +514,8 @@ class MainActivity : ComponentActivity() {
                 enabled = { wakeOnMotionEnabled },
                 register = ::registerMotionListener,
                 unregister = ::unregisterMotionListener
-            )
+            ),
+            onQuiet = { quiet -> if (::androidTvRegistry.isInitialized) androidTvRegistry.setQuiet(quiet) }
         )
     }
 
@@ -854,9 +849,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The screen came on: Home Assistant live again, motion sensor, Apple TV check… Android's
+     * SCREEN_ON broadcast can come seconds late after a long sleep (3.8 s seen on an HA100), so
+     * [onResume] calls this too when the screen is already on (1.4.0); the later one does nothing.
+     */
+    private fun markScreenOn(source: String) {
+        val now = System.currentTimeMillis()
+        if (screenOn) {
+            if (screenOnSinceMs > 0) Log.i(SCREEN_TAG, "$source — already handled ${now - screenOnSinceMs}ms ago")
+            return
+        }
+        screenOn = true
+        screenOnSinceMs = now
+        val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
+        Log.i(SCREEN_TAG, "$source — screen on, was off for ${offFor}ms")
+        standby.onScreenOn()
+        // A long sleep can leave the Apple TV link dead while it looks open (1.3.9).
+        if (offFor >= LONG_SLEEP_MS && ::appleTvRegistry.isInitialized) appleTvRegistry.onWake()
+    }
+
     override fun onResume() {
         super.onResume()
         Log.i("MainActivity", "onResume — instance ${this.hashCode()} screenOn=$screenOn")
+        if (!screenOn && (getSystemService(POWER_SERVICE) as? PowerManager)?.isInteractive == true) markScreenOn("onResume")
         reloadDashboard()
     }
 
@@ -1333,7 +1349,7 @@ class MainActivity : ComponentActivity() {
                 MOTION_TAG,
                 "setup: sensor='${s.name}' vendor='${s.vendor}' " +
                     "wakeUp=${s.isWakeUpSensor} minDelay=${s.minDelay}us wakeOnMotion=$wakeOnMotionEnabled " +
-                    "tiltWake=${TILT_WAKE_DEG}deg linWake=${LIN_ACC_WAKE} consecutive=$MOTION_CONSECUTIVE_N " +
+                    "tiltWake=${TILT_WAKE_DEG}deg linWake=${LIN_ACC_WAKE} samples=$MOTION_SAMPLES_N/${MOTION_WINDOW_MS}ms " +
                     "warmup=${SCREEN_OFF_WARMUP_MS}ms floor=$MAGNITUDE_SANITY_FLOOR"
             )
         }

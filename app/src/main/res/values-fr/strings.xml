@@ -58,6 +58,8 @@
     <string name="update_up_to_date">À jour</string>
     <string name="update_check_failed">Vérification impossible</string>
     <string name="update_available_short">Disponible</string>
+    <string name="update_downloading">Téléchargement de la mise à jour… %1$d%%</string>
+    <string name="update_download_failed">La mise à jour n\'a pas pu être téléchargée ou ouverte. Vérifiez le Wi-Fi et réessayez.</string>
     <string name="about_device">Appareil</string>
     <string name="about_battery">Batterie</string>
     <string name="about_package">Paquet</string>

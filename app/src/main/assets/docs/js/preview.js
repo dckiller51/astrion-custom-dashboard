@@ -246,8 +246,11 @@ function renderTabs() {
       const gear = document.createElement('span');
       gear.className = 'tab-settings';
       gear.title = I18N.t('web_modal_page_settings');
-      gear.textContent = '⚙';
+      gear.textContent = '✎'; // 1.4.1: the same pencil as the cards' (⚙ looked like a dot on some screens)
       gear.onclick = (e) => { e.stopPropagation(); openPageDialog(index); };
+      // A drag started on the pencil doesn't move the page (the tab itself stays draggable).
+      gear.draggable = false;
+      gear.addEventListener('dragstart', (e) => { e.preventDefault(); e.stopPropagation(); });
       tab.appendChild(gear);
     }
 
@@ -1050,6 +1053,26 @@ function renderPreview() {
           ${rowsHtml}
           <div class="hint" style="margin-top:8px">${I18N.t('web_preview_plex_placeholder')} ${I18N.t('web_preview_server', o.host || I18N.t('web_preview_not_set'))} · ${I18N.t('web_preview_playback_entity', o.media_entity || I18N.t('web_preview_not_set'))}${o.play_entity ? ' · ' + I18N.t('web_preview_direct_client', o.play_entity) : ''} · ${I18N.t('web_preview_items_per_row', o.items_per_row ?? 12)}.</div>
         </div>`;
+    } else if (card.type === 'title') {
+      // 1.4.1: the real title and subtitle, aligned as on the remote (it used to say "title").
+      const o = card.options || {};
+      const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const iconSrc = o.icon ? iconUrl(o.icon) : '';
+      const forceStart = !!iconSrc || o.divider === true; // icon or divider: left-aligned row, like TitleCard.kt
+      const align = { center: 'center', end: 'right', justify: 'justify' }[o.alignment] || 'left';
+      const color = parseHexColorCss(o.color) || '#E6EEF2';
+      const titleRow = (o.title || iconSrc || o.divider)
+        ? `<div style="display:flex;align-items:center;gap:8px">
+            ${iconSrc ? `<img src="${iconSrc}" alt="" style="width:22px;height:22px;object-fit:contain">` : ''}
+            ${o.title ? `<b style="font-size:20px;color:${color};${forceStart ? '' : `flex:1;text-align:${align}`}">${esc(o.title)}</b>` : ''}
+            ${o.divider ? `<div style="flex:1;height:1px;background:${color};opacity:0.3"></div>` : ''}
+          </div>`
+        : '';
+      cardEl.className = 'card';
+      cardEl.innerHTML = `
+        <div class="card-title"><span>title</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+        ${titleRow}
+        ${o.subtitle ? `<div style="font-size:14px;color:#9AA7AE;text-align:${align}">${esc(o.subtitle)}</div>` : ''}`;
     } else if (card.type === 'monitor') {
       cardEl.className = 'card';
       cardEl.innerHTML = `

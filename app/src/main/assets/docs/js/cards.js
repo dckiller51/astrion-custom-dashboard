@@ -38,6 +38,10 @@ function haEntityFieldHtml(domain, fieldId, label) {
 }
 
 function updateCardFormInputs() {
+  // A fresh form: nothing being edited (an edit left open on a card closed earlier used to stay,
+  // and "Save changes" then warned about a button that wasn't there — 1.4.1).
+  editingGridItem = null;
+  gridEditSnapshot = null;
   const type = document.getElementById('cardTypeSelect').value;
   const container = document.getElementById('dynamicCardInputs');
 
@@ -377,6 +381,8 @@ function updateCardFormInputs() {
         <input type="text" id="giStopActivity" list="giStopRooms" placeholder="${I18N.t('web_hotkey_stop_room_ph')}">
         <datalist id="giStopRooms">${activityRoomOptionsHtml()}</datalist>
         <div class="hint">${I18N.t('web_card_stops_whatever_activity_is_running_in')}</div>
+        ${type === 'button_grid' ? `<label class="inline-check"><input type="checkbox" id="giLongOnly"> ${I18N.t('web_card_grid_long_only')}</label>
+        <div class="hint">${I18N.t('web_card_grid_long_only_hint')}</div>` : ''}
         <label>${I18N.t('web_card_long_press_action_optional_json_fired')}</label>
         <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
         <div class="hint">${I18N.t('web_card_long_press_hint', type)}</div>
@@ -606,6 +612,19 @@ function updateFanStepVisibility() {
 }
 
 let editingGridItem = null; // index of the button/scene being edited within _pendingGridItems, or null
+let gridEditSnapshot = null; // the form's text fields as the edited item filled them (see confirmPendingGridItems)
+
+/** The grid item form's text fields (selects are left out: some are filled later, asynchronously). */
+const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand',
+  'giIrDelay', 'giActivityId', 'giHarmonyDevice', 'giHarmonyCommand', 'giStateEntity', 'giStateValue', 'giLongPress',
+  'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder'];
+function gridItemTextSnapshot() {
+  return GRID_ITEM_TEXT_FIELDS.map(id => {
+    const el = document.getElementById(id);
+    if (!el || el.tagName === 'SELECT') return '';
+    return el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value.trim();
+  }).join('\u0001');
+}
 
 function onGiTrackChange() {
   const checked = document.getElementById('giTrack').checked;
@@ -957,7 +976,9 @@ function renderGridItemsList(type) {
     el.className = 'list-item';
     const upDisabled = i === 0 ? ' style="opacity:.3;pointer-events:none"' : '';
     const downDisabled = i === items.length - 1 ? ' style="opacity:.3;pointer-events:none"' : '';
-    const label = item.spacer ? `<i style="color:#888">${I18N.t('web_card_grid_spacer')}</i>` : (item.name || I18N.t('web_unnamed'));
+    const label = item.spacer
+      ? `<i style="color:#888">${I18N.t('web_card_grid_spacer')}</i>`
+      : (item.name || I18N.t('web_unnamed')) + (item.long_press_only ? ` <small style="color:#888">(${I18N.t('web_card_grid_long_only_badge')})</small>` : '');
     const editBtn = item.spacer ? '' : `<span class="remove" style="color:#00E5FF" onclick="editGridItem('${type}', ${i})">✎</span> `;
     el.innerHTML = `<span>${label}</span><span>` +
       `<span class="remove"${upDisabled} onclick="moveGridItem('${type}', ${i}, -1)" title="${I18N.t('web_preview_move_up')}">↑</span> ` +
@@ -1004,6 +1025,8 @@ function fillGridItemForm(type, item) {
     document.getElementById('giIrDevice').value = item.irDevice || '';
     fillGiIrCommands(item);
     document.getElementById('giClosePopup').checked = item.closePopup === true;
+    const longOnlyEl = document.getElementById('giLongOnly');
+    if (longOnlyEl) longOnlyEl.checked = item.long_press_only === true;
     document.getElementById('giStateEntity').value = item.state_entity || '';
     document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
     setColorFieldValue('giActiveColor', item.active_color || '');
@@ -1073,6 +1096,7 @@ async function editGridItem(type, i) {
   const item = window._pendingGridItems[i];
   fillGridItemForm(type, item);
   await fillGiHarmonySection(item);
+  gridEditSnapshot = gridItemTextSnapshot();
   const submit = document.getElementById('giSubmitBtn');
   submit.textContent = I18N.t(type === 'button_grid' ? 'web_card_grid_save_button' : 'web_card_grid_save_scene');
   submit.classList.add('editing'); // 1.4.0: green "Save scene" next to a red "Cancel edit" while editing one
@@ -1081,6 +1105,7 @@ async function editGridItem(type, i) {
 
 function cancelGridItemEdit() {
   editingGridItem = null;
+  gridEditSnapshot = null;
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
@@ -1092,6 +1117,8 @@ function cancelGridItemEdit() {
   if (pageModeEl) pageModeEl.value = 'page';
   const closePopupEl = document.getElementById('giClosePopup');
   if (closePopupEl) closePopupEl.checked = false;
+  const longOnlyEl = document.getElementById('giLongOnly');
+  if (longOnlyEl) longOnlyEl.checked = false;
   setColorFieldValue('giColor', '');
   setColorFieldValue('giActiveColor', '');
   const activeBorderEl = document.getElementById('giActiveBorder');
@@ -1134,6 +1161,7 @@ function addGridItem(type) {
     }
     if (!collectGiIrCommands(item)) return;
     if (document.getElementById('giClosePopup')?.checked) item.closePopup = true;
+    if (document.getElementById('giLongOnly')?.checked) item.long_press_only = true; // 1.4.1: a tap does nothing
 
     const harmonyMode = document.getElementById('giHarmonyMode')?.value || '';
     if (harmonyMode === 'activity') {
@@ -1624,14 +1652,16 @@ function confirmPendingGridItems() {
   const type = document.getElementById('cardTypeSelect')?.value;
   if (type !== 'button_grid' && type !== 'scene_grid') return true;
   const name = document.getElementById('giName');
-  const icon = document.getElementById('giIcon');
-  const pending = (name && name.value.trim()) || (icon && icon.value.trim()) || editingGridItem !== null;
+  // Pending = something was really typed: any field of a new item, or a change to the edited one
+  // (just opening a button with ✎ and saving the card asks nothing — 1.4.1).
+  const now = gridItemTextSnapshot();
+  const pending = editingGridItem !== null ? gridEditSnapshot !== null && now !== gridEditSnapshot : now.replace(/\u0001/g, '') !== '';
   if (!pending) return true;
   const what = (name && name.value.trim()) || I18N.t(type === 'button_grid' ? 'web_card_grid_this_button' : 'web_card_grid_this_scene');
   if (!confirm(I18N.t('web_card_grid_pending_confirm', what))) return false;
   addGridItem(type);
   // addGridItem clears the form once the item is in; still filled = it refused it (and said why).
-  return !(name && name.value.trim()) && editingGridItem === null;
+  return editingGridItem === null && gridItemTextSnapshot().replace(/\u0001/g, '') === '';
 }
 
 function addCardToPage() {

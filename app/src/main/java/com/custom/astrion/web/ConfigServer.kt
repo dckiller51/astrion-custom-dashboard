@@ -1793,6 +1793,7 @@ class ConfigServer(
             return redirectHome(context.getString(R.string.web_config_update_needs_permission))
         }
 
+        if (UpdateChecker.isDownloading) return updateAlreadyDownloading()
         val file =
             UpdateChecker.download(context, info.apkUrl)
                 ?: return newFixedLengthResponse(
@@ -1851,6 +1852,7 @@ class ConfigServer(
             )
         }
 
+        if (UpdateChecker.isDownloading) return updateAlreadyDownloading()
         val file =
             UpdateChecker.download(context, info.apkUrl)
                 ?: return newFixedLengthResponse(
@@ -1871,6 +1873,13 @@ class ConfigServer(
             )
         }
     }
+
+    /** 409 while an update is already downloading (1.4.1): a second one used to corrupt the first. */
+    private fun updateAlreadyDownloading(): Response = newFixedLengthResponse(
+        Response.Status.CONFLICT,
+        "text/plain",
+        "An update is already downloading on the remote: wait for the install prompt"
+    )
 
     // ---- ring ("find my remote") -------------------------------------------
 

@@ -58,6 +58,8 @@
     <string name="update_up_to_date">Actualizado</string>
     <string name="update_check_failed">No se pudo comprobar</string>
     <string name="update_available_short">Disponible</string>
+    <string name="update_downloading">Descargando la actualización… %1$d%%</string>
+    <string name="update_download_failed">No se pudo descargar ni abrir la actualización. Comprueba el Wi-Fi y vuelve a intentarlo.</string>
     <string name="about_device">Dispositivo</string>
     <string name="about_battery">Batería</string>
     <string name="about_package">Paquete</string>

@@ -58,6 +58,8 @@
     <string name="update_up_to_date">Aktuell</string>
     <string name="update_check_failed">Prüfung fehlgeschlagen</string>
     <string name="update_available_short">Verfügbar</string>
+    <string name="update_downloading">Update wird heruntergeladen… %1$d%%</string>
+    <string name="update_download_failed">Das Update konnte nicht heruntergeladen oder geöffnet werden. Prüfe das WLAN und versuche es erneut.</string>
     <string name="about_device">Gerät</string>
     <string name="about_battery">Akku</string>
     <string name="about_package">Paket</string>
