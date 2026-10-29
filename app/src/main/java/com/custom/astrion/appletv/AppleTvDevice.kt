@@ -76,6 +76,13 @@ class AppleTvDevice(
 
     @Volatile private var mrpSupervisor: Thread? = null
 
+    // Quiet (screen off a while, 1.4.1): the now-playing link is closed and not reconnected until
+    // the screen is back on. It drops by itself every few minutes (tvOS), and each reconnect woke
+    // the remote's Wi-Fi and processor all night for a title nobody looks at. Keys don't use it.
+    @Volatile private var mrpPaused = false
+
+    @Volatile private var mrpLost: Semaphore? = null
+
     @Volatile private var lastMrpEndpoint: AppleTvEndpoint? = spec.mrp?.let { AppleTvEndpoint(it.host, it.port) }
 
     // The item currently fetched into snapshot.artworkJpeg, so a repeated SetStateMessage for the
@@ -213,32 +220,56 @@ class AppleTvDevice(
         val mrp = spec.mrp ?: return
         var backoff = MIN_BACKOFF_MS
         while (running.get()) {
-            val lost = Semaphore(0)
-            // Set from the client's onDisconnected callback right before it releases [lost], so
-            // the actual reason is available here instead of a bare, unexplained "connection
-            // lost" — every disconnect was silently dropping its Throwable until now.
-            val lostReason = AtomicReference<Throwable?>()
-            if (tryConnectMrp(mrp, lost, lostReason)) {
+            if (mrpPaused) {
+                // Quiet (1.4.1): no link until the screen is back on (setQuiet releases mrpRetryNow).
+                if (!awaitInterruptibly({ mrpRetryNow.acquire() })) return
+                mrpRetryNow.drainPermits()
                 backoff = MIN_BACKOFF_MS
-                if (!awaitInterruptibly({ lost.acquire() })) return
-                log("[${spec.name}] MRP connection lost: ${lostReason.get()?.message ?: "no error given"}")
-                // Keeping the last [playing] (title/artist/artwork) instead of nulling it here is
-                // deliberate: this connection cycles every ~30s on real hardware regardless of any
-                // keep-alive we send (tvOS's own doing, confirmed not fixable client-side — see the
-                // CHANGELOG), and the reconnect itself only takes a few seconds. Clearing it on every
-                // cycle produced a visible flicker in Home Assistant's media_player card between
-                // "title + artwork" and "playing with no artwork", since AppleTvEntity.populate()
-                // only fills those fields when `playing` is non-null. Showing the last known state
-                // through that brief gap, until a fresh one actually arrives, reads as continuous
-                // instead of flickering — and if the Apple TV changed what's playing during the gap,
-                // the next push corrects it within a few seconds anyway.
-                update { it.copy(mrpConnected = false) }
+            } else {
+                val connected = mrpSession(mrp) ?: return
+                if (connected) backoff = MIN_BACKOFF_MS
+                if (!running.get() || !mrpWaitBeforeRetry(backoff)) return
+                if (!mrpPaused) backoff = minOf(backoff * 2, MAX_BACKOFF_MS)
             }
-            if (!running.get()) return
-            if (!awaitInterruptibly({ mrpRetryNow.tryAcquire(backoff, TimeUnit.MILLISECONDS) })) return
-            mrpRetryNow.drainPermits()
-            backoff = minOf(backoff * 2, MAX_BACKOFF_MS)
         }
+    }
+
+    /** The back-off before the next MRP attempt (none when just paused); false if interrupted. */
+    private fun mrpWaitBeforeRetry(backoff: Long): Boolean {
+        if (mrpPaused) return true
+        if (!awaitInterruptibly({ mrpRetryNow.tryAcquire(backoff, TimeUnit.MILLISECONDS) })) return false
+        mrpRetryNow.drainPermits()
+        return true
+    }
+
+    /** One MRP connection, until it's lost (or paused): true if it connected, false if not, null if interrupted. */
+    private fun mrpSession(mrp: MrpSpec): Boolean? {
+        val lost = Semaphore(0)
+        mrpLost = lost
+        // Set from the client's onDisconnected callback right before it releases [lost], so
+        // the actual reason is available here instead of a bare, unexplained "connection
+        // lost" — every disconnect was silently dropping its Throwable until now.
+        val lostReason = AtomicReference<Throwable?>()
+        if (!tryConnectMrp(mrp, lost, lostReason)) return false
+        if (!awaitInterruptibly({ lost.acquire() })) return null
+        if (mrpPaused) {
+            runCatching { mrpClient?.close() }
+            mrpClient = null
+        } else {
+            log("[${spec.name}] MRP connection lost: ${lostReason.get()?.message ?: "no error given"}")
+        }
+        // Keeping the last [playing] (title/artist/artwork) instead of nulling it here is
+        // deliberate: this connection cycles every ~30s on real hardware regardless of any
+        // keep-alive we send (tvOS's own doing, confirmed not fixable client-side — see the
+        // CHANGELOG), and the reconnect itself only takes a few seconds. Clearing it on every
+        // cycle produced a visible flicker in Home Assistant's media_player card between
+        // "title + artwork" and "playing with no artwork", since AppleTvEntity.populate()
+        // only fills those fields when `playing` is non-null. Showing the last known state
+        // through that brief gap, until a fresh one actually arrives, reads as continuous
+        // instead of flickering — and if the Apple TV changed what's playing during the gap,
+        // the next push corrects it within a few seconds anyway.
+        update { it.copy(mrpConnected = false) }
+        return true
     }
 
     private fun newMrpClient(
@@ -396,6 +427,19 @@ class AppleTvDevice(
         runCatching { c.close() }
         if (client === c) client = null
         retryNow.release()
+    }
+
+    /** Quiet on/off (1.4.1): the now-playing link closes, then reconnects at once on wake. */
+    fun setQuiet(quiet: Boolean) {
+        if (spec.mrp == null || mrpPaused == quiet || !running.get()) return
+        mrpPaused = quiet
+        if (quiet) {
+            log("[${spec.name}] quiet: now playing paused")
+            mrpLost?.release() // the supervisor closes the link and waits
+        } else {
+            log("[${spec.name}] awake: now playing resumed")
+            mrpRetryNow.release()
+        }
     }
 
     /**

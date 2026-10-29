@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.2-beta] - 2026-10-29
+
+### Added
+
+- **Remote tweaks: a key that only wakes the screen** (`install.sh --wake-keys --wake-only ok`): with the screen off, OK (or any key you pick by its name: `menu`, `back`, `red`…; table in the wiki) just turns the screen on and isn't replayed, so you can look at the dashboard without sending OK to the TV. The other keys still act on the first press (volume, channels…).
+
+### Changed
+
+- **Builder: the pages as a tree beside the remote**, instead of tabs above it: sub-pages indented under their parent, folding branches, 🏠 start page, ⧉ popup, 🎬 Activity-only. Drag a page onto the edge of another to move it, or onto its middle to make it a sub-page; **+** on a page adds a sub-page, ✎ opens its settings. On a narrow window the list goes above the remote. Suggested by a user.
+
+### Fixed
+
+- **Other connections kept the remote awake at night too**: overnight logs showed a switched-off NVIDIA SHIELD tried every 30 s (over 100 times an hour) and the Apple TV's *now playing* link reconnecting every few minutes (tvOS drops it by itself). With Home Assistant's quiet mode, an Android TV that doesn't answer is now tried every 10 minutes, and the Apple TV's *now playing* link is paused; both are back the moment the screen comes on. Keys and Activities use other connections and work as before.
+
 ## [1.4.1-beta] - 2026-10-29
 
 ### Added

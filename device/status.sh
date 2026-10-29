@@ -35,6 +35,8 @@ line "power save" "$(iw dev "$iface" get power_save 2>/dev/null || echo 'unknown
 echo "== Wake keys"
 if grep -q '^WAKE_KEYS=1' /vendor/etc/astrion-tweaks.conf 2>/dev/null; then
     line "replay" "on"
+    only=$(sed -n 's/^WAKE_ONLY="\(.*\)"/\1/p' /vendor/etc/astrion-tweaks.conf 2>/dev/null)
+    line "wake-only keys" "${only:-none}"
     line "getevent running" "$(pgrep -f '^getevent' >/dev/null 2>&1 && echo yes || echo 'no (see the log)')"
 else
     line "replay" "off (install.sh --wake-keys)"

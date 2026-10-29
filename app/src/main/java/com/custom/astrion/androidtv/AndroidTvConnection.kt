@@ -38,6 +38,10 @@ class AndroidTvConnection(
 ) {
     @Volatile private var running = false
 
+    // Quiet (1.4.1): a TV that doesn't answer (off, asleep) is tried every 10 minutes instead of
+    // every 30 s, which woke the remote all night; back on screen, it's tried again at once.
+    @Volatile private var quiet = false
+
     @Volatile private var socket: SSLSocket? = null
     private var thread: Thread? = null
     private val writeLock = Any()
@@ -65,6 +69,11 @@ class AndroidTvConnection(
         runCatching { socket?.close() }
         thread?.interrupt()
         thread = null
+    }
+
+    fun setQuiet(quiet: Boolean) {
+        this.quiet = quiet
+        if (!quiet && !state.connected) thread?.interrupt() // ends the wait: try again now
     }
 
     /** Presses a key ([direction]: short press by default, or start/end of a long press). */
@@ -131,7 +140,7 @@ class AndroidTvConnection(
                 socket = null
             }
             if (running && failures > 0) runCatching { onConnectFailed(failures) }
-            if (running) sleepQuietly(backoffMs(failures))
+            if (running) sleepQuietly(if (quiet) QUIET_RETRY_MS else backoffMs(failures))
         }
         update { it.copy(connected = false) }
     }
@@ -216,6 +225,7 @@ class AndroidTvConnection(
         private const val CONNECT_TIMEOUT_MS = 5_000
         private const val SILENCE_TIMEOUT_MS = 20_000
         private val BACKOFF_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
+        private const val QUIET_RETRY_MS = 10 * 60_000L
 
         private fun backoffMs(failures: Int): Long = BACKOFF_MS[(failures - 1).coerceIn(0, BACKOFF_MS.size - 1)]
     }

@@ -48,6 +48,33 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   @keyframes spin { to { transform: rotate(360deg); } }
   /* 1.4.0: the preview's header (Save to device, undo, history…) stays on screen while the page scrolls. */
   .preview-head { display: flex; align-items: center; gap: 8px; margin: -20px -20px 12px; padding: 14px 20px 10px; position: sticky; top: 0; z-index: 50; background: #181818; border-radius: 12px 12px 0 0; }
+  /* 1.4.2: preview = remote (left) + page tree (right); the tree goes above on a narrow pane. */
+  #saveToDeviceFab { white-space: nowrap; }
+  .preview-body { display: flex; gap: 16px; align-items: flex-start; }
+  .preview-remote-col { flex: 0 0 208px; min-width: 0; }
+  .page-tree-col { flex: 1; min-width: 150px; position: sticky; top: 64px; }
+  .preview-pane.narrow .preview-body { flex-direction: column; align-items: stretch; }
+  .preview-pane.narrow .preview-remote-col { flex-basis: auto; order: 2; }
+  .preview-pane.narrow .page-tree-col { order: 1; position: static; }
+  .page-tree-head { display: flex; align-items: center; justify-content: space-between; color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .page-tree { display: flex; flex-direction: column; gap: 3px; }
+  .page-tree-hint { margin-top: 8px; font-size: 0.72rem; }
+  .pt-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; background: #2d2d2d; border: 1px solid #3a3a3a; cursor: grab; font-size: 0.85rem; color: #eee; min-height: 30px; box-sizing: border-box; }
+  .pt-row:hover { border-color: #555; }
+  .pt-row.active { background: #00E5FF; color: #121212; border-color: #00E5FF; }
+  .pt-row.dragging { opacity: 0.4; }
+  .pt-row.drop-before { box-shadow: inset 0 3px 0 #00E5FF; }
+  .pt-row.drop-after { box-shadow: inset 0 -3px 0 #00E5FF; }
+  .pt-row.drop-inside { outline: 2px dashed #00E5FF; outline-offset: -2px; }
+  .pt-row.active.drop-before, .pt-row.active.drop-after { box-shadow: inset 0 3px 0 #121212; }
+  .pt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pt-toggle { width: 14px; text-align: center; cursor: pointer; opacity: 0.7; flex: none; }
+  .pt-badge { font-size: 0.75rem; opacity: 0.85; flex: none; }
+  .pt-btn { cursor: pointer; padding: 1px 5px; border-radius: 4px; opacity: 0.6; flex: none; }
+  .pt-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+  .pt-row.active .pt-btn:hover { background: rgba(0,0,0,0.15); }
+  .pt-row .pt-add { visibility: hidden; }
+  .pt-row:hover .pt-add, .pt-row.active .pt-add { visibility: visible; }
   /* Grid scene/button form: "+ Add" in the accent colour; while editing one, a green "Save" and a red "Cancel". */
   button.grid-add { background: #00E5FF; color: #121212; }
   button.grid-add.editing { background: #2e7d32; color: #fff; }

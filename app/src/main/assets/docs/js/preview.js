@@ -207,55 +207,137 @@ function _eaHighlight(idx) {
   }
 }
 
+/**
+ * The pages as a tree beside the remote (1.4.2; tabs before): sub-pages indented under their
+ * `parent`, in the dashboard's order. Click a page to show it; drag it onto the top or bottom
+ * edge of another to place it there (same parent as that one), or onto its middle to make it a
+ * sub-page; ✎ opens its settings, + adds a sub-page. Branches fold with ▸ / ▾.
+ * Kept under its old name: every caller refreshes "the tabs" with renderTabs().
+ */
+let pageTreeCollapsed = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('astrion.pageTreeCollapsed') || '[]')); } catch (e) { return new Set(); }
+})();
+
+function savePageTreeCollapsed() {
+  try { localStorage.setItem('astrion.pageTreeCollapsed', JSON.stringify([...pageTreeCollapsed])); } catch (e) { /* private mode */ }
+}
+
 function renderTabs() {
-  const tabsContainer = document.getElementById('tabs');
-  tabsContainer.innerHTML = '';
-  dashboardData.pages.forEach((page, index) => {
-    const tab = document.createElement('div');
-    const isActive = index === currentActivePage;
-    tab.className = `tab ${isActive ? 'active' : ''}`;
-    tab.dataset.pageIdx = String(index);
-
-    const label = document.createElement('span');
-    label.textContent = (page.parent ? '↳ ' : '') + page.name + (index === dashboardData.startPage ? ' 🏠' : '');
-    if (page.parent) label.title = I18N.t('web_preview_child_of', page.parent);
-    tab.appendChild(label);
-    tab.onclick = () => onPageChange(index);
-
-    // Drag-to-reorder, mirroring enhanceCardControls() below. Dropping a tab
-    // onto another tab repositions its page in dashboardData.pages; the active
-    // tab and start page follow their pages via reorderPage()'s index fixup.
-    tab.setAttribute('draggable', 'true');
-    tab.addEventListener('dragstart', (e) => {
-      tab.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(index));
-    });
-    tab.addEventListener('dragend', () => tab.classList.remove('dragging'));
-    tab.addEventListener('dragover', (e) => { e.preventDefault(); tab.classList.add('drag-over'); });
-    tab.addEventListener('dragleave', () => tab.classList.remove('drag-over'));
-    tab.addEventListener('drop', (e) => {
-      e.preventDefault();
-      tab.classList.remove('drag-over');
-      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-      const toIdx = parseInt(tab.dataset.pageIdx, 10);
-      if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) reorderPage(fromIdx, toIdx);
-    });
-
-    if (isActive) {
-      const gear = document.createElement('span');
-      gear.className = 'tab-settings';
-      gear.title = I18N.t('web_modal_page_settings');
-      gear.textContent = '✎'; // 1.4.1: the same pencil as the cards' (⚙ looked like a dot on some screens)
-      gear.onclick = (e) => { e.stopPropagation(); openPageDialog(index); };
-      // A drag started on the pencil doesn't move the page (the tab itself stays draggable).
-      gear.draggable = false;
-      gear.addEventListener('dragstart', (e) => { e.preventDefault(); e.stopPropagation(); });
-      tab.appendChild(gear);
-    }
-
-    tabsContainer.appendChild(tab);
+  const tree = document.getElementById('pageTree');
+  if (!tree) return;
+  tree.innerHTML = '';
+  const pages = dashboardData.pages;
+  const names = new Set(pages.map(p => p.name));
+  const childrenOf = new Map(); // parent name ('' = top level) -> page indexes, in dashboard order
+  pages.forEach((p, i) => {
+    const key = p.parent && names.has(p.parent) && p.parent !== p.name ? p.parent : '';
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key).push(i);
   });
+  const seen = new Set();
+  const addRows = (parentName, depth) => {
+    (childrenOf.get(parentName) || []).forEach(index => {
+      if (seen.has(index)) return; // a loop in hand-written JSON: show each page once
+      seen.add(index);
+      const page = pages[index];
+      const kids = childrenOf.get(page.name) || [];
+      const collapsed = pageTreeCollapsed.has(page.name);
+      tree.appendChild(pageTreeRow(index, depth, kids.length > 0, collapsed));
+      if (collapsed) hideRows(page.name); else addRows(page.name, depth + 1);
+    });
+  };
+  // A folded branch: its sub-pages are known, just not shown (else they'd land at the end).
+  const hideRows = (parentName) => {
+    (childrenOf.get(parentName) || []).forEach(index => {
+      if (seen.has(index)) return;
+      seen.add(index);
+      hideRows(pages[index].name);
+    });
+  };
+  addRows('', 0);
+  pages.forEach((p, i) => { if (!seen.has(i)) tree.appendChild(pageTreeRow(i, 0, false, false)); });
+}
+
+function pageTreeRow(index, depth, hasKids, collapsed) {
+  const page = dashboardData.pages[index];
+  const row = document.createElement('div');
+  row.className = 'pt-row' + (index === currentActivePage ? ' active' : '');
+  row.style.marginLeft = `${depth * 16}px`;
+  row.dataset.pageIdx = String(index);
+  row.onclick = () => onPageChange(index);
+
+  const toggle = document.createElement('span');
+  toggle.className = 'pt-toggle';
+  if (hasKids) {
+    toggle.textContent = collapsed ? '▸' : '▾';
+    toggle.title = I18N.t(collapsed ? 'web_tree_expand' : 'web_tree_collapse');
+    toggle.onclick = (e) => {
+      e.stopPropagation();
+      if (collapsed) pageTreeCollapsed.delete(page.name); else pageTreeCollapsed.add(page.name);
+      savePageTreeCollapsed();
+      renderTabs();
+    };
+  }
+  row.appendChild(toggle);
+
+  const name = document.createElement('span');
+  name.className = 'pt-name';
+  name.textContent = page.name;
+  if (page.parent) name.title = I18N.t('web_preview_child_of', page.parent);
+  row.appendChild(name);
+
+  const badge = (text, titleKey) => {
+    const b = document.createElement('span');
+    b.className = 'pt-badge';
+    b.textContent = text;
+    b.title = I18N.t(titleKey);
+    row.appendChild(b);
+  };
+  if (index === dashboardData.startPage) badge('🏠', 'web_tree_start_page');
+  if (page.popupWidth != null || (typeof popupOpenersOf === 'function' && popupOpenersOf(page.name) > 0)) badge('⧉', 'web_tree_popup');
+  if (page.hiddenUnlessActivity) badge('🎬', 'web_tree_activity_only');
+
+  const button = (text, titleKey, onClick, extraClass) => {
+    const b = document.createElement('span');
+    b.className = 'pt-btn' + (extraClass ? ' ' + extraClass : '');
+    b.textContent = text;
+    b.title = I18N.t(titleKey);
+    b.draggable = false;
+    b.addEventListener('dragstart', (e) => { e.preventDefault(); e.stopPropagation(); });
+    b.onclick = (e) => { e.stopPropagation(); onClick(); };
+    row.appendChild(b);
+  };
+  button('+', 'web_tree_add_subpage', () => openSubPageDialog(index), 'pt-add');
+  button('✎', 'web_modal_page_settings', () => openPageDialog(index));
+
+  // Drag and drop: top / bottom quarter = before / after that page, the middle = inside it.
+  row.setAttribute('draggable', 'true');
+  const zone = (e) => {
+    const r = row.getBoundingClientRect();
+    const y = (e.clientY - r.top) / r.height;
+    return y < 0.28 ? 'before' : (y > 0.72 ? 'after' : 'inside');
+  };
+  const clear = () => row.classList.remove('drop-before', 'drop-after', 'drop-inside');
+  row.addEventListener('dragstart', (e) => {
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  });
+  row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    clear();
+    row.classList.add('drop-' + zone(e));
+  });
+  row.addEventListener('dragleave', clear);
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const where = zone(e);
+    clear();
+    const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (!isNaN(fromIdx)) movePageInTree(fromIdx, index, where);
+  });
+  return row;
 }
 
 // Mimics the real status bar clock so the preview's proportions match what
@@ -336,6 +418,9 @@ function updateRemoteScreenScale() {
 function updateRemoteFrameScale() {
   const wrap = document.querySelector('.remote-frame-scale-wrap');
   const frame = document.querySelector('.remote-frame');
+  // 1.4.2: a narrow pane puts the page tree above the remote instead of beside it.
+  const pane = document.querySelector('.preview-pane');
+  if (pane) pane.classList.toggle('narrow', pane.clientWidth < 420);
   if (!wrap || !frame || wrap.clientWidth === 0) return;
   const scale = Math.min(wrap.clientWidth / 208, 1);
   frame.style.transform = `scale(${scale})`;

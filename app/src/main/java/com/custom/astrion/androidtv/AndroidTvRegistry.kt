@@ -99,6 +99,8 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
      * The TV connections themselves stay (they only talk when something happens).
      */
     fun setQuiet(quiet: Boolean) {
+        // A TV that doesn't answer is tried every 10 minutes while quiet, at once on wake (1.4.1).
+        devices.values.forEach { it.connection.setQuiet(quiet) }
         val helpers = devices.values.mapNotNull { it.helper }
         if (helpers.isEmpty()) return
         log(if (quiet) "quiet: TV Helper polling paused" else "awake: TV Helper polling resumed")
