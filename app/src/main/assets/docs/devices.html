@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Astrion Custom — Devices</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Add to home screen (1.4.3): Astrion's icon and name on a phone's home screen. -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Astrion">
 </head>
 <body>
 
@@ -194,6 +203,11 @@
                     The MAC is what keeps this extender's identity stable: IR devices point at it by an id derived from the MAC, so you can rename it,
                     move it to a new IP, or even remove and re-add it later without breaking every device that uses it.
                 </div>
+                <label style="margin-top:10px" data-i18n="web_dev_extender_outputs">IR outputs</label>
+                <select id="extenderOutputs">
+                    <option value="1" data-i18n="web_dev_extender_outputs_1">1 (most extenders)</option>
+                    <option value="3" data-i18n="web_dev_extender_outputs_3">3: KinCony KC868-AGv3 (built-in LEDs + 2 cables)</option>
+                </select>
                 <div class="btn-row" style="margin-top:10px">
                     <button id="saveExtenderBtn" onclick="saveExtender()" data-i18n="web_save">Save</button>
                     <button class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
@@ -285,10 +299,19 @@
                 </div>
 
                 <label style="margin-top:10px" data-i18n="web_dev_where_should_this_device_s_commands">Where should this device's commands actually get sent from?</label>
-                <select id="irTargetSelect"><option value="" data-i18n="web_dev_this_remote_s_own_ir_blaster">— this remote's own IR blaster —</option></select>
+                <select id="irTargetSelect" onchange="updateIrOutputRow()"><option value="" data-i18n="web_dev_this_remote_s_own_ir_blaster">— this remote's own IR blaster —</option></select>
                 <div class="hint" data-i18n-html="web_dev_ir_target_hint">
                     Same for every card/hotkey that references this device — set it once here, not per-card. Only IR-database-referenced devices (not hand-pasted commands) can target an extender right now.
                     Need one added? Go to <a href="javascript:void(0)" onclick="showView('viewExtender')">IR Extenders</a>.
+                </div>
+                <div id="irOutputRow" style="display:none">
+                    <label style="margin-top:10px" data-i18n="web_dev_ir_output">IR output</label>
+                    <select id="irOutputSelect">
+                        <option value="1" data-i18n="web_dev_ir_output_1">Built-in IR LEDs</option>
+                        <option value="2" data-i18n="web_dev_ir_output_2">Extension cable 1</option>
+                        <option value="3" data-i18n="web_dev_ir_output_3">Extension cable 2</option>
+                    </select>
+                    <div class="hint" data-i18n="web_dev_ir_output_hint">Which of the extender's IR outputs sends this device's commands: stick an extension cable's emitter on the device in a closed cabinet.</div>
                 </div>
 
                 <div class="btn-row">

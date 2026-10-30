@@ -196,6 +196,20 @@ function initEditor() {
   if (typeof applyThemeToPreview === 'function') applyThemeToPreview();
   updateJsonOutput();
   updateHotkeyActionInputs();
+  initFolds();
+}
+
+/** 1.4.3: the folded sections (theme, dock, standby, JSON) stay as the person left them. */
+function initFolds() {
+  document.querySelectorAll('details.fold').forEach(el => {
+    const key = 'astrion.fold.' + el.id;
+    try { if (localStorage.getItem(key) === '1') el.open = true; } catch (e) { /* no storage: folded */ }
+    if (el.dataset.foldBound) return;
+    el.dataset.foldBound = '1';
+    el.addEventListener('toggle', () => {
+      try { localStorage.setItem(key, el.open ? '1' : '0'); } catch (e) { /* ignore */ }
+    });
+  });
 }
 
 // ---- Pages: add / rename / delete, all via the page dialog -----------------

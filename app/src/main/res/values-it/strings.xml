@@ -33,6 +33,7 @@
     <string name="settings_update_available">Aggiornamento disponibile: v%1$s</string>
     <string name="settings_beta_update_available">Beta disponibile: %1$s</string>
     <string name="settings_local_config">Configurazione locale: %1$s</string>
+    <string name="web_config_qr_hint">Scansionalo con il telefono per aprire la pagina web del telecomando e il builder, senza digitare l\'indirizzo. Sul telefono, «Aggiungi alla schermata Home» ti dà poi un\'icona Astrion.</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Schermo</string>

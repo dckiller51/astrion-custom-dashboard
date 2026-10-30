@@ -33,6 +33,7 @@
     <string name="settings_update_available">Actualización disponible: v%1$s</string>
     <string name="settings_beta_update_available">Beta disponible: %1$s</string>
     <string name="settings_local_config">Configuración local: %1$s</string>
+    <string name="web_config_qr_hint">Escanéalo con tu teléfono para abrir la página web del mando y el builder, sin escribir la dirección. En el teléfono, «Añadir a pantalla de inicio» te da luego un icono de Astrion.</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Pantalla</string>

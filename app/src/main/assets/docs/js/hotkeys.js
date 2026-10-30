@@ -384,12 +384,20 @@ function renderHotkeysList() {
   container.innerHTML = '';
   const page = dashboardData.pages[currentActivePage];
 
+  // 1.4.3: green = active on the page shown, amber = not used there. A page key replaces the
+  // global key of the same press type (the app's own precedence), so that global one is amber.
+  const pageKeys = {
+    hotkeys: new Set(((page && page.hotkeys) || []).map(h => String(h.key).toUpperCase())),
+    longHotkeys: new Set(((page && page.longHotkeys) || []).map(h => String(h.key).toUpperCase()))
+  };
   const addRows = (list, scope, listType, label) => {
     (list || []).forEach((h, i) => {
+      const replaced = scope === 'global' && pageKeys[listType].has(String(h.key).toUpperCase());
+      const tip = I18N.t(replaced ? 'web_hotkey_replaced_here' : 'web_hotkey_active_here');
       const row = document.createElement('div');
-      row.className = 'list-item';
+      row.className = 'list-item ' + (replaced ? 'hk-replaced' : 'hk-active');
       row.innerHTML = `
-        <span>[${label}] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}</span>
+        <span><span class="hk-scope ${replaced ? 'hk-off' : 'hk-on'}" title="${tip}">${label}</span> <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}</span>
         <span>
           <span class="remove" style="color:#00E5FF" onclick="editHotkey('${scope}','${listType}',${i})">✎</span>
           <span class="remove" onclick="removeHotkey('${scope}','${listType}',${i})">✕</span>
@@ -404,7 +412,11 @@ function renderHotkeysList() {
   addRows(page.hotkeys, 'page', 'hotkeys', I18N.t('web_hotkey_scope_page'));
   addRows(page.longHotkeys, 'page', 'longHotkeys', I18N.t('web_hotkey_scope_page_long'));
 
-  if (!container.innerHTML.trim()) container.innerHTML = `<div class="hint">${I18N.t('web_hotkey_none')}</div>`;
+  if (!container.innerHTML.trim()) {
+    container.innerHTML = `<div class="hint">${I18N.t('web_hotkey_none')}</div>`;
+  } else {
+    container.insertAdjacentHTML('beforeend', `<div class="hint hk-legend">${I18N.t('web_hotkey_legend')}</div>`);
+  }
 
   updateHardwareKeyHighlights();
 }

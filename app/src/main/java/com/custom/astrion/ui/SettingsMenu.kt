@@ -485,6 +485,13 @@ private fun WebConfigSection(ctx: CardContext) {
             color = if (ctx.deviceSettings.configServerEnabled) LocalTheme.current.accent else LocalTheme.current.mutedText,
             fontSize = 13.sp
         )
+        // 1.4.3: scan it with a phone instead of typing the address.
+        if (ctx.deviceSettings.configServerEnabled) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                QrCode("http://$ip:8080/", Modifier.clip(RoundedCornerShape(8.dp)))
+                Box(Modifier.weight(1f)) { Hint(stringResource(R.string.web_config_qr_hint)) }
+            }
+        }
     }
 }
 

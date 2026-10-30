@@ -179,7 +179,11 @@ function renderDevicesList() {
   if (extenderList) {
     extenderList.innerHTML = extenders.length
       ? extenders.map(ext => {
-          const summary = [ext.host || I18N.t('web_dev_no_host_set'), ext.mac ? 'MAC ' + ext.mac : null].filter(Boolean).join(' · ');
+          const summary = [
+            ext.host || I18N.t('web_dev_no_host_set'),
+            ext.mac ? 'MAC ' + ext.mac : null,
+            (ext.outputs || 1) > 1 ? I18N.t('web_dev_extender_outputs_count', ext.outputs) : null
+          ].filter(Boolean).join(' · ');
           return `<div class="list-item"><span>${ext.name} <span style="color:#888">(${summary})</span></span>` +
             `<span><span class="remove" style="color:#00E5FF" onclick="editExtender('${ext.localId}')">✎</span> <span class="remove" onclick="removeExtender('${ext.localId}')">✕</span></span></div>`;
         }).join('')
@@ -300,6 +304,7 @@ async function openDeviceForm(type) {
     document.getElementById('extenderName').value = '';
     document.getElementById('extenderHost').value = '';
     document.getElementById('extenderMac').value = '';
+    document.getElementById('extenderOutputs').value = '1';
     editingExtenderId = null;
     document.getElementById('saveExtenderBtn').textContent = I18N.t('web_save');
     document.getElementById('removeExtenderBtn').style.display = 'none';
@@ -331,6 +336,16 @@ function renderIrTargetOptions() {
   select.innerHTML = `<option value="">${I18N.t('web_dev_this_remote_s_own_ir_blaster')}</option>` +
     extenders.map(ext => `<option value="${ext.localId}">${ext.name}</option>`).join('');
   if (extenders.some(ext => ext.localId === current)) select.value = current;
+  updateIrOutputRow();
+}
+
+/** Shows the "IR output" choice (1.4.3) only when the chosen extender has several outputs. */
+function updateIrOutputRow() {
+  const row = document.getElementById('irOutputRow');
+  if (!row) return;
+  const id = document.getElementById('irTargetSelect').value;
+  const ext = extenders.find(e => e.localId === id);
+  row.style.display = ext && (ext.outputs || 1) > 1 ? '' : 'none';
 }
 
 // ---- This remote --------------------------------------------------------------
@@ -400,6 +415,7 @@ async function persistHaAndHubs() {
       body.append('extender_name[]', ext.name || '');
       body.append('extender_host[]', ext.host || '');
       body.append('extender_mac[]', ext.mac || '');
+      body.append('extender_outputs[]', String(ext.outputs || 1));
     });
     body.set('atv_present', '1'); // tells the device this form carries the Apple TV list (even if empty)
     appleTvs.forEach(tv => {
@@ -805,6 +821,7 @@ function editExtender(localId) {
   document.getElementById('extenderName').value = ext.name || '';
   document.getElementById('extenderHost').value = ext.host || '';
   document.getElementById('extenderMac').value = ext.mac || '';
+  document.getElementById('extenderOutputs').value = String(ext.outputs || 1) === '3' ? '3' : '1';
   document.getElementById('saveExtenderBtn').textContent = I18N.t('web_save');
   document.getElementById('removeExtenderBtn').style.display = '';
 }
@@ -813,6 +830,7 @@ async function saveExtender() {
   const name = document.getElementById('extenderName').value.trim();
   const host = document.getElementById('extenderHost').value.trim();
   const macRaw = document.getElementById('extenderMac').value.trim();
+  const outputs = parseInt(document.getElementById('extenderOutputs').value, 10) || 1;
   if (!name) { alert(I18N.t('web_dev_err_extender_name')); return; }
   if (!host) { alert(I18N.t('web_dev_err_extender_host')); return; }
   const mac = normalizeMac(macRaw);
@@ -840,12 +858,13 @@ async function saveExtender() {
     ext.name = name;
     ext.host = host;
     ext.mac = mac;
+    ext.outputs = outputs;
   } else {
     if (existing) {
       alert(I18N.t('web_dev_err_mac_exists', existing.name));
       return;
     }
-    extenders.push({ localId, name, host, mac });
+    extenders.push({ localId, name, host, mac, outputs });
   }
   await persistHaAndHubs();
 }
@@ -1283,6 +1302,8 @@ function editIrDevice(id) {
   editingIrDevice = id;
   document.getElementById('irDevName').value = dev.name;
   document.getElementById('irTargetSelect').value = (dev.target && dev.target.extender) || '';
+  document.getElementById('irOutputSelect').value = String((dev.target && dev.target.output) || 1);
+  updateIrOutputRow();
 
   const isReference = !dev.commands;
   document.querySelector(`input[name="irSourceMode"][value="${isReference ? 'reference' : 'inline'}"]`).checked = true;
@@ -1311,6 +1332,9 @@ function cancelIrDeviceEdit() {
   document.getElementById('irRefKnownCommands').value = '';
   const targetSelect = document.getElementById('irTargetSelect');
   if (targetSelect) targetSelect.value = '';
+  const outputSelect = document.getElementById('irOutputSelect');
+  if (outputSelect) outputSelect.value = '1';
+  updateIrOutputRow();
   document.querySelector('input[name="irSourceMode"][value="inline"]').checked = true;
   onIrSourceModeChange();
   document.getElementById('saveIrDeviceBtn').textContent = I18N.t('web_save');
@@ -1347,7 +1371,15 @@ async function saveIrDevice() {
     alert(I18N.t('web_dev_err_inline_extender'));
     return;
   }
-  deviceFields.target = targetExtenderId ? { extender: targetExtenderId } : undefined;
+  const targetExt = extenders.find(e => e.localId === targetExtenderId);
+  const output = parseInt(document.getElementById('irOutputSelect').value, 10) || 1;
+  if (!targetExtenderId) {
+    deviceFields.target = undefined;
+  } else if (targetExt && (targetExt.outputs || 1) > 1) {
+    deviceFields.target = { extender: targetExtenderId, output };
+  } else {
+    deviceFields.target = { extender: targetExtenderId };
+  }
 
   dashboardData.irDevices = dashboardData.irDevices || [];
   let savedId;

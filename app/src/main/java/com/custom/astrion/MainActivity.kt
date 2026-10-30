@@ -1125,8 +1125,8 @@ class MainActivity : ComponentActivity() {
         if (client == null) {
             Log.w(IrTransmit.TAG, "NOT SENT $irDevice/$irCommand: extender ${target.extenderId} isn't registered")
         } else {
-            IrTransmit.extender(irDevice, irCommand, target.extenderId, prontoCode)
-            lifecycleScope.launch { client.send(prontoCode) }
+            IrTransmit.extender(irDevice, irCommand, target, prontoCode)
+            lifecycleScope.launch { client.send(prontoCode, target.output) }
         }
     }
 

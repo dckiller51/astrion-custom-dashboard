@@ -33,6 +33,7 @@
     <string name="settings_update_available">Update verfügbar: v%1$s</string>
     <string name="settings_beta_update_available">Beta verfügbar: %1$s</string>
     <string name="settings_local_config">Lokale Konfiguration: %1$s</string>
+    <string name="web_config_qr_hint">Scanne ihn mit deinem Handy, um die Webseite der Fernbedienung und den Builder zu öffnen, ohne die Adresse einzutippen. Auf dem Handy gibt dir „Zum Startbildschirm hinzufügen“ dann ein Astrion-Symbol.</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Anzeige</string>

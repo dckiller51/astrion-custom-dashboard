@@ -137,7 +137,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .list-item .remove { color: #ff8a8a; cursor: pointer; font-weight: bold; flex-shrink: 0; }
   .card-title .remove { cursor: pointer; color: #ccc; }
   .card-title .remove:hover { color: #fff; }
-  .hotkeys-badge { background: #0d2b30; border: 1px solid #00E5FF; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.78rem; }
   .hint { font-size: 0.75rem; color: #777; margin-top: 4px; }
   .hint-row { display: flex; flex-wrap: wrap; gap: 4px 16px; }
   .hint-row .inline-check { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #ccc; margin: 0; }
@@ -707,3 +706,35 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .weather-place { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .weather-place button { margin-left: auto; }
 .weather-result { display: block; width: 100%; text-align: left; margin-top: 6px; }
+
+  /* 1.4.3: the builder on a phone. One column, the preview first (no longer sticky), bigger
+     touch targets, and 16px inputs so iOS doesn't zoom in on every field. */
+  @media (max-width: 760px) {
+    body { padding: 12px; }
+    .layout { flex-direction: column; align-items: stretch; gap: 14px; }
+    .editor-pane, .preview-pane { padding: 14px; }
+    .preview-pane { position: static; order: -1; }
+    .preview-head { flex-wrap: wrap; row-gap: 8px; margin: -14px -14px 12px; padding: 12px 14px 10px; }
+    input, select, textarea { font-size: 16px; }
+    button { min-height: 40px; }
+    .preview-head { gap: 6px; }
+    .preview-head .ha-icon-btn { min-width: 36px; min-height: 36px; width: 36px; height: 36px; padding: 0; }
+    pre, table { max-width: 100%; overflow-x: auto; }
+  }
+
+  /* 1.4.3: hotkey scope labels, green when the key applies on the page shown, amber when not. */
+  .hk-scope { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 0.74rem; font-weight: 600; border: 1px solid; }
+  .hk-scope.hk-on { color: #4caf50; border-color: #4caf50; background: rgba(76, 175, 80, 0.12); }
+  .hk-scope.hk-off { color: #ffb300; border-color: #ffb300; background: rgba(255, 179, 0, 0.12); }
+  .list-item.hk-active { border-left: 3px solid #4caf50; }
+  .list-item.hk-replaced { border-left: 3px solid #ffb300; color: #9a9a9a; }
+  .list-item.hk-replaced b { color: #9a9a9a; }
+  .hk-legend { margin-top: 8px; }
+
+  /* 1.4.3: folded sections of the builder's left pane. */
+  details.fold { margin: 0; }
+  details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; margin: 18px 0 10px; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "▸"; color: #00E5FF; font-size: 0.9rem; transition: transform 150ms; }
+  details.fold[open] > summary::before { transform: rotate(90deg); }
+  details.fold > summary h2 { display: inline-block; margin: 0; }
