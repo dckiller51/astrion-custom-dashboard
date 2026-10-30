@@ -17,8 +17,8 @@ android {
         applicationId = "com.custom.astrion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 52
-        versionName = "1.4.2"
+        versionCode = 53
+        versionName = "1.4.3"
     }
 
     buildTypes {
@@ -106,6 +106,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // QR code of the web page's address in Settings (1.4.3). Apache-2.0, pure Java, no Android deps.
+    implementation("com.google.zxing:core:3.5.3")
 
     // Apple TV Companion protocol: X25519 / Ed25519 / ChaCha20-Poly1305 are not in the
     // Android platform before API 33 (minSdk is 26). Only the lightweight

@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title data-i18n="web_ui_title">Astrion Custom — dashboard.json Editor</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Add to home screen (1.4.3): Astrion's icon and name on a phone's home screen. -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Astrion">
 </head>
 <body>
 
@@ -32,15 +41,6 @@
 <div class="layout">
     <!-- LEFT PANE -->
     <div class="editor-pane">
-
-        <h2 data-i18n="web_ui_load_heading">Load an existing dashboard.json (optional)</h2>
-        <div class="section-box">
-            <textarea id="importBox" rows="4" data-i18n-attr="placeholder:web_ui_import_placeholder" placeholder="Paste your current dashboard.json here to edit it, or leave empty to start fresh."></textarea>
-            <div class="btn-row">
-                <button data-i18n="web_ui_load_button" onclick="importJson()">Load</button>
-                <button class="secondary" data-i18n="web_ui_start_over" onclick="resetAll()">Start over</button>
-            </div>
-        </div>
 
         <div class="hint" style="margin-bottom:20px" data-i18n-html="web_ui_devices_hint">
             Home Assistant, Harmony Hub(s), and IR Devices are configured once from
@@ -114,20 +114,41 @@
             <div id="activitiesList" style="margin-top:12px"></div>
         </div>
 
-        <h2 data-i18n="web_ui_3_theme_amp_colors">3. Theme &amp; Colors</h2>
-        <div class="section-box" id="themeBox"></div>
+        <!-- 1.4.3: the sections used once, folded (the builder remembers which ones are open). -->
+        <details class="fold" id="foldTheme">
+            <summary><h2 data-i18n="web_ui_3_theme_amp_colors">3. Theme &amp; Colors</h2></summary>
+            <div class="section-box" id="themeBox"></div>
+        </details>
 
-        <h2 data-i18n="web_ui_4_dock_screen">4. Dock screen</h2>
-        <div class="section-box" id="dockBox"></div>
+        <details class="fold" id="foldDock">
+            <summary><h2 data-i18n="web_ui_4_dock_screen">4. Dock screen</h2></summary>
+            <div class="section-box" id="dockBox"></div>
+        </details>
 
-        <h2 data-i18n="web_ui_5_standby_amp_battery">5. Standby &amp; battery</h2>
-        <div class="section-box" id="powerBox"></div>
+        <details class="fold" id="foldPower">
+            <summary><h2 data-i18n="web_ui_5_standby_amp_battery">5. Standby &amp; battery</h2></summary>
+            <div class="section-box" id="powerBox"></div>
+        </details>
 
-        <h2 data-i18n="web_ui_6_generated_json">6. Generated JSON</h2>
-        <textarea id="jsonOutput" readonly></textarea>
+        <details class="fold" id="foldJson">
+            <summary><h2 data-i18n="web_ui_6_import_export_json">6. Import / export JSON</h2></summary>
+            <h3 class="subsection-title" data-i18n="web_ui_6_generated_json">Generated JSON</h3>
+            <textarea id="jsonOutput" readonly></textarea>
+            <div class="btn-row">
+                <button data-i18n="web_ui_copy_json" onclick="copyJson()">Copy JSON</button>
+                <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
+            </div>
+            <h3 class="subsection-title" data-i18n="web_ui_load_heading">Load an existing dashboard.json (optional)</h3>
+            <div class="section-box">
+                <textarea id="importBox" rows="4" data-i18n-attr="placeholder:web_ui_import_placeholder" placeholder="Paste your current dashboard.json here to edit it, or leave empty to start fresh."></textarea>
+                <div class="btn-row">
+                    <button data-i18n="web_ui_load_button" onclick="importJson()">Load</button>
+                    <button class="secondary" data-i18n="web_ui_start_over" onclick="resetAll()">Start over</button>
+                </div>
+            </div>
+        </details>
+
         <div class="btn-row">
-            <button data-i18n="web_ui_copy_json" onclick="copyJson()">Copy JSON</button>
-            <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
             <button id="saveToDeviceBtn" style="display:none" data-i18n="web_ui_save_to_device" onclick="saveDashboardToDevice()">Save to device</button>
         </div>
         <input type="text" id="saveNote" maxlength="200" style="display:none;margin-top:8px" data-i18n-attr="placeholder:web_history_save_note_ph" placeholder="Note for this version (optional), e.g. new Apple TV page">
@@ -274,7 +295,6 @@
             <div class="hint page-tree-hint" data-i18n="web_tree_hint">Click a page to show it. Drag it to reorder, or onto another page to make it a sub-page.</div>
         </div>
         </div>
-        <div id="hotkeysInfo"></div>
     </div>
 </div>
 

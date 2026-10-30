@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.3-beta] - 2026-10-30
+
+### Added
+
+- **IR extenders with several outputs**: an extender can have **3 IR outputs** (KinCony KC868-AGv3: built-in IR LEDs + 2 extension cables), and each IR device picks its **IR output** on the web page (*IR Devices*). Its commands go out as `/pronto?out=N`; Activities batch them per output. Needs the astrion-ir-extender firmware for that box.
+- **QR code of the web page** in the remote's **Settings › Web configuration**: scan it with a phone, no address to type.
+- **Add to Home screen**: the web page and the builder give your phone an **Astrion** icon and name.
+
+### Changed
+
+- **Builder on a phone**: one column, the preview and the page list first, bigger buttons, and fields that don't make an iPhone zoom in.
+- **Builder: less scrolling** (suggested by a user): Hotkeys and Activities come first; **Theme & Colors**, **Dock screen**, **Standby & battery** and the new **Import / export JSON** (the generated JSON and *Load an existing dashboard.json* together) are folded, and the builder remembers which ones you open. The theme still updates the preview live.
+- **Builder: hotkeys** show where they apply in the list itself: the **Global** / **Page** label is green when the key works on the page shown, amber when that page's own key replaces it. The *Hotkeys active on this page* box under the preview is gone.
+
 ## [1.4.2-beta] - 2026-10-29
 
 ### Added

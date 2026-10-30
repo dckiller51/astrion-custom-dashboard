@@ -54,7 +54,7 @@ class ExtenderClient(
      * failures via [onError] rather than throwing, matching every other
      * network call site in this app (Harmony, HA) — a single unreachable
      * extender should never crash the button that tried to use it. */
-    suspend fun send(prontoCode: String): Boolean = sendBody(prontoCode)
+    suspend fun send(prontoCode: String, output: Int = 0): Boolean = sendBody(prontoCode, output)
 
     /** Sends several [commands] in one request, letting the extender's
      * own firmware handle the inter-command timing (see
@@ -64,21 +64,23 @@ class ExtenderClient(
      * an Activity switch touching multiple devices on the same
      * extender) — a fast second POST used to be able to overwrite a
      * first one the extender hadn't transmitted yet. */
-    suspend fun sendBatch(commands: List<ExtenderBatchCommand>): Boolean {
+    suspend fun sendBatch(commands: List<ExtenderBatchCommand>, output: Int = 0): Boolean {
         if (commands.isEmpty()) return true
         val body =
             commands.joinToString("\n") { cmd ->
                 if (cmd.delayBeforeMs > 0) "${cmd.delayBeforeMs}>${cmd.prontoCode}" else cmd.prontoCode
             }
-        return sendBody(body)
+        return sendBody(body, output)
     }
 
-    private suspend fun sendBody(body: String): Boolean = withContext(Dispatchers.IO) {
+    /** [output] > 0 picks one of the extender's IR outputs (`/pronto?out=N`, 1.4.3); an extender
+     * with a single output ignores it. */
+    private suspend fun sendBody(body: String, output: Int): Boolean = withContext(Dispatchers.IO) {
         runCatching {
             val request =
                 Request
                     .Builder()
-                    .url("http://$host/pronto")
+                    .url(prontoUrl(host, output))
                     .post(body.toRequestBody(textMediaType))
                     .build()
 
@@ -99,3 +101,6 @@ class ExtenderClient(
         }
     }
 }
+
+/** The extender's `/pronto` URL; [output] > 0 adds `?out=N` (1.4.3). */
+internal fun prontoUrl(host: String, output: Int): String = if (output > 0) "http://$host/pronto?out=$output" else "http://$host/pronto"

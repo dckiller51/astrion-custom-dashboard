@@ -104,8 +104,8 @@ class ActivityDispatcher(
          * wait — see [runSteps]. */
         abstract val gapBeforeMs: Int
 
-        /** A single Pronto code bound for [extenderId]. Consecutive
-         * `Extender` steps targeting the *same* extender get merged by
+        /** A single Pronto code bound for [extenderId] (on its IR [output], 1.4.3). Consecutive
+         * `Extender` steps targeting the *same* extender and output get merged by
          * [runSteps] into one `POST /pronto` batch instead of one
          * request per step — this is what actually fixes commands
          * getting silently dropped when several arrive close together
@@ -113,7 +113,12 @@ class ActivityDispatcher(
          * device's command, with no gap between them: a fast second
          * request used to be able to overwrite a first one the extender
          * hadn't transmitted yet). */
-        data class Extender(val extenderId: String, val prontoCode: String, override val gapBeforeMs: Int) : DispatchStep()
+        data class Extender(
+            val extenderId: String,
+            val prontoCode: String,
+            override val gapBeforeMs: Int,
+            val output: Int = 0
+        ) : DispatchStep()
 
         /** Anything that isn't a batchable extender send — local IR,
          * Harmony, or a Home Assistant service call. Always dispatched
@@ -190,8 +195,8 @@ class ActivityDispatcher(
                             )
                             this.keepGap(gap)
                         } else {
-                            IrTransmit.extender(deviceId, command, target.extenderId, pronto)
-                            this.steps += DispatchStep.Extender(target.extenderId, pronto, gap)
+                            IrTransmit.extender(deviceId, command, target, pronto)
+                            this.steps += DispatchStep.Extender(target.extenderId, pronto, gap, target.output)
                         }
                     }
                 }
@@ -218,7 +223,7 @@ class ActivityDispatcher(
         var i = 0
         while (i < steps.size) {
             when (val step = steps[i]) {
-                is DispatchStep.Extender -> i = this.runExtenderRun(steps, i, step.extenderId)
+                is DispatchStep.Extender -> i = this.runExtenderRun(steps, i, step)
                 is DispatchStep.Immediate -> {
                     if (step.gapBeforeMs > 0) delay(step.gapBeforeMs.milliseconds)
                     step.run()
@@ -229,21 +234,23 @@ class ActivityDispatcher(
     }
 
     /** Collects every consecutive [DispatchStep.Extender] step starting at
-     * [start] that targets [extenderId], sends them as one batch, and
+     * [start] that targets [first]'s extender and IR output, sends them as one batch, and
      * returns the index of the first step (extender-bound or not) that
      * didn't belong to this run — [runSteps] resumes from there. Split
      * out purely to keep [runSteps] itself under detekt's
      * NestedBlockDepth threshold. */
-    private suspend fun runExtenderRun(steps: List<DispatchStep>, start: Int, extenderId: String): Int {
+    private suspend fun runExtenderRun(steps: List<DispatchStep>, start: Int, first: DispatchStep.Extender): Int {
+        val extenderId = first.extenderId
         val batch = mutableListOf<ExtenderBatchCommand>()
         var j = start
         while (j < steps.size) {
             val s = steps[j]
-            if (s !is DispatchStep.Extender || s.extenderId != extenderId) break
+            // One request = one output (`?out=N` applies to the whole body).
+            if (s !is DispatchStep.Extender || s.extenderId != extenderId || s.output != first.output) break
             batch += ExtenderBatchCommand(s.gapBeforeMs, s.prontoCode)
             j++
         }
-        extenderRegistry.client(extenderId)?.let { c -> extenderScope.launch { c.sendBatch(batch) } }
+        extenderRegistry.client(extenderId)?.let { c -> extenderScope.launch { c.sendBatch(batch, first.output) } }
             ?: Log.w(IrTransmit.TAG, "NOT SENT ${batch.size} command(s): extender $extenderId isn't registered")
         // The batch's delays play out on the extender itself; wait the same
         // total here so whatever follows (local IR, Harmony, HA) still lands
@@ -322,8 +329,8 @@ class ActivityDispatcher(
         if (client == null) {
             Log.w(IrTransmit.TAG, "NOT SENT $deviceId/$command: extender ${target.extenderId} isn't registered")
         } else {
-            IrTransmit.extender(deviceId, command, target.extenderId, pronto)
-            extenderScope.launch { client.send(pronto) }
+            IrTransmit.extender(deviceId, command, target, pronto)
+            extenderScope.launch { client.send(pronto, target.output) }
         }
     }
 

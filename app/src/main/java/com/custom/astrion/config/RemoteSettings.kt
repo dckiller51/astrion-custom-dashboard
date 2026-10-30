@@ -30,7 +30,11 @@ data class ExtenderConfig(
     /** Normalized to 12 lowercase hex digits, no separators. [localId] is
      * always `ext_<mac>`; this field keeps the value around so the edit
      * form can show it back to the user. */
-    val mac: String = ""
+    val mac: String = "",
+    /** How many IR outputs the extender has (1.4.3): 1 for most, 3 for a KinCony KC868-AGv3
+     * (built-in LEDs + 2 extension cables). With more than one, each IR device picks its
+     * output ([IrTarget.Extender.output]). */
+    val outputs: Int = 1
 )
 
 /**
@@ -120,6 +124,9 @@ object RemoteSettings {
     private const val KEY_HA_WEBHOOK_ID = "ha_webhook_id"
     private const val KEY_HARMONY_HUBS = "harmony_hubs" // JSON array, see HarmonyHubConfig
     private const val KEY_EXTENDERS = "ir_extenders" // JSON array, see ExtenderConfig
+
+    /** The most IR outputs an extender can have (KinCony KC868-AGv3: 3). */
+    const val MAX_EXTENDER_OUTPUTS = 3
     private const val KEY_APPLE_TVS = "apple_tvs" // JSON array, see AppleTvConfig
     private const val KEY_ANDROID_TVS = "android_tvs" // JSON array, see AndroidTvConfig
     private const val KEY_ANDROID_TV_IDENTITY = "android_tv_identity" // key:cert, see AndroidTvIdentity
@@ -236,6 +243,7 @@ object RemoteSettings {
                         put("name", ext.name)
                         put("host", ext.host)
                         put("mac", ext.mac)
+                        put("outputs", ext.outputs)
                     }
                 }
             }
@@ -255,7 +263,8 @@ object RemoteSettings {
                 localId = obj["localId"]?.jsonPrimitive?.content ?: UUID.randomUUID().toString(),
                 name = obj["name"]?.jsonPrimitive?.content ?: "IR Extender",
                 host = obj["host"]?.jsonPrimitive?.content ?: "",
-                mac = obj["mac"]?.jsonPrimitive?.content ?: ""
+                mac = obj["mac"]?.jsonPrimitive?.content ?: "",
+                outputs = obj["outputs"]?.jsonPrimitive?.content?.toIntOrNull()?.coerceIn(1, MAX_EXTENDER_OUTPUTS) ?: 1
             )
         }
     } catch (_: Exception) {

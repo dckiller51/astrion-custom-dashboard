@@ -33,6 +33,7 @@
     <string name="settings_update_available">Mise à jour disponible : v%1$s</string>
     <string name="settings_beta_update_available">Bêta disponible : %1$s</string>
     <string name="settings_local_config">Configuration locale : %1$s</string>
+    <string name="web_config_qr_hint">Scannez-le avec votre téléphone pour ouvrir la page web de la télécommande et le builder, sans taper l\'adresse. Sur le téléphone, « Ajouter à l\'écran d\'accueil » vous donne ensuite une icône Astrion.</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Écran</string>

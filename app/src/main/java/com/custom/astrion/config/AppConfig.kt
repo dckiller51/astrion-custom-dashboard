@@ -445,7 +445,9 @@ data class IrDeviceConfig(
 sealed class IrTarget {
     data object Local : IrTarget()
 
-    data class Extender(val extenderId: String) : IrTarget()
+    /** [output]: which of the extender's IR outputs to use (1.4.3; KinCony KC868-AGv3: 1 built-in
+     * LEDs, 2 and 3 its extension cables), sent as `/pronto?out=N`. 0 = the extender's default. */
+    data class Extender(val extenderId: String, val output: Int = 0) : IrTarget()
 }
 
 /**

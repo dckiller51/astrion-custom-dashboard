@@ -450,30 +450,8 @@ function renderPreview() {
 
   updateStatusBarClock();
 
-  // 1.4.0: only the keys that really apply on this page. A page key overrides the global key of
-  // the same press type, so that global one is left out (it used to be listed as well).
-  const effective = (globalList, pageList) => {
-    const overridden = new Set((pageList || []).map(h => String(h.key).toUpperCase()));
-    return (globalList || []).filter(h => !overridden.has(String(h.key).toUpperCase()));
-  };
-  const globalShort = effective(dashboardData.hotkeys, page.hotkeys);
-  const globalLong = effective(dashboardData.longHotkeys, page.longHotkeys);
-  const pageKeys = (page.hotkeys || []).length + (page.longHotkeys || []).length;
-  const hkInfo = document.getElementById('hotkeysInfo');
-  if (hkInfo) {
-    if (globalShort.length + globalLong.length + pageKeys > 0) {
-      let hkHtml = `<div class="hotkeys-badge"><strong>${I18N.t('web_preview_hotkeys_active')}</strong><br>`;
-      const hkRow = (scopeKey, h) => `• [${I18N.t(scopeKey)}] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`;
-      globalShort.forEach(h => hkHtml += hkRow('web_hotkey_scope_global', h));
-      globalLong.forEach(h => hkHtml += hkRow('web_hotkey_scope_global_long', h));
-      (page.hotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page', h));
-      (page.longHotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page_long', h));
-      hkHtml += `</div>`;
-      hkInfo.innerHTML = hkHtml;
-    } else {
-      hkInfo.innerHTML = '';
-    }
-  }
+  // 1.4.3: which hotkeys apply on this page now shows in the hotkey list itself (green / amber),
+  // see renderHotkeysList(); the "Hotkeys active on this page" box is gone.
 
   if (!page.cards || page.cards.length === 0) {
     contentContainer.innerHTML += `<p style="color:#666; font-style:italic;">${I18N.t('web_preview_no_cards')}</p>`;

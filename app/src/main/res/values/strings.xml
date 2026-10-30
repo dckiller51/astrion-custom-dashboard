@@ -33,6 +33,7 @@
     <string name="settings_update_available">Update available: v%1$s</string>
     <string name="settings_beta_update_available">Beta available: %1$s</string>
     <string name="settings_local_config">Local config: %1$s</string>
+    <string name="web_config_qr_hint">Scan it with your phone to open the remote\'s web page and the builder, without typing the address. On the phone, “Add to Home screen” then gives you an Astrion icon.</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Display</string>

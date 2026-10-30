@@ -582,6 +582,7 @@ class ConfigServer(
                                     put("name", ext.name)
                                     put("host", ext.host)
                                     put("mac", ext.mac)
+                                    put("outputs", ext.outputs)
                                 }
                             )
                         }
@@ -1207,6 +1208,7 @@ class ConfigServer(
         val names = params["extender_name[]"].orEmpty()
         val hosts = params["extender_host[]"].orEmpty()
         val macs = params["extender_mac[]"].orEmpty()
+        val outputs = params["extender_outputs[]"].orEmpty()
         val rowCount = maxOf(ids.size, names.size, hosts.size, macs.size)
 
         return (0 until rowCount).mapNotNull { i ->
@@ -1230,7 +1232,8 @@ class ConfigServer(
                 localId = localId,
                 name = name.ifBlank { "IR Extender" },
                 host = host,
-                mac = mac
+                mac = mac,
+                outputs = outputs.getOrNull(i)?.trim()?.toIntOrNull()?.coerceIn(1, RemoteSettings.MAX_EXTENDER_OUTPUTS) ?: 1
             )
         }
     }
