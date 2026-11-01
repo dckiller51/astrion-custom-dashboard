@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.4-beta] - 2026-11-01
+
+### Added
+
+- **Builder: order your Activities**: **↑** / **↓** in the Activities list move an Activity within its room (e.g. *Watch TV* then *Watch TV - Movies*). Suggested by a user.
+- **Button colours**: each button of a **button grid** can have its own background and text colour (`color`, `text_color`), over the theme's; a **scene grid** tile gets `text_color` too. The builder's preview shows them.
+
+### Fixed
+
+- **Grids: "Active color" and "Accent border while active" seemed not to save**: without an entity to watch, the builder dropped them silently. It now says what they need. On a scene grid tile, they also work **while the tile's Activity runs**, with no entity to watch. Reported by a user.
+
 ## [1.4.3-beta] - 2026-10-30
 
 ### Added

@@ -50,6 +50,12 @@ function themeValues() {
   return out;
 }
 
+/** 1.4.4: a theme token's current value (the dashboard's theme, else its default), for a
+ * per-button color field's placeholder. */
+function themeDefault(key, fallback) {
+  try { return themeValues()[key] || fallback; } catch (e) { return fallback; }
+}
+
 // Builds the Theme & Colors form (swatch + hex text field per token) into
 // #themeBox. Called once from initEditor(); inputs persist across re-renders
 // of the preview (only the preview re-renders, not this form).

@@ -277,8 +277,11 @@ class SceneGridCard : CardRenderer {
         fun stateFor(scene: Map<String, Any?>): SceneButtonState {
             val stateActive = isConditionActive(scene)
             val activityActive = isActive(scene)
-            val background = (if (stateActive) parseHexColor(scene["active_color"] as? String) else null) ?: colorOf(scene)
-            val stateBorder = if (stateActive) conditionBorderColor(scene) else null
+            // 1.4.4: a tile without "state_entity" also uses its "active_color" / "active_border"
+            // while its Activity runs (they used to be ignored without a watched entity).
+            val activeLook = stateActive || (activityActive && scene["state_entity"] == null)
+            val background = (if (activeLook) parseHexColor(scene["active_color"] as? String) else null) ?: colorOf(scene)
+            val stateBorder = if (activeLook) conditionBorderColor(scene) else null
             val (borderActive, borderColor) =
                 when {
                     stateBorder != null -> true to stateBorder
@@ -292,7 +295,8 @@ class SceneGridCard : CardRenderer {
                 hasIcon = hasIcon,
                 showLabel = showLabels,
                 active = borderActive,
-                borderColor = borderColor
+                borderColor = borderColor,
+                textColor = parseHexColor(scene["text_color"] as? String) ?: contrastText(background)
             )
         }
 
@@ -329,8 +333,6 @@ class SceneGridCard : CardRenderer {
         }
     }
 
-    private fun luminance(c: Color): Float = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
-
     /** [SceneButton]'s icon layout knobs, bundled into one parameter so
      * adding these didn't push the function over detekt's parameter-count
      * threshold. [iconPosition] only affects the icon+label tile shape
@@ -363,7 +365,9 @@ class SceneGridCard : CardRenderer {
          * in [Render]). Null draws no border even when [active] is true —
          * e.g. a state condition matched but no "active_border" was set,
          * so only the background changes via "active_color". */
-        val borderColor: Color? = null
+        val borderColor: Color? = null,
+        /** "text_color" (1.4.4) when set, else black or white for contrast with [color]. */
+        val textColor: Color = contrastText(color)
     )
 
     /** The border every tile shares when [SceneButtonState.active] is true
@@ -381,7 +385,7 @@ class SceneGridCard : CardRenderer {
         onLongClick: (() -> Unit)?,
         onClick: () -> Unit
     ) {
-        val textColor = if (luminance(state.color) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)
+        val textColor = state.textColor
         // iconFill tiles render the bitmap at the full tile height (ContentScale.
         // FillHeight), otherwise it's a 28dp square — pick the larger of the two
         // as the downsample target so the same bitmap stays sharp in either mode
@@ -540,3 +544,9 @@ class SceneGridCard : CardRenderer {
 
 /** Height of a text-only tile when the card sets no `tile_height`. */
 private const val TEXT_TILE_HEIGHT_DP = 58
+
+private fun luminance(c: Color): Float = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+
+/** Black or white, whichever reads best on [background]. Top-level so [SceneGridCard]'s nested
+ * tile state can use it as a default. */
+private fun contrastText(background: Color): Color = if (luminance(background) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)
