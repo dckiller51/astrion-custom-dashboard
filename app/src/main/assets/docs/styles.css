@@ -529,11 +529,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   }
   .preview-scene-tile.no-icon .st-label { font-size: 15px; margin-top: 0; }
   .preview-button-tile .bt-label {
-    color: var(--text); font-size: 12px; font-weight: 500; text-align: center; max-width: 100%;
+    color: inherit; font-size: 12px; font-weight: 500; text-align: center; max-width: 100%;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .preview-button-tile.no-icon { background: var(--control); }
-  .preview-button-tile.has-icon { background: var(--control); }
+  .preview-button-tile.no-icon { background: var(--control); color: var(--text); }
+  .preview-button-tile.has-icon { background: var(--control); color: var(--text); }
   .preview-button-tile.no-icon .bt-label { font-size: 15px; }
 
   /* cover card — mirrors CoverCard.kt's 3 layouts (default / horizontal / vertical)[cite: 1] */
@@ -738,3 +738,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   details.fold > summary::before { content: "▸"; color: #00E5FF; font-size: 0.9rem; transition: transform 150ms; }
   details.fold[open] > summary::before { transform: rotate(90deg); }
   details.fold > summary h2 { display: inline-block; margin: 0; }
+
+  /* 1.4.4: ↑ ↓ to reorder Activities. */
+  .list-item .move { color: #bbb; }
+  .list-item .move-spacer { display: inline-block; width: 1em; }

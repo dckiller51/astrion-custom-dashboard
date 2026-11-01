@@ -61,6 +61,9 @@ import com.custom.astrion.ui.tapCombinedClickable
  * - "active_border": optional accent border while active — `true` draws
  *   the theme's accent color, or give your own hex color instead.
  *
+ * Each button can also have its own colors (1.4.4), over the theme's: "color"
+ * (background) and "text_color" (label), hex like scene_grid's "color".
+ *
  * "closePopup": true dismisses whichever popup is currently open, fired
  * after every other action on that button — e.g. a small TV/Projector
  * popup (opened via a scene_grid/title tile's own "pageMode": "popup")
@@ -188,11 +191,12 @@ class ButtonGridCard : CardRenderer {
         }
     }
 
-    /** The button's background while active — `"active_color"` when set
-     * and parsable, otherwise the ordinary theme control background (same
-     * as an inactive/non-conditional button). */
+    /** The button's background — `"active_color"` while active when set and parsable, otherwise
+     * its own `"color"` (1.4.4), otherwise the theme's control background. */
     private fun tileBackground(b: Map<String, Any?>, active: Boolean, theme: ThemeColors): Color =
-        (if (active) parseHexColor(b["active_color"] as? String) else null) ?: theme.controlBackground
+        (if (active) parseHexColor(b["active_color"] as? String) else null)
+            ?: parseHexColor(b["color"] as? String)
+            ?: theme.controlBackground
 
     /** The optional accent border while active — `"active_border"` in the
      * config: `true` draws `theme.accent`, a hex string draws that color
@@ -252,7 +256,7 @@ class ButtonGridCard : CardRenderer {
             if (hasName) {
                 Text(
                     name!!,
-                    color = theme.primaryText,
+                    color = parseHexColor(b["text_color"] as? String) ?: theme.primaryText,
                     fontSize = (style.fontSize ?: if (hasIcon) 12 else 15).sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,

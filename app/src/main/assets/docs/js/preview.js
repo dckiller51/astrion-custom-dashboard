@@ -1010,7 +1010,7 @@ function renderPreview() {
         const src = iconUrl(item.icon);
         if (isScene) {
           const bg = parseHexColorCss(item.color) || (typeof themeValues === 'function' ? themeValues().controlBackground : '#2C4C58');
-          const textColor = textColorForBg(bg);
+          const textColor = parseHexColorCss(item.text_color) || textColorForBg(bg);
           const isFillTile = iconFill && src && !showLabels;
           const tileClass = isFillTile ? 'fill' : (hasIconGrid ? 'has-icon' : 'no-icon');
           const heightStyle = tileHeight ? `height:${tileHeight}px;` : '';
@@ -1030,7 +1030,13 @@ function renderPreview() {
           const iconCell = hasIcon
             ? `<img class="bt-icon" src="${src}" alt="" onerror="onButtonIconError(this)">`
             : '';
-          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${tileHeight ? ` style="height:${tileHeight}px"` : ''}>
+          // 1.4.4: the button's own colors, over the theme's.
+          const btnStyle = [
+            tileHeight ? `height:${tileHeight}px` : '',
+            parseHexColorCss(item.color) ? `background:${parseHexColorCss(item.color)}` : '',
+            parseHexColorCss(item.text_color) ? `color:${parseHexColorCss(item.text_color)}` : ''
+          ].filter(Boolean).join(';');
+          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${btnStyle ? ` style="${btnStyle}"` : ''}>
             ${iconCell}
             ${label && (showLabels || !hasIcon) ? `<div class="bt-label"${fontStyle}>${label}</div>` : ''}
           </div>`;

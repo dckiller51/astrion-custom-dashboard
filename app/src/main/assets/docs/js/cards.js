@@ -316,6 +316,9 @@ function updateCardFormInputs() {
           ${(dashboardData.irDevices || []).length === 0 ? `<div class="hint">${I18N.t('web_card_no_ir_devices_yet_add_one')}</div>` : ''}
           <label class="inline-check"><input type="checkbox" id="giClosePopup"> ${I18N.t('web_card_close_the_open_popup_after_this')}</label>
           <div class="hint">${I18N.t('web_card_for_a_button_placed_inside_a')}</div>
+          <label>${I18N.t('web_card_grid_button_color')}</label>${colorFieldHtml('giColor', '', themeDefault('controlBackground', '#2C4C58'))}
+          <label>${I18N.t('web_card_grid_text_color')}</label>${colorFieldHtml('giTextColor', '', themeDefault('primaryText', '#F0F2F6'))}
+          <div class="hint">${I18N.t('web_card_grid_colors_hint')}</div>
           <div class="divider" style="margin:12px 0"></div>
           <label>${I18N.t('web_card_state_entity_optional_highlights_this_button')}</label><input type="text" id="giStateEntity" placeholder="${I18N.t('web_card_e_g_input_select_living_room')}">
           <label>${I18N.t('web_card_target_state_optional_comma_separated_for')}</label><input type="text" id="giStateValue" placeholder="e.g., TV">
@@ -356,12 +359,14 @@ function updateCardFormInputs() {
           </select>
           ${(dashboardData.activities || []).length === 0 ? `<div class="hint">${I18N.t('web_card_grid_no_activities_hint')}</div>` : `<div class="hint">${I18N.t('web_card_saving_this_tile_sets_this_as')}</div>`}
           <label>${I18N.t('web_card_grid_color')}</label>${colorFieldHtml('giColor', '', '#66009688')}
+          <label>${I18N.t('web_card_grid_text_color')}</label>${colorFieldHtml('giTextColor', '', '')}
+          <div class="hint">${I18N.t('web_card_grid_scene_text_color_hint')}</div>
           <div class="divider" style="margin:12px 0"></div>
           <label>${I18N.t('web_card_state_entity_optional_highlights_this_tile')}</label><input type="text" id="giStateEntity" placeholder="${I18N.t('web_card_ph_light')}">
           <label>${I18N.t('web_card_target_state_optional_comma_separated_for')}</label><input type="text" id="giStateValue" placeholder="e.g., on">
           <label>${I18N.t('web_card_active_color_optional_hex_background_while')}</label>${colorFieldHtml('giActiveColor', '', '#FF2A4954')}
           <label class="inline-check"><input type="checkbox" id="giActiveBorder"> ${I18N.t('web_card_accent_border_while_active')}</label>
-          <div class="hint">${I18N.t('web_card_independent_of_track_as_activity_below')}</div>
+          <div class="hint">${I18N.t('web_card_independent_of_track_as_activity_below')} ${I18N.t('web_card_grid_active_with_activity_hint')}</div>
           <div class="divider" style="margin:12px 0"></div>
           <label><input type="checkbox" id="giTrack" onchange="onGiTrackChange()"> ${I18N.t('web_card_grid_track')}</label>
           <div class="hint">${I18N.t('web_card_grid_track_hint')}</div>
@@ -1027,6 +1032,8 @@ function fillGridItemForm(type, item) {
     document.getElementById('giClosePopup').checked = item.closePopup === true;
     const longOnlyEl = document.getElementById('giLongOnly');
     if (longOnlyEl) longOnlyEl.checked = item.long_press_only === true;
+    setColorFieldValue('giColor', item.color || '');
+    setColorFieldValue('giTextColor', item.text_color || '');
     document.getElementById('giStateEntity').value = item.state_entity || '';
     document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
     setColorFieldValue('giActiveColor', item.active_color || '');
@@ -1044,6 +1051,7 @@ function fillGridItemForm(type, item) {
     const actRefSel = document.getElementById('giActivityRef');
     if (actRefSel) actRefSel.value = item.activity || '';
     setColorFieldValue('giColor', item.color || '');
+    setColorFieldValue('giTextColor', item.text_color || '');
     document.getElementById('giStateEntity').value = item.state_entity || '';
     document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
     setColorFieldValue('giActiveColor', item.active_color || '');
@@ -1120,6 +1128,7 @@ function cancelGridItemEdit() {
   const longOnlyEl = document.getElementById('giLongOnly');
   if (longOnlyEl) longOnlyEl.checked = false;
   setColorFieldValue('giColor', '');
+  setColorFieldValue('giTextColor', '');
   setColorFieldValue('giActiveColor', '');
   const activeBorderEl = document.getElementById('giActiveBorder');
   if (activeBorderEl) activeBorderEl.checked = false;
@@ -1199,6 +1208,8 @@ function addGridItem(type) {
     const activeColor = colorFieldValue('giActiveColor');
     const activeBorder = document.getElementById('giActiveBorder').checked;
     if (stateEntity && !stateValueRaw) { alert(I18N.t('web_card_err_target_state')); return; }
+    // 1.4.4: they used to be dropped silently without a watched entity, as if never saved.
+    if (!stateEntity && (activeColor || activeBorder)) { alert(I18N.t('web_card_err_active_needs_state')); return; }
     if (stateEntity) {
       item.state_entity = stateEntity;
       const values = stateValueRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -1206,6 +1217,10 @@ function addGridItem(type) {
       if (activeColor) item.active_color = activeColor;
       if (activeBorder) item.active_border = true;
     }
+    const btnColor = colorFieldValue('giColor');
+    const btnTextColor = colorFieldValue('giTextColor');
+    if (btnColor) item.color = btnColor;
+    if (btnTextColor) item.text_color = btnTextColor;
   } else {
     const entityId = document.getElementById('giEntityId').value.trim();
     const page = document.getElementById('giPage').value.trim();
@@ -1289,13 +1304,20 @@ function addGridItem(type) {
     const activeColor = colorFieldValue('giActiveColor');
     const activeBorder = document.getElementById('giActiveBorder').checked;
     if (stateEntity && !stateValueRaw) { alert(I18N.t('web_card_err_target_state')); return; }
+    // 1.4.4: a tile's Activity (tracked tile or composed Activity) also turns them on.
+    const hasActivity = !!(item.activity || item.track);
+    if (!stateEntity && !hasActivity && (activeColor || activeBorder)) { alert(I18N.t('web_card_err_active_needs_state_or_activity')); return; }
     if (stateEntity) {
       item.state_entity = stateEntity;
       const values = stateValueRaw.split(',').map(s => s.trim()).filter(Boolean);
       item.state_value = values.length > 1 ? values : values[0];
+    }
+    if (stateEntity || hasActivity) {
       if (activeColor) item.active_color = activeColor;
       if (activeBorder) item.active_border = true;
     }
+    const sceneTextColor = colorFieldValue('giTextColor');
+    if (sceneTextColor) item.text_color = sceneTextColor;
   }
   if (longPress) item.long_press = longPress;
   window._pendingGridItems = window._pendingGridItems || [];
