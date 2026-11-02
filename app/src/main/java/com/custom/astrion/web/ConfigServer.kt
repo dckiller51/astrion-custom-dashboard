@@ -11,6 +11,7 @@ import android.os.BatteryManager
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import androidx.core.net.toUri
@@ -272,7 +273,20 @@ class ConfigServer(
     private val irDatabaseDir: File
         get() = File(Environment.getExternalStorageDirectory(), "astrion/ir-database").apply { mkdirs() }
 
+    /**
+     * Keeps the processor (not the screen) awake while someone uses the web page (1.4.4). With the
+     * screen off the remote's processor sleeps, now that nothing else keeps it awake (1.4.1 paused
+     * the TV Helper): a big download such as the full backup started, then stalled mid-way. Each
+     * request re-arms it for [WEB_AWAKE_MS]; it lets go on its own once the page goes quiet.
+     */
+    private val webWakeLock: PowerManager.WakeLock? by lazy {
+        (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "astrion:web")
+            ?.apply { setReferenceCounted(false) }
+    }
+
     override fun serve(session: IHTTPSession): Response = try {
+        runCatching { webWakeLock?.acquire(WEB_AWAKE_MS) }
         val method = session.method
         val uri = session.uri
         backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session) ?: when (uri) {
@@ -1446,16 +1460,30 @@ class ConfigServer(
                     "text/plain",
                     "Missing file"
                 )
+        // 1.4.5: only a real dashboard replaces the current one. Any file used to be written as is,
+        // so a wrong file chosen on the web page's restore left the remote on its built-in page.
+        val text = File(tmpPath).readText()
+        dashboardProblem(text)?.let { problem ->
+            Log.w("ConfigServer", "dashboard.json upload refused: $problem")
+            return jsonResponse(Response.Status.BAD_REQUEST, JSONObject().put("error", problem))
+        }
         // Version history (1.3.0): the new content is kept, with the optional note sent along.
         val note = session.parameters["note"]?.firstOrNull()
-        val versionId = runCatching { DashboardHistory.recordSave(File(tmpPath).readText(), note) }.getOrNull()
+        val versionId = runCatching { DashboardHistory.recordSave(text, note) }.getOrNull()
         File(tmpPath).copyTo(DashboardLoader.configFile, overwrite = true)
+        Log.i("ConfigServer", "dashboard.json saved: ${text.length} chars, version $versionId")
         onDashboardUpdated()
         // 1.3.1: tools pushing a dashboard (Astrion Config Manager…) learn which version they created,
         // e.g. to pin it, without reading /history. The HTML body stays for browsers.
         return redirectHome(context.getString(R.string.web_config_dashboard_updated)).apply {
             if (versionId != null) addHeader(VERSION_ID_HEADER, versionId)
         }
+    }
+
+    /** Why [text] can't be a dashboard.json (1.4.5), or null when it can: JSON with a "pages" list. */
+    private fun dashboardProblem(text: String): String? {
+        val root = runCatching { JSONObject(text) }.getOrNull() ?: return "Not a dashboard.json (not JSON). Nothing was changed."
+        return if (root.optJSONArray("pages") == null) "Not a dashboard.json (no \"pages\" list). Nothing was changed." else null
     }
 
     /**
@@ -1550,10 +1578,15 @@ class ConfigServer(
      */
     private fun handleIrDatabaseUpload(session: IHTTPSession): Response {
         val wantsJson = session.headers["accept"]?.contains("application/json") == true
-        val (tmpPath, target) = validateIrDatabaseUpload(session) ?: return irDatabaseError(
-            Response.Status.BAD_REQUEST,
-            "Expected a single .json ir-database category file (with \"category\"+\"brands\" keys)"
-        )
+        val (tmpPath, target) =
+            when (val checked = validateIrDatabaseUpload(session)) {
+                is IrUpload.Ok -> checked.tmpPath to checked.target
+                is IrUpload.Refused -> {
+                    // 1.4.5: the reason goes back to the page (it only said "HTTP 400") and to the log.
+                    Log.w("ConfigServer", "ir-database upload refused: ${checked.reason}")
+                    return irDatabaseError(Response.Status.BAD_REQUEST, checked.reason)
+                }
+            }
 
         val dest = File(irDatabaseDir, target)
         if (wantsJson && dest.exists()) {
@@ -1567,6 +1600,7 @@ class ConfigServer(
             File(tmpPath).copyTo(dest, overwrite = true)
         }
         IrDatabaseRuntime.invalidate()
+        Log.i("ConfigServer", "ir-database: $target saved")
 
         return if (wantsJson) {
             jsonResponse(
@@ -1581,21 +1615,34 @@ class ConfigServer(
         }
     }
 
-    /** Null means invalid — caller responds with one generic error either
-     * way, so there's no need to thread a specific reason back out here. */
-    private fun validateIrDatabaseUpload(session: IHTTPSession): Pair<String, String>? {
+    /** What [validateIrDatabaseUpload] found: the file to save, or why it can't be one. */
+    private sealed class IrUpload {
+        class Ok(val tmpPath: String, val target: String) : IrUpload()
+
+        class Refused(val reason: String) : IrUpload()
+    }
+
+    private fun validateIrDatabaseUpload(session: IHTTPSession): IrUpload {
         val files = HashMap<String, String>()
         session.parseBody(files)
-        val tmpPath = files["file"] ?: return null
-        val originalName = session.parameters["file"]?.firstOrNull() ?: return null
-        if (!originalName.endsWith(".json", ignoreCase = true)) return null
-        val parsed = runCatching { Json.parseToJsonElement(File(tmpPath).readText()).jsonObject }.getOrNull()
-        if (parsed?.containsKey("category") != true || !parsed.containsKey("brands")) return null
+        val tmpPath = files["file"] ?: return IrUpload.Refused("No file received.")
+        val originalName = session.parameters["file"]?.firstOrNull().orEmpty()
+        if (!originalName.endsWith(".json", ignoreCase = true)) {
+            return IrUpload.Refused("\"$originalName\" isn't a .json file: pick an ir-database category file such as tv.json.")
+        }
+        val parsed =
+            runCatching { Json.parseToJsonElement(File(tmpPath).readText()).jsonObject }.getOrElse { e ->
+                val why = e.message?.lineSequence()?.firstOrNull()?.take(JSON_ERROR_MAX)
+                return IrUpload.Refused("$originalName isn't valid JSON: $why")
+            }
+        if (!parsed.containsKey("category") || !parsed.containsKey("brands")) {
+            return IrUpload.Refused("$originalName has no \"category\" and \"brands\": it isn't an ir-database category file.")
+        }
         // Lowercased on write so files landing here stay consistent with
         // the category ids elsewhere (the picker itself already does
         // this) — IrDatabaseRuntime's own lookup is case-insensitive
         // regardless, for files that arrive some other way (manual copy).
-        return tmpPath to sanitize(originalName).lowercase()
+        return IrUpload.Ok(tmpPath, sanitize(originalName).lowercase())
     }
 
     private fun jsonResponse(status: Response.Status, body: JsonObject): Response =
@@ -2023,3 +2070,9 @@ class ConfigServer(
 
 /** Response header of `POST /dashboard.json`: id of the version it created in the history (1.3.1). */
 private const val VERSION_ID_HEADER = "X-Astrion-Version-Id"
+
+/** How long one web page request keeps the processor awake (1.4.4), see `webWakeLock`. */
+private const val WEB_AWAKE_MS = 2 * 60 * 1000L
+
+/** How much of a JSON parse error an ir-database upload shows (1.4.5). */
+private const val JSON_ERROR_MAX = 160

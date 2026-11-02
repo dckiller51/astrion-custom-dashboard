@@ -1508,7 +1508,11 @@ async function uploadIrDatabase() {
     const form = new FormData();
     form.append('file', file, file.name);
     const res = await fetch('/ir-database', { method: 'POST', body: form });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      // 1.4.5: the remote says why (not valid JSON, not a category file…), not just "HTTP 400".
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
     showToast(I18N.t('web_dev_irdb_updated'));
     input.value = '';
     irOnDeviceCache = {};
