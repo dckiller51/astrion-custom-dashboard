@@ -98,6 +98,13 @@ class XboxModelTest {
     }
 
     @Test
+    fun `lost completions get their own icon`() {
+        val lost = entity("sensor.trueachievements_dckillerpp_lost_completions", "2", "icon" to "mdi:trophy-broken")
+        assertEquals(XboxModel.StatKind.LOST, XboxModel.statKind(lost))
+        assertEquals(XboxModel.StatIcon.BuiltIn(XboxModel.StatKind.LOST), XboxModel.statIcon("lost_completions", lost))
+    }
+
+    @Test
     fun `counter labels drop the account part`() {
         val ta =
             entity(

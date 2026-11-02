@@ -12,6 +12,7 @@ import fi.iki.elonen.NanoHTTPD.IHTTPSession
 import fi.iki.elonen.NanoHTTPD.Method
 import fi.iki.elonen.NanoHTTPD.Response
 import java.io.File
+import java.io.FilterInputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,7 +41,12 @@ class BackupRoutes(private val context: Context, private val onRestored: () -> U
     }
 
     private fun backup(): Response {
-        val zip = File(context.cacheDir, "astrion-backup.zip")
+        // 1.4.4: one file per download, deleted once sent. A single shared file was rewritten
+        // by a second request (a retry, a double click) while the first was still being sent.
+        context.cacheDir.listFiles { f -> f.name.startsWith("astrion-backup") }?.forEach { old ->
+            if (System.currentTimeMillis() - old.lastModified() > STALE_BACKUP_MS) old.delete()
+        }
+        val zip = File.createTempFile("astrion-backup-", ".zip", context.cacheDir)
         return try {
             val manifest =
                 buildJsonObject {
@@ -53,11 +59,22 @@ class BackupRoutes(private val context: Context, private val onRestored: () -> U
                 BackupArchive.PREFS_FILES.associateWith { name ->
                     BackupArchive.prefsToJson(context.getSharedPreferences(name, Context.MODE_PRIVATE).all)
                 }
+            val started = System.currentTimeMillis()
             zip.outputStream().use { BackupArchive.write(it, manifest, prefs, root) }
-            val response = NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/zip", zip.inputStream(), zip.length())
+            Log.i(TAG, "backup: ${zip.length()} bytes, built in ${System.currentTimeMillis() - started} ms, sending")
+            val body =
+                object : FilterInputStream(zip.inputStream()) {
+                    override fun close() {
+                        super.close()
+                        zip.delete()
+                        Log.i(TAG, "backup: download finished or interrupted")
+                    }
+                }
+            val response = NanoHTTPD.newFixedLengthResponse(Response.Status.OK, "application/zip", body, zip.length())
             response.addHeader("Content-Disposition", "attachment; filename=\"astrion-backup-${stamp("yyyyMMdd-HHmm")}.zip\"")
             response
         } catch (e: Exception) {
+            zip.delete()
             Log.w(TAG, "backup failed", e)
             error(Response.Status.INTERNAL_ERROR, "backup failed: ${e.message}")
         }
@@ -110,5 +127,8 @@ class BackupRoutes(private val context: Context, private val onRestored: () -> U
 
     private companion object {
         const val TAG = "Backup"
+
+        /** A download file left behind (connection cut before the end) is removed after this. */
+        const val STALE_BACKUP_MS = 10 * 60 * 1000L
     }
 }

@@ -655,12 +655,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
      edit form by attachEntityAutocomplete() in preview.js. Floats below the
      input, same width, dark theme to match the editor. */
   .ea-dropdown { position: fixed; z-index: 9999; background: #2d2d2d; border: 1px solid #444; border-radius: 6px; max-height: 260px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
-  .ea-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; cursor: pointer; font-size: 0.82rem; gap: 8px; }
+  .ea-item { display: flex; flex-direction: column; align-items: stretch; padding: 6px 10px; cursor: pointer; font-size: 0.82rem; gap: 1px; }
   .ea-item:hover { background: #383838; }
   .ea-item.ea-selected { background: #00E5FF; color: #121212; }
   .ea-item.ea-selected .ea-name { color: #333; }
-  .ea-id { font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ea-name { color: #888; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 45%; }
+  .ea-id { font-family: monospace; font-size: 0.74rem; color: #9a9a9a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ea-name { color: #e0e0e0; overflow-wrap: anywhere; }
+  .ea-item.ea-selected .ea-id { color: #333; }
   .ea-more { padding: 4px 10px; font-size: 0.75rem; color: #666; font-style: italic; }
 
   /* ---- Theme & Colors form ---- */

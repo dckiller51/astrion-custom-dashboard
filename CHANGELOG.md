@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.5-beta] - 2026-11-02
+
+### Added
+
+- **Xbox card: TrueAchievements' Lost Completions** (its 2026.10.2): the counter of games no longer at 100 % gets a red trophy, comes right after *Completed Games* when the builder fills the card, and a long press lists the games with their progress (e.g. *Halo Infinite (Xbox Series): 120 / 135*).
+
+### Changed
+
+- **Builder: entity suggestions** show the entity's name first and a long id shortened in the middle, in a wider list: ids sharing a long start (`sensor.trueachievements_<gamertag>_…`) all looked the same. On the Xbox card, each counter's entity gets its own line.
+
+### Fixed
+
+- **Download the full backup stalled half-way** with the remote's screen off: its processor goes to sleep, and since 1.4.1 nothing else keeps it awake (the TV Helper pauses). While the web page is in use, the processor (not the screen) now stays awake, for 2 minutes after the last request. Each backup download also gets its own file, so a second click or a retry can no longer spoil the first. Reported by a user.
+- **A wrong file could replace the dashboard**: the web page's *Restore* (and `POST /dashboard.json`) wrote any file as `dashboard.json`, and the remote fell back to its built-in page ("dashboard.json invalid (missing "pages" array)"). Only a real dashboard (JSON with a `pages` list) is accepted now; anything else is refused with a message, and the current dashboard stays. To undo it on a 1.4.4 remote: builder › 🕘 **Version history** › restore the last good version.
+- **IR database upload said only "HTTP 400"**: the web page now shows why a file is refused (not a `.json` file, not valid JSON with the parser's message, or no `category` / `brands`), and the log records it. Reported by a user.
+
 ## [1.4.4-beta] - 2026-11-01
 
 ### Added

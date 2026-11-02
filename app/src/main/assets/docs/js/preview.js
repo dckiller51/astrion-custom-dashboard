@@ -107,9 +107,12 @@ function attachEntityAutocomplete(inputEl, domain) {
       const row = document.createElement('div');
       row.className = 'ea-item';
       row.dataset.id = it.id;
+      // 1.4.5: the name first, and a long id shortened in the middle, so ids sharing a long
+      // start (sensor.trueachievements_<gamertag>_…) can be told apart.
+      row.title = it.id;
       row.innerHTML =
-        `<span class="ea-id">${it.id}</span>` +
-        `<span class="ea-name">${it.name}</span>`;
+        `<span class="ea-name">${it.name}</span>` +
+        `<span class="ea-id">${_eaShortId(it.id)}</span>`;
       row.addEventListener('mousedown', (e) => {
         e.preventDefault();
         accept(it.id);
@@ -189,9 +192,19 @@ function _eaClose() {
 function _eaPosition() {
   if (!_eaState.dropdown || !_eaState.input) return;
   const rect = _eaState.input.getBoundingClientRect();
-  _eaState.dropdown.style.left = rect.left + 'px';
+  // 1.4.5: at least 340 px wide (a narrow field cut every id), never past the window's edge.
+  const width = Math.min(Math.max(rect.width, 340), window.innerWidth - 16);
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  _eaState.dropdown.style.left = left + 'px';
   _eaState.dropdown.style.top = (rect.bottom + 2) + 'px';
-  _eaState.dropdown.style.width = rect.width + 'px';
+  _eaState.dropdown.style.width = width + 'px';
+}
+
+/** An entity id short enough for the dropdown: its start and its end, with … in between. */
+function _eaShortId(id) {
+  const MAX = 38;
+  if (id.length <= MAX) return id;
+  return id.slice(0, 7) + '…' + id.slice(-(MAX - 8));
 }
 
 function _eaHighlight(idx) {
