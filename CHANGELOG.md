@@ -5,6 +5,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [1.4.5-beta] - 2026-11-02
 
+### Added
+
+- **Xbox card: TrueAchievements' Lost Completions** (its 2026.10.2): the counter of games no longer at 100 % gets a red trophy, comes right after *Completed Games* when the builder fills the card, and a long press lists the games with their progress (e.g. *Halo Infinite (Xbox Series): 120 / 135*).
+
+### Changed
+
+- **Builder: entity suggestions** show the entity's name first and a long id shortened in the middle, in a wider list: ids sharing a long start (`sensor.trueachievements_<gamertag>_…`) all looked the same. On the Xbox card, each counter's entity gets its own line.
+
 ### Fixed
 
 - **Download the full backup stalled half-way** with the remote's screen off: its processor goes to sleep, and since 1.4.1 nothing else keeps it awake (the TV Helper pauses). While the web page is in use, the processor (not the screen) now stays awake, for 2 minutes after the last request. Each backup download also gets its own file, so a second click or a retry can no longer spoil the first. Reported by a user.

@@ -103,7 +103,7 @@ internal object XboxModel {
     }
 
     /** What kind of counter a tile shows, for its icon: from the entity's MDI icon or unit. */
-    enum class StatKind { GAMERSCORE, TA_SCORE, PERCENT, FINISHED, GAMES, ACHIEVEMENTS, PEOPLE, OTHER }
+    enum class StatKind { GAMERSCORE, TA_SCORE, PERCENT, FINISHED, LOST, GAMES, ACHIEVEMENTS, PEOPLE, OTHER }
 
     /** A counter's icon (1.3.7): a built-in one, none, or an uploaded icon file. */
     sealed class StatIcon {
@@ -119,6 +119,7 @@ internal object XboxModel {
             "star" to StatKind.TA_SCORE,
             "percent" to StatKind.PERCENT,
             "trophy" to StatKind.FINISHED,
+            "lost_completions" to StatKind.LOST,
             "medal" to StatKind.ACHIEVEMENTS,
             "controller" to StatKind.GAMES,
             "people" to StatKind.PEOPLE,
@@ -137,19 +138,29 @@ internal object XboxModel {
     }
 
     fun statKind(e: EntityState): StatKind {
-        val icon = e.attrString("icon").orEmpty()
-        val unit = e.attrString("unit_of_measurement").orEmpty()
-        return when {
-            icon == "mdi:alpha-g-circle" || unit == "G" || unit == "points" -> StatKind.GAMERSCORE
-            icon == "mdi:star-circle" || unit == "TA" -> StatKind.TA_SCORE
-            icon == "mdi:percent" || unit == "%" -> StatKind.PERCENT
-            icon == "mdi:trophy" -> StatKind.FINISHED
-            icon == "mdi:trophy-variant" -> StatKind.ACHIEVEMENTS
-            icon == "mdi:controller" || unit == "games" -> StatKind.GAMES
-            unit == "people" -> StatKind.PEOPLE
+        MDI_KINDS[e.attrString("icon").orEmpty()]?.let { return it }
+        return when (e.attrString("unit_of_measurement").orEmpty()) {
+            "G", "points" -> StatKind.GAMERSCORE
+            "TA" -> StatKind.TA_SCORE
+            "%" -> StatKind.PERCENT
+            "games" -> StatKind.GAMES
+            "people" -> StatKind.PEOPLE
             else -> StatKind.OTHER
         }
     }
+
+    /** A counter's kind by its entity's MDI icon, before its unit. */
+    private val MDI_KINDS =
+        mapOf(
+            "mdi:alpha-g-circle" to StatKind.GAMERSCORE,
+            "mdi:star-circle" to StatKind.TA_SCORE,
+            "mdi:percent" to StatKind.PERCENT,
+            "mdi:trophy" to StatKind.FINISHED,
+            // TrueAchievements' "Lost Completions" (games no longer at 100 %, its 2026.10.2).
+            "mdi:trophy-broken" to StatKind.LOST,
+            "mdi:trophy-variant" to StatKind.ACHIEVEMENTS,
+            "mdi:controller" to StatKind.GAMES
+        )
 
     /** Attributes the details sheet leaves out: technical, or already shown as the picture/title. */
     val HIDDEN_ATTRIBUTES =

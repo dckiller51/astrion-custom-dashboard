@@ -362,6 +362,7 @@ class XboxCard : CardRenderer {
         XboxModel.StatKind.TA_SCORE -> Icons.Filled.Stars to theme.amber
         XboxModel.StatKind.PERCENT -> Icons.Filled.Percent to theme.accent
         XboxModel.StatKind.FINISHED -> Icons.Filled.EmojiEvents to theme.amber
+        XboxModel.StatKind.LOST -> Icons.Filled.EmojiEvents to theme.danger
         XboxModel.StatKind.ACHIEVEMENTS -> Icons.Filled.MilitaryTech to theme.amber
         XboxModel.StatKind.GAMES -> Icons.Filled.SportsEsports to theme.accentSecondary
         XboxModel.StatKind.PEOPLE -> Icons.Filled.People to theme.accent

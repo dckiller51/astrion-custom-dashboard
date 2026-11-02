@@ -28,6 +28,9 @@ import com.custom.astrion.R
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ui.tapClickable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -94,14 +97,37 @@ internal fun XboxDetailDialog(ctx: CardContext, e: EntityState, onClose: () -> U
 
 /** The attributes to list: known ones first, in a sensible order, then any other; never the technical ones. */
 internal fun attributeRows(e: EntityState): List<Pair<String, String>> {
+    // "game_names" repeats "games" (TrueAchievements' Lost Completions): only the richer one is shown.
+    val skip = if (e.attributes["games"] is JsonArray) setOf("game_names") else emptySet()
     val values =
         e.attributes.entries
-            .filter { (k, _) -> k !in XboxModel.HIDDEN_ATTRIBUTES && k != "name" }
-            .mapNotNull { (k, v) -> (v as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() && it != "null" }?.let { k to it } }
+            .filter { (k, _) -> k !in XboxModel.HIDDEN_ATTRIBUTES && k != "name" && k !in skip }
+            .mapNotNull { (k, v) -> attributeText(v)?.takeIf { it.isNotBlank() && it != "null" }?.let { k to it } }
             .filterNot { (k, v) -> XboxModel.isPlaceholder(k, v) }
             .toMap()
     val known = ATTRIBUTE_ORDER.filter { it in values }
     return (known + (values.keys - known.toSet()).sorted()).map { it to values.getValue(it) }
+}
+
+/**
+ * An attribute as text: a plain value, or a list one item per line (1.4.5) — e.g. TrueAchievements'
+ * Lost Completions "games": "Halo Infinite (Xbox Series): 120 / 135".
+ */
+private fun attributeText(v: JsonElement): String? = when (v) {
+    is JsonPrimitive -> v.content
+    is JsonArray -> v.mapNotNull { item -> listItemText(item) }.joinToString("\n").ifBlank { null }
+    else -> null
+}
+
+private fun listItemText(item: JsonElement): String? = when (item) {
+    is JsonPrimitive -> item.content
+    is JsonObject -> {
+        val name = (item["name"] as? JsonPrimitive)?.content
+        val platform = (item["platform"] as? JsonPrimitive)?.content?.let { " ($it)" }.orEmpty()
+        val progress = (item["achievements"] as? JsonPrimitive)?.content?.let { ": $it" }.orEmpty()
+        name?.let { it + platform + progress }
+    }
+    else -> null
 }
 
 private val ATTRIBUTE_ORDER =
