@@ -1165,6 +1165,8 @@
   "web_modal_choose_icon": "Choose an icon",
   "web_modal_close": "✕ Close",
   "web_modal_edit_card": "Edit card",
+  "web_modal_focus_nav": "Move between the page's buttons with the arrow keys",
+  "web_modal_focus_nav_hint": "Arrow keys without a hotkey on this page move a highlight from button to button, and OK presses it. Untick it if you only use the touch screen: arrow keys and OK without a hotkey then do nothing here.",
   "web_modal_icon_hint_1": "Icons already uploaded via the \"Icons\" section on the device's home page (",
   "web_modal_new_activity": "New Activity",
   "web_modal_optgroup_advanced": "Advanced (raw options)",

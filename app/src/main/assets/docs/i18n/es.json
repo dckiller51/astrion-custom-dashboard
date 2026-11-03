@@ -1165,6 +1165,8 @@
   "web_modal_choose_icon": "Elige un icono",
   "web_modal_close": "✕ Cerrar",
   "web_modal_edit_card": "Editar tarjeta",
+  "web_modal_focus_nav": "Moverse entre los botones de la página con las flechas",
+  "web_modal_focus_nav_hint": "Las flechas sin atajo en esta página mueven un resaltado de botón en botón, y OK lo pulsa. Desmárcalo si solo usas la pantalla táctil: las flechas y OK sin atajo ya no harán nada aquí.",
   "web_modal_icon_hint_1": "Iconos ya subidos mediante la sección \"Iconos\" de la página de inicio del dispositivo (",
   "web_modal_new_activity": "Nueva Actividad",
   "web_modal_optgroup_advanced": "Avanzado (opciones sin procesar)",

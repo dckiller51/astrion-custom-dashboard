@@ -366,6 +366,8 @@
             <label data-i18n="web_modal_page_name">Page name</label>
             <input type="text" id="pageDialogName" placeholder="e.g., Living Room, Apple TV..." data-i18n-attr="placeholder:web_modal_page_name_placeholder">
             <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogStart"> <span data-i18n="web_modal_start_page">Start page (shown on launch)</span></label>
+            <label class="inline-check" style="margin-top:6px"><input type="checkbox" id="pageDialogFocusNav" checked> <span data-i18n="web_modal_focus_nav">Move between the page's buttons with the arrow keys</span></label>
+            <div class="hint" style="margin-top:4px" data-i18n="web_modal_focus_nav_hint">Arrow keys without a hotkey on this page move a highlight from button to button, and OK presses it. Untick it if you only use the touch screen: arrow keys and OK without a hotkey then do nothing here.</div>
             <label style="margin-top:10px" data-i18n="web_modal_parent_page_label">Parent page (optional)</label>
             <select id="pageDialogParent" onchange="onPageDialogParentChange()"></select>
             <div class="hint" style="margin-top:4px" data-i18n="web_modal_parent_hint">Makes this a child page — navigate to it via a card's own "Page to open" (e.g. a scene_grid tile), and a physical button jumps back to the parent automatically.</div>

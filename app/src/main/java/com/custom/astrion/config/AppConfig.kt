@@ -252,6 +252,9 @@ data class PageConfig(
      * Activity stops while it's on screen. A jump from a tile, hotkey or Home Assistant still
      * lands on it (that's how "start Activity + open page" works). */
     val hideMode: String = "dots",
+    /** `"focusNavigation": false` (1.4.7): arrow keys and OK without a hotkey on this page don't
+     * move or press Compose's focus (no highlight going from button to button). */
+    val focusNavigation: Boolean = true,
     /** Optional Home Assistant entity id to watch: when its state matches
      * [openWhenState] (default `"on"`), automatically navigates to this
      * page — e.g. a doorbell `switch` turning on pops open a "Doorbell"

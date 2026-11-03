@@ -1165,6 +1165,8 @@
   "web_modal_choose_icon": "Symbol auswählen",
   "web_modal_close": "✕ Schließen",
   "web_modal_edit_card": "Karte bearbeiten",
+  "web_modal_focus_nav": "Mit den Pfeiltasten zwischen den Tasten der Seite wechseln",
+  "web_modal_focus_nav_hint": "Pfeiltasten ohne Hotkey auf dieser Seite bewegen eine Markierung von Taste zu Taste, und OK drückt sie. Abwählen, wenn du nur den Touchscreen nutzt: Pfeiltasten und OK ohne Hotkey tun hier dann nichts.",
   "web_modal_icon_hint_1": "Symbole, die bereits über den Abschnitt \"Symbole\" auf der Startseite des Geräts hochgeladen wurden (",
   "web_modal_new_activity": "Neue Aktivität",
   "web_modal_optgroup_advanced": "Erweitert (rohe Optionen)",
