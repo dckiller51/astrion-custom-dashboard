@@ -153,6 +153,24 @@ class MainActivity : ComponentActivity() {
         // Activation keys Compose's clickable reacts to — see
         // shouldSwallowHiddenFocusActivation().
         val ACTIVATION_KEYCODES = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
+
+        // The keys Android's ViewRootImpl treats as navigation keys: in touch mode, the first press
+        // of one can be swallowed (see noteKey()).
+        val TOUCH_MODE_NAV_KEYCODES =
+            setOf(
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_PAGE_UP,
+                KeyEvent.KEYCODE_PAGE_DOWN,
+                KeyEvent.KEYCODE_MOVE_HOME,
+                KeyEvent.KEYCODE_MOVE_END,
+                KeyEvent.KEYCODE_TAB,
+                KeyEvent.KEYCODE_SPACE,
+                KeyEvent.KEYCODE_ENTER
+            )
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -162,6 +180,16 @@ class MainActivity : ComponentActivity() {
 
     /** When the held short-press key last ran its action (see [repeatDue]). */
     private var lastRepeatAt = 0L
+
+    /** Keys whose press (ACTION_DOWN) reached [dispatchKeyEvent] and that aren't released yet. */
+    private val keysDown = HashSet<Int>()
+
+    /**
+     * Set when a key takes the window out of touch mode, cleared when a press reaches
+     * [dispatchKeyEvent]. Android swallows that first press when it moves focus while leaving
+     * touch mode (ViewRootImpl, before any key handler): see [noteKey].
+     */
+    private var leftTouchModeByKey = false
 
     private var sensorManager: SensorManager? = null
     private var motionSensor: Sensor? = null
@@ -547,6 +575,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i("MainActivity", "onCreate — activity instance ${this.hashCode()}")
+        // Only a key takes the window out of touch mode (a touch puts it back in): see noteKey().
+        window.decorView.viewTreeObserver.addOnTouchModeChangeListener { inTouchMode ->
+            if (!inTouchMode) leftTouchModeByKey = true
+        }
 
         // Enable full-screen immersive sticky mode for dedicated wall/remote tablet mode
         @Suppress("DEPRECATION")
@@ -1232,7 +1264,19 @@ class MainActivity : ComponentActivity() {
             Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)})")
             if (DEBUG_KEYS) Toast.makeText(this, "Unmapped key: $code", Toast.LENGTH_SHORT).show()
         }
-        return shouldSwallowHiddenFocusActivation(event, code) || super.dispatchKeyEvent(event)
+        return focusNavigationOff(code) || shouldSwallowHiddenFocusActivation(event, code) || super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * A page with `"focusNavigation": false` (1.4.7): its arrow and OK keys without a hotkey are
+     * swallowed, so no highlight moves from button to button and OK presses nothing unseen.
+     */
+    private fun focusNavigationOff(code: Int): Boolean {
+        val page = dashboard.config.pages.getOrNull(currentPageIndex) ?: return false
+        if (page.focusNavigation) return false
+        val nav = HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS || code in ACTIVATION_KEYCODES
+        if (nav) FocusHighlight.visible = false
+        return nav
     }
 
     /**
@@ -1269,10 +1313,12 @@ class MainActivity : ComponentActivity() {
         }
         val code = event.keyCode
         logKeyEventDown(event)
+        val lostPress = noteKey(event)
         val shortH = keyRouter.shortHandler(code)
         val longH = keyRouter.longHandler(code)
 
         if (shortH == null && longH == null) return dispatchUnmappedKey(event, code)
+        if (lostPress) return replayLostPress(code, shortH)
 
         // This key is about to be fully consumed as a hotkey below (never
         // reaching Compose's own focus-navigation via super.dispatchKeyEvent).
@@ -1304,18 +1350,23 @@ class MainActivity : ComponentActivity() {
                 return true
             }
             KeyEvent.ACTION_UP -> {
-                if (longH != null && code == activeLongKey) {
-                    cancelPendingLong()
-                    activeLongKey = -1
-                    if (!longFired) {
-                        fireButtonTap()
-                        shortH?.invoke()
-                    }
-                }
+                onMappedKeyUp(code, shortH, longH)
                 return true
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** Release of a mapped key: a key with a long action runs its short one here, if the long one didn't fire. */
+    private fun onMappedKeyUp(code: Int, shortH: (() -> Boolean)?, longH: (() -> Boolean)?) {
+        if (longH != null && code == activeLongKey) {
+            cancelPendingLong()
+            activeLongKey = -1
+            if (!longFired) {
+                fireButtonTap()
+                shortH?.invoke()
+            }
+        }
     }
 
     /** A held key's next repeat, once its interval has passed (see [repeatIntervalFor]). */
@@ -1330,6 +1381,42 @@ class MainActivity : ComponentActivity() {
     private fun cancelPendingLong() {
         pendingLong?.let { keyHandler.removeCallbacks(it) }
         pendingLong = null
+    }
+
+    /**
+     * Tracks presses, and returns true for the release of a press Android swallowed (1.4.7).
+     *
+     * After a touch (tapping a tile, an Activity, a page) the window is in touch mode. The next
+     * D-pad / OK / page key takes it out of touch mode, and when that moves the focus, ViewRootImpl
+     * consumes that press before any key handler sees it — so the first arrow after a tap did
+     * nothing, without the haptic tick, while BACK (not a navigation key) worked. Its release
+     * still arrives: a release with no press seen, right after a key left touch mode, is that key.
+     */
+    private fun noteKey(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                keysDown.add(code)
+                leftTouchModeByKey = false
+                false
+            }
+            KeyEvent.ACTION_UP -> {
+                val lost = keysDown.remove(code).not() && leftTouchModeByKey && code in TOUCH_MODE_NAV_KEYCODES
+                if (lost) leftTouchModeByKey = false
+                lost
+            }
+            else -> false
+        }
+    }
+
+    /** Runs the short action of a key whose press Android swallowed (see [noteKey]), on its release. */
+    private fun replayLostPress(code: Int, shortH: (() -> Boolean)?): Boolean {
+        Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)}): press swallowed leaving touch mode, run on release")
+        if (shortH != null) {
+            fireButtonTap()
+            shortH.invoke()
+        }
+        return true
     }
 
     private fun logKeyEventDown(event: KeyEvent) {

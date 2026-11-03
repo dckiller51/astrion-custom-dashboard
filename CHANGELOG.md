@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.7-beta] - 2026-11-03
+
+### Added
+
+- **Page option: moving between buttons with the arrow keys** (builder › page settings, on by default): untick it on a page you only use by touch, and its arrow and OK keys without a hotkey no longer move a highlight from button to button nor press one (`"focusNavigation": false`). Requested by a user.
+
+### Fixed
+
+- **The first D-pad press after touching the screen did nothing** (no haptic tick either): after tapping a tile, an Activity or a page, the next arrow, OK or page key was swallowed by Android itself as it left touch mode, before any hotkey saw it — with IR, Android TV or Home Assistant hotkeys alike, while BACK always worked. That press now runs on its release. Reported by a user.
+
 ## [1.4.6-beta] - 2026-11-03
 
 ### Added

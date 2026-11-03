@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -140,6 +141,7 @@ object DashboardLoader {
                     val openWhenState = obj["openWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "on"
                     val closeWhenState = obj["closeWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     val openMode = if (obj["openMode"]?.jsonPrimitive?.content == "popup") "popup" else "page"
+                    val focusNavigation = obj["focusNavigation"]?.jsonPrimitive?.booleanOrNull != false
                     PageConfig(
                         name = name,
                         cards = cards,
@@ -157,7 +159,8 @@ object DashboardLoader {
                         openWhenEntity = openWhenEntity,
                         openWhenState = openWhenState,
                         closeWhenState = closeWhenState,
-                        openMode = openMode
+                        openMode = openMode,
+                        focusNavigation = focusNavigation
                     )
                 }
             if (pages.isEmpty()) error("\"pages\" is empty")
@@ -508,6 +511,7 @@ object DashboardLoader {
                                 put("hiddenUnlessActivity", it)
                                 if (page.hideMode == "full") put("hideMode", "full")
                             }
+                            if (!page.focusNavigation) put("focusNavigation", false)
                             page.openWhenEntity?.let {
                                 put("openWhenEntity", it)
                                 if (page.openWhenState != "on") put("openWhenState", page.openWhenState)

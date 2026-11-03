@@ -1165,6 +1165,8 @@
   "web_modal_choose_icon": "Choisir une icône",
   "web_modal_close": "✕ Fermer",
   "web_modal_edit_card": "Modifier la carte",
+  "web_modal_focus_nav": "Se déplacer entre les boutons de la page avec les flèches",
+  "web_modal_focus_nav_hint": "Les flèches sans raccourci sur cette page déplacent une surbrillance de bouton en bouton, et OK l'appuie. Décochez si vous n'utilisez que l'écran tactile : les flèches et OK sans raccourci ne font alors plus rien ici.",
   "web_modal_icon_hint_1": "Icônes déjà envoyées via la section « Icônes » de la page d'accueil de l'appareil (",
   "web_modal_new_activity": "Nouvelle Activité",
   "web_modal_optgroup_advanced": "Avancé (options brutes)",

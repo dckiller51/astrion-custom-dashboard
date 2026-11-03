@@ -267,6 +267,7 @@ function openPageDialog(index) {
   onPageDialogOpenModeChange();
   attachEntityAutocomplete(document.getElementById('pageDialogOpenWhenEntity'), null);
   document.getElementById('pageDialogStart').checked = isNew ? false : (dashboardData.startPage === index);
+  document.getElementById('pageDialogFocusNav').checked = isNew || dashboardData.pages[index].focusNavigation !== false;
   document.getElementById('pageDialogDeleteBtn').style.display = isNew ? 'none' : '';
   document.getElementById('pageDialogModal').classList.add('open');
   document.getElementById('pageDialogName').focus();
@@ -422,6 +423,7 @@ function savePageDialog() {
   const closeWhenState = document.getElementById('pageDialogCloseWhenState').value.trim() || undefined;
   const openMode = document.getElementById('pageDialogOpenMode').value;
   const makeStart = document.getElementById('pageDialogStart').checked;
+  const focusNav = document.getElementById('pageDialogFocusNav').checked;
 
   if (editingPage === null) {
     const page = { name, cards: [], hotkeys: [], longHotkeys: [] };
@@ -435,6 +437,7 @@ function savePageDialog() {
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity;
     if (hideFull) page.hideMode = 'full';
+    if (!focusNav) page.focusNavigation = false;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState;
@@ -469,6 +472,7 @@ function savePageDialog() {
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity; else delete page.hiddenUnlessActivity;
     if (hideFull) page.hideMode = 'full'; else delete page.hideMode;
+    if (!focusNav) page.focusNavigation = false; else delete page.focusNavigation;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState; else delete page.openWhenState;

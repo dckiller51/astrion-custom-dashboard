@@ -1165,6 +1165,8 @@
   "web_modal_choose_icon": "Scegli un'icona",
   "web_modal_close": "✕ Chiudi",
   "web_modal_edit_card": "Modifica scheda",
+  "web_modal_focus_nav": "Spostarsi tra i pulsanti della pagina con le frecce",
+  "web_modal_focus_nav_hint": "Le frecce senza scorciatoia su questa pagina spostano un'evidenziazione da un pulsante all'altro, e OK lo preme. Togli la spunta se usi solo lo schermo tattile: le frecce e OK senza scorciatoia qui non faranno più nulla.",
   "web_modal_icon_hint_1": "Icone già caricate tramite la sezione \"Icone\" della home page del dispositivo (",
   "web_modal_new_activity": "Nuova Attività",
   "web_modal_optgroup_advanced": "Avanzate (opzioni grezze)",
