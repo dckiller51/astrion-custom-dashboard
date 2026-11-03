@@ -101,6 +101,7 @@ import org.json.JSONObject
  *  POST /appletv-mrp-pair-finish  complete MRP pairing (sessionId, pin) and return the credentials
  *  GET  /appletv-artwork/<localId>  the current artwork for a paired Apple TV, if MRP has fetched
  *                        one; this is what a device's `entity_picture` attribute points at
+ *  POST /zidoo-check    a Zidoo player's model and MAC address (host), see ZidooRoutes (1.4.6)
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -241,6 +242,9 @@ class ConfigServer(
 
     private val androidTvRoutes = AndroidTvRoutes(context) { androidTvRegistry }
 
+    /** Zidoo players (1.4.6): added by IP, no pairing. */
+    private val zidooRoutes = ZidooRoutes(context)
+
     /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
     @Volatile
     var onBackupRestored: () -> Unit = {}
@@ -285,11 +289,15 @@ class ConfigServer(
             ?.apply { setReferenceCounted(false) }
     }
 
+    /** The web page's password (1.4.6), checked before anything else. */
+    private val webAuth = WebAuth(context)
+
     override fun serve(session: IHTTPSession): Response = try {
         runCatching { webWakeLock?.acquire(WEB_AWAKE_MS) }
         val method = session.method
         val uri = session.uri
-        backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session) ?: when (uri) {
+        webAuth.check(session) ?: backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session)
+            ?: zidooRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -410,7 +418,7 @@ class ConfigServer(
             )
         }
         val content =
-            runCatching { androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())) }
+            runCatching { zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))) }
                 .getOrElse { file.readText() }
         return newFixedLengthResponse(Response.Status.OK, "application/json", content)
     }
@@ -553,9 +561,9 @@ class ConfigServer(
      * Everything the Devices page (/, docs/js/devices-page.js) needs to
      * pre-fill its Home Assistant + Harmony Hub forms for *editing* — unlike
      * [serveHarmonyHubs] above (deliberately id+name only, for pickers), this
-     * includes the HA token and each hub's ip/hubId. Same trust level as
-     * /save-connection, which already accepts these back: local-only server,
-     * same device, same secret either way.
+     * includes each hub's ip/hubId. Since 1.4.6 never the Home Assistant token nor
+     * the Apple TV pairing keys: only whether they're set (`tokenSet`,
+     * `credentialsSet`); /save-connection keeps the saved ones when they come back empty.
      */
     private fun serveDevicesConfig(): Response {
         val json =
@@ -564,7 +572,9 @@ class ConfigServer(
                     "ha",
                     JSONObject().apply {
                         put("url", RemoteSettings.haUrl(context))
-                        put("token", RemoteSettings.haToken(context))
+                        // 1.4.6: the token never leaves the remote once saved; the page only learns there is one.
+                        put("token", "")
+                        put("tokenSet", RemoteSettings.haToken(context).isNotBlank())
                         put("webhookId", RemoteSettings.haWebhookId(context))
                     }
                 )
@@ -585,6 +595,7 @@ class ConfigServer(
                 )
                 put("appleTvs", appleTvsJson())
                 put("androidTvs", androidTvRoutes.configJson())
+                put("zidoos", zidooRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1154,10 +1165,17 @@ class ConfigServer(
         session.parseBody(files) // reads the request body ONCE; also populates session.parameters for an urlencoded POST
         val params = session.parameters
 
+        val haUrl = params["ha_url"]?.firstOrNull().orEmpty().trim()
+        // 1.4.6: the page never gets the token back, so an empty one keeps the saved token
+        // (an empty URL, Home Assistant removed, clears it).
+        val haToken =
+            params["ha_token"]?.firstOrNull().orEmpty().trim().ifBlank {
+                if (haUrl.isBlank()) "" else RemoteSettings.haToken(context)
+            }
         RemoteSettings.saveHaConnection(
             context = context,
-            haUrl = params["ha_url"]?.firstOrNull().orEmpty().trim(),
-            haToken = params["ha_token"]?.firstOrNull().orEmpty().trim(),
+            haUrl = haUrl,
+            haToken = haToken,
             haWebhookId = params["ha_webhook_id"]?.firstOrNull().orEmpty().trim()
         )
         RemoteSettings.saveHarmonyHubs(context, parseHubRows(params))
@@ -1168,6 +1186,7 @@ class ConfigServer(
             RemoteSettings.saveAppleTvs(context, parseAppleTvRows(params))
         }
         androidTvRoutes.saveRows(params)
+        zidooRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
@@ -1261,16 +1280,29 @@ class ConfigServer(
      * shape and made unique, since cards and hotkeys reference them.
      */
     private fun parseAppleTvRows(params: Map<String, List<String>>): List<AppleTvConfig> {
+        // 1.4.6: /devices-config no longer sends the pairing keys, so a row without them keeps the
+        // ones saved for its localId (a freshly paired TV still sends its new keys).
+        val saved = RemoteSettings.appleTvs(context).associateBy { it.localId }
+        val localIds = params["atv_localid[]"].orEmpty()
         val names = params["atv_name[]"].orEmpty()
         val entityIds = params["atv_entityid[]"].orEmpty()
         val hosts = params["atv_host[]"].orEmpty()
         val ports = params["atv_port[]"].orEmpty()
         val services = params["atv_service[]"].orEmpty()
-        val credentials = params["atv_credentials[]"].orEmpty()
+        val rows = maxOf(localIds.size, params["atv_credentials[]"].orEmpty().size)
+        val credentials =
+            (0 until rows).map { i ->
+                params["atv_credentials[]"]?.getOrNull(i)?.trim()?.ifBlank { null }
+                    ?: saved[localIds.getOrNull(i).orEmpty().trim()]?.credentials.orEmpty()
+            }
         val mrpHosts = params["atv_mrphost[]"].orEmpty()
         val mrpPorts = params["atv_mrpport[]"].orEmpty()
         val mrpServices = params["atv_mrpservice[]"].orEmpty()
-        val mrpCredentials = params["atv_mrpcredentials[]"].orEmpty()
+        val mrpCredentials =
+            (0 until rows).map { i ->
+                params["atv_mrpcredentials[]"]?.getOrNull(i)?.trim()?.ifBlank { null }
+                    ?: saved[localIds.getOrNull(i).orEmpty().trim()]?.mrpCredentials.orEmpty()
+            }
         val mrpTransports = params["atv_mrptransport[]"].orEmpty()
         val used = HashSet<String>()
         val entityPattern = Regex("^media_player\\.[a-z0-9_]+$")
@@ -1319,11 +1351,13 @@ class ConfigServer(
                     put("host", tv.host)
                     put("port", tv.port)
                     put("serviceName", tv.serviceName)
-                    put("credentials", tv.credentials)
+                    // 1.4.6: pairing keys stay on the remote, see parseAppleTvRows.
+                    put("credentials", "")
+                    put("credentialsSet", tv.credentials.isNotBlank())
                     put("mrpHost", tv.mrpHost)
                     put("mrpPort", tv.mrpPort)
                     put("mrpServiceName", tv.mrpServiceName)
-                    put("mrpCredentials", tv.mrpCredentials)
+                    put("mrpCredentials", "")
                     put("mrpTransport", tv.mrpTransport)
                     put("mrpPaired", tv.mrpCredentials.isNotBlank())
                 }

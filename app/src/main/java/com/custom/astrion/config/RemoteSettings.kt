@@ -94,6 +94,19 @@ data class AndroidTvConfig(
 )
 
 /**
+ * One Zidoo player added on the web page (1.4.6) — its control API on port 9529, no pairing.
+ * Published as [entityId] (`media_player.zidoo_…`) plus the matching `remote.zidoo_…`.
+ */
+data class ZidooConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    /** The player's MAC address, for Wake-on-LAN. Blank when the player didn't give one. */
+    val mac: String = ""
+)
+
+/**
  * A single Harmony Hub the app can talk to directly, bypassing Home
  * Assistant. [localId] is a stable app-generated key (independent of the
  * hub's own numeric [hubId]) used to reference this hub from dashboard.json
@@ -130,6 +143,7 @@ object RemoteSettings {
     private const val KEY_APPLE_TVS = "apple_tvs" // JSON array, see AppleTvConfig
     private const val KEY_ANDROID_TVS = "android_tvs" // JSON array, see AndroidTvConfig
     private const val KEY_ANDROID_TV_IDENTITY = "android_tv_identity" // key:cert, see AndroidTvIdentity
+    private const val KEY_ZIDOOS = "zidoos" // JSON array, see ZidooConfig
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -375,5 +389,37 @@ object RemoteSettings {
 
     fun saveAndroidTvIdentity(context: Context, serialized: String) {
         prefs(context).edit(commit = true) { putString(KEY_ANDROID_TV_IDENTITY, serialized) }
+    }
+
+    /** All Zidoo players, in the order they were added (1.4.6). */
+    fun zidoos(context: Context): List<ZidooConfig> {
+        val raw = prefs(context).getString(KEY_ZIDOOS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                ZidooConfig(localId, str("name").ifBlank { "Zidoo" }, entityId, str("host"), str("mac"))
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveZidoos(context: Context, zidoos: List<ZidooConfig>) {
+        val array =
+            buildJsonArray {
+                zidoos.forEach { z ->
+                    addJsonObject {
+                        put("localId", z.localId)
+                        put("name", z.name)
+                        put("entityId", z.entityId)
+                        put("host", z.host)
+                        put("mac", z.mac)
+                    }
+                }
+            }
+        prefs(context).edit { putString(KEY_ZIDOOS, array.toString()) }
     }
 }

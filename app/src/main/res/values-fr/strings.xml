@@ -34,6 +34,15 @@
     <string name="settings_beta_update_available">Bêta disponible : %1$s</string>
     <string name="settings_local_config">Configuration locale : %1$s</string>
     <string name="web_config_qr_hint">Scannez-le avec votre téléphone pour ouvrir la page web de la télécommande et le builder, sans taper l\'adresse. Sur le téléphone, « Ajouter à l\'écran d\'accueil » vous donne ensuite une icône Astrion.</string>
+    <string name="web_password_on">La page web demande un mot de passe</string>
+    <string name="web_password_off">Pas de mot de passe : tout appareil de votre réseau peut ouvrir la page web de la télécommande</string>
+    <string name="web_password_new">Définir un mot de passe (4 caractères minimum)</string>
+    <string name="web_password_change">Nouveau mot de passe</string>
+    <string name="web_password_remove">Supprimer le mot de passe</string>
+    <string name="web_password_hint">Demandé par le navigateur pour la page web, le builder et les sauvegardes (n\'importe quel nom d\'utilisateur). L\'intégration Home Assistant en a aussi besoin, dans ses réglages. Oublié ? Supprimez-le ici et choisissez-en un nouveau.</string>
+    <string name="web_password_too_short">%1$d caractères minimum</string>
+    <string name="web_password_saved">Mot de passe de la page web enregistré</string>
+    <string name="web_password_removed">Mot de passe de la page web supprimé</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Écran</string>

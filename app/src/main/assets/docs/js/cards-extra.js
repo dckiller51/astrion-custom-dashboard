@@ -159,6 +159,7 @@ function tvRemoteFormHtml() {
     <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" placeholder="${I18N.t('web_card_ph_remote')}">
     <label>${I18N.t('web_card_media_entity_id_opt')}</label><input type="text" id="optMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
     <div class="hint">${I18N.t('web_card_tv_media_hint')}</div>
+    <label class="inline-check"><input type="checkbox" id="optTvShowDpad" checked> ${I18N.t('web_card_tv_show_dpad')}</label>
     <label class="inline-check"><input type="checkbox" id="optTvShowVolume" checked> ${I18N.t('web_card_tv_show_volume')}</label>
     <label>${I18N.t('web_card_tv_volume_entity')}</label><input type="text" id="optMuteEntity" placeholder="remote.soundbar">
     <div class="hint">${I18N.t('web_card_tv_volume_hint')}</div>
@@ -256,6 +257,7 @@ function fillTvRemoteForm(o) {
   document.getElementById('optMediaEntity').value = o.media_entity || '';
   document.getElementById('optMuteEntity').value = o.mute_entity || '';
   document.getElementById('optTvShowVolume').checked = o.show_volume !== false;
+  document.getElementById('optTvShowDpad').checked = o.show_dpad !== false;
   document.getElementById('optTvNowPlaying').checked = o.show_now_playing !== false;
   document.getElementById('optTvNowPlayingEntity').value = o.now_playing_entity || '';
   document.getElementById('optTvTransport').checked = o.show_transport === true;
@@ -267,7 +269,7 @@ function fillTvRemoteForm(o) {
   const cmds = o.commands || {};
   document.querySelectorAll('.tv-cmd').forEach(el => { el.value = cmds[el.dataset.key] || ''; });
   window._tvExtra = cxWithout(o, ['name', 'remote_entity', 'media_entity', 'mute_entity', 'show_volume', 'apps', 'commands',
-    'show_now_playing', 'now_playing_entity', 'show_transport', 'apps_style', 'layout', 'show_skip']);
+    'show_now_playing', 'now_playing_entity', 'show_transport', 'apps_style', 'layout', 'show_skip', 'show_dpad']);
   // Command renames for keys this form doesn't list are kept too.
   window._tvExtraCommands = cxWithout(cmds, TV_COMMAND_KEYS.map(([k]) => k));
   renderTvApps();
@@ -290,6 +292,7 @@ function collectTvRemoteOptions() {
   const vol = document.getElementById('optMuteEntity').value.trim();
   if (vol) out.mute_entity = vol;
   if (!document.getElementById('optTvShowVolume').checked) out.show_volume = false;
+  if (!document.getElementById('optTvShowDpad').checked) out.show_dpad = false;
   if (!document.getElementById('optTvNowPlaying').checked) out.show_now_playing = false;
   const npEntity = document.getElementById('optTvNowPlayingEntity').value.trim();
   if (npEntity) out.now_playing_entity = npEntity;
@@ -692,17 +695,19 @@ function tvRemotePreviewHtml(o) {
       <div style="height:6px;border-radius:3px;background:#1B2027;margin:10px 0"><div style="width:40%;height:100%;border-radius:3px;background:#8AB4FF"></div></div>
       ${o.show_skip === false ? '' : `<div style="display:flex;justify-content:center;gap:18px">${btn('−10')}${btn('⏯')}${btn('+10')}</div>`}`}
     ${tvAppIconsPreviewHtml(apps)}
+    ${o.show_dpad === false ? `<div style="display:flex;justify-content:space-evenly;margin-top:10px">${btn('↩')}${btn('⌂')}${btn('☰')}</div>
+    ${o.show_volume === false ? '' : `<div style="display:flex;justify-content:space-evenly;margin-top:8px">${btn('−')}${btn('🔇')}${btn('+')}</div>`}` : `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
       ${col(['↩', '⌂', '☰'])}
       <div style="width:130px;height:130px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">OK</div>
       ${o.show_volume === false ? '<div style="width:40px"></div>' : col(['+', '🔇', '−'])}
-    </div>`;
+    </div>`}`;
   }
   return `${header}
     ${o.show_now_playing === false ? '' : `<div style="display:flex;align-items:center;gap:10px;margin-top:10px;padding:6px;border-radius:12px;background:#151A20">
       <div style="width:36px;height:36px;border-radius:9px;background:#1B2027"></div>
       <div style="flex:1;color:#9AA8AD;font-size:12px">${I18N.t('web_card_tv_np_preview')}</div>${btn('⏯')}</div>`}
-    <div style="display:flex;justify-content:center;margin:10px 0"><div style="width:110px;height:110px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">OK</div></div>
+    ${o.show_dpad === false ? '<div style="height:10px"></div>' : '<div style="display:flex;justify-content:center;margin:10px 0"><div style="width:110px;height:110px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">OK</div></div>'}
     <div style="display:flex;justify-content:space-evenly">${btn('↩')}${btn('⌂')}${btn('☰')}</div>
     ${o.show_transport ? `<div style="display:flex;justify-content:space-evenly;margin-top:8px">${btn('⏪')}${btn('⏯')}${btn('⏩')}</div>` : ''}
     ${o.show_volume === false ? '' : `<div style="display:flex;justify-content:space-evenly;margin-top:8px">${btn('−')}${btn('🔇')}${btn('+')}</div>`}

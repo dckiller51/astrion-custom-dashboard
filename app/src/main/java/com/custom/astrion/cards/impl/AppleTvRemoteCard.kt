@@ -94,6 +94,8 @@ import com.custom.astrion.ui.tapClickable
  *    now-playing strip and brings back the classic Play/Pause button.
  *  - `showSkip` (default true): the −10 s / +10 s buttons of the full layout, and holding the
  *    trackpad's left/right arrows to jump 10 s. Direct Apple TV only.
+ *  - `showClickpad` (default true, 1.4.6): false hides the trackpad, for an Apple TV driven
+ *    with the remote's own D-pad keys (or a card used only for what's playing and the apps).
  *  - `apps`: `[{ "source": "Netflix", "label": "Netflix", "icon": "/sdcard/astrion/icons/n.png",
  *    "color": "#B3261E" }]` — `source` is the app name as in the entity's `source_list` and is
  *    launched with `media_player.select_source`; `icon` is a local PNG path or an image URL
@@ -198,6 +200,7 @@ internal class AtvRender(
     val showArtwork = config.bool("showArtwork", true)
     val showProgress = config.bool("showProgress", true)
     val showSkip = config.bool("showSkip", true) && target.isDirect
+    val showClickpad = config.bool("showClickpad", true)
 
     fun send(command: String) = target.send(ctx, command)
 
@@ -273,7 +276,7 @@ class AppleTvRemoteCard : CardRenderer {
 
     @Composable
     private fun ClassicLayout(r: AtvRender) {
-        AtvTrackpad(220.dp, r.theme, r::send, r.holds)
+        if (r.showClickpad) AtvTrackpad(220.dp, r.theme, r::send, r.holds)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             r.buttons(ExtraButtons.DEFAULT_IDS).forEach { id ->
                 val spec = ExtraButtons.resolve(id)
@@ -300,9 +303,8 @@ class AppleTvRemoteCard : CardRenderer {
                 PLAY_ROW_H.takeIf { !strip },
                 APPS_ICONS_H.takeIf { r.apps.isNotEmpty() }
             )
-        val pad = trackpadFor(blocks, min = 150, max = 212)
         if (stripEntity != null) NowPlayingStrip(r, stripEntity)
-        AtvTrackpad(pad.dp, r.theme, r::send, r.holds)
+        if (r.showClickpad) AtvTrackpad(trackpadFor(blocks, min = 150, max = 212).dp, r.theme, r::send, r.holds)
         RoundButtonRow(r, ExtraButtons.COMPACT_DEFAULT_IDS, size = 52, labels = false)
         if (!strip) PlayPauseButton(r, 56)
         if (r.apps.isNotEmpty()) {
@@ -358,17 +360,22 @@ class AppleTvRemoteCard : CardRenderer {
         // others sit in two short columns either side of the trackpad (up to 3 each), so the card
         // gains no extra row.
         val sideButtons = buttons.drop(2).take(SIDE_MAX_BUTTONS * 2)
-        val pad = trackpadFor(fullBlocks(r), min = 140, max = 220, fit = r.fit)
         if (entity != null) FullNowPlaying(r, entity)
         FullTransportRow(r, buttons.take(2))
         if (r.apps.isNotEmpty()) {
             val width = cardInnerWidthDp(CARD_PADDING).dp
             AtvAppsRow(r.ctx, r.apps.take(WIDE_MAX_APPS), 44.dp, labels = true, rowWidth = width, launch = r::launch)
         }
-        if (sideButtons.isEmpty()) {
-            AtvTrackpad(pad.dp, r.theme, r::send, r.holds)
-        } else {
-            TrackpadWithSides(r, pad, sideButtons)
+        when {
+            // No trackpad (1.4.6): the side buttons, if any, become one row.
+            !r.showClickpad -> if (sideButtons.isNotEmpty()) ButtonsRow(r, sideButtons)
+            sideButtons.isEmpty() -> AtvTrackpad(
+                trackpadFor(fullBlocks(r), min = 140, max = 220, fit = r.fit).dp,
+                r.theme,
+                r::send,
+                r.holds
+            )
+            else -> TrackpadWithSides(r, trackpadFor(fullBlocks(r), min = 140, max = 220, fit = r.fit), sideButtons)
         }
     }
 
@@ -481,6 +488,17 @@ class AppleTvRemoteCard : CardRenderer {
     }
 
     // ---- shared ---------------------------------------------------------------------------
+
+    /** [ids] as one row of round buttons (the full layout without its trackpad). */
+    @Composable
+    private fun ButtonsRow(r: AtvRender, ids: List<String>) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            ids.forEach { id ->
+                val spec = ExtraButtons.resolve(id)
+                AtvRoundButton(spec.icon, spec.label, SIDE_BUTTON.dp, r.theme) { r.send(spec.command) }
+            }
+        }
+    }
 
     @Composable
     private fun RoundButtonRow(r: AtvRender, defaults: List<String>, size: Int, labels: Boolean) {

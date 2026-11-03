@@ -89,6 +89,7 @@ import com.custom.astrion.ui.tapClickable
  *       "show_transport": false,        // optional (1.3.6): rewind / play-pause / fast forward
  *       "layout": "full",               // optional (1.3.6): large cover, draggable progress, ±10 s, app icons
  *       "show_skip": true,              // optional (1.3.6, full layout): the −10 s / Play-Pause / +10 s row
+ *       "show_dpad": false,             // optional (1.4.6): hides the D-pad (the remote's own keys do it)
  *       "commands": { "power": "POWER", "volume_up": "VOLUME_UP" }   // optional renames
  *   } }
  *
@@ -181,6 +182,11 @@ class TvRemoteCard : CardRenderer {
                 r.apps.firstOrNull { r.tileOf(it) == tile }?.let(r::launch)
             }
         }
+        if (!config.bool("show_dpad", true)) {
+            // No D-pad (1.4.6): back / home / menu and the volume as rows, like the classic layout.
+            NoDpadRows(r, config)
+            return
+        }
         val blocks =
             listOfNotNull(
                 HEADER_H,
@@ -228,6 +234,25 @@ class TvRemoteCard : CardRenderer {
     }
 
     @Composable
+    private fun NoDpadRows(r: TvRender, config: CardConfig) {
+        val theme = r.ctx.theme
+        ButtonRow(
+            theme,
+            Icons.AutoMirrored.Filled.ArrowBack to { r.send(r.c("back", "BACK")) },
+            Icons.Filled.Home to { r.send(r.c("home", "HOME")) },
+            Icons.Filled.Menu to { r.send(r.c("menu", "MENU")) }
+        )
+        if (config.bool("show_volume", true)) {
+            ButtonRow(
+                theme,
+                Icons.AutoMirrored.Filled.VolumeDown to { r.send(r.c("volume_down", "VOLUME_DOWN"), r.muteEntity) },
+                Icons.AutoMirrored.Filled.VolumeOff to { r.send(r.c("mute", "MUTE"), r.muteEntity) },
+                Icons.AutoMirrored.Filled.VolumeUp to { r.send(r.c("volume_up", "VOLUME_UP"), r.muteEntity) }
+            )
+        }
+    }
+
+    @Composable
     private fun SideColumn(content: @Composable () -> Unit) {
         Column(
             modifier = Modifier.width(SIDE_BUTTON.dp),
@@ -240,8 +265,8 @@ class TvRemoteCard : CardRenderer {
     @Composable
     private fun RemoteControls(r: TvRender, config: CardConfig) {
         val ctx = r.ctx
-        // D-pad cluster
-        DPad(r)
+        // D-pad cluster (1.4.6: can be hidden, e.g. when the remote's own keys drive the TV)
+        if (config.bool("show_dpad", true)) DPad(r)
 
         // Navigation row: back / home / menu
         ButtonRow(

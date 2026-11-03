@@ -77,6 +77,8 @@ import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.weather.LocalWeather
 import com.custom.astrion.web.ConfigServer
+import com.custom.astrion.zidoo.ZidooRegistry
+import com.custom.astrion.zidoo.installZidoo
 import java.util.concurrent.TimeUnit
 import kotlin.math.acos
 import kotlin.math.sqrt
@@ -402,6 +404,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
     private lateinit var androidTvRegistry: AndroidTvRegistry // Android TV, direct (1.3.6)
+    private lateinit var zidooRegistry: ZidooRegistry // Zidoo players, direct (1.4.6)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -518,6 +521,7 @@ class MainActivity : ComponentActivity() {
             onQuiet = { quiet ->
                 if (::androidTvRegistry.isInitialized) androidTvRegistry.setQuiet(quiet)
                 if (::appleTvRegistry.isInitialized) appleTvRegistry.setQuiet(quiet)
+                if (::zidooRegistry.isInitialized) zidooRegistry.setQuiet(quiet)
             }
         )
     }
@@ -653,6 +657,8 @@ class MainActivity : ComponentActivity() {
         appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.i("AppleTv", it) })
         // After the Apple TV one: it chains to its service handler.
         androidTvRegistry = installAndroidTv(this, client, configServer, log = { Log.i("AndroidTv", it) })
+        // After the Android TV one, chained the same way.
+        zidooRegistry = installZidoo(this, client, log = { Log.i("Zidoo", it) })
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
         // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
@@ -668,6 +674,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        zidooRegistry.stop()
         androidTvRegistry.stop()
         appleTvRegistry.stop()
 
@@ -988,6 +995,8 @@ class MainActivity : ComponentActivity() {
         service == "media_player.select_source" || service == "media_player.play_media" -> null
         // An Android TV paired with Astrion answers directly, as fast as IR: smooth D-pad scrolling.
         service == "remote.send_command" && entityId?.startsWith("remote.androidtv_") == true -> IR_REPEAT_MS
+        // Same for a Zidoo added in Astrion (1.4.6): its control API is on the local network.
+        service == "remote.send_command" && entityId?.startsWith("remote.zidoo_") == true -> IR_REPEAT_MS
         else -> HA_REPEAT_MS
     }
 
@@ -1571,6 +1580,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        zidooRegistry.stop()
         androidTvRegistry.stop()
         appleTvRegistry.stop()
         super.onDestroy()

@@ -475,6 +475,7 @@ private fun ConnectionSection(ctx: CardContext) {
 @Composable
 private fun WebConfigSection(ctx: CardContext) {
     ConfigServerRow(ctx)
+    if (ctx.deviceSettings.configServerEnabled) WebPasswordRow()
     localIpAddress()?.let { ip ->
         Text(
             if (ctx.deviceSettings.configServerEnabled) {

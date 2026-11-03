@@ -555,11 +555,12 @@ data class ActivityConfig(
      * `media_entities` logic. */
     val nowPlayingEntity: String? = null
 ) {
-    /** [nowPlayingEntity], or the first Apple TV / Android TV paired directly with Astrion among [devices]. */
+    /** [nowPlayingEntity], or the first Apple TV / Android TV / Zidoo (1.4.6) added in Astrion among [devices]. */
     val effectiveNowPlayingEntity: String?
         get() =
             nowPlayingEntity ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.appletv_") }?.deviceId
                 ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.androidtv_") }?.deviceId
+                ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.zidoo_") }?.deviceId
 }
 
 /**
