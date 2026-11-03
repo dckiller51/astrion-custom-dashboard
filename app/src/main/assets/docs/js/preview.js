@@ -1292,13 +1292,14 @@ function appleTvRemotePreviewHtml(atv) {
   const showArtwork = atv.showArtwork !== false;
   const showProgress = atv.showProgress !== false;
   const showSkip = atv.showSkip !== false && isDirect;
+  const showPad = atv.showClickpad !== false;
   const buttons = (Array.isArray(atv.buttons) && atv.buttons.length) ? atv.buttons : ATV_PREVIEW_DEFAULTS[layout];
   const apps = hasMedia ? (atv.apps || []) : [];
   const box = inner => `<div class="preview-apple-remote" style="gap:${layout === 'classic' ? 18 : 12}px;padding:${layout === 'classic' ? 20 : 14}px">${inner}</div>`;
 
   if (layout === 'classic') {
     return box(`
-      ${atvPreviewTrackpad(160)}
+      ${showPad ? atvPreviewTrackpad(160) : ''}
       <div class="preview-row-buttons">${buttons.map(id => `<div class="preview-pill">${ATV_PREVIEW_ICONS[id] ? ATV_PREVIEW_ICONS[id] + ' ' : ''}${atvPreviewButtonLabel(id)}</div>`).join('')}</div>
       <div class="preview-play-btn">⏯</div>
       ${atvPreviewApps(apps.slice(0, 5), 34, false)}`);
@@ -1311,7 +1312,7 @@ function appleTvRemotePreviewHtml(atv) {
           ${showArtwork ? '<div style="width:34px;height:34px;border-radius:7px;background:#2a3550;flex:none"></div>' : ''}
           <div style="flex:1;min-width:0;font-size:11px;text-align:left;display:flex;flex-direction:column;gap:4px"><b>${I18N.t('web_preview_now_playing')}</b>${showProgress ? atvPreviewProgress(false) : ''}</div>
           ${atvPreviewPlay(30, true)}</div>` : ''}
-      ${atvPreviewTrackpad(strip ? 130 : 145)}
+      ${showPad ? atvPreviewTrackpad(strip ? 130 : 145) : ''}
       <div style="display:flex;justify-content:space-evenly;width:100%">${buttons.map(id => atvPreviewRound(id, 34)).join('')}</div>
       ${strip ? '' : atvPreviewPlay(40, false)}
       ${atvPreviewApps(apps.slice(0, 6), 34, false)}`);
@@ -1338,7 +1339,9 @@ function appleTvRemotePreviewHtml(atv) {
       ${flank[1] ? atvPreviewRound(flank[1], 32) : ''}
     </div>`;
   const column = ids => `<div style="display:flex;flex-direction:column;gap:7px;width:30px;align-items:center">${ids.map(id => atvPreviewRound(id, 30)).join('')}</div>`;
-  const pad = side.length
+  const pad = !showPad
+    ? (side.length ? `<div style="display:flex;justify-content:space-evenly;width:100%">${side.map(id => atvPreviewRound(id, 30)).join('')}</div>` : '')
+    : side.length
     ? `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
          ${column(side.filter((_, i) => i % 2 === 0))}${atvPreviewTrackpad(130)}${column(side.filter((_, i) => i % 2 === 1))}
        </div>`

@@ -7,6 +7,7 @@ import androidx.core.content.edit
 import com.custom.astrion.BuildConfig
 import com.custom.astrion.config.BackupArchive
 import com.custom.astrion.config.BackupException
+import com.custom.astrion.config.WebPassword
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
 import fi.iki.elonen.NanoHTTPD.Method
@@ -92,6 +93,7 @@ class BackupRoutes(private val context: Context, private val onRestored: () -> U
                     values.forEach { (key, value) -> putValue(key, value) }
                 }
             }
+            WebPassword.reload() // the restored settings may carry another web page password
             val restored = BackupArchive.restoreFiles(upload, root)
             Log.i(TAG, "backup restored: ${contents.prefs.keys.joinToString()} and $restored file(s); restarting")
             onRestored()

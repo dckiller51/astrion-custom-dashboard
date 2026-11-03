@@ -418,6 +418,7 @@ function updateCardFormInputs() {
         <option value="compact">${I18N.t('web_card_compact_remote_first_now_playing_strip')}</option>
         <option value="full">${I18N.t('web_card_full_artwork_seek_bar_10_s')}</option>
       </select>
+      <label class="inline-check"><input type="checkbox" id="atvShowClickpad" checked> ${I18N.t('web_card_atv_show_clickpad')}</label>
       <div id="atvRichBox" style="display:none">
         <label class="inline-check"><input type="checkbox" id="atvShowArtwork" checked> ${I18N.t('web_card_show_artwork')}</label>
         <label class="inline-check"><input type="checkbox" id="atvShowProgress" checked> ${I18N.t('web_card_show_title_progress_bar')}</label>
@@ -918,6 +919,7 @@ async function fillAppleTvHarmonyFields(o) {
   document.getElementById('atvShowArtwork').checked = o.showArtwork !== false;
   document.getElementById('atvShowProgress').checked = o.showProgress !== false;
   document.getElementById('atvShowSkip').checked = o.showSkip !== false;
+  document.getElementById('atvShowClickpad').checked = o.showClickpad !== false;
   document.getElementById('atvEntity').innerHTML = atvEntityOptionsHtml(o.entity || '');
   window._pendingAtvApps = JSON.parse(JSON.stringify(o.apps || [])).map(a => ({
     source: a.source || '', label: a.label || '', icon: a.icon || '', color: a.color || ''
@@ -1862,6 +1864,7 @@ function addCardToPage() {
     }
     newCard.options.buttons = selectedAtvButtons();
     const atvLayout = document.getElementById('atvLayout').value;
+    if (!document.getElementById('atvShowClickpad').checked) newCard.options.showClickpad = false;
     if (atvLayout !== 'classic') {
       newCard.options.layout = atvLayout;
       if (!document.getElementById('atvShowArtwork').checked) newCard.options.showArtwork = false;

@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.6-beta] - 2026-11-03
+
+### Added
+
+- **A password for the web page** (Settings › Web configuration): once set, every page and endpoint of the configurator on port 8080 asks for it (HTTP Basic, any user name), the builder and backups included. The remote's own requests aren't asked; a wrong password slows the next try down. Only a salted hash is kept, carried by the full backup. The Home Assistant integration 2026.11.0 takes the password (when adding the remote, Reconfigure, or re-authentication). Requested in an issue.
+- **Zidoo players, direct** (Devices › **Zidoo**): add a Zidoo (Z9X, Z10, Z20, UHD3000, UHD8000…) by its IP address, no pairing and no Home Assistant. It shows up as `media_player.zidoo_…` (on / playing / paused, title, cover or backdrop, progress, its apps as sources) plus `remote.zidoo_…`, through the player's control API (port 9529, the one Zidoo's phone app uses). The TV remote card works with it as is (its Android key names are translated to the Zidoo's), and so do the media player and source cards, buttons, hotkeys and Activities. Play / pause / seek go to the Zidoo's own video or music player; *turn on* sends Wake-on-LAN (wired network) and the power key. Ideas taken from the HACS Zidoo integration. Requested by a user.
+- **Hide the pad** of the remote cards: *D-pad* box on the TV remote card (`show_dpad: false`), *Trackpad* box on the Apple TV remote card (`showClickpad: false`), for when the remote's own arrow keys do the job. The other buttons stay (in the full layouts, the ones that sat beside the pad move to a row). Requested by a user.
+
+### Changed
+
+- **The Home Assistant token and the Apple TV pairing keys never leave the remote once saved**: `/devices-config` only says whether they're set (`tokenSet`, `credentialsSet`), the web page's token field shows *Saved on the remote*, and an empty field keeps them.
+
 ## [1.4.5-beta] - 2026-11-02
 
 ### Added

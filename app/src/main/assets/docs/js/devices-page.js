@@ -26,6 +26,7 @@ let appleTvMrpScanResults = []; // last /appletv-mrp-scan result
 let androidTvs = [];       // full [{localId, name, entityId, host, serviceName, mac, certSha256}] (1.3.6)
 let androidTvScanResults = []; // last /androidtv-scan result
 let androidTvPairing = null; // { sessionId, device: {host, serviceName, name} } while waiting for the code
+let zidoos = [];           // full [{localId, name, entityId, host, mac}] (1.4.6)
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
 
@@ -73,6 +74,7 @@ async function loadAll() {
     extenders = Array.isArray(data.extenders) ? data.extenders : [];
     appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
     androidTvs = Array.isArray(data.androidTvs) ? data.androidTvs : [];
+    zidoos = Array.isArray(data.zidoos) ? data.zidoos : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -101,7 +103,8 @@ async function reconcileAppleTvHaDevices() {
   dashboardData.haDevices = dashboardData.haDevices || [];
   let changed = false;
   const paired = appleTvs.map(tv => ({ id: 'appletv_' + tv.localId, tv }))
-    .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })));
+    .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })))
+    .concat(zidoos.map(tv => ({ id: 'zidoo_' + tv.localId, tv })));
   paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
@@ -212,6 +215,7 @@ function renderDevicesList() {
   }
 
   renderAndroidTvs();
+  renderZidoos();
 
   const tileIrCount = document.getElementById('tileIrCount');
   if (tileIrCount) {
@@ -267,6 +271,7 @@ function closeDeviceForms() {
   appleTvMrpPairing = null;
   setDisplay('androidTvForm', 'none');
   androidTvPairing = null;
+  setDisplay('zidooForm', 'none');
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -278,7 +283,9 @@ async function openDeviceForm(type) {
   if (type === 'ha') {
     document.getElementById('haForm').style.display = '';
     document.getElementById('haUrl').value = haConfig.url || '';
-    document.getElementById('haToken').value = haConfig.token || '';
+    // 1.4.6: the remote never sends the saved token back; empty keeps it.
+    document.getElementById('haToken').value = '';
+    document.getElementById('haToken').placeholder = haConfig.tokenSet ? I18N.t('web_dev_token_saved') : '';
     document.getElementById('haWebhookId').value = haConfig.webhookId || '';
     document.getElementById('removeHaBtn').style.display = haConfig.url ? '' : 'none';
     document.getElementById('haForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -317,6 +324,12 @@ async function openDeviceForm(type) {
     document.getElementById('androidTvForm').style.display = '';
     document.getElementById('androidTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     scanAndroidTvs();
+  } else if (type === 'zidoo') {
+    document.getElementById('zidooForm').style.display = '';
+    document.getElementById('zidooHost').value = '';
+    document.getElementById('zidooName').value = '';
+    document.getElementById('zidooForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('zidooHost').focus();
   } else if (type === 'ir') {
     document.getElementById('irForm').style.display = '';
     renderIrTargetOptions();
@@ -442,6 +455,14 @@ async function persistHaAndHubs() {
       body.append('adtv_mac[]', tv.mac || '');
       body.append('adtv_cert[]', tv.certSha256 || '');
       body.append('adtv_helper[]', tv.helperCode || '');
+    });
+    body.set('zidoo_present', '1'); // same for the Zidoo list (1.4.6)
+    zidoos.forEach(z => {
+      body.append('zidoo_localid[]', z.localId || '');
+      body.append('zidoo_name[]', z.name || '');
+      body.append('zidoo_entityid[]', z.entityId || '');
+      body.append('zidoo_host[]', z.host || '');
+      body.append('zidoo_mac[]', z.mac || '');
     });
     const res = await fetch('/save-connection', {
       method: 'POST',

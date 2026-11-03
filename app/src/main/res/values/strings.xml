@@ -34,6 +34,15 @@
     <string name="settings_beta_update_available">Beta available: %1$s</string>
     <string name="settings_local_config">Local config: %1$s</string>
     <string name="web_config_qr_hint">Scan it with your phone to open the remote\'s web page and the builder, without typing the address. On the phone, “Add to Home screen” then gives you an Astrion icon.</string>
+    <string name="web_password_on">The web page asks for a password</string>
+    <string name="web_password_off">No password: anyone on your network can open this remote\'s web page</string>
+    <string name="web_password_new">Set a password (at least 4 characters)</string>
+    <string name="web_password_change">New password</string>
+    <string name="web_password_remove">Remove the password</string>
+    <string name="web_password_hint">Asked by the browser for the web page, the builder and the backups (any user name). The Home Assistant integration needs it too, in its settings. Forgot it? Remove it here and set a new one.</string>
+    <string name="web_password_too_short">At least %1$d characters</string>
+    <string name="web_password_saved">Web page password saved</string>
+    <string name="web_password_removed">Web page password removed</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Display</string>

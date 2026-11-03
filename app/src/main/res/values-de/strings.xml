@@ -34,6 +34,15 @@
     <string name="settings_beta_update_available">Beta verfügbar: %1$s</string>
     <string name="settings_local_config">Lokale Konfiguration: %1$s</string>
     <string name="web_config_qr_hint">Scanne ihn mit deinem Handy, um die Webseite der Fernbedienung und den Builder zu öffnen, ohne die Adresse einzutippen. Auf dem Handy gibt dir „Zum Startbildschirm hinzufügen“ dann ein Astrion-Symbol.</string>
+    <string name="web_password_on">Die Webseite fragt nach einem Passwort</string>
+    <string name="web_password_off">Kein Passwort: Jedes Gerät in deinem Netzwerk kann die Webseite der Fernbedienung öffnen</string>
+    <string name="web_password_new">Passwort festlegen (mindestens 4 Zeichen)</string>
+    <string name="web_password_change">Neues Passwort</string>
+    <string name="web_password_remove">Passwort entfernen</string>
+    <string name="web_password_hint">Der Browser fragt danach für die Webseite, den Builder und die Sicherungen (beliebiger Benutzername). Die Home-Assistant-Integration braucht es auch, in ihren Einstellungen. Vergessen? Hier entfernen und ein neues festlegen.</string>
+    <string name="web_password_too_short">Mindestens %1$d Zeichen</string>
+    <string name="web_password_saved">Passwort der Webseite gespeichert</string>
+    <string name="web_password_removed">Passwort der Webseite entfernt</string>
 
     <!-- Settings: groups, screen timeout, About (1.2.5) -->
     <string name="settings_display">Anzeige</string>
