@@ -3,7 +3,6 @@ package com.custom.astrion.zidoo
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
-import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.JsonObject
 import okhttp3.Cookie
@@ -43,7 +42,9 @@ class ZidooClient(private val host: () -> String) {
         val request = Request.Builder().url(base() + path.trimStart('/')).header("Cache-Control", "no-cache").build()
         http.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) return@use null
-            ZidooParse.parse(resp.body?.string().orEmpty())
+            // Bytes read as UTF-8 (1.4.8): the player says another charset, and a path with an
+            // accent ("Séries") came back garbled, so its episodes were never found on the poster wall.
+            ZidooParse.parse(resp.body?.bytes()?.toString(Charsets.UTF_8).orEmpty())
         }
     }.getOrNull()
 
@@ -54,6 +55,12 @@ class ZidooClient(private val host: () -> String) {
     fun video(): ZidooPlayback? = ZidooParse.video(get("ZidooVideoPlay/getPlayStatus"))
 
     fun music(): ZidooPlayback? = ZidooParse.music(get("ZidooMusicControl/getPlayStatus"))
+
+    fun musicV2(): ZidooPlayback? = ZidooParse.musicV2(get("ZidooMusicControl/v2/getState"))
+
+    /** What plays: the video player, else the music player (v2 first, 1.4.8: an Eversolo says there
+     * what a streaming app plays, with its cover), else nothing. */
+    fun playback(): ZidooPlayback? = video() ?: musicV2() ?: music()
 
     fun apps(): Map<String, String> = ZidooParse.apps(get("ZidooControlCenter/Apps/getApps"))
 
@@ -66,7 +73,7 @@ class ZidooClient(private val host: () -> String) {
     fun musicArtUrl(musicId: Long, musicType: Int): String =
         base() + "ZidooMusicControl/v2/getImage?id=$musicId&music_type=$musicType&type=4&target=16"
 
-    private fun enc(value: String) = URLEncoder.encode(value, "UTF-8")
+    private fun enc(value: String) = ZidooParse.query(value)
 
     companion object {
         const val PORT = 9529

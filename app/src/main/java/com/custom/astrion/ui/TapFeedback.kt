@@ -5,6 +5,10 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.FocusInteraction
+import androidx.compose.foundation.interaction.Interaction
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.getValue
@@ -20,6 +24,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.custom.astrion.cards.impl.rememberLongPressKeyModifier
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filter
 
 /**
  * Tap feedback — the tiny "tick" sound the device's own Android UI menus
@@ -63,6 +69,16 @@ object FocusHighlight {
 private const val LONG_PRESS_DEDUPE_MS = 800L
 
 /**
+ * [source] without its focus events, for the ripple (1.4.7): focus is shown by the accent
+ * border, which [FocusHighlight] can hide. The ripple's own focused state (a light overlay) can't
+ * be hidden that way, so a button Android focused on its own (the first arrow press after a
+ * touch, on a page whose arrows are hotkeys or turned off) stayed highlighted.
+ */
+private class PressOnlySource(source: InteractionSource) : InteractionSource {
+    override val interactions: Flow<Interaction> = source.interactions.filter { it !is FocusInteraction }
+}
+
+/**
  * Drop-in replacement for [Modifier.clickable] that also plays the tap
  * feedback sound through [LocalTapFeedback], and draws a clearly visible
  * accent border around itself while it holds keyboard/D-pad focus (physical
@@ -96,15 +112,17 @@ fun Modifier.tapClickable(
     val feedback = LocalTapFeedback.current
     val theme = LocalTheme.current
     val interactionSource = remember { MutableInteractionSource() }
+    val rippleSource = remember(interactionSource) { PressOnlySource(interactionSource) }
     val isFocused by interactionSource.collectIsFocusedAsState()
     this
         .then(if (isFocused && FocusHighlight.visible) Modifier.border(2.5.dp, theme.accent, focusShape) else Modifier)
+        .indication(rippleSource, LocalIndication.current)
         .clickable(
             enabled = enabled,
             onClickLabel = onClickLabel,
             role = role,
             interactionSource = interactionSource,
-            indication = LocalIndication.current
+            indication = null
         ) {
             feedback()
             onClick()
@@ -126,6 +144,7 @@ fun Modifier.tapCombinedClickable(focusShape: Shape, onLongClick: (() -> Unit)?,
         val feedback = LocalTapFeedback.current
         val theme = LocalTheme.current
         val interactionSource = remember { MutableInteractionSource() }
+        val rippleSource = remember(interactionSource) { PressOnlySource(interactionSource) }
         val isFocused by interactionSource.collectIsFocusedAsState()
         val lastLongFire = remember { mutableLongStateOf(0L) }
         val fireLong = {
@@ -139,9 +158,10 @@ fun Modifier.tapCombinedClickable(focusShape: Shape, onLongClick: (() -> Unit)?,
         this
             .then(if (isFocused && FocusHighlight.visible) Modifier.border(2.5.dp, theme.accent, focusShape) else Modifier)
             .then(rememberLongPressKeyModifier(Unit, fireLong))
+            .indication(rippleSource, LocalIndication.current)
             .combinedClickable(
                 interactionSource = interactionSource,
-                indication = LocalIndication.current,
+                indication = null,
                 onLongClick = fireLong
             ) {
                 feedback()

@@ -1642,11 +1642,24 @@ async function loadIconsList() {
       list.innerHTML = `<div class="hint">${I18N.t('web_dev_no_icons')}</div>`;
       return;
     }
+    // 1.4.8: tick several icons, then delete them with one confirmation.
+    const bar = document.createElement('div');
+    bar.className = 'list-item';
+    bar.style.cssText = 'gap:8px;align-items:center';
+    bar.innerHTML = `<label class="inline-check" style="margin:0"><input type="checkbox" id="iconSelectAll" onchange="selectAllIcons(this.checked)"> ${I18N.t('web_dev_icons_select_all')}</label>` +
+      `<button type="button" class="secondary" id="deleteIconsBtn" style="margin:0" disabled onclick="deleteSelectedIcons()">${I18N.t('web_dev_icons_delete_selected', 0)}</button>`;
+    list.appendChild(bar);
     names.forEach(name => {
       const row = document.createElement('div');
       row.className = 'list-item';
-      const label = document.createElement('span');
-      label.style.cssText = 'display:flex;align-items:center;gap:8px';
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:8px;margin:0;cursor:pointer';
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'icon-select';
+      check.value = name;
+      check.addEventListener('change', updateIconSelection);
+      label.appendChild(check);
       const img = document.createElement('img');
       img.src = `/icons/${encodeURIComponent(name)}`;
       img.alt = '';
@@ -1665,6 +1678,54 @@ async function loadIconsList() {
     list.innerHTML = `<div class="hint">${I18N.t('web_dev_icons_load_failed')}</div>`;
     console.error('Failed to load /icons-list', e);
   }
+}
+
+function selectedIconNames() {
+  return Array.from(document.querySelectorAll('#iconsList .icon-select:checked')).map(el => el.value);
+}
+
+function updateIconSelection() {
+  const all = document.querySelectorAll('#iconsList .icon-select');
+  const n = selectedIconNames().length;
+  const btn = document.getElementById('deleteIconsBtn');
+  if (btn) { btn.disabled = n === 0; btn.textContent = I18N.t('web_dev_icons_delete_selected', n); }
+  const box = document.getElementById('iconSelectAll');
+  if (box) { box.checked = n > 0 && n === all.length; box.indeterminate = n > 0 && n < all.length; }
+}
+
+function selectAllIcons(on) {
+  document.querySelectorAll('#iconsList .icon-select').forEach(el => { el.checked = on; });
+  updateIconSelection();
+}
+
+/** 1.4.8: the ticked icons, one confirmation for all (with how many are still used by the dashboard). */
+async function deleteSelectedIcons() {
+  const names = selectedIconNames();
+  if (!names.length) return;
+  let text = '';
+  try {
+    const res = await fetch('/dashboard.json');
+    if (res.ok) text = await res.text();
+  } catch (e) { /* no dashboard: nothing is in use */ }
+  const used = names.filter(n => text.includes(`/icons/${n}"`)).length;
+  const warning = used ? '\n\n' + I18N.t('web_dev_icons_still_used_n', used) : '';
+  if (!confirm(I18N.t('web_dev_icons_confirm_delete_n', names.length) + warning)) return;
+  const btn = document.getElementById('deleteIconsBtn');
+  if (btn) btn.disabled = true;
+  const failed = [];
+  for (let i = 0; i < names.length; i++) {
+    if (btn) btn.textContent = I18N.t('web_dev_icons_deleting_n', i + 1, names.length);
+    try {
+      const res = await fetch(`/icons/${encodeURIComponent(names[i])}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) {
+      console.error('Icon delete failed', names[i], e);
+      failed.push(names[i]);
+    }
+  }
+  if (failed.length) showToast(I18N.t('web_dev_icons_delete_failed_n', failed.length, failed.join(', ')), 'error');
+  else showToast(I18N.t('web_dev_icons_deleted_n', names.length));
+  await loadIconsList();
 }
 
 /** How many times dashboard.json mentions this icon's file (cards, scene/

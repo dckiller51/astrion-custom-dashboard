@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.8-beta] - 2026-11-04
+
+### Changed
+
+- **Media player card (full): the progress bar seeks** when the player can (Zidoo, Plex, Cast, Kodi…): tap or drag it, as on the TV and Apple TV remote cards, with the same bar (elapsed, thumb, time left). Players that can't seek keep the plain bar. Requested by a user.
+
+- **TV remote card: the device's own apps** (builder): a **This device's apps** button fills the card's app buttons with the apps of the player it drives, and the app field suggests them first. A Zidoo or Eversolo added in Astrion publishes its apps without its utilities (settings, updates, file manager…); its card gets them instead of Netflix & co. when picked, and on the remote when the card has no apps of its own. Requested by a user.
+
+- **Web page › Icons: delete several at once**: tick icons (or *Select all*), then **Delete selected**, with one confirmation that says how many are still used by the dashboard. The page also says how to replace an icon: upload a file with the same name. Requested by a user.
+
+### Fixed
+
+- **A button stayed highlighted on a page with arrow-key movement turned off** (1.4.7's page option, e.g. an Apple TV page): the first arrow press after a touch let Android focus a button on its own, and besides the accent outline (already hidden) the tap ripple kept its light "focused" overlay. Focus is now shown only by the outline, which such pages never show. Reported by a user.
+- **Zidoo: no film or episode title, no backdrop** for files whose path has a space (nearly all): the path was sent to the Zidoo's poster wall with `+` for spaces, which it doesn't read as spaces. Sent as `%20` now, like Zidoo's own app; and the Zidoo's answers are read as UTF-8 whatever charset it announces, so a folder with an accent (`Séries`) no longer garbles the path. Reported by a user (Z9X 8K).
+- **Eversolo (added as a Zidoo, same control API): no cover nor title for a streaming app** such as Apple Music: the remote now also reads the player's newer music status, which gives what the built-in player and the apps that share it play (Eversolo's own Apple Music, not Apple's), with the cover. Tested by a user (DMP-A6).
+
 ## [1.4.7-beta] - 2026-11-03
 
 ### Added
