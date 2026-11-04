@@ -532,7 +532,16 @@ class MediaPlayerCard : CardRenderer {
                 onQueue = data.onQueue
             )
             if (e?.attrDouble("media_duration") != null) {
-                MediaProgressBar(e, ctx.theme)
+                // A player that can seek (1.4.8): the bar can be tapped or dragged, like the TV remote card's.
+                if (e.supports(Feature.SEEK)) {
+                    AtvProgress(e, ctx.theme, thick = true) { seconds ->
+                        ctx.client.callService(
+                            ServiceCall.of("media_player", "media_seek", e.entityId, "seek_position" to seconds.coerceAtLeast(0.0))
+                        )
+                    }
+                } else {
+                    MediaProgressBar(e, ctx.theme)
+                }
             }
             FullMediaButtonsRow(ctx.theme, mediaButtons, data.mp)
             FullVolumeRow(FullVolumeRowData(data.entityId, e, data.mp, volumeButtons, hasVolumeSlider, ctx.theme))

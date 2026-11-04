@@ -117,7 +117,7 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
         val c = device.client
         // Off or in standby, it doesn't answer: one call (and one timeout) to find out, not three.
         val first = if (before.reachable) null else c.model() ?: return ZidooState(apps = before.apps)
-        val playback = c.video() ?: c.music()
+        val playback = c.playback()
         val model = first ?: if (playback == null || before.model == null) c.model() else null
         if (playback == null && model == null) return ZidooState(apps = before.apps)
         model?.mac?.let { if (device.mac.isBlank()) device.mac = it }
@@ -153,7 +153,7 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             picture = movie?.let { c.backdropUrl(it.id) }
         } else {
             val id = p.musicId
-            if (id != null && id > 0) picture = c.musicArtUrl(id, p.musicType ?: 0)
+            picture = p.artUrl ?: if (id != null && id > 0) c.musicArtUrl(id, p.musicType ?: 0) else null
         }
         return base.copy(
             source = p.source,
@@ -242,6 +242,7 @@ private fun toJson(value: Any?): JsonElement = when (value) {
     is Number -> JsonPrimitive(value)
     is String -> JsonPrimitive(value)
     is Iterable<*> -> JsonArray(value.map { toJson(it) })
+    is Map<*, *> -> JsonObject(value.entries.associate { (k, v) -> k.toString() to toJson(v) })
     else -> JsonPrimitive(value.toString())
 }
 

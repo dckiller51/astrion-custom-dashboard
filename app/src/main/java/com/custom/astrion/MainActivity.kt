@@ -577,7 +577,12 @@ class MainActivity : ComponentActivity() {
         Log.i("MainActivity", "onCreate — activity instance ${this.hashCode()}")
         // Only a key takes the window out of touch mode (a touch puts it back in): see noteKey().
         window.decorView.viewTreeObserver.addOnTouchModeChangeListener { inTouchMode ->
-            if (!inTouchMode) leftTouchModeByKey = true
+            if (!inTouchMode) {
+                leftTouchModeByKey = true
+                // That key may hand focus to a button before any handler sees it (1.4.8): on a
+                // page with arrow-key movement turned off, no outline for it, not even until release.
+                if (dashboard.config.pages.getOrNull(currentPageIndex)?.focusNavigation == false) FocusHighlight.visible = false
+            }
         }
 
         // Enable full-screen immersive sticky mode for dedicated wall/remote tablet mode

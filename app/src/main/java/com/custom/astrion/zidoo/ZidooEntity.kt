@@ -156,6 +156,7 @@ object ZidooEntityMapper {
         s.model?.let { a["model"] = it }
         s.firmware?.let { a["sw_version"] = it }
         if (s.apps.isNotEmpty()) a["source_list"] = s.apps.keys.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        mediaApps(s.apps).takeIf { it.isNotEmpty() }?.let { a["astrion_apps"] = it }
         if (playing) addNowPlaying(a, s)
         return ZidooEntityData(spec.entityId, stateOf(s), a)
     }
@@ -175,6 +176,34 @@ object ZidooEntityMapper {
         s.positionAt?.let { a["media_position_updated_at"] = isoInstant(it) }
         s.pictureUrl?.let { a["entity_picture"] = it }
     }
+
+    /**
+     * The apps worth a button (1.4.8): every openable one but the player's own utilities
+     * (settings, updates, file manager…), as `{name, app}` — what the TV remote card's `apps`
+     * take. The builder offers them, and the card uses them when it has no `apps` of its own.
+     */
+    fun mediaApps(apps: Map<String, String>): List<Map<String, String>> = apps.entries
+        .filter { (_, pkg) -> pkg !in UTILITY_APPS }
+        .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.key })
+        .map { (label, pkg) -> mapOf("name" to label, "app" to pkg) }
+
+    private val UTILITY_APPS =
+        setOf(
+            "com.zidoo.custom.power",
+            "com.zidoo.control.center",
+            "com.zidoo.fileexplorer",
+            "com.zidoo.usb.install",
+            "com.zidoo.imageplayer",
+            "com.zidoo.key.installation",
+            "com.zidoo.ota.update",
+            "com.zidoo.clear",
+            "com.zidoo.rs232.control",
+            "com.zidoo.shortcut.key",
+            "com.zidoo.setupwizard",
+            "com.zidoo.cnc",
+            "com.android.quick.settings",
+            "com.android.chrome"
+        )
 
     fun remote(spec: ZidooSpec, s: ZidooState): ZidooEntityData {
         val a = linkedMapOf<String, Any?>("friendly_name" to spec.name)

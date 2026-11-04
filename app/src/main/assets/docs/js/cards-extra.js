@@ -156,8 +156,8 @@ function tvRemoteFormHtml() {
     .map(c => `<option value="${cxEsc(c)}">`).join('');
   return `
     <label>${I18N.t('web_card_name')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_tv_name')}">
-    <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" placeholder="${I18N.t('web_card_ph_remote')}">
-    <label>${I18N.t('web_card_media_entity_id_opt')}</label><input type="text" id="optMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
+    <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" placeholder="${I18N.t('web_card_ph_remote')}" onchange="onTvEntityChange()">
+    <label>${I18N.t('web_card_media_entity_id_opt')}</label><input type="text" id="optMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}" onchange="onTvEntityChange()">
     <div class="hint">${I18N.t('web_card_tv_media_hint')}</div>
     <label class="inline-check"><input type="checkbox" id="optTvShowDpad" checked> ${I18N.t('web_card_tv_show_dpad')}</label>
     <label class="inline-check"><input type="checkbox" id="optTvShowVolume" checked> ${I18N.t('web_card_tv_show_volume')}</label>
@@ -183,6 +183,7 @@ function tvRemoteFormHtml() {
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="secondary" onclick="addTvApp()">${I18N.t('web_card_tv_add_app')}</button>
       <button type="button" class="secondary" onclick="resetTvApps()">${I18N.t('web_card_tv_default_apps')}</button>
+      <button type="button" class="secondary" onclick="useTvDeviceApps()">${I18N.t('web_card_tv_device_apps')}</button>
     </div>
     <details style="margin-top:10px">
       <summary>${I18N.t('web_card_tv_commands')}</summary>
@@ -198,11 +199,66 @@ function tvRemoteFormHtml() {
 }
 
 function tvAppLabel(pkg) {
+  const own = tvDeviceApps().find(a => a.app === pkg);
+  if (own) return own.name;
   const known = TV_KNOWN_APPS.find(([, p]) => p === pkg);
   return known ? known[0] : '';
 }
 
+// The apps of the device the card drives (1.4.8), read from its media player as the remote
+// publishes it: a Zidoo / Eversolo added in Astrion gives [{name, app}] (astrion_apps); any other
+// player its source_list (names, which it opens too). [] when the builder can't see it.
+function tvDeviceApps() {
+  if (typeof haStates === 'undefined' || !haStates) return [];
+  const remote = (document.getElementById('optRemoteEntity') || {}).value || '';
+  const media = ((document.getElementById('optMediaEntity') || {}).value || '').trim() ||
+    (remote.includes('.') ? 'media_player.' + remote.trim().split('.')[1] : '');
+  const attrs = (haStates[media] && haStates[media].attributes) || {};
+  if (Array.isArray(attrs.astrion_apps)) {
+    return attrs.astrion_apps.filter(a => a && a.app).map(a => ({ name: a.name || a.app, app: a.app }));
+  }
+  return (Array.isArray(attrs.source_list) ? attrs.source_list : []).map(s => ({ name: String(s), app: String(s) }));
+}
+
+/** Whether the card's player publishes its own apps (a Zidoo / Eversolo added in Astrion). */
+function tvDeviceHasOwnApps() {
+  if (typeof haStates === 'undefined' || !haStates) return false;
+  const remote = (document.getElementById('optRemoteEntity') || {}).value || '';
+  const media = ((document.getElementById('optMediaEntity') || {}).value || '').trim() ||
+    (remote.includes('.') ? 'media_player.' + remote.trim().split('.')[1] : '');
+  return !!(haStates[media] && haStates[media].attributes && Array.isArray(haStates[media].attributes.astrion_apps));
+}
+
+// The app field's suggestions: the device's own apps first, then the common Android TV ones.
+function refreshTvAppSuggestions() {
+  const list = document.getElementById('tvAppPackages');
+  if (!list) return;
+  const own = tvDeviceApps();
+  const seen = new Set(own.map(a => a.app));
+  list.innerHTML = own.map(a => `<option value="${cxEsc(a.app)}">${cxEsc(a.name)}</option>`).join('') +
+    TV_KNOWN_APPS.filter(([, p]) => !seen.has(p)).map(([n, p]) => `<option value="${cxEsc(p)}">${cxEsc(n)}</option>`).join('');
+}
+
+function useTvDeviceApps() {
+  const own = tvDeviceApps();
+  if (!own.length) { alert(I18N.t('web_card_tv_no_device_apps')); return; }
+  window._pendingTvApps = own.map(a => ({ ...a }));
+  renderTvApps();
+}
+
+// A new remote / media entity: fresh suggestions; and a player with its own apps replaces the
+// untouched Android TV defaults (a Zidoo has no Netflix).
+function onTvEntityChange() {
+  syncTvApps();
+  const pending = window._pendingTvApps || [];
+  const untouched = pending.length === TV_DEFAULT_APPS.length &&
+    pending.every((a, i) => a.app === TV_DEFAULT_APPS[i].app && a.name === TV_DEFAULT_APPS[i].name && !a.icon);
+  if (untouched && tvDeviceHasOwnApps()) window._pendingTvApps = tvDeviceApps();
+  renderTvApps();
+}
+
 function renderTvApps() {
+  refreshTvAppSuggestions();
   const list = document.getElementById('tvAppsList');
   if (!list) return;
   const apps = window._pendingTvApps || [];
@@ -265,7 +321,9 @@ function fillTvRemoteForm(o) {
   document.getElementById('optTvLayout').value = o.layout === 'full' ? 'full' : 'classic';
   document.getElementById('optTvShowSkip').checked = o.show_skip !== false;
   // No "apps" in the card = the app's defaults: show them, so what's listed is what the remote shows.
-  window._pendingTvApps = (Array.isArray(o.apps) ? o.apps : TV_DEFAULT_APPS).map(a => ({ ...a }));
+  // A Zidoo / Eversolo card without apps shows the device's own (1.4.8), as the remote does.
+  const ownApps = tvDeviceHasOwnApps() ? tvDeviceApps() : null;
+  window._pendingTvApps = (Array.isArray(o.apps) ? o.apps : ownApps || TV_DEFAULT_APPS).map(a => ({ ...a }));
   const cmds = o.commands || {};
   document.querySelectorAll('.tv-cmd').forEach(el => { el.value = cmds[el.dataset.key] || ''; });
   window._tvExtra = cxWithout(o, ['name', 'remote_entity', 'media_entity', 'mute_entity', 'show_volume', 'apps', 'commands',

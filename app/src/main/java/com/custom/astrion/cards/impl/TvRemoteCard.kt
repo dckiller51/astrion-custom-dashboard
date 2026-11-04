@@ -55,6 +55,9 @@ import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * TV / Android-TV remote card.
@@ -113,7 +116,7 @@ class TvRemoteCard : CardRenderer {
                 muteEntity = config.string("mute_entity") ?: remoteEntity,
                 mediaEntity = mediaEntity,
                 commands = commands,
-                apps = (config.options["apps"] as? List<Map<String, Any?>>) ?: DEFAULT_APPS
+                apps = (config.options["apps"] as? List<Map<String, Any?>>) ?: deviceApps(ctx, mediaEntity) ?: DEFAULT_APPS
             )
         val nowPlaying = nowPlayingOf(config, ctx, mediaEntity)
         val full = config.string("layout") == "full"
@@ -295,6 +298,21 @@ class TvRemoteCard : CardRenderer {
                 Icons.AutoMirrored.Filled.VolumeUp to { r.send(r.c("volume_up", "VOLUME_UP"), r.muteEntity) }
             )
         }
+    }
+
+    /**
+     * The device's own apps (1.4.8), for a card with no `apps`: a player that publishes them as
+     * `astrion_apps` (a Zidoo or Eversolo added in Astrion) gets its apps, not Android TV's.
+     */
+    private fun deviceApps(ctx: CardContext, mediaEntity: String): List<Map<String, Any?>>? {
+        val list = ctx.entities[mediaEntity]?.attr("astrion_apps") as? JsonArray ?: return null
+        return list
+            .mapNotNull { el ->
+                val o = el as? JsonObject ?: return@mapNotNull null
+                val name = (o["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
+                val app = (o["app"] as? JsonPrimitive)?.content ?: return@mapNotNull null
+                mapOf("name" to name, "app" to app)
+            }.takeIf { it.isNotEmpty() }
     }
 
     /** The player the now-playing part follows, when it's on and has something to show. */

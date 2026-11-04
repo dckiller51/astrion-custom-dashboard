@@ -34,6 +34,9 @@ class ZidooEntityTest {
         assertEquals("Key.Ok", ZidooKeys.of("DPAD_CENTER"))
         assertEquals("Key.Ok", ZidooKeys.of("ok"))
         assertEquals("Key.Mute", ZidooKeys.of("MUTE"))
+        assertEquals("Key.Menu", ZidooKeys.of("MENU"))
+        assertEquals("Key.Info", ZidooKeys.of("INFO"))
+        assertEquals("Key.Menu", ZidooKeys.of("Key.Menu"))
         assertEquals("Key.Number_7", ZidooKeys.of("7"))
         assertEquals("Key.PopMenu", ZidooKeys.of("Key.PopMenu"))
         assertNull(ZidooKeys.of("NOT_A_KEY"))
@@ -111,5 +114,41 @@ class ZidooEntityTest {
                 )
             )
         assertEquals(ZidooMovie(44, "Pilot", "Show", 1, 3), movie)
+    }
+
+    @Test
+    fun `file paths are sent the way the player reads them`() {
+        assertEquals(
+            "/mnt/smb/192.168.1.66%23video/S%C3%A9ries/Kaamelott%20%282005%29/Season%204/Kaamelott%20-%20S04E86.mkv",
+            ZidooParse.query("/mnt/smb/192.168.1.66#video/Séries/Kaamelott (2005)/Season 4/Kaamelott - S04E86.mkv")
+        )
+        assertEquals("Key.PowerOn.Poweroff", ZidooParse.query("Key.PowerOn.Poweroff"))
+    }
+
+    @Test
+    fun `an Eversolo's streaming app is read with its cover`() {
+        val p =
+            ZidooParse.musicV2(
+                ZidooParse.parse(
+                    """{"state":3,"position":1872,"duration":417000,"playingMusic":{"id":-562332526,"type":3,""" +
+                        """"title":"If Darkness Had a Son","artist":"Metallica","album":"72 Seasons",""" +
+                        """"albumArt":"https://is1-ssl.mzstatic.com/a/800x800bb.jpg"}}"""
+                )
+            )
+        assertTrue(p!!.playing)
+        assertEquals("If Darkness Had a Son", p.title)
+        assertEquals(417_000L, p.durationMs)
+        assertEquals("https://is1-ssl.mzstatic.com/a/800x800bb.jpg", p.artUrl)
+        assertNull(ZidooParse.musicV2(ZidooParse.parse("""{"state":0}""")))
+        assertNull(ZidooParse.musicV2(ZidooParse.parse("""{"status":404}""")))
+    }
+
+    @Test
+    fun `the device's apps worth a button leave its utilities out`() {
+        val apps = mapOf("Alimentation" to "com.zidoo.custom.power", "ZDMC" to "com.zidoo.zdmc", "Home Theater 5.0" to "com.zidoo.poster")
+        assertEquals(
+            listOf(mapOf("name" to "Home Theater 5.0", "app" to "com.zidoo.poster"), mapOf("name" to "ZDMC", "app" to "com.zidoo.zdmc")),
+            ZidooEntityMapper.media(spec, idle.copy(apps = apps)).attributes["astrion_apps"]
+        )
     }
 }

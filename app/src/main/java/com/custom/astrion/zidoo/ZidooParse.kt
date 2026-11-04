@@ -26,7 +26,9 @@ data class ZidooPlayback(
     val positionMs: Long? = null,
     /** Music: the track's id and type, for its cover. */
     val musicId: Long? = null,
-    val musicType: Int? = null
+    val musicType: Int? = null,
+    /** A cover the player gives as a full URL (Eversolo, streaming apps such as Apple Music). */
+    val artUrl: String? = null
 )
 
 /** The film or episode a video file is, from the player's poster wall (for title and backdrop). */
@@ -59,6 +61,13 @@ object ZidooParse {
         (this[key] as? JsonPrimitive)?.let { it.intOrNull ?: it.contentOrNull?.toDoubleOrNull()?.toInt() }
 
     private fun JsonObject.bool(key: String) = (this[key] as? JsonPrimitive)?.booleanOrNull
+
+    /**
+     * [value] for a query string, the way the player reads it (1.4.8): spaces as `%20` and `/`
+     * left as is. Java's form encoding (`+` for a space, `%2F`) made the poster wall miss every
+     * file path with a space, so no film title nor backdrop.
+     */
+    fun query(value: String): String = java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20").replace("%2F", "/")
 
     fun ok(o: JsonObject?): Boolean = o != null && o.int("status") == HTTP_OK
 
@@ -103,6 +112,31 @@ object ZidooParse {
         )
     }
 
+    /**
+     * `ZidooMusicControl/v2/getState` (Eversolo, 1.4.8): what plays, built-in player or a streaming
+     * app (Apple Music, Qobuz…), with the cover as a URL. `state` 0: nothing; 3: playing; else paused.
+     * Null when it plays nothing or the player doesn't have this call (a Zidoo).
+     */
+    fun musicV2(o: JsonObject?): ZidooPlayback? {
+        val state = o?.int("state") ?: return null
+        if (state == 0) return null
+        val m = o.obj("playingMusic") ?: return null
+        val art = (m.str("albumArtBig") ?: m.str("albumArt"))?.takeIf { it.startsWith("http") }
+        return ZidooPlayback(
+            source = ZidooSource.MUSIC,
+            playing = state == V2_PLAYING,
+            title = m.str("title"),
+            artist = m.str("artist"),
+            album = m.str("album"),
+            path = m.str("uri"),
+            durationMs = o.long("duration"),
+            positionMs = o.long("position"),
+            musicId = m.long("id"),
+            musicType = m.int("type"),
+            artUrl = art
+        )
+    }
+
     /** `ZidooControlCenter/Apps/getApps`: label → package, the apps it can open. */
     fun apps(o: JsonObject?): Map<String, String> {
         if (!ok(o)) return emptyMap()
@@ -135,6 +169,7 @@ object ZidooParse {
     }
 
     private const val HTTP_OK = 200
+    private const val V2_PLAYING = 3
     private val MAC = Regex("^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 }
 
