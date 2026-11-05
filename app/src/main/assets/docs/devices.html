@@ -34,42 +34,32 @@
 
             <div class="tile-grid">
                 <button type="button" class="tile tile-ha" onclick="showView('viewHa')">
-                    <span class="tile-icon">🏠</span>
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg></span>
                     <span class="tile-name" data-i18n="web_config_ha_heading">Home Assistant</span>
                     <span class="tile-count" id="tileHaCount" data-i18n="web_dev_not_connected">Not connected</span>
                 </button>
                 <button type="button" class="tile tile-harmony" onclick="showView('viewHarmony')">
-                    <span class="tile-icon">📡</span>
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="13" r="2"></circle><path d="M8.5 9.5a5 5 0 0 1 7 0M5.6 6.6a9 9 0 0 1 12.8 0M12 15v6"></path></svg></span>
                     <span class="tile-name" data-i18n="web_dev_harmony">Harmony</span>
                     <span class="tile-count" id="tileHarmonyCount" data-i18n="web_dev_no_hub_yet">No hub yet</span>
                 </button>
                 <button type="button" class="tile tile-ir" onclick="showView('viewIr')">
-                    <span class="tile-icon">📺</span>
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2"></rect><path d="M18 9a4 4 0 0 1 0 6M20.5 7a7 7 0 0 1 0 10"></path></svg></span>
                     <span class="tile-name" data-i18n="web_dev_ir_devices">IR Devices</span>
                     <span class="tile-count" id="tileIrCount" data-i18n="web_dev_no_devices_yet">No devices yet</span>
                 </button>
                 <button type="button" class="tile tile-extender" onclick="showView('viewExtender')">
-                    <span class="tile-icon">📡</span>
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8"></path></svg></span>
                     <span class="tile-name" data-i18n="web_dev_ir_extenders">IR Extenders</span>
                     <span class="tile-count" id="tileExtenderCount" data-i18n="web_dev_no_extender_yet">No extender yet</span>
                 </button>
-                <button type="button" class="tile tile-appletv" onclick="showView('viewAppleTv')">
-                    <span class="tile-icon">📱</span>
-                    <span class="tile-name" data-i18n="web_dev_apple_tv">Apple TV</span>
-                    <span class="tile-count" id="tileAppleTvCount" data-i18n="web_dev_no_apple_tv_yet">No Apple TV yet</span>
-                </button>
-                <button type="button" class="tile tile-androidtv" onclick="showView('viewAndroidTv')">
-                    <span class="tile-icon">📺</span>
-                    <span class="tile-name" data-i18n="web_dev_android_tv">Android TV</span>
-                    <span class="tile-count" id="tileAndroidTvCount" data-i18n="web_dev_no_android_tv_yet">No Android TV yet</span>
-                </button>
-                <button type="button" class="tile tile-zidoo" onclick="showView('viewZidoo')">
-                    <span class="tile-icon">🎬</span>
-                    <span class="tile-name" data-i18n="web_dev_zidoo">Zidoo</span>
-                    <span class="tile-count" id="tileZidooCount" data-i18n="web_dev_no_zidoo_yet">No Zidoo yet</span>
+                <button type="button" class="tile tile-direct" onclick="showView('viewDirect')">
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg></span>
+                    <span class="tile-name" data-i18n="web_dev_direct">Direct devices</span>
+                    <span class="tile-count" id="tileDirectCount" data-i18n="web_dev_direct_none">None yet</span>
                 </button>
                 <button type="button" class="tile tile-weather" onclick="showView('viewWeather')">
-                    <span class="tile-icon">🌤️</span>
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg></span>
                     <span class="tile-name" data-i18n="web_dev_weather">Weather</span>
                     <span class="tile-count" id="tileWeatherCount" data-i18n="web_dev_weather_not_set">Not set</span>
                 </button>
@@ -88,7 +78,7 @@
         <!-- ---- Home Assistant ------------------------------------------ -->
         <div id="viewHa" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_config_ha_heading">Home Assistant</h2>
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg><span data-i18n="web_config_ha_heading">Home Assistant</span></h2>
 
             <div class="section-box">
                 <div id="haConnectionSummary" class="hint" data-i18n="web_dev_not_connected_2">Not connected.</div>
@@ -155,7 +145,7 @@
         <!-- ---- Harmony --------------------------------------------------- -->
         <div id="viewHarmony" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_harmony">Harmony</h2>
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="13" r="2"></circle><path d="M8.5 9.5a5 5 0 0 1 7 0M5.6 6.6a9 9 0 0 1 12.8 0M12 15v6"></path></svg><span data-i18n="web_dev_harmony">Harmony</span></h2>
 
             <div id="harmonyHubsList" style="margin-bottom:14px"></div>
             <div class="btn-row">
@@ -184,12 +174,13 @@
         <!-- ---- IR Extenders ------------------------------------------------ -->
         <div id="viewExtender" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_ir_extenders">IR Extenders</h2>
-            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_extenders_hint">
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8"></path></svg><span data-i18n="web_dev_ir_extenders">IR Extenders</span></h2>
+            <details class="direct-about"><summary data-i18n="web_dev_direct_about">How it works</summary>
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_extenders_hint">
                 Network-connected WiFi IR blasters — point an IR device at one instead of this remote's own built-in IR when it needs to reach a closed cabinet or another room. No Home Assistant required.
                 See <a href="https://github.com/dckiller51/astrion-ir-extender" target="_blank" rel="noopener">astrion-ir-extender</a> for the firmware.
             </div>
-
+            </details>
             <div id="extendersList" style="margin-bottom:14px"></div>
             <div class="btn-row">
                 <button type="button" onclick="openDeviceForm('extender')" data-i18n="web_dev_add_extender">+ Add extender</button>
@@ -242,7 +233,7 @@
         <!-- ---- IR Devices -------------------------------------------------- -->
         <div id="viewIr" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_ir_devices">IR Devices</h2>
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="6" width="12" height="12" rx="2"></rect><path d="M18 9a4 4 0 0 1 0 6M20.5 7a7 7 0 0 1 0 10"></path></svg><span data-i18n="web_dev_ir_devices">IR Devices</span></h2>
             <div class="hint" data-i18n="web_dev_a_registry_of_named_ir_commands">
                 A registry of named IR commands per physical device — works fully offline,
                 no Harmony hub, no Home Assistant, no cloud. Referenced by scene_grid tiles
@@ -327,17 +318,29 @@
             </div>
         </div>
 
-        <!-- ---- Apple TV ----------------------------------------------------- -->
-        <div id="viewAppleTv" class="category-view">
+        <!-- ---- Direct devices (1.4.9): Apple TV, Android TV (androidtv/*.kt), Zidoo / Eversolo
+             (zidoo/*.kt) and the ones to come, one tab per kind of device ---------------- -->
+        <div id="viewDirect" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_apple_tv">Apple TV</h2>
-            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_atv_hint">
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8M12 17v4"></path></svg><span data-i18n="web_dev_direct">Direct devices</span></h2>
+            <div class="hint" style="margin-bottom:14px" data-i18n="web_dev_direct_hint">Controlled by the remote itself over your network, without Home Assistant.</div>
+            <div class="direct-tabs" role="tablist">
+                <button type="button" role="tab" class="direct-tab" data-tab="tv" onclick="showDirectTab('tv')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8"></path></svg><span data-i18n="web_dev_direct_tab_tv">TV &amp; box</span><span class="direct-count" id="directCountTv">0</span></button>
+                <button type="button" role="tab" class="direct-tab" data-tab="players" onclick="showDirectTab('players')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M10 10l4 2-4 2z"></path></svg><span data-i18n="web_dev_direct_tab_players">Players</span><span class="direct-count" id="directCountPlayers">0</span></button>
+                <button type="button" role="tab" class="direct-tab" data-tab="audio" onclick="showDirectTab('audio')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="14" r="3"></circle><circle cx="12" cy="7" r="1"></circle></svg><span data-i18n="web_dev_direct_tab_audio">Audio</span><span class="direct-count">0</span></button>
+                <button type="button" role="tab" class="direct-tab" data-tab="light" onclick="showDirectTab('light')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"></path></svg><span data-i18n="web_dev_direct_tab_light">Lighting</span><span class="direct-count">0</span></button>
+            </div>
+            <div class="direct-pane" data-pane="tv">
+<div id="viewAppleTv" class="direct-block">
+            <h3 class="direct-block-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="8" width="16" height="9" rx="2"></rect><path d="M9 20h6"></path></svg><span data-i18n="web_dev_apple_tv">Apple TV</span></h3>
+            <details class="direct-about"><summary data-i18n="web_dev_direct_about">How it works</summary>
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_atv_hint">
                 Control an Apple TV directly over your network — no Home Assistant and no Harmony hub needed.
                 Each paired Apple TV shows up as a <code>media_player</code> entity (for example <code>media_player.appletv_salon</code>)
                 that any media player / source card, button or hotkey can use, and the Apple TV remote card can target it too.
                 Your phone or this remote must be on the same network as the Apple TV.
             </div>
-
+            </details>
             <div id="appleTvsList" style="margin-bottom:14px"></div>
             <div class="btn-row">
                 <button type="button" onclick="openDeviceForm('appleTv')" data-i18n="web_dev_add_apple_tv">+ Add Apple TV</button>
@@ -399,23 +402,23 @@
             </div>
         </div>
 
-        <!-- ---- Android TV (1.3.6, androidtv/*.kt + AndroidTvRoutes.kt) ------ -->
-        <div id="viewAndroidTv" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_android_tv">Android TV</h2>
-            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_adtv_hint">
+<div id="viewAndroidTv" class="direct-block">
+            <h3 class="direct-block-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8"></path></svg><span data-i18n="web_dev_android_tv">Android TV</span></h3>
+            <details class="direct-about"><summary data-i18n="web_dev_direct_about">How it works</summary>
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_adtv_hint">
                 Control an Android TV / Google TV (NVIDIA SHIELD, Chromecast with Google TV, Sony, Philips…) directly over your network,
                 like the Google TV app does — no Home Assistant and no ADB needed.
                 Each paired TV shows up as a <code>media_player</code> entity (for example <code>media_player.androidtv_shield</code>)
                 plus a <code>remote</code> entity, usable by the TV remote card, media player / source cards, buttons, hotkeys and Activities.
             </div>
 
-            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_adtv_helper_hint">
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_adtv_helper_hint">
                 <b>Title, cover and any app:</b> install the optional <b>Astrion TV Helper</b> on the TV (not on the Play Store):
                 download <a href="https://github.com/dckiller51/astrion-custom-dashboard/releases/tag/tv-helper" target="_blank" rel="noopener"><code>astrion-tv-helper.apk</code></a>,
                 then follow the <a href="https://github.com/dckiller51/astrion-custom-dashboard/wiki/Android-TV#astrion-tv-helper-title-cover-any-app" target="_blank" rel="noopener">wiki steps</a> (ADB install + two permission lines).
                 Open it on the TV, then click <b>+ Helper</b> next to the TV and type its code.
             </div>
+            </details>
             <div id="androidTvsList" style="margin-bottom:14px"></div>
             <div class="btn-row">
                 <button type="button" onclick="openDeviceForm('androidTv')" data-i18n="web_dev_add_android_tv">+ Add Android TV</button>
@@ -452,28 +455,30 @@
             </div>
         </div>
 
-        <!-- ---- Zidoo (1.4.6, zidoo/*.kt + ZidooRoutes.kt) ----------------------- -->
-        <div id="viewZidoo" class="category-view">
-            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_zidoo">Zidoo</h2>
-            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_zidoo_hint">
-                Control a Zidoo media player (Z9X, Z10, Z20, UHD3000, UHD8000…) directly over your network, like Zidoo's own phone app
+            </div>
+            <div class="direct-pane" data-pane="players">
+<div id="viewZidoo" class="direct-block">
+            <h3 class="direct-block-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M10 10l4 2-4 2z"></path></svg><span data-i18n="web_dev_zidoo_eversolo">Zidoo / Eversolo</span></h3>
+            <details class="direct-about"><summary data-i18n="web_dev_direct_about">How it works</summary>
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_zidoo_hint">
+                Control a Zidoo media player (Z9X, Z10, Z20, UHD3000, UHD8000…) or an Eversolo audio streamer (DMP-A6, DMP-A8…) directly over your network, like Zidoo's own phone app
                 does — no Home Assistant, no pairing. Each player shows up as a <code>media_player</code> entity (for example
                 <code>media_player.zidoo_z9x</code>) with what it plays, plus a <code>remote</code> entity, usable by the TV remote card,
                 media player / source cards, buttons, hotkeys and Activities.
             </div>
-            <div class="hint" style="margin-bottom:14px" data-i18n-html="web_dev_zidoo_power_hint">
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_zidoo_power_hint">
                 <b>Turning it on:</b> a Zidoo that is fully off is woken with Wake-on-LAN, which needs a wired network connection
                 and "Wake on LAN" allowed in the player's settings. Older models (such as the Z9S) can't be woken over the network:
                 use an IR code for power instead.
             </div>
+            </details>
             <div id="zidoosList" style="margin-bottom:14px"></div>
             <div class="btn-row">
-                <button type="button" onclick="openDeviceForm('zidoo')" data-i18n="web_dev_add_zidoo">+ Add Zidoo</button>
+                <button type="button" onclick="openDeviceForm('zidoo')" data-i18n="web_dev_add_zidoo">+ Add Zidoo / Eversolo</button>
             </div>
 
             <div id="zidooForm" class="section-box" style="display:none;margin-top:14px">
-                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_add_a_zidoo">Add a Zidoo</h3>
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_add_a_zidoo">Add a Zidoo or an Eversolo</h3>
                 <div class="hint" style="margin-bottom:10px" data-i18n="web_dev_zidoo_form_hint">
                     Turn the player on, then enter its IP address (Zidoo settings › Network, or your router's list).
                 </div>
@@ -485,6 +490,15 @@
                     <button id="zidooAddBtn" type="button" onclick="addZidoo()" data-i18n="web_dev_zidoo_add_btn">Add</button>
                     <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
                 </div>
+            </div>
+        </div>
+
+            </div>
+            <div class="direct-pane" data-pane="audio">
+                <div class="direct-soon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="14" r="3"></circle><circle cx="12" cy="7" r="1"></circle></svg><span data-i18n="web_dev_direct_soon_audio">Coming later: network amplifiers (Denon / Marantz).</span></div>
+            </div>
+            <div class="direct-pane" data-pane="light">
+                <div class="direct-soon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"></path></svg><span data-i18n="web_dev_direct_soon_light">Coming later: the Philips Hue bridge.</span></div>
             </div>
         </div>
 
@@ -544,7 +558,7 @@
         <!-- ---- Built-in weather (1.3.2, js/weather.js) ---------------------- -->
         <div id="viewWeather" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
-            <h2 style="margin-top:0" data-i18n="web_dev_weather">Weather</h2>
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><span data-i18n="web_dev_weather">Weather</span></h2>
             <div class="section-box" id="weatherBox"></div>
         </div>
 

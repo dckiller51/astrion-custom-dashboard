@@ -37,8 +37,16 @@ data class ZidooMovie(
     val name: String? = null,
     val seriesName: String? = null,
     val season: Int? = null,
-    val episode: Int? = null
-)
+    val episode: Int? = null,
+    /** An episode's season and series on the poster wall (1.4.9): their artwork, the episode has none of its own. */
+    val seasonId: Long? = null,
+    val seriesId: Long? = null
+) {
+    val isEpisode: Boolean get() = episode != null || seasonId != null
+
+    /** The poster-wall ids whose artwork to try, best first: the series, the season, the episode itself. */
+    fun artIds(): List<Long> = if (isEpisode) listOfNotNull(seriesId, seasonId, id).filter { it > 0 }.distinct() else listOf(id)
+}
 
 /**
  * Reads the answers of the Zidoo control API (the player's built-in HTTP server on port 9529, the
@@ -116,10 +124,16 @@ object ZidooParse {
      * `ZidooMusicControl/v2/getState` (Eversolo, 1.4.8): what plays, built-in player or a streaming
      * app (Apple Music, Qobuz…), with the cover as a URL. `state` 0: nothing; 3: playing; else paused.
      * Null when it plays nothing or the player doesn't have this call (a Zidoo).
+     *
+     * An app the Eversolo only hosts (1.4.9: the official Apple Music) is in `everSoloPlayInfo`:
+     * there `playingMusic` keeps the last track of the Eversolo's own player and `state` is 4, so
+     * the card showed an old title, an old cover and a frozen bar. Its `everSoloPlayAudioInfo` is
+     * the track really playing; `state` still says playing (3) or paused (4).
      */
     fun musicV2(o: JsonObject?): ZidooPlayback? {
         val state = o?.int("state") ?: return null
         if (state == 0) return null
+        hostedApp(o, state == V2_PLAYING)?.let { return it }
         val m = o.obj("playingMusic") ?: return null
         val art = (m.str("albumArtBig") ?: m.str("albumArt"))?.takeIf { it.startsWith("http") }
         return ZidooPlayback(
@@ -133,6 +147,25 @@ object ZidooParse {
             positionMs = o.long("position"),
             musicId = m.long("id"),
             musicType = m.int("type"),
+            artUrl = art
+        )
+    }
+
+    /** What an app the Eversolo hosts plays (see [musicV2]); null when its own player plays. */
+    private fun hostedApp(o: JsonObject, playing: Boolean): ZidooPlayback? {
+        val info = o.obj("everSoloPlayInfo") ?: return null
+        if (info.bool("isOpenApp") != true) return null
+        val track = info.obj("everSoloPlayAudioInfo") ?: return null
+        val title = track.str("songName") ?: return null
+        val art = (track.str("albumUrl") ?: info.str("onlineIcon"))?.takeIf { it.startsWith("http") }
+        return ZidooPlayback(
+            source = ZidooSource.MUSIC,
+            playing = playing,
+            title = title,
+            artist = track.str("artistName"),
+            album = track.str("albumName"),
+            durationMs = info.long("duration") ?: o.long("duration"),
+            positionMs = info.long("currentPosition") ?: o.long("position"),
             artUrl = art
         )
     }
@@ -156,7 +189,8 @@ object ZidooParse {
         if (o == null) return null
         val movie = o.obj("movie")
         val episode = o.obj("episode")
-        val season = o.obj("season")?.obj("aggregation")
+        val seasonObj = o.obj("season")
+        val season = seasonObj?.obj("aggregation")
         val id = movie?.long("id") ?: episode?.long("id") ?: o.obj("video")?.long("parentId") ?: return null
         if (id <= 0) return null
         return ZidooMovie(
@@ -164,7 +198,9 @@ object ZidooParse {
             name = movie?.str("name") ?: episode?.obj("aggregation")?.str("name"),
             seriesName = season?.str("tvName"),
             season = season?.int("seasonNumber"),
-            episode = episode?.obj("aggregation")?.int("episodeNumber")
+            episode = episode?.obj("aggregation")?.int("episodeNumber"),
+            seasonId = seasonObj?.long("id") ?: episode?.long("parentId"),
+            seriesId = seasonObj?.long("parentId")
         )
     }
 

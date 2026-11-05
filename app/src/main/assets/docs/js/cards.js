@@ -172,6 +172,15 @@ function updateCardFormInputs() {
       <div id="mediaMusicSearchHint" class="hint" style="display:none">${I18N.t('web_card_media_music_search_hint')}</div>
       <label class="inline-check"><input type="checkbox" id="optMediaQueue" checked onchange="updateMusicSearchFields()"> ${I18N.t('web_card_media_queue')}</label>
       <div id="mediaQueueHint" class="hint">${I18N.t('web_card_media_queue_hint')}</div>
+      <label class="inline-check"><input type="checkbox" id="optMediaSources"> ${I18N.t('web_card_media_sources')}</label>
+      <div id="mediaAppsField" style="display:none">
+        <h4 style="margin:12px 0 0">${I18N.t('web_card_tv_apps')}</h4>
+        <div class="hint">${I18N.t('web_card_media_apps_hint')}</div>
+        ${tvAppsSectionHtml(false)}
+      </div>
+      <h4 style="margin:12px 0 0">${I18N.t('web_card_media_keypad_title')}</h4>
+      <div class="hint">${I18N.t('web_card_media_keypad_hint')}</div>
+      ${keypadFieldsHtml(I18N.t('web_card_keypad_none'))}
       <div id="mediaMusicSearchFields">
         <label>${I18N.t('web_card_media_search_player')}</label>
         <select id="optMediaSearchPlayer"></select>
@@ -205,6 +214,7 @@ function updateCardFormInputs() {
     document.getElementById('optMediaVariant').addEventListener('change', updateMediaTopButtonsVisibility);
     updateMediaTopButtonsVisibility();
     fillMusicSearchPlayers('');
+    fillMediaApps({});
   } else if (type === 'camera') {
     container.innerHTML = `
       <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_camera_name')}">
@@ -435,7 +445,9 @@ function updateCardFormInputs() {
       <div id="atvAppsList"></div>
       <datalist id="atvSourceHints"></datalist>
       <button type="button" class="secondary" onclick="addAtvApp()">${I18N.t('web_card_add_an_app')}</button>
-      <div class="hint">${I18N.t('web_card_app_is_the_name_as_the')}</div>`;
+      <div class="hint">${I18N.t('web_card_app_is_the_name_as_the')}</div>
+      <label class="inline-check"><input type="checkbox" id="atvShowApps" checked> ${I18N.t('web_card_show_app_shortcuts')}</label>
+      <div class="hint">${I18N.t('web_card_show_app_shortcuts_hint')}</div>`;
     window._pendingAtvApps = [];
     renderAtvAppsList();
     renderAppleTvHarmonyFields();
@@ -605,6 +617,8 @@ function updateMediaTopButtonsVisibility() {
   if (!variantEl || !field) return;
   field.style.display = variantEl.value === 'full' ? '' : 'none';
   if (artworkField) artworkField.style.display = variantEl.value === 'full' ? '' : 'none';
+  const appsField = document.getElementById('mediaAppsField');
+  if (appsField) appsField.style.display = variantEl.value === 'full' ? '' : 'none';
 }
 
 // fan card: percentage step only applies to simple/full layouts — the
@@ -720,7 +734,9 @@ const ATV_EXTRA_BUTTONS = [
   { id: 'Guide', label: 'Guide', labelKey: 'web_atv_btn_guide' },
   { id: 'VolumeUp', label: 'Volume +', labelKey: 'web_atv_btn_volume_up' },
   { id: 'VolumeDown', label: 'Volume −', labelKey: 'web_atv_btn_volume_down' },
-  { id: 'ControlCenter', label: 'Control Center', labelKey: 'web_atv_btn_control_center' }
+  { id: 'ControlCenter', label: 'Control Center', labelKey: 'web_atv_btn_control_center' },
+  // 1.4.9: not sent to the Apple TV, it opens the pop-up of its apps.
+  { id: 'AppPicker', label: 'Apps (pop-up)', labelKey: 'web_atv_btn_app_picker' }
 ];
 const ATV_DEFAULT_BUTTONS = ['Menu', 'Home'];
 // Per-layout defaults (AppleTvRemoteCard.kt: DEFAULT_IDS for classic and full, COMPACT_DEFAULT_IDS).
@@ -920,6 +936,7 @@ async function fillAppleTvHarmonyFields(o) {
   document.getElementById('atvShowProgress').checked = o.showProgress !== false;
   document.getElementById('atvShowSkip').checked = o.showSkip !== false;
   document.getElementById('atvShowClickpad').checked = o.showClickpad !== false;
+  document.getElementById('atvShowApps').checked = o.showApps !== false;
   document.getElementById('atvEntity').innerHTML = atvEntityOptionsHtml(o.entity || '');
   window._pendingAtvApps = JSON.parse(JSON.stringify(o.apps || [])).map(a => ({
     source: a.source || '', label: a.label || '', icon: a.icon || '', color: a.color || ''
@@ -1419,7 +1436,9 @@ function openCardDialog(idx) {
   if (isNew) {
     select.value = select.options[0].value;
     updateCardFormInputs();
+    showCardGallery(); // 1.4.9: the card types as a gallery first
   } else {
+    hideCardGallery(false);
     const card = dashboardData.pages[currentActivePage].cards[idx];
     const known = Array.from(select.options).map(o => o.value).filter(v => v !== 'custom');
     select.value = known.includes(card.type) ? card.type : 'custom';
@@ -1541,6 +1560,9 @@ function fillCardForm(card) {
     updateMediaTopButtonsVisibility();
     document.getElementById('optMediaMusicSearch').checked = o.music_search === true;
     document.getElementById('optMediaQueue').checked = o.show_queue !== false;
+    document.getElementById('optMediaSources').checked = o.show_sources === true;
+    fillMediaApps(o);
+    fillKeypadFields(o);
     fillMusicSearchPlayers(o.search_player || '');
     updateMusicSearchFields();
   } else if (type === 'camera') {
@@ -1784,6 +1806,9 @@ function addCardToPage() {
     const showQueue = document.getElementById('optMediaQueue').checked;
     if (musicSearch) newCard.options.music_search = true;
     if (!showQueue) newCard.options.show_queue = false;
+    if (document.getElementById('optMediaSources').checked) newCard.options.show_sources = true;
+    if (mediaVariant === 'full') collectMediaApps(newCard.options);
+    collectKeypadFields(newCard.options);
     if (musicSearch || showQueue) {
       const searchPlayer = document.getElementById('optMediaSearchPlayer').value;
       if (searchPlayer) newCard.options.search_player = searchPlayer;
@@ -1875,6 +1900,7 @@ function addCardToPage() {
     if (atvEntity) newCard.options.entity = atvEntity;
     const atvApps = collectAtvApps();
     if (atvApps.length) newCard.options.apps = atvApps;
+    if (!document.getElementById('atvShowApps').checked) newCard.options.showApps = false;
     window._pendingAtvApps = [];
   } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row' || type === 'xbox') {
     const collect = { tv_remote: collectTvRemoteOptions, xbox: collectXboxOptions, speaker_group: collectSpeakerGroupOptions,

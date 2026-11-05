@@ -317,4 +317,8 @@
     <string name="xbox_attr_game_url">Juego en TrueAchievements</string>
     <string name="xbox_attr_walkthrough_url">Guía de logros</string>
     <string name="xbox_attr_location">Ubicación</string>
+    <string name="picker_sources">Fuentes y apps</string>
+    <string name="picker_sources_button">Fuentes</string>
+    <string name="picker_no_sources">Este reproductor no da ninguna lista de fuentes o apps.</string>
+    <string name="picker_keypad">Teclado numérico</string>
 </resources>

@@ -114,6 +114,46 @@ class ZidooEntityTest {
                 )
             )
         assertEquals(ZidooMovie(44, "Pilot", "Show", 1, 3), movie)
+        assertEquals(listOf(44L), movie!!.artIds())
+        val episode =
+            ZidooParse.movie(
+                ZidooParse.parse(
+                    """{"episode":{"id":412,"parentId":348,"aggregation":{"episodeNumber":7,"name":"Le traître"}},""" +
+                        """"season":{"id":348,"parentId":189,"aggregation":{"seasonNumber":4,"tvName":"Kaamelott"}}}"""
+                )
+            )
+        assertEquals(listOf(189L, 348L, 412L), episode!!.artIds())
+        val film = ZidooParse.movie(ZidooParse.parse("""{"movie":{"id":13057,"name":"Alien"}}"""))
+        assertEquals(listOf(13057L), film!!.artIds())
+    }
+
+    @Test
+    fun `the official Apple Music on an Eversolo is read from everSoloPlayInfo`() {
+        fun read(state: Int) = ZidooParse.musicV2(
+            ZidooParse.parse(
+                """{"state":$state,"position":97902,"duration":228933,"playingMusic":{"id":-32434293,"type":3,""" +
+                    """"title":"2 Minutes To Midnight","artist":"Iron Maiden","albumArt":"https://a/old.jpg"},""" +
+                    """"everSoloPlayInfo":{"currentPosition":97902,"duration":228933,"isOpenApp":true,"playStatus":2,""" +
+                    """"everSoloPlayAudioInfo":{"albumName":"Blue Moves","albumUrl":"https://a/new.jpg",""" +
+                    """"artistName":"Elton John","songName":"Sorry Seems to Be the Hardest Word"}}}"""
+            )
+        )!!
+        assertEquals(false, read(4).playing) // paused: state 4 (its playStatus says 2)
+        val p = read(3) // playing: state 3 (its playStatus says 1)
+        assertEquals("Sorry Seems to Be the Hardest Word", p.title)
+        assertEquals("Elton John", p.artist)
+        assertEquals("Blue Moves", p.album)
+        assertEquals("https://a/new.jpg", p.artUrl)
+        assertEquals(true, p.playing)
+        assertEquals(97902L, p.positionMs)
+        assertEquals(228933L, p.durationMs)
+    }
+
+    @Test
+    fun `an Eversolo is named by its model`() {
+        assertEquals("Eversolo", ZidooKeys.brandOf("DMP-A6"))
+        assertEquals("Zidoo", ZidooKeys.brandOf("Z9X"))
+        assertEquals("Zidoo", ZidooKeys.brandOf(null))
     }
 
     @Test

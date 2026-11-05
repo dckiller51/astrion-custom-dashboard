@@ -22,11 +22,31 @@ function renderZidoos() {
   if (!list) return;
   list.innerHTML = zidoos.length
     ? zidoos.map(z => {
-        const status = zidooStatus(z);
-        return `<div class="list-item"><span>${atvEsc(z.name)} <span style="color:#888">(<code>${atvEsc(z.entityId)}</code> · ${atvEsc(z.host)}${status ? ' · ' + status : ''})</span></span>` +
-          `<span><span class="remove" style="color:#00E5FF" onclick="renameZidoo('${atvEsc(z.localId)}')">✎</span> <span class="remove" onclick="removeZidoo('${atvEsc(z.localId)}')">✕</span></span></div>`;
+        const kind = zidooKind(z);
+        const model = zidooModel(z);
+        return deviceCardHtml({
+          kind: kind === 'audio' ? 'audio' : 'player',
+          name: atvEsc(z.name),
+          details: `${model ? atvEsc(model) + ' · ' : ''}${atvEsc(z.host)} · <code>${atvEsc(z.entityId)}</code>`,
+          badge: I18N.t(kind === 'audio' ? 'web_dev_kind_audio_streamer' : 'web_dev_kind_video_player'),
+          state: zidooStatus(z), tone: deviceStateTone(z.entityId),
+          actions: `<span class="remove" style="color:#00E5FF" onclick="renameZidoo('${atvEsc(z.localId)}')">✎</span> <span class="remove" onclick="removeZidoo('${atvEsc(z.localId)}')">✕</span>`
+        });
       }).join('')
     : `<div class="hint">${I18N.t('web_dev_list_no_zidoo')}</div>`;
+}
+
+/** The model the player announces (Z9X, DMP-A6…), from the entity the remote publishes. */
+function zidooModel(z) {
+  const e = haStates && haStates[z.entityId];
+  return (e && e.attributes && e.attributes.model) || '';
+}
+
+/** 'audio' for an Eversolo streamer (DMP-…), else 'video' (a Zidoo player) (1.4.9). */
+function zidooKind(z) {
+  const e = haStates && haStates[z.entityId];
+  const a = (e && e.attributes) || {};
+  return /eversolo/i.test(a.manufacturer || '') || /^DMP/i.test(a.model || '') ? 'audio' : 'video';
 }
 
 /** "● on" / "▶ playing" / "❚❚ paused" / "○ off", from the entity the remote publishes. */

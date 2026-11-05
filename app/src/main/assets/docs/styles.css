@@ -107,6 +107,45 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
      and left-aligned like the rest of the form fields, mirroring the way
      Home Assistant edits a card in a dedicated dialog rather than inline. */
   .ha-dialog { width: min(520px, 90vw); max-height: 85vh; overflow-y: auto; text-align: left; }
+  .ha-dialog.gallery-mode { width: min(880px, 94vw); }
+
+  /* Card gallery (1.4.9): the card types as tiles, by use, with a search and a "For a device" tab. */
+  .gallery-head { display: flex; gap: 10px; margin-bottom: 12px; }
+  .gallery-search { flex: 1; display: flex; align-items: center; gap: 8px; background: #252525; border: 1px solid #444; border-radius: 10px; padding: 0 12px; min-height: 42px; color: #888; margin: 0; }
+  .gallery-search input { flex: 1; background: transparent; border: none; color: #e0e0e0; font-size: 0.95rem; outline: none; margin: 0; padding: 0; min-width: 0; }
+  .gallery-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .gallery-tab { min-height: 38px; padding: 0 14px; margin: 0; border-radius: 19px; border: 1px solid #444; background: #252525; color: #ddd; font-size: 0.88rem; cursor: pointer; }
+  .gallery-tab:hover { border-color: #777; }
+  .gallery-tab.active { border-color: #00E5FF; background: #00363d; color: #00E5FF; font-weight: 600; }
+  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .gallery-tile, .gallery-device {
+    display: flex; gap: 12px; align-items: flex-start; text-align: left; margin: 0; padding: 14px; min-height: 64px;
+    background: #222; border: 1px solid #383838; border-radius: 12px; color: #e0e0e0; cursor: pointer; font-family: inherit;
+  }
+  .gallery-tile:hover, .gallery-device:hover { border-color: #00E5FF; }
+  .gallery-tile.recommended, .gallery-device.active { border-color: #00E5FF; background: #0f2d33; }
+  .gallery-tile-icon { flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px; background: rgba(0,229,255,0.1); color: #00E5FF; display: flex; align-items: center; justify-content: center; }
+  .gallery-tile-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .gallery-tile-text b { font-size: 0.95rem; color: #f0f0f0; }
+  .gallery-tile-text span { font-size: 0.8rem; color: #a0a0a0; line-height: 1.35; overflow-wrap: anywhere; }
+  .gallery-tile-text .gallery-badge { color: #00E5FF; font-weight: 600; }
+  .gallery-devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .gallery-device { align-items: center; padding: 10px 12px; min-height: 56px; }
+  .gallery-device .gallery-tile-icon { width: 36px; height: 36px; }
+  .gallery-suggestions { margin-top: 16px; background: #141414; border: 1px solid #333; border-radius: 12px; padding: 14px; }
+  /* Card forms in folding sections (1.4.9). */
+  .form-section { border: 1px solid #383838; border-radius: 10px; background: #222; margin: 0 0 10px; }
+  .form-section > summary {
+    display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 14px; cursor: pointer;
+    list-style: none; font-weight: 600; color: #f0f0f0; user-select: none;
+  }
+  .form-section > summary::-webkit-details-marker { display: none; }
+  .form-section > summary::before { content: '▸'; color: #888; font-size: 0.85rem; width: 12px; transition: transform 150ms; }
+  .form-section[open] > summary::before { transform: rotate(90deg); color: #00E5FF; }
+  .form-section-name { flex: 1; }
+  .form-section-badge { font-size: 0.75rem; font-weight: 600; color: #00E5FF; background: rgba(0,229,255,0.12); border-radius: 10px; padding: 2px 9px; }
+  .form-section-body { padding: 2px 14px 14px; border-top: 1px solid #333; }
+  .gallery-suggestions-title { font-size: 0.9rem; color: #a0a0a0; margin-bottom: 10px; }
   .inline-check { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #ccc; }
   .inline-check input { width: auto; }
   /* Drag-and-drop card reordering in the preview, same interaction as
@@ -186,6 +225,48 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .tile.tile-androidtv .tile-icon { background: rgba(61,220,132,0.12); color: #3DDC84; }
   .tile.tile-zidoo { border-color: #4a3a1a; } .tile.tile-zidoo:hover, .tile.tile-zidoo:focus-visible { border-color: #F5A623; }
   .tile.tile-zidoo .tile-icon { background: rgba(245,166,35,0.12); color: #F5A623; }
+
+  .tile.tile-direct { border-color: #1f3d44; } .tile.tile-direct:hover, .tile.tile-direct:focus-visible { border-color: #00E5FF; }
+  .tile.tile-direct .tile-icon { background: rgba(0,229,255,0.12); color: #00E5FF; }
+
+  /* Direct devices (1.4.9): a tab per kind of device. */
+  .view-title { display: flex; align-items: center; gap: 10px; margin-top: 0; }
+  .view-title svg { color: #00E5FF; flex-shrink: 0; }
+  .direct-tabs { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 18px; }
+  .direct-tab {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; margin: 0;
+    border-radius: 10px; border: 1px solid #444; background: #1a1a1a; color: #ddd; font-size: 0.92rem; cursor: pointer;
+  }
+  .direct-tab:hover { border-color: #777; }
+  .direct-tab.active { border-color: #00E5FF; background: #00363d; color: #00E5FF; font-weight: 600; }
+  .direct-count { font-size: 0.78rem; color: #999; background: #2a2a2a; border-radius: 9px; padding: 1px 7px; }
+  .direct-tab.active .direct-count { color: #00E5FF; background: rgba(0,229,255,0.12); }
+  .direct-block + .direct-block { margin-top: 28px; padding-top: 22px; border-top: 1px solid #2c2c2c; }
+  .direct-block-title { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 1.1rem; color: #f0f0f0; }
+  .direct-block-title svg { color: #00E5FF; }
+  .direct-soon { display: flex; align-items: center; gap: 12px; color: #999; background: #1a1a1a; border: 1px dashed #444; border-radius: 12px; padding: 18px; }
+  #appleTvsList, #androidTvsList, #zidoosList, #haDevicesList, #harmonyHubsList, #extendersList, #irDevicesList { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .device-card { display: flex; gap: 14px; align-items: center; background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 14px 16px; min-width: 0; }
+  .device-card-icon { flex-shrink: 0; width: 52px; height: 52px; border-radius: 12px; background: #252525; display: flex; align-items: center; justify-content: center; }
+  .device-card-icon .device-kind-icon { margin: 0; vertical-align: 0; }
+  .device-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .device-card-text b { font-size: 1rem; color: #f0f0f0; }
+  .device-card-details { font-size: 0.8rem; color: #999; overflow-wrap: anywhere; }
+  .device-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .device-card-tags .device-badge { margin-left: 0; }
+  .device-card-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; white-space: nowrap; font-size: 0.85rem; }
+  .device-state { font-size: 0.75rem; border-radius: 9px; padding: 1px 8px; background: #2a2a2a; color: #bbb; white-space: nowrap; }
+  .device-state.tone-ok { background: #16351c; color: #8fe09a; }
+  .device-state.tone-warn { background: #3a3220; color: #f1cf7a; }
+  .device-state.tone-bad { background: #3d1f1f; color: #ff9a9a; }
+  .device-state.tone-off { background: #2a2a2a; color: #aaa; }
+  .direct-about { margin: 0 0 14px; }
+  .direct-about > summary { cursor: pointer; color: #9fdfe6; font-size: 0.85rem; list-style: none; }
+  .direct-about > summary::-webkit-details-marker { display: none; }
+  .direct-about > summary::before { content: 'ⓘ '; }
+  .direct-about[open] > summary { margin-bottom: 8px; }
+  .device-kind-icon { display: inline-flex; vertical-align: -4px; margin-right: 8px; color: #00E5FF; }
+  .device-badge { font-size: 0.75rem; color: #ccc; background: #2d2d2d; border-radius: 9px; padding: 1px 8px; margin-left: 4px; white-space: nowrap; }
 
   .utility-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 28px; }
   .utility-row a, .utility-row button.link-btn {
@@ -704,6 +785,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 @keyframes deeplinkFlash { 0%, 40% { background: rgba(0, 229, 255, .22); box-shadow: 0 0 0 6px rgba(0, 229, 255, .22); } 100% { background: transparent; box-shadow: none; } }
 
 /* Built-in weather (js/weather.js) */
+.tile.tile-extender { border-color: #2e2a45; } .tile.tile-extender:hover, .tile.tile-extender:focus-visible { border-color: #B39DFF; }
+.tile.tile-extender .tile-icon { background: rgba(179,157,255,0.14); color: #B39DFF; }
 .tile.tile-weather { border-color: #2a3550; } .tile.tile-weather:hover, .tile.tile-weather:focus-visible { border-color: #8AB4FF; }
 .tile.tile-weather .tile-icon { background: rgba(138,180,255,0.14); color: #8AB4FF; }
 .weather-place { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }

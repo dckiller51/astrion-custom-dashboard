@@ -188,7 +188,8 @@ object DashboardLoader {
                 dock,
                 power,
                 weather,
-                keepOn
+                keepOn,
+                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true
             )
         }
         else -> error("top level must be an object or array")
