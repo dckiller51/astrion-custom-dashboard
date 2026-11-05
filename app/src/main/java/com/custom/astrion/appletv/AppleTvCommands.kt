@@ -64,6 +64,43 @@ internal object AppleTvCommands {
 
     const val SEEK_STEP_SECONDS = 10.0
 
+    /**
+     * Android TV key names (what the TV remote card and its hotkeys send, 1.4.9) → this table's
+     * names, so `remote.send_command` on an Apple TV's `remote.appletv_…` takes either. POWER and
+     * MUTE aren't buttons here: the registry turns POWER into a toggle, MUTE has no equivalent.
+     */
+    private val ANDROID_NAMES =
+        mapOf(
+            "DPAD_UP" to "Up",
+            "DPAD_DOWN" to "Down",
+            "DPAD_LEFT" to "Left",
+            "DPAD_RIGHT" to "Right",
+            "DPAD_CENTER" to "Select",
+            "ENTER" to "Select",
+            "BACK" to "Menu",
+            "ESCAPE" to "Menu",
+            "MENU" to "Menu",
+            "HOME" to "Home",
+            "MEDIA_PLAY_PAUSE" to "PlayPause",
+            "MEDIA_PLAY" to "Play",
+            "MEDIA_PAUSE" to "Pause",
+            "MEDIA_STOP" to "Stop",
+            "MEDIA_NEXT" to "Next",
+            "MEDIA_PREVIOUS" to "Previous",
+            "MEDIA_REWIND" to "SeekBackward",
+            "MEDIA_FAST_FORWARD" to "SeekForward",
+            "VOLUME_UP" to "VolumeUp",
+            "VOLUME_DOWN" to "VolumeDown",
+            "CHANNEL_UP" to "ChannelUp",
+            "CHANNEL_DOWN" to "ChannelDown",
+            "GUIDE" to "Guide",
+            "SEARCH" to "Siri",
+            "ASSIST" to "Siri"
+        )
+
+    /** [name] as this table spells it: an Android TV key name is translated, anything else kept. */
+    fun fromAndroidName(name: String): String = ANDROID_NAMES[name.trim().uppercase().removePrefix("KEYCODE_")] ?: name.trim()
+
     private fun normalize(rawName: String): String =
         rawName.lowercase().replace("_", "").replace("-", "").replace(" ", "").removePrefix("direction")
 

@@ -317,4 +317,8 @@
     <string name="xbox_attr_game_url">Game on TrueAchievements</string>
     <string name="xbox_attr_walkthrough_url">Achievement guide</string>
     <string name="xbox_attr_location">Location</string>
+    <string name="picker_sources">Sources &amp; apps</string>
+    <string name="picker_sources_button">Sources</string>
+    <string name="picker_no_sources">This player gives no list of sources or apps.</string>
+    <string name="picker_keypad">Number keys</string>
 </resources>

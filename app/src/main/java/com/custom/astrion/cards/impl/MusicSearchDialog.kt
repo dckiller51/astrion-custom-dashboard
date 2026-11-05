@@ -25,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -143,8 +145,15 @@ private class ResultActions(val pick: (MediaSearch.Item, Boolean) -> Unit, val o
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun MediaLibraryButtons(theme: ThemeColors, onBrowse: (() -> Unit)?, onSearch: (() -> Unit)?, onQueue: (() -> Unit)? = null) {
-    if (onBrowse == null && onSearch == null && onQueue == null) return
+internal fun MediaLibraryButtons(
+    theme: ThemeColors,
+    onBrowse: (() -> Unit)?,
+    onSearch: (() -> Unit)?,
+    onQueue: (() -> Unit)? = null,
+    onSources: (() -> Unit)? = null,
+    onKeypad: (() -> Unit)? = null
+) {
+    if (listOfNotNull(onBrowse, onSearch, onQueue, onSources, onKeypad).isEmpty()) return
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -152,6 +161,8 @@ internal fun MediaLibraryButtons(theme: ThemeColors, onBrowse: (() -> Unit)?, on
         onBrowse?.let { LibraryPill(theme, Icons.AutoMirrored.Filled.List, stringResource(R.string.media_browse), it) }
         onSearch?.let { LibraryPill(theme, Icons.Filled.Search, stringResource(R.string.music_search_button), it) }
         onQueue?.let { LibraryPill(theme, QueueIcon, stringResource(R.string.music_queue), it) }
+        onSources?.let { LibraryPill(theme, Icons.Filled.Apps, stringResource(R.string.picker_sources_button), it) }
+        onKeypad?.let { LibraryPill(theme, Icons.Filled.Dialpad, "123", it) }
     }
 }
 

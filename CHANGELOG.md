@@ -3,6 +3,48 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.4.9-beta] - 2026-11-04
+
+### Added
+
+- **Sources / apps in a pop-up**: a button opens every source or app of the player in a grid (its icon when the card gives one, else its initials; the current one outlined), and a tap selects it. Works with any player that gives its list: Zidoo, Eversolo, Apple TV, Android TV, and a TV's or amplifier's inputs through Home Assistant.
+  - **TV remote card**: a button in the header, shown when the media player has a list (option *Sources / apps button*, on by default).
+  - **Apple TV remote card**: an **Apps (pop-up)** button to add among the card's buttons.
+  - **Media player card** (full view): a **Sources** button, option *Sources button*.
+  - **Icons**: an app without an icon in the card gets the icon uploaded on the web page (Icons) with the same name — `Netflix.png`, `disney.png` for *Disney+*, `apple-tv.png` for *Apple TV* (case, spaces, accents and signs don't matter).
+  - **Order**: the card's own apps come first, in the card's order (reorder them in the builder with ↑ ↓), then the player's other sources in its own order.
+  - **Shortcuts optional**: *Show the app shortcuts on the card* (TV remote `show_apps`, Apple TV `showApps`) unticked, the card's apps show no shortcut and only set the pop-up's order and icons.
+- **0–9 keypad in a pop-up**: for channels, or a Zidoo's skip speed; the pop-up stays open to type a number.
+  - **Where the digits go**: the card's remote entity, another remote entity (with a `device` for Home Assistant's Harmony remote), an **IR device** (the remote's blaster or an extender) or a **Harmony device**.
+  - **What each key sends**: a digit sends itself, unless renamed (e.g. `Num1`, `Digit1` on an IR device: the builder suggests the device's commands); OK sends what you set (the TV remote card's own OK command by default), or doesn't show.
+  - **TV remote card**: option *0–9 keypad button*. **Media player card** (full view): a **123** button once a keypad target is set.
+
+- **Apple TV paired directly: a `remote.appletv_<name>` entity**, like the Android TVs and Zidoos: `remote.send_command` takes the Apple TV's names (`Menu`, `Select`…) and the Android TV ones the TV remote card and hotkeys send (`DPAD_UP` → Up, `BACK` → Menu, `MEDIA_PLAY_PAUSE`…), POWER and `turn_on` / `turn_off` toggle it. So the TV remote card, keypad targets and *Call a service* hotkeys work with it too (held keys repeat fast). The Apple TV card and `astrion_appletv.send_command` are unchanged.
+
+- **Media player card: app shortcuts** (full view), like the TV remote card's: text buttons two a row or labelled icons, set in the builder (with *This device's apps* for a Zidoo / Eversolo). They also order the Sources pop-up and give it their icons.
+
+- **TV remote card: a tap on what plays opens the media player view** (large cover, progress bar, controls) in a pop-up, which closes by itself when playback ends. Option *now_playing_tap: none* to turn it off.
+- **No swiping between pages** (option under the builder's page list, `swipePages: false`): pages then change only with buttons, tiles, hotkeys and the page dots.
+- **Builder: copy a card to other pages** (⧉ on the card), at the top or bottom of each: e.g. a row of page buttons on every page.
+- **Pages that open by themselves: several states** for opening or closing, separated by commas (`on, off, idle`).
+
+### Changed
+
+- **Devices page: one *Direct devices* view, a tab per kind of device**: **TV & box** (Apple TV, Android TV), **Players** (Zidoo, Eversolo), **Audio** and **Lighting** (to come). An icon per kind; a Zidoo or Eversolo shows its model and a *Video player* / *Audio streamer* badge.
+- **Builder: a card gallery** instead of the dropdown: the card types as tiles with a line on what each does, grouped by use, with a search. **For a device** starts from a device of the catalogue and offers the cards that suit it, already filled in (a Zidoo's media player in full view with its apps, its TV remote…).
+- **Builder: folding sections** for the big forms (media player, TV remote, Apple TV remote): Essentials, Display, Controls, Apps & sources, Search / queue, Advanced, each showing how many settings it changes.
+- **Hotkeys: the *Android TV key or app* action lists the Zidoos and Eversolos** added in the remote too (same key names; their own apps suggested), so a Zidoo key no longer needs the generic *remote command* action.
+- **Builder: pickers instead of typing** for the keypad: the remote entity is chosen from every `remote` the builder sees (Home Assistant's and the ones the remote answers itself), the Harmony device from the hub's devices, and every key suggests the chosen IR or Harmony device's commands. The TV remote card's remote entity field suggests them too.
+
+### Fixed
+
+- **Hotkeys written with Android names**: `MENU` (the remote's Menu button is `MAIN`), `FAST_FORWARD`, `MEDIA_PLAY_PAUSE`, `VOLUME_MUTE`, `PROG_RED`… now work. A hotkey on a button the remote doesn't have (`F4`, `NUM_0`, `PAUSE`…) was silently dropped: it is now said in the log, and the builder flags it with a ⚠.
+- **The remote's buttons work while a pop-up is open** (sources, keypad, the media player's details): a hotkey (volume, play, a player's arrows…) used to do nothing until the pop-up was closed. BACK still closes the pop-up.
+- **Zidoo series: the artwork shows for an episode**: an episode has no backdrop of its own on the poster wall, so the remote now takes the series' backdrop, else the season's, else their posters (the season's poster is the one a Zidoo has).
+- **Eversolo with the official Apple Music app**: the title, artist, cover and progress bar now follow what it plays (the Eversolo reports that app apart; the card kept the built-in player's last track and a frozen bar).
+
+Requested by a user.
+
 ## [1.4.8-beta] - 2026-11-04
 
 ### Changed

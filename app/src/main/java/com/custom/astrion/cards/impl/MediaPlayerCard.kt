@@ -165,7 +165,11 @@ class MediaPlayerCard : CardRenderer {
             artworkFit = if (config.string("artwork_fit") == "contain") ContentScale.Fit else ContentScale.Crop,
             artworkAspectRatio = if (config.string("artwork_ratio") == "portrait") 2f / 3f else 1.2f,
             musicSearch = if (config.bool("music_search")) config.string("search_player") ?: entityId else null,
-            queuePlayer = if (config.bool("show_queue", true)) config.string("search_player") ?: entityId else null
+            queuePlayer = if (config.bool("show_queue", true)) config.string("search_player") ?: entityId else null,
+            showSources = config.bool("show_sources", false),
+            keypad = KeypadTarget.from(config, defaultRemote = null, defaultOk = null),
+            apps = AppShortcuts.appsOf(config.options).orEmpty(),
+            appIcons = config.string("apps_style") == "icons"
         )
     }
 
@@ -199,6 +203,8 @@ class MediaPlayerCard : CardRenderer {
         var showBrowse by remember { mutableStateOf(false) }
         var showSearch by remember { mutableStateOf(false) }
         var showQueue by remember { mutableStateOf(false) }
+        var showSources by remember { mutableStateOf(false) }
+        var showKeypad by remember { mutableStateOf(false) }
         Box(
             modifier =
             Modifier
@@ -222,10 +228,18 @@ class MediaPlayerCard : CardRenderer {
                     playerConfig = playerConfig,
                     onBrowse = { showBrowse = true },
                     onSearch = playerConfig.musicSearch?.let { { showSearch = true } },
-                    onQueue = playerConfig.queuePlayer?.let { { showQueue = true } }
+                    onQueue = playerConfig.queuePlayer?.let { { showQueue = true } },
+                    // 1.4.9: every source / app in a pop-up, and a 0–9 keypad sent to `keypad_entity`.
+                    onSources =
+                    { showSources = true }.takeIf { playerConfig.showSources && QuickPickers.sourcesOf(ctx, entityId).isNotEmpty() },
+                    onKeypad = { showKeypad = true }.takeIf { playerConfig.keypad != null }
                 )
             )
         }
+        QuickDialogs(ctx, entityId, playerConfig, showSources, showKeypad, close = {
+            showSources = false
+            showKeypad = false
+        })
         if (showBrowse) {
             MediaBrowser(entityId = entityId, client = ctx.client, theme = ctx.theme) { showBrowse = false }
         }
@@ -266,6 +280,24 @@ class MediaPlayerCard : CardRenderer {
                 onClose = { showDetail = false }
             )
         }
+    }
+
+    /** The sources and keypad pop-ups of the full variant (1.4.9), when open. */
+    @Composable
+    private fun QuickDialogs(
+        ctx: CardContext,
+        entityId: String,
+        playerConfig: MediaPlayerConfig,
+        showSources: Boolean,
+        showKeypad: Boolean,
+        close: () -> Unit
+    ) {
+        if (showSources) {
+            val shortcuts = AppShortcuts(ctx, playerConfig.apps, entityId)
+            SourcePickerDialog(ctx, entityId, shortcuts.icons(), shortcuts.order(), onClose = close)
+        }
+        val keypad = playerConfig.keypad
+        if (showKeypad && keypad != null) KeypadDialog(ctx.theme, keypad.hasOk, onKey = { keypad.send(ctx, it) }, onClose = close)
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -503,7 +535,9 @@ class MediaPlayerCard : CardRenderer {
         val playerConfig: MediaPlayerConfig,
         val onBrowse: () -> Unit,
         val onSearch: (() -> Unit)? = null,
-        val onQueue: (() -> Unit)? = null
+        val onQueue: (() -> Unit)? = null,
+        val onSources: (() -> Unit)? = null,
+        val onKeypad: (() -> Unit)? = null
     )
 
     @Composable
@@ -529,7 +563,9 @@ class MediaPlayerCard : CardRenderer {
                 ctx.theme,
                 onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) data.onBrowse else null,
                 onSearch = data.onSearch,
-                onQueue = data.onQueue
+                onQueue = data.onQueue,
+                onSources = data.onSources,
+                onKeypad = data.onKeypad
             )
             if (e?.attrDouble("media_duration") != null) {
                 // A player that can seek (1.4.8): the bar can be tapped or dragged, like the TV remote card's.
@@ -545,6 +581,9 @@ class MediaPlayerCard : CardRenderer {
             }
             FullMediaButtonsRow(ctx.theme, mediaButtons, data.mp)
             FullVolumeRow(FullVolumeRowData(data.entityId, e, data.mp, volumeButtons, hasVolumeSlider, ctx.theme))
+            if (playerConfig.apps.isNotEmpty()) {
+                AppShortcuts(ctx, playerConfig.apps, data.entityId).Rows(playerConfig.appIcons, cardPadding = FULL_PADDING)
+            }
         }
     }
 
@@ -759,6 +798,9 @@ class MediaPlayerCard : CardRenderer {
         const val DEFAULT_MEDIA_CONTROLS = "previous,play_pause,next"
         const val DEFAULT_VOLUME_CONTROLS = "mute,buttons"
 
+        // The full variant's padding (dp), for the width of its app icons.
+        const val FULL_PADDING = 16
+
         /** All keys accepted by the `media_controls` option, in Mushroom's own display order. */
         val MEDIA_CONTROL_KEYS = listOf("on_off", "shuffle", "previous", "play_pause", "next", "repeat")
 
@@ -788,7 +830,15 @@ private data class MediaPlayerConfig(
     /** `music_search` (1.3.9): the player that searches and plays the results; null without the option. */
     val musicSearch: String? = null,
     /** The Queue button's player (1.4.0): `search_player` or the card's own; null when hidden or the player has no queue. */
-    val queuePlayer: String? = null
+    val queuePlayer: String? = null,
+    /** `show_sources` (1.4.9): a Sources button opening every source / app of the player in a pop-up. */
+    val showSources: Boolean = false,
+    /** The 0–9 keypad's target (1.4.9, `keypad_*` options, see [KeypadTarget]); null: no keypad. */
+    val keypad: KeypadTarget? = null,
+    /** App shortcuts under the controls (1.4.9, `apps` as in the TV remote card), full variant. */
+    val apps: List<Map<String, Any?>> = emptyList(),
+    /** `apps_style: "icons"`: labelled icons, else text buttons two a row. */
+    val appIcons: Boolean = false
 )
 
 private data class MediaText(val title: String, val subtitle: String?, val finalState: String)

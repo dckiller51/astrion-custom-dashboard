@@ -84,7 +84,7 @@
                 <option value="service" data-i18n="web_ui_action_service">Home Assistant service call</option>
                 <option value="remoteCommand" data-i18n="web_ui_action_remote_command">Home Assistant remote command</option>
                 <option value="appleTvCommand" data-i18n="web_ui_apple_tv_command_direct_no_home">Apple TV command (direct — no Home Assistant needed)</option>
-                <option value="androidTvCommand" data-i18n="web_ui_action_android_tv">Android TV key or app (direct — no Home Assistant needed)</option>
+                <option value="androidTvCommand" data-i18n="web_ui_action_android_tv">Android TV / Zidoo / Eversolo key or app (direct — no Home Assistant needed)</option>
                 <option value="irCommand" data-i18n="web_ui_action_ir_command">IR command (remote's own blaster or IR extender)</option>
                 <option value="harmonyCommand" data-i18n="web_ui_action_harmony_command">Harmony IR command (direct to hub)</option>
                 <option value="harmonyActivity" data-i18n="web_ui_action_harmony_activity">Harmony activity (direct to hub)</option>
@@ -292,6 +292,8 @@
                 <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
             </div>
             <div id="pageTree" class="page-tree"></div>
+            <label class="inline-check page-tree-swipe"><input type="checkbox" id="swipePagesToggle" checked onchange="onSwipePagesChange(this.checked)"> <span data-i18n="web_tree_swipe_pages">Swipe left / right to change page</span></label>
+            <div class="hint page-tree-hint" data-i18n="web_tree_swipe_pages_hint">Unticked, pages change only with buttons and tiles, hotkeys and the page dots: no more landing on another page by accident.</div>
             <div class="hint page-tree-hint" data-i18n="web_tree_hint">Click a page to show it. Drag it to reorder, or onto another page to make it a sub-page.</div>
         </div>
         </div>
@@ -309,7 +311,10 @@
     <div class="preview-modal-inner ha-dialog">
         <button class="preview-modal-close" data-i18n="web_modal_close" onclick="cancelCardEdit()">✕ Close</button>
         <h2 style="margin-top:0" id="cardEditorTitle" data-i18n="web_modal_add_card">Add card</h2>
-        <div class="section-box">
+        <div id="cardGallery" class="card-gallery" style="display:none"></div>
+        <div class="section-box" id="cardFormBox">
+            <button type="button" id="cardBackToGallery" class="back-link" style="display:none" onclick="showCardGallery()" data-i18n="web_gallery_back">← Other card types</button>
+            <div id="cardTypeRow">
             <label data-i18n="web_modal_card_type">Card type</label>
             <select id="cardTypeSelect" onchange="updateCardFormInputs()">
                 <optgroup data-i18n-attr="label:web_modal_optgroup_common" label="Common">
@@ -348,6 +353,7 @@
                     <option value="custom" data-i18n="web_modal_type_custom">Other / custom type…</option>
                 </optgroup>
             </select>
+            </div>
 
             <div id="dynamicCardInputs"></div>
             <div class="btn-row">
@@ -406,6 +412,7 @@
             </div>
             <label style="margin-top:10px" data-i18n="web_ui_and_auto_close_when_its_state">...and auto-close when its state is (optional)</label>
             <input type="text" id="pageDialogCloseWhenState" placeholder="leave blank for &quot;anything else&quot;" data-i18n-attr="placeholder:web_ui_leave_blank_for_anything_else">
+            <div class="hint" style="margin-top:4px" data-i18n="web_ui_states_comma_hint">Several states: separate them with commas, e.g. on, off, idle.</div>
             <div class="hint" style="margin-top:4px" data-i18n="web_ui_automatically_jumps_to_this_page_the">Automatically jumps to this page the moment the entity's state matches the "open" one above (e.g. a doorbell switch turning on) — remembering wherever you were, so BACK/the chevron return there. Leave "close when" blank for the simple on/off case: closes on any state other than the open one. Set it explicitly for anything with more than two meaningful states — a cover's open/opening/closing/closed, a lock's locked/unlocked — so a transitional state doesn't force the page shut mid-way (e.g. open="open", close="closed" ignores "opening"/"closing" entirely). You can always close it yourself too, the same way as tapping "‹ back". For BACK on the remote itself to also close it, also set a "Parent page" above — the hardware BACK button only knows about that static field, not this dynamic close.</div>
             <div id="pageDialogOpenModeRow" style="display:none">
                 <label style="margin-top:10px" data-i18n="web_ui_how_it_opens">How it opens</label>
@@ -489,6 +496,9 @@
 <script src="js/pages.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/cards-extra.js"></script>
+<script src="js/card-gallery.js"></script>
+<script src="js/card-sections.js"></script>
+<script src="js/card-copy.js"></script>
 <script src="js/cards-xbox.js"></script>
 <script src="js/history.js"></script>
 <script src="js/deeplink.js"></script>

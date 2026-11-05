@@ -143,6 +143,144 @@ const TV_KNOWN_APPS = [
   ['Google Play Store', 'com.android.vending']
 ];
 
+// ---- 0–9 keypad target (1.4.9), shared by the TV remote and media player card forms ----------
+// Where the digits go: a remote entity (the TV card's own by default), an IR device, or a Harmony
+// device; and what each key sends (`keypad_commands`, e.g. {"1": "Num1", "ok": "Select"}).
+const KEYPAD_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'ok'];
+
+function keypadFieldsHtml(remotePlaceholder) {
+  const irOptions = (dashboardData.irDevices || []).map(d => `<option value="${cxEsc(d.id)}">${cxEsc(d.name || d.id)}</option>`).join('');
+  return `
+    <label>${I18N.t('web_card_keypad_target')}</label>
+    <select id="kpTarget" onchange="onKeypadTargetChange()">
+      <option value="remote">${I18N.t('web_card_keypad_target_remote')}</option>
+      <option value="ir">${I18N.t('web_card_keypad_target_ir')}</option>
+      <option value="harmony">${I18N.t('web_card_keypad_target_harmony')}</option>
+    </select>
+    <div id="kpRemoteBox">
+      <select id="kpEntity" style="margin-top:6px" data-empty-label="${cxEsc(remotePlaceholder)}">${keypadRemoteOptions('', remotePlaceholder)}</select>
+      <input type="text" id="kpRemoteDevice" placeholder="${I18N.t('web_card_keypad_remote_device_ph')}" style="margin-top:6px">
+    </div>
+    <div id="kpIrBox" style="display:none"><select id="kpIrDevice" onchange="onKeypadTargetChange()">${irOptions}</select></div>
+    <div id="kpHarmonyBox" style="display:none"></div>
+    <details style="margin-top:8px"><summary>${I18N.t('web_card_keypad_commands')}</summary>
+      <div class="hint">${I18N.t('web_card_keypad_commands_hint')}</div>
+      <datalist id="kpCommandList"></datalist>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+        ${KEYPAD_KEYS.map(k => `<label style="margin:0">${k === 'ok' ? 'OK' : k}<input type="text" class="kp-cmd" data-key="${k}" list="kpCommandList" placeholder="${k === 'ok' ? '' : k}" style="margin:2px 0 0"></label>`).join('')}
+      </div>
+    </details>`;
+}
+
+/** Every remote.* the builder can see (Home Assistant's and the ones the remote answers itself), plus [selected] if missing. */
+function keypadRemoteOptions(selected, emptyLabel) {
+  const states = (typeof haStates !== 'undefined' && haStates) || {};
+  const ids = Object.keys(states).filter(id => id.startsWith('remote.')).sort();
+  if (selected && !ids.includes(selected)) ids.unshift(selected);
+  return `<option value="">${cxEsc(emptyLabel)}</option>` + ids.map(id => {
+    const name = states[id] && (states[id].friendly_name || (states[id].attributes || {}).friendly_name);
+    return `<option value="${cxEsc(id)}"${id === selected ? ' selected' : ''}>${cxEsc(name ? `${name} — ${id}` : id)}</option>`;
+  }).join('');
+}
+
+/** The Harmony hub / device pickers (harmony.js), or plain fields when no hub answers. */
+function renderKeypadHarmony() {
+  const box = document.getElementById('kpHarmonyBox');
+  if (!box || box.dataset.ready) return;
+  box.dataset.ready = '1';
+  if (typeof harmonyAvailable !== 'undefined' && harmonyAvailable) {
+    renderHarmonyHubSelect(box, 'device', 'kp');
+    box.addEventListener('change', e => { if (e.target.id === 'kpDeviceSelect') refreshKeypadCommandList(); });
+  } else {
+    box.innerHTML = `<input type="text" id="kpDeviceSelect" placeholder="${I18N.t('web_card_keypad_harmony_device_ph')}" style="margin-top:6px">
+      <input type="text" id="kpHub" placeholder="${I18N.t('web_card_keypad_hub_ph')}" style="margin-top:6px">`;
+  }
+}
+
+function onKeypadTargetChange() {
+  const t = (document.getElementById('kpTarget') || {}).value || 'remote';
+  setDisplayIf('kpRemoteBox', t === 'remote');
+  setDisplayIf('kpIrBox', t === 'ir');
+  setDisplayIf('kpHarmonyBox', t === 'harmony');
+  if (t === 'harmony') renderKeypadHarmony();
+  refreshKeypadCommandList();
+}
+
+/** The chosen IR or Harmony device's own command names, as suggestions for every key. */
+function refreshKeypadCommandList() {
+  const list = document.getElementById('kpCommandList');
+  if (!list) return;
+  const t = (document.getElementById('kpTarget') || {}).value || 'remote';
+  let names = [];
+  if (t === 'ir') {
+    const dev = (dashboardData.irDevices || []).find(d => d.id === document.getElementById('kpIrDevice').value);
+    names = dev ? (dev.commands ? Object.keys(dev.commands) : (dev.commandHints || [])) : [];
+  } else if (t === 'harmony' && typeof harmonyConfigCache !== 'undefined') {
+    const hub = (document.getElementById('kpHub') || {}).value;
+    const deviceId = (document.getElementById('kpDeviceSelect') || {}).value;
+    const device = ((harmonyConfigCache[hub] || {}).devices || []).find(d => d.id === deviceId);
+    names = ((device && device.commands) || []).map(c => c.name);
+  }
+  list.innerHTML = names.map(n => `<option value="${cxEsc(n)}">`).join('');
+}
+
+function setDisplayIf(id, on) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = on ? '' : 'none';
+}
+
+async function fillKeypadFields(o) {
+  if (!document.getElementById('kpTarget')) return;
+  const target = o.keypad_ir_device ? 'ir' : (o.keypad_harmony_device ? 'harmony' : 'remote');
+  document.getElementById('kpTarget').value = target;
+  const ent = document.getElementById('kpEntity');
+  ent.innerHTML = keypadRemoteOptions(o.keypad_entity || '', ent.dataset.emptyLabel || '');
+  document.getElementById('kpRemoteDevice').value = o.keypad_remote_device || '';
+  if (o.keypad_ir_device) document.getElementById('kpIrDevice').value = o.keypad_ir_device;
+  const cmds = o.keypad_commands || {};
+  document.querySelectorAll('.kp-cmd').forEach(el => { el.value = cmds[el.dataset.key] || (el.dataset.key === 'ok' ? (o.keypad_ok || '') : ''); });
+  onKeypadTargetChange();
+  if (target === 'harmony') {
+    const hubSel = document.getElementById('kpHub');
+    const devSel = document.getElementById('kpDeviceSelect');
+    if (hubSel && hubSel.tagName === 'SELECT') {
+      hubSel.value = o.keypad_hub || (harmonyHubsList[0] || {}).localId || '';
+      await onHarmonyHubChange('device', 'kp');
+      if (![...devSel.options].some(op => op.value === o.keypad_harmony_device)) {
+        devSel.insertAdjacentHTML('beforeend', `<option value="${cxEsc(o.keypad_harmony_device)}">${cxEsc(o.keypad_harmony_device)}</option>`);
+      }
+      devSel.value = o.keypad_harmony_device;
+    } else if (devSel) {
+      devSel.value = o.keypad_harmony_device;
+      if (hubSel) hubSel.value = o.keypad_hub || '';
+    }
+    refreshKeypadCommandList();
+  }
+}
+
+/** Writes the keypad_* options into [out] (and removes stale ones); false when nothing targets the keypad. */
+function collectKeypadFields(out) {
+  ['keypad_entity', 'keypad_remote_device', 'keypad_ir_device', 'keypad_harmony_device', 'keypad_hub', 'keypad_commands', 'keypad_ok']
+    .forEach(k => delete out[k]);
+  if (!document.getElementById('kpTarget')) return false;
+  const t = document.getElementById('kpTarget').value;
+  const val = id => document.getElementById(id).value.trim();
+  let has = false;
+  if (t === 'remote') {
+    if (val('kpEntity')) { out.keypad_entity = val('kpEntity'); has = true; }
+    if (val('kpRemoteDevice')) out.keypad_remote_device = val('kpRemoteDevice');
+  } else if (t === 'ir' && val('kpIrDevice')) {
+    out.keypad_ir_device = val('kpIrDevice'); has = true;
+  } else if (t === 'harmony' && document.getElementById('kpDeviceSelect') && val('kpDeviceSelect')) {
+    out.keypad_harmony_device = val('kpDeviceSelect'); has = true;
+    if (document.getElementById('kpHub') && val('kpHub')) out.keypad_hub = val('kpHub');
+  }
+  const cmds = {};
+  document.querySelectorAll('.kp-cmd').forEach(el => { if (el.value.trim()) cmds[el.dataset.key] = el.value.trim(); });
+  if (Object.keys(cmds).length) out.keypad_commands = cmds;
+  return has;
+}
+
 // Keys of the card and their default Android TV command.
 const TV_COMMAND_KEYS = [
   ['power', 'POWER'], ['up', 'DPAD_UP'], ['down', 'DPAD_DOWN'], ['left', 'DPAD_LEFT'], ['right', 'DPAD_RIGHT'],
@@ -156,10 +294,14 @@ function tvRemoteFormHtml() {
     .map(c => `<option value="${cxEsc(c)}">`).join('');
   return `
     <label>${I18N.t('web_card_name')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_tv_name')}">
-    <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" placeholder="${I18N.t('web_card_ph_remote')}" onchange="onTvEntityChange()">
+    <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" list="tvRemoteEntities" placeholder="${I18N.t('web_card_ph_remote')}" onchange="onTvEntityChange()">
+    <datalist id="tvRemoteEntities">${Object.keys((typeof haStates !== 'undefined' && haStates) || {}).filter(id => id.startsWith('remote.')).sort().map(id => `<option value="${cxEsc(id)}">`).join('')}</datalist>
     <label>${I18N.t('web_card_media_entity_id_opt')}</label><input type="text" id="optMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}" onchange="onTvEntityChange()">
     <div class="hint">${I18N.t('web_card_tv_media_hint')}</div>
     <label class="inline-check"><input type="checkbox" id="optTvShowDpad" checked> ${I18N.t('web_card_tv_show_dpad')}</label>
+    <label class="inline-check"><input type="checkbox" id="optTvShowSources" checked> ${I18N.t('web_card_tv_show_sources')}</label>
+    <label class="inline-check"><input type="checkbox" id="optTvShowKeypad" onchange="setDisplayIf('tvKeypadBox', this.checked)"> ${I18N.t('web_card_tv_show_keypad')}</label>
+    <div id="tvKeypadBox" style="display:none">${keypadFieldsHtml(I18N.t('web_card_keypad_tv_remote_ph'))}</div>
     <label class="inline-check"><input type="checkbox" id="optTvShowVolume" checked> ${I18N.t('web_card_tv_show_volume')}</label>
     <label>${I18N.t('web_card_tv_volume_entity')}</label><input type="text" id="optMuteEntity" placeholder="remote.soundbar">
     <div class="hint">${I18N.t('web_card_tv_volume_hint')}</div>
@@ -172,19 +314,9 @@ function tvRemoteFormHtml() {
     <label class="inline-check"><input type="checkbox" id="optTvNowPlaying" checked> ${I18N.t('web_card_tv_now_playing')}</label>
     <label>${I18N.t('web_card_tv_now_playing_entity')}</label><input type="text" id="optTvNowPlayingEntity" placeholder="media_player.…">
     <div class="hint">${I18N.t('web_card_tv_now_playing_hint')}</div>
+    <label class="inline-check"><input type="checkbox" id="optTvNowPlayingTap" checked> ${I18N.t('web_card_tv_now_playing_tap')}</label>
     <label class="inline-check"><input type="checkbox" id="optTvTransport"> ${I18N.t('web_card_tv_show_transport')}</label>
-    <label>${I18N.t('web_card_tv_apps')}</label>
-    <select id="optTvAppsStyle">
-      <option value="buttons">${I18N.t('web_card_tv_apps_buttons')}</option>
-      <option value="icons">${I18N.t('web_card_tv_apps_icons')}</option>
-    </select>
-    <datalist id="tvAppPackages">${TV_KNOWN_APPS.map(([n, p]) => `<option value="${p}">${n}</option>`).join('')}</datalist>
-    <div id="tvAppsList"></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="secondary" onclick="addTvApp()">${I18N.t('web_card_tv_add_app')}</button>
-      <button type="button" class="secondary" onclick="resetTvApps()">${I18N.t('web_card_tv_default_apps')}</button>
-      <button type="button" class="secondary" onclick="useTvDeviceApps()">${I18N.t('web_card_tv_device_apps')}</button>
-    </div>
+    ${tvAppsSectionHtml(true)}
     <details style="margin-top:10px">
       <summary>${I18N.t('web_card_tv_commands')}</summary>
       <div class="hint">${I18N.t('web_card_tv_commands_hint')}</div>
@@ -196,6 +328,53 @@ function tvRemoteFormHtml() {
         </div>`).join('')}
     </details>
   `;
+}
+
+// The app shortcuts editor (style, list, add / defaults / device apps): the TV remote card's, and
+// the media player card's since 1.4.9 (withShowToggle: the TV card's "show the shortcuts" box).
+function tvAppsSectionHtml(withShowToggle) {
+  return `
+    <label>${I18N.t('web_card_tv_apps')}</label>
+    <select id="optTvAppsStyle">
+      <option value="buttons">${I18N.t('web_card_tv_apps_buttons')}</option>
+      <option value="icons">${I18N.t('web_card_tv_apps_icons')}</option>
+    </select>
+    ${withShowToggle ? `<label class="inline-check"><input type="checkbox" id="optTvShowApps" checked> ${I18N.t('web_card_show_app_shortcuts')}</label>
+    <div class="hint">${I18N.t('web_card_show_app_shortcuts_hint')}</div>` : ''}
+    <datalist id="tvAppPackages">${TV_KNOWN_APPS.map(([n, p]) => `<option value="${p}">${n}</option>`).join('')}</datalist>
+    <div id="tvAppsList"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="secondary" onclick="addTvApp()">${I18N.t('web_card_tv_add_app')}</button>
+      <button type="button" class="secondary" onclick="resetTvApps()">${I18N.t('web_card_tv_default_apps')}</button>
+      <button type="button" class="secondary" onclick="useTvDeviceApps()">${I18N.t('web_card_tv_device_apps')}</button>
+    </div>`;
+}
+
+// The media player card's app shortcuts (1.4.9): fill / collect, same list as the TV card's.
+function fillMediaApps(o) {
+  const style = document.getElementById('optTvAppsStyle');
+  if (style) style.value = o.apps_style === 'icons' ? 'icons' : 'buttons';
+  window._pendingTvApps = (Array.isArray(o.apps) ? o.apps : []).map(a => ({ ...a }));
+  renderTvApps();
+}
+
+function collectMediaApps(out) {
+  syncTvApps();
+  const apps = (window._pendingTvApps || []).filter(a => a.service || a.app).map(a => {
+    const r = { ...a };
+    if (!r.name) r.name = tvAppLabel(r.app) || r.app;
+    return r;
+  });
+  if (apps.length) out.apps = apps; else delete out.apps;
+  if (apps.length && document.getElementById('optTvAppsStyle').value === 'icons') out.apps_style = 'icons'; else delete out.apps_style;
+}
+
+// The media player whose apps the editor offers: the TV card's media entity (or its remote's
+// twin), the media player card's own entity.
+function tvAppsMediaEntity() {
+  const val = id => ((document.getElementById(id) || {}).value || '').trim();
+  const remote = val('optRemoteEntity');
+  return val('optMediaEntity') || (remote.includes('.') ? 'media_player.' + remote.split('.')[1] : '') || val('optEntityId');
 }
 
 function tvAppLabel(pkg) {
@@ -210,9 +389,7 @@ function tvAppLabel(pkg) {
 // player its source_list (names, which it opens too). [] when the builder can't see it.
 function tvDeviceApps() {
   if (typeof haStates === 'undefined' || !haStates) return [];
-  const remote = (document.getElementById('optRemoteEntity') || {}).value || '';
-  const media = ((document.getElementById('optMediaEntity') || {}).value || '').trim() ||
-    (remote.includes('.') ? 'media_player.' + remote.trim().split('.')[1] : '');
+  const media = tvAppsMediaEntity();
   const attrs = (haStates[media] && haStates[media].attributes) || {};
   if (Array.isArray(attrs.astrion_apps)) {
     return attrs.astrion_apps.filter(a => a && a.app).map(a => ({ name: a.name || a.app, app: a.app }));
@@ -223,9 +400,7 @@ function tvDeviceApps() {
 /** Whether the card's player publishes its own apps (a Zidoo / Eversolo added in Astrion). */
 function tvDeviceHasOwnApps() {
   if (typeof haStates === 'undefined' || !haStates) return false;
-  const remote = (document.getElementById('optRemoteEntity') || {}).value || '';
-  const media = ((document.getElementById('optMediaEntity') || {}).value || '').trim() ||
-    (remote.includes('.') ? 'media_player.' + remote.trim().split('.')[1] : '');
+  const media = tvAppsMediaEntity();
   return !!(haStates[media] && haStates[media].attributes && Array.isArray(haStates[media].attributes.astrion_apps));
 }
 
@@ -314,9 +489,15 @@ function fillTvRemoteForm(o) {
   document.getElementById('optMuteEntity').value = o.mute_entity || '';
   document.getElementById('optTvShowVolume').checked = o.show_volume !== false;
   document.getElementById('optTvShowDpad').checked = o.show_dpad !== false;
+  document.getElementById('optTvShowSources').checked = o.show_sources !== false;
+  document.getElementById('optTvShowKeypad').checked = o.show_keypad === true;
+  setDisplayIf('tvKeypadBox', o.show_keypad === true);
+  fillKeypadFields(o);
+  document.getElementById('optTvShowApps').checked = o.show_apps !== false;
   document.getElementById('optTvNowPlaying').checked = o.show_now_playing !== false;
   document.getElementById('optTvNowPlayingEntity').value = o.now_playing_entity || '';
   document.getElementById('optTvTransport').checked = o.show_transport === true;
+  document.getElementById('optTvNowPlayingTap').checked = o.now_playing_tap !== 'none';
   document.getElementById('optTvAppsStyle').value = o.apps_style === 'icons' ? 'icons' : 'buttons';
   document.getElementById('optTvLayout').value = o.layout === 'full' ? 'full' : 'classic';
   document.getElementById('optTvShowSkip').checked = o.show_skip !== false;
@@ -327,7 +508,8 @@ function fillTvRemoteForm(o) {
   const cmds = o.commands || {};
   document.querySelectorAll('.tv-cmd').forEach(el => { el.value = cmds[el.dataset.key] || ''; });
   window._tvExtra = cxWithout(o, ['name', 'remote_entity', 'media_entity', 'mute_entity', 'show_volume', 'apps', 'commands',
-    'show_now_playing', 'now_playing_entity', 'show_transport', 'apps_style', 'layout', 'show_skip', 'show_dpad']);
+    'show_now_playing', 'now_playing_entity', 'now_playing_tap', 'show_transport', 'apps_style', 'layout', 'show_skip', 'show_dpad', 'show_sources', 'show_keypad', 'show_apps',
+    'keypad_entity', 'keypad_remote_device', 'keypad_ir_device', 'keypad_harmony_device', 'keypad_hub', 'keypad_commands', 'keypad_ok']);
   // Command renames for keys this form doesn't list are kept too.
   window._tvExtraCommands = cxWithout(cmds, TV_COMMAND_KEYS.map(([k]) => k));
   renderTvApps();
@@ -351,10 +533,17 @@ function collectTvRemoteOptions() {
   if (vol) out.mute_entity = vol;
   if (!document.getElementById('optTvShowVolume').checked) out.show_volume = false;
   if (!document.getElementById('optTvShowDpad').checked) out.show_dpad = false;
+  if (!document.getElementById('optTvShowSources').checked) out.show_sources = false;
+  if (document.getElementById('optTvShowKeypad').checked) {
+    out.show_keypad = true;
+    collectKeypadFields(out); // nothing set: the card's own remote
+  }
+  if (!document.getElementById('optTvShowApps').checked) out.show_apps = false;
   if (!document.getElementById('optTvNowPlaying').checked) out.show_now_playing = false;
   const npEntity = document.getElementById('optTvNowPlayingEntity').value.trim();
   if (npEntity) out.now_playing_entity = npEntity;
   if (document.getElementById('optTvTransport').checked) out.show_transport = true;
+  if (!document.getElementById('optTvNowPlayingTap').checked) out.now_playing_tap = 'none';
   if (document.getElementById('optTvAppsStyle').value === 'icons') out.apps_style = 'icons';
   if (document.getElementById('optTvLayout').value === 'full') out.layout = 'full';
   if (!document.getElementById('optTvShowSkip').checked) out.show_skip = false;
@@ -665,7 +854,12 @@ function editRowChild(i) {
     select.value = select.options[0].value;
   }
   updateCardFormInputs();
-  if (child) fillCardForm(child);
+  if (child) {
+    hideCardGallery(false);
+    fillCardForm(child);
+  } else {
+    showCardGallery();
+  }
 }
 
 // Called by addCardToPage() in child mode, with the card the form just built.
@@ -686,6 +880,7 @@ function returnToRowForm() {
   document.getElementById('cardEditorTitle').textContent = isNew ? I18N.t('web_modal_add_card') : I18N.t('web_modal_edit_card');
   document.getElementById('addCardBtn').innerText = isNew ? I18N.t('web_modal_add_card_to_page') : I18N.t('web_save_changes');
   document.getElementById('cardTypeSelect').value = 'row';
+  hideCardGallery(false);
   updateCardFormInputs();
 }
 
@@ -740,9 +935,11 @@ function tvAppIconsPreviewHtml(apps) {
 }
 
 function tvRemotePreviewHtml(o) {
-  const apps = Array.isArray(o.apps) ? o.apps : TV_DEFAULT_APPS;
+  // show_apps false (1.4.9): the apps only order the sources pop-up, no shortcut on the card.
+  const apps = o.show_apps === false ? [] : (Array.isArray(o.apps) ? o.apps : TV_DEFAULT_APPS);
   const btn = (t) => `<div style="width:40px;height:40px;border-radius:50%;background:#1B2027;display:flex;align-items:center;justify-content:center;color:#B6C9CE">${t}</div>`;
-  const header = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="color:#E6EEF2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(o.name || 'TV')}</b>${btn('⏻')}</div>`;
+  const extras = (o.show_sources === false ? '' : btn('▦')) + (o.show_keypad ? btn('#') : '');
+  const header = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b style="color:#E6EEF2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">${cxEsc(o.name || 'TV')}</b>${extras}${btn('⏻')}</div>`;
   if (o.layout === 'full') {
     // Like the remote: what's playing, the apps, then the D-pad between back/home/menu and the volume.
     const col = (items) => `<div style="display:flex;flex-direction:column;gap:6px">${items.map(btn).join('')}</div>`;

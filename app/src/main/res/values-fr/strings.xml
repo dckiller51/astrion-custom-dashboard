@@ -317,4 +317,8 @@
     <string name="xbox_attr_game_url">Jeu sur TrueAchievements</string>
     <string name="xbox_attr_walkthrough_url">Guide des succès</string>
     <string name="xbox_attr_location">Lieu</string>
+    <string name="picker_sources">Sources et applis</string>
+    <string name="picker_sources_button">Sources</string>
+    <string name="picker_no_sources">Ce lecteur ne donne aucune liste de sources ou d\'applis.</string>
+    <string name="picker_keypad">Pavé numérique</string>
 </resources>

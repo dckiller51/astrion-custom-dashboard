@@ -70,6 +70,22 @@ class ZidooClient(private val host: () -> String) {
 
     fun backdropUrl(movieId: Long): String = base() + "ZidooPoster/v2/getBackdrop?id=$movieId&w=$ART_W&h=$ART_H"
 
+    fun posterUrl(movieId: Long): String = base() + "ZidooPoster/v2/getPoster?id=$movieId&w=$POSTER_W&h=$POSTER_H"
+
+    /**
+     * Whether [url] answers with an image (1.4.9): an episode often has no backdrop of its own, so
+     * the registry tries the series', then the season's, and keeps the first one that is there.
+     */
+    fun isImage(url: String): Boolean = runCatching {
+        http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            val bytes = resp.body?.bytes() ?: return@use false
+            // A missing image is a JSON error with HTTP 200 ({"status":803,…}); the image may come
+            // with no image/* type, so its first byte decides.
+            val type = resp.header("Content-Type").orEmpty()
+            resp.isSuccessful && bytes.isNotEmpty() && (type.startsWith("image/") || bytes[0] != '{'.code.toByte())
+        }
+    }.getOrDefault(false)
+
     fun musicArtUrl(musicId: Long, musicType: Int): String =
         base() + "ZidooMusicControl/v2/getImage?id=$musicId&music_type=$musicType&type=4&target=16"
 
@@ -80,6 +96,8 @@ class ZidooClient(private val host: () -> String) {
         private const val TIMEOUT_S = 3L
         private const val ART_W = 1080
         private const val ART_H = 720
+        private const val POSTER_W = 480
+        private const val POSTER_H = 720
         private const val WOL_PORT = 9
         private const val MAC_BYTES = 6
         private const val WOL_REPEATS = 16

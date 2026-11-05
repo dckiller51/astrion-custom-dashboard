@@ -46,7 +46,10 @@ data class AppConfig(
      * Activity takes the room, whatever each Activity says (1.3.5) — e.g. the Android TV entity used
      * to launch apps, which is the same TV as the one the next Activity uses. Stopping an Activity
      * ("Off") still follows that Activity's own "power off when it ends". */
-    val keepOnDevices: Set<String> = emptySet()
+    val keepOnDevices: Set<String> = emptySet(),
+    /** `swipePages: false` (1.4.9): no swiping left / right between pages; they change with
+     * buttons, tiles, hotkeys and the page dots only. */
+    val swipePages: Boolean = true
 )
 
 /**

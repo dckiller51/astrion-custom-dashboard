@@ -59,6 +59,7 @@ import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.harmony.HarmonyHubRegistry
+import com.custom.astrion.input.DialogKeys
 import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
 import com.custom.astrion.ui.ChargingScreen
@@ -145,6 +146,9 @@ class MainActivity : ComponentActivity() {
         // Keys that pop up a temporary volume readout when their hotkey
         // fires an HA service call — see runHotkey()'s bottom branch.
         val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
+
+        // remote.* entities the remote answers itself (see serviceRepeatMs()).
+        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_")
 
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
@@ -575,6 +579,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i("MainActivity", "onCreate — activity instance ${this.hashCode()}")
+        DialogKeys.forward = ::dispatchHotkeyFromDialog
         // Only a key takes the window out of touch mode (a touch puts it back in): see noteKey().
         window.decorView.viewTreeObserver.addOnTouchModeChangeListener { inTouchMode ->
             if (!inTouchMode) {
@@ -967,7 +972,7 @@ class MainActivity : ComponentActivity() {
         bindSettingsFallback()
 
         if (page?.parent != null) {
-            val key = runCatching { HardwareKey.valueOf(page.parentKey.uppercase()) }.getOrNull()
+            val key = HardwareKey.fromName(page.parentKey)
             if (key != null && !keyRouter.isShortBound(key)) {
                 keyRouter.on(key) { goToParent() }
             }
@@ -1001,17 +1006,18 @@ class MainActivity : ComponentActivity() {
     private fun bindHotkeys(short: List<HotkeyConfig>, long: List<HotkeyConfig>) {
         keyRouter.clear()
         short.forEach { hk ->
-            val key =
-                runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
-                    ?: return@forEach
+            val key = buttonOf(hk) ?: return@forEach
             keyRouter.on(key, repeatIntervalFor(hk)) { runHotkey(hk) }
         }
         long.forEach { hk ->
-            val key =
-                runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
-                    ?: return@forEach
+            val key = buttonOf(hk) ?: return@forEach
             keyRouter.onLong(key) { runHotkey(hk, long = true) }
         }
+    }
+
+    /** The button [hk] is on; null (and said in the log, 1.4.9) when this remote has no such button. */
+    private fun buttonOf(hk: HotkeyConfig): HardwareKey? = HardwareKey.fromName(hk.key).also {
+        if (it == null) Log.w(KEY_TAG, "hotkey on \"${hk.key}\" ignored: this remote has no such button")
     }
 
     /**
@@ -1030,10 +1036,9 @@ class MainActivity : ComponentActivity() {
     private fun serviceRepeatMs(service: String, entityId: String?): Long? = when {
         // Opening an app (1.3.6 Android TV hotkeys): once, not again and again while held.
         service == "media_player.select_source" || service == "media_player.play_media" -> null
-        // An Android TV paired with Astrion answers directly, as fast as IR: smooth D-pad scrolling.
-        service == "remote.send_command" && entityId?.startsWith("remote.androidtv_") == true -> IR_REPEAT_MS
-        // Same for a Zidoo added in Astrion (1.4.6): its control API is on the local network.
-        service == "remote.send_command" && entityId?.startsWith("remote.zidoo_") == true -> IR_REPEAT_MS
+        // A device paired with Astrion (Android TV, Zidoo 1.4.6, Apple TV 1.4.9) answers directly,
+        // as fast as IR: smooth D-pad scrolling.
+        service == "remote.send_command" && entityId != null && DIRECT_REMOTE_PREFIXES.any { entityId.startsWith(it) } -> IR_REPEAT_MS
         else -> HA_REPEAT_MS
     }
 
@@ -1362,6 +1367,16 @@ class MainActivity : ComponentActivity() {
         return super.dispatchKeyEvent(event)
     }
 
+    /**
+     * A key pressed while a pop-up is open (1.4.9, see [DialogKeys]): run as a hotkey when it is
+     * one, else false and the pop-up keeps it.
+     */
+    private fun dispatchHotkeyFromDialog(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (keyRouter.shortHandler(code) == null && keyRouter.longHandler(code) == null) return false
+        return dispatchKeyEvent(event)
+    }
+
     /** Release of a mapped key: a key with a long action runs its short one here, if the long one didn't fire. */
     private fun onMappedKeyUp(code: Int, shortH: (() -> Boolean)?, longH: (() -> Boolean)?) {
         if (longH != null && code == activeLongKey) {
@@ -1662,6 +1677,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         Log.i("MainActivity", "onDestroy — activity instance ${this.hashCode()}")
+        if (DialogKeys.forward == ::dispatchHotkeyFromDialog) DialogKeys.forward = null
         unregisterMotionListener()
         runCatching { unregisterReceiver(screenStateReceiver) }
         standby.stop()

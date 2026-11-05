@@ -38,6 +38,7 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
         /** The video file whose film was last looked up, and what was found. */
         var moviePath: String? = null
         var movie: ZidooMovie? = null
+        var moviePicture: String? = null
     }
 
     private val devices = LinkedHashMap<String, Device>() // by media entity id
@@ -148,9 +149,10 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             if (path != null && path != device.moviePath) {
                 device.moviePath = path
                 device.movie = c.movieOf(path)
+                device.moviePicture = device.movie?.let { pictureOf(c, it) }
             }
             movie = device.movie
-            picture = movie?.let { c.backdropUrl(it.id) }
+            picture = device.moviePicture
         } else {
             val id = p.musicId
             picture = p.artUrl ?: if (id != null && id > 0) c.musicArtUrl(id, p.musicType ?: 0) else null
@@ -169,6 +171,18 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             positionAt = now,
             pictureUrl = picture
         )
+    }
+
+    /**
+     * A film's backdrop; for an episode (1.4.9) the first artwork the player has among the
+     * backdrops of the series, the season and the episode, then their posters — an episode
+     * rarely has a backdrop, so before this it showed none.
+     */
+    private fun pictureOf(c: ZidooClient, movie: ZidooMovie): String? {
+        if (!movie.isEpisode) return c.backdropUrl(movie.id)
+        val ids = movie.artIds()
+        val candidates = ids.map(c::backdropUrl) + ids.map(c::posterUrl)
+        return candidates.firstOrNull(c::isImage) ?: c.backdropUrl(movie.id)
     }
 
     private fun publish(device: Device) {

@@ -45,6 +45,7 @@ import com.custom.astrion.R
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
+import com.custom.astrion.input.ForwardHotkeys
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.icons.MdiIcons
 import com.custom.astrion.ui.tapClickable
@@ -95,6 +96,7 @@ fun MediaPlayerDetailDialog(
     }
 
     Dialog(onDismissRequest = onClose) {
+        ForwardHotkeys() // the remote's buttons keep working here (1.4.9)
         Column(
             modifier =
             Modifier

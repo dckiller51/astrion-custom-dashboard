@@ -89,10 +89,12 @@ const ATV_ALL_COMMANDS = [
 
 /** The hotkey's Android TV, kind (key/app) and value, or null when it isn't an Android TV hotkey. */
 function androidTvHotkeyParts(h) {
-  if (h.service === 'remote.send_command' && /^remote\.androidtv_/.test(h.entityId || '')) {
+  // A Zidoo / Eversolo added in Astrion too (1.4.9): its remote.zidoo_… / media_player.zidoo_…
+  // take the same Android key names and its apps by name.
+  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo)_/.test(h.entityId || '')) {
     return { tv: h.entityId.replace(/^remote\./, 'media_player.'), kind: 'key', value: (h.data && h.data.command) || '' };
   }
-  if (h.service === 'media_player.select_source' && /^media_player\.androidtv_/.test(h.entityId || '')) {
+  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo)_/.test(h.entityId || '')) {
     return { tv: h.entityId, kind: 'app', value: (h.data && h.data.source) || '' };
   }
   return null;
@@ -102,7 +104,8 @@ async function loadNativeAndroidTvs() {
   try {
     const res = await fetch('/devices-config');
     const data = await res.json();
-    return Array.isArray(data.androidTvs) ? data.androidTvs : [];
+    // The Zidoos / Eversolos added in Astrion (1.4.9) answer the same keys and apps.
+    return [...(Array.isArray(data.androidTvs) ? data.androidTvs : []), ...(Array.isArray(data.zidoos) ? data.zidoos : [])];
   } catch (e) {
     return [];
   }
@@ -132,7 +135,12 @@ function onHkAndroidTvKindChange() {
   const kind = document.getElementById('hkAndroidTvKind').value;
   const input = document.getElementById('hkAndroidTvValue');
   const list = document.getElementById('hkAndroidTvValues');
-  const apps = typeof TV_KNOWN_APPS !== 'undefined' ? TV_KNOWN_APPS : [];
+  const known = typeof TV_KNOWN_APPS !== 'undefined' ? TV_KNOWN_APPS : [];
+  // The device's own apps first (a Zidoo has no Netflix), as its media player publishes them.
+  const tv = (document.getElementById('hkAndroidTv') || {}).value || '';
+  const attrs = (typeof haStates !== 'undefined' && haStates && haStates[tv] && haStates[tv].attributes) || {};
+  const own = Array.isArray(attrs.source_list) ? attrs.source_list.map(s => [String(s), String(s)]) : [];
+  const apps = /^media_player\.zidoo_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
   list.innerHTML = kind === 'app'
     ? apps.map(([n, p]) => `<option value="${escapeAttr(p)}">${escapeAttr(n)}</option>`).join('')
     : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('');
@@ -281,7 +289,7 @@ function updateHotkeyActionInputs(preselect) {
   } else if (action === 'androidTvCommand') {
     container.innerHTML = `
       <label>${I18N.t('web_hotkey_adtv_tv')}</label>
-      <select id="hkAndroidTv"></select>
+      <select id="hkAndroidTv" onchange="onHkAndroidTvKindChange()"></select>
       <label>${I18N.t('web_hotkey_adtv_kind')}</label>
       <select id="hkAndroidTvKind" onchange="onHkAndroidTvKindChange()">
         <option value="key">${I18N.t('web_hotkey_adtv_kind_key')}</option>
@@ -292,7 +300,7 @@ function updateHotkeyActionInputs(preselect) {
       <div class="hint" id="hkAndroidTvHint"></div>
     `;
     onHkAndroidTvKindChange();
-    populateHkAndroidTvSelect(preselect && preselect.androidTv);
+    populateHkAndroidTvSelect(preselect && preselect.androidTv).then(onHkAndroidTvKindChange);
   } else if (action === 'irCommand') {
     const devices = dashboardData.irDevices || [];
     container.innerHTML = `
@@ -466,7 +474,7 @@ async function editHotkey(scope, listType, i) {
 
   document.getElementById('hkScope').value = scope;
   document.getElementById('hkType').value = listType;
-  document.getElementById('hkKey').value = h.key;
+  document.getElementById('hkKey').value = hwKeyCanonical(h.key) || 'BACK';
   const adtv = androidTvHotkeyParts(h);
   const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.activity ? 'startActivity' : h.event ? 'haEvent' : adtv ? 'androidTvCommand' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
   document.getElementById('hkAction').value = action;
@@ -677,8 +685,30 @@ const RELEASE_KEYS = {
 const t = (key) => I18N.t(RELEASE_KEYS[key] || key);
 
 /** "Menu (MAIN)": the key's name as printed on the remote, then its id — or just the id when they match. */
+// The remote's buttons, and the Android names the app also takes for them (1.4.9, as
+// HardwareKey.fromName): a copied dashboard said "MENU" for MAIN and that hotkey never fired.
+function cxEscHk(v) { return String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+const HW_KEYS = ['BACK', 'HOME', 'POWER', 'VOLUME_UP', 'VOLUME_DOWN', 'MUTE', 'PAGE_UP', 'PAGE_DOWN',
+  'UP', 'DOWN', 'LEFT', 'RIGHT', 'CENTER', 'VOICE', 'MAIN', 'REWIND', 'PLAY', 'STOP', 'FASTFORWARD',
+  'RED_BUTTON', 'GREEN_BUTTON', 'BLUE_BUTTON', 'YELLOW_BUTTON'];
+const HW_KEY_ALIASES = {
+  MENU: 'MAIN', FAST_FORWARD: 'FASTFORWARD', MEDIA_FAST_FORWARD: 'FASTFORWARD', MEDIA_REWIND: 'REWIND',
+  MEDIA_PLAY_PAUSE: 'PLAY', PLAY_PAUSE: 'PLAY', MEDIA_STOP: 'STOP', VOLUME_MUTE: 'MUTE',
+  RED: 'RED_BUTTON', GREEN: 'GREEN_BUTTON', BLUE: 'BLUE_BUTTON', YELLOW: 'YELLOW_BUTTON',
+  PROG_RED: 'RED_BUTTON', PROG_GREEN: 'GREEN_BUTTON', PROG_BLUE: 'BLUE_BUTTON', PROG_YELLOW: 'YELLOW_BUTTON',
+};
+
+/** The remote's button a hotkey key names; null when the remote has none (the hotkey never fires). */
+function hwKeyCanonical(key) {
+  const k = String(key || '').trim().toUpperCase().replace(/^KEYCODE_/, '');
+  return HW_KEYS.includes(k) ? k : (HW_KEY_ALIASES[k] || null);
+}
+
 function hwKeyLabel(key) {
-  const id = 'web_hwkey_' + String(key).toLowerCase();
+  const canonical = hwKeyCanonical(key);
+  if (!canonical) return `<span style="color:#ff8a65" title="${cxEscHk(I18N.t('web_hotkey_unknown_key'))}">⚠ ${cxEscHk(key)}</span>`;
+  const id = 'web_hwkey_' + canonical.toLowerCase();
   const title = I18N.strings[id] !== undefined ? I18N.t(id) : '';
   return title && title.toUpperCase() !== String(key).toUpperCase() ? `${title} (${key})` : key;
 }

@@ -148,10 +148,15 @@ function renderDevicesList() {
   const haList = document.getElementById('haDevicesList');
   if (haList) {
     haList.innerHTML = dashboardData.haDevices.length
-      ? dashboardData.haDevices.map(dev =>
-          `<div class="list-item"><span>${dev.name} <span style="color:#888">(${HA_DOMAIN_LABELS[dev.domain] ? I18N.t(HA_DOMAIN_LABELS[dev.domain]) : dev.domain} · ${dev.entityId})</span></span>` +
-          `<span><span class="remove" style="color:#00E5FF" onclick="editHaEntity('${dev.id}')">✎</span> <span class="remove" onclick="removeHaEntityFromList('${dev.id}')">✕</span></span></div>`
-        ).join('')
+      ? dashboardData.haDevices.map(dev => {
+          const st = haStates && haStates[dev.entityId] ? haStates[dev.entityId].state : '';
+          return deviceCardHtml({
+            kind: haDeviceKind(dev), name: atvEsc(dev.name), details: `<code>${atvEsc(dev.entityId)}</code>`,
+            badge: HA_DOMAIN_LABELS[dev.domain] ? I18N.t(HA_DOMAIN_LABELS[dev.domain]) : atvEsc(dev.domain),
+            state: st ? atvEsc(st) : '', tone: deviceStateTone(dev.entityId),
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editHaEntity('${dev.id}')">✎</span> <span class="remove" onclick="removeHaEntityFromList('${dev.id}')">✕</span>`
+          });
+        }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_devices')}</div>`;
   }
 
@@ -165,9 +170,12 @@ function renderDevicesList() {
   if (harmonyList) {
     harmonyList.innerHTML = harmonyHubs.length
       ? harmonyHubs.map(hub => {
-          const summary = hub.ip ? `${hub.ip}${hub.hubId ? ' · id ' + hub.hubId : ''}` : I18N.t('web_dev_no_ip_set');
-          return `<div class="list-item"><span><span class="remove" style="color:#00E5FF;cursor:pointer" onclick="browseHarmonyDevices('${hub.localId}')">${hub.name}</span> <span style="color:#888">(${summary})</span></span>` +
-            `<span><span class="remove" style="color:#00E5FF" onclick="editHarmonyHub('${hub.localId}')">✎</span> <span class="remove" onclick="removeHarmonyHub('${hub.localId}')">✕</span></span></div>`;
+          const summary = hub.ip ? `${atvEsc(hub.ip)}${hub.hubId ? ' · id ' + atvEsc(hub.hubId) : ''}` : I18N.t('web_dev_no_ip_set');
+          return deviceCardHtml({
+            kind: 'hub', name: `<span class="remove" style="color:#00E5FF;cursor:pointer" onclick="browseHarmonyDevices('${hub.localId}')">${atvEsc(hub.name)}</span>`,
+            details: summary,
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editHarmonyHub('${hub.localId}')">✎</span> <span class="remove" onclick="removeHarmonyHub('${hub.localId}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_hub')}</div>`;
   }
@@ -187,8 +195,10 @@ function renderDevicesList() {
             ext.mac ? 'MAC ' + ext.mac : null,
             (ext.outputs || 1) > 1 ? I18N.t('web_dev_extender_outputs_count', ext.outputs) : null
           ].filter(Boolean).join(' · ');
-          return `<div class="list-item"><span>${ext.name} <span style="color:#888">(${summary})</span></span>` +
-            `<span><span class="remove" style="color:#00E5FF" onclick="editExtender('${ext.localId}')">✎</span> <span class="remove" onclick="removeExtender('${ext.localId}')">✕</span></span></div>`;
+          return deviceCardHtml({
+            kind: 'extender', name: atvEsc(ext.name), details: atvEsc(summary),
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editExtender('${ext.localId}')">✎</span> <span class="remove" onclick="removeExtender('${ext.localId}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_extender')}</div>`;
   }
@@ -208,14 +218,18 @@ function renderDevicesList() {
           const nowPlayingAction = tv.mrpCredentials
             ? `<span style="color:#888">${I18N.t('web_dev_atv_np_on')}</span>`
             : `<span class="remove" style="color:#00E5FF" onclick="scanAppleTvMrp('${tv.localId}')">${I18N.t('web_dev_atv_np_add')}</span>`;
-          return `<div class="list-item"><span>${atvEsc(tv.name)} <span style="color:#888">(<code>${atvEsc(tv.entityId)}</code>${status ? ' · ' + status : ''})</span></span>` +
-            `<span>${nowPlayingAction} <span class="remove" style="color:#00E5FF" onclick="renameAppleTv('${tv.localId}')">✎</span> <span class="remove" onclick="removeAppleTv('${tv.localId}')">✕</span></span></div>`;
+          return deviceCardHtml({
+            kind: 'box', name: atvEsc(tv.name), details: `<code>${atvEsc(tv.entityId)}</code>`,
+            state: status, tone: deviceStateTone(tv.entityId),
+            actions: `${nowPlayingAction} <span class="remove" style="color:#00E5FF" onclick="renameAppleTv('${tv.localId}')">✎</span> <span class="remove" onclick="removeAppleTv('${tv.localId}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_atv')}</div>`;
   }
 
   renderAndroidTvs();
   renderZidoos();
+  renderDirectCounts();
 
   const tileIrCount = document.getElementById('tileIrCount');
   if (tileIrCount) {
@@ -230,8 +244,10 @@ function renderDevicesList() {
           const summary = dev.commands
             ? I18N.t(Object.keys(dev.commands).length === 1 ? 'web_ir_summary_inline_one' : 'web_ir_summary_inline_many', Object.keys(dev.commands).length)
             : I18N.t('web_ir_summary_reference', dev.brand, dev.model, dev.category);
-          return `<div class="list-item"><span>${dev.name} <span style="color:#888">(${summary})</span></span>` +
-            `<span><span class="remove" style="color:#00E5FF" onclick="editIrDevice('${dev.id}')">✎</span> <span class="remove" onclick="removeIrDeviceFromList('${dev.id}')">✕</span></span></div>`;
+          return deviceCardHtml({
+            kind: 'ir', name: atvEsc(dev.name), details: atvEsc(summary),
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editIrDevice('${dev.id}')">✎</span> <span class="remove" onclick="removeIrDeviceFromList('${dev.id}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_devices')}</div>`;
   }
@@ -239,12 +255,111 @@ function renderDevicesList() {
 
 // ---- navigation: home tiles <-> one category view at a time ---------------
 
+// The direct devices (1.4.9) live in one view, a tab per kind of device: the old views' ids
+// still open it, on their tab.
+const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewZidoo: 'players' };
+
 function showView(id) {
+  if (DIRECT_TABS[id]) {
+    showDirectTab(DIRECT_TABS[id]);
+    id = 'viewDirect';
+  } else if (id === 'viewDirect' && !document.querySelector('.direct-tab.active')) {
+    let saved = null;
+    try { saved = localStorage.getItem('astrion.directTab'); } catch (e) { /* private mode */ }
+    showDirectTab(['tv', 'players', 'audio', 'light'].includes(saved) ? saved : 'tv');
+  }
   document.querySelectorAll('#viewHome, .category-view').forEach(el => {
     el.style.display = el.id === id ? 'block' : 'none';
   });
   if (id !== 'viewHome') closeDeviceForms();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showDirectTab(tab) {
+  document.querySelectorAll('.direct-tab').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.direct-pane').forEach(p => { p.style.display = p.dataset.pane === tab ? '' : 'none'; });
+  try { localStorage.setItem('astrion.directTab', tab); } catch (e) { /* private mode */ }
+}
+
+/** Counts on the home tile and the tabs. */
+function renderDirectCounts() {
+  const tv = appleTvs.length + androidTvs.length;
+  const players = zidoos.length;
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('directCountTv', tv);
+  set('directCountPlayers', players);
+  set('tileDirectCount', tv + players ? countLabel(tv + players, 'web_dev_count_direct') : I18N.t('web_dev_direct_none'));
+}
+
+/** A small icon for a kind of device (tv, box, player, audio), as in the tabs. */
+function deviceKindIcon(kind) {
+  const paths = {
+    tv: '<rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8"></path>',
+    box: '<rect x="4" y="8" width="16" height="9" rx="2"></rect><path d="M9 20h6"></path>',
+    player: '<rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M10 10l4 2-4 2z"></path>',
+    audio: '<rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="14" r="3"></circle><circle cx="12" cy="7" r="1"></circle>',
+    light: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"></path>',
+    switch: '<path d="M12 3v9"></path><path d="M6.3 7.5a8 8 0 1 0 11.4 0"></path>',
+    cover: '<rect x="4" y="3" width="16" height="18" rx="1"></rect><path d="M4 8h16M4 13h16M12 21v-3"></path>',
+    climate: '<path d="M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z"></path>',
+    fan: '<circle cx="12" cy="12" r="2"></circle><path d="M12 10c0-4 1-7 4-7s2 5-2 7M14 12c4 0 7 1 7 4s-5 2-7-2M12 14c0 4-1 7-4 7s-2-5 2-7M10 12c-4 0-7-1-7-4s5-2 7 2"></path>',
+    camera: '<path d="M3 7h4l2-3h6l2 3h4v13H3z"></path><circle cx="12" cy="13" r="4"></circle>',
+    media: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M10 9l5 3-5 3z"></path>',
+    sensor: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>',
+    remote: '<rect x="7" y="2" width="10" height="20" rx="3"></rect><circle cx="12" cy="8" r="2"></circle>',
+    hub: '<circle cx="12" cy="13" r="2"></circle><path d="M8.5 9.5a5 5 0 0 1 7 0M5.6 6.6a9 9 0 0 1 12.8 0M12 15v6"></path>',
+    ir: '<rect x="3" y="6" width="12" height="12" rx="2"></rect><path d="M18 9a4 4 0 0 1 0 6M20.5 7a7 7 0 0 1 0 10"></path>',
+    extender: '<circle cx="12" cy="12" r="3"></circle><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8"></path>',
+    generic: '<rect x="4" y="4" width="16" height="16" rx="3"></rect><circle cx="12" cy="12" r="2"></circle>'
+  };
+  return `<span class="device-kind-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${paths[kind] || paths.generic}</svg></span>`;
+}
+
+/** The icon of a catalogue entity, by its domain (and a direct device's prefix). */
+function haDeviceKind(dev) {
+  const obj = (dev.entityId || '').split('.')[1] || '';
+  if (dev.domain === 'media_player') {
+    if (/^appletv_/.test(obj)) return 'box';
+    if (/^androidtv_/.test(obj)) return 'tv';
+    if (/^zidoo_/.test(obj)) return zidooKind({ entityId: dev.entityId }) === 'audio' ? 'audio' : 'player';
+    return 'media';
+  }
+  return { light: 'light', switch: 'switch', input_boolean: 'switch', cover: 'cover', climate: 'climate', fan: 'fan',
+    camera: 'camera', sensor: 'sensor', binary_sensor: 'sensor', remote: 'remote' }[dev.domain] || 'generic';
+}
+
+/** The colour of an entity's state on a device card: on / playing green, paused or standby amber,
+ * off grey, unreachable red. */
+function deviceStateTone(entityId) {
+  const e = haStates && haStates[entityId];
+  if (!e) return 'none';
+  if (e.attributes && e.attributes.astrion_needs_pairing) return 'warn';
+  if (e.state === 'unavailable') return 'bad';
+  if (e.state === 'on' || e.state === 'playing' || e.state === 'idle') return 'ok';
+  if (e.state === 'paused' || e.state === 'standby') return 'warn';
+  return 'off';
+}
+
+/**
+ * One device of the Direct devices view as a card (1.4.9, as in the mock-up): its kind's icon,
+ * name, details line, an optional badge, its state as a coloured pill, and its actions.
+ * [o]: {kind, name, details, badge, state, tone, extra, actions} — details, badge, state and
+ * extra are HTML already escaped by the caller.
+ */
+function deviceCardHtml(o) {
+  return `<div class="device-card">
+      <span class="device-card-icon">${deviceKindIcon(o.kind).replace('width="18" height="18"', 'width="28" height="28"')}</span>
+      <span class="device-card-text">
+        <b>${o.name}</b>
+        <span class="device-card-details">${o.details}</span>
+        <span class="device-card-tags">${o.badge ? `<span class="device-badge">${o.badge}</span>` : ''}${o.state ? `<span class="device-state tone-${o.tone || 'none'}">${o.state}</span>` : ''}${o.extra || ''}</span>
+      </span>
+      <span class="device-card-actions">${o.actions}</span>
+    </div>`;
 }
 
 // ---- form show/hide ---------------------------------------------------------

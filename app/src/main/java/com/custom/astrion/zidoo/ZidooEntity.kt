@@ -102,6 +102,13 @@ object ZidooKeys {
             "FAST_FORWARD" to "MEDIA_FAST_FORWARD"
         )
 
+    /** "Eversolo" for its streamers (DMP-A6, DMP-A8…: same control API, 1.4.9), else "Zidoo". */
+    fun brandOf(model: String?): String {
+        val m = model.orEmpty()
+        val eversolo = m.startsWith("DMP", ignoreCase = true) || m.contains("eversolo", ignoreCase = true)
+        return if (eversolo) "Eversolo" else "Zidoo"
+    }
+
     private val KEY_NAME = Regex("^Key\\.[A-Za-z0-9_.]{1,40}$")
 
     /** The `Key.*` to send for [name]: one of the player's own (as is) or an Android name; null when unknown. */
@@ -152,7 +159,7 @@ object ZidooEntityMapper {
         // ±10 s falls back to the rewind / fast-forward keys.
         val playing = s.reachable && s.source != ZidooSource.NONE
         a["supported_features"] = if (playing) FEATURES or SEEK else FEATURES
-        a["manufacturer"] = "Zidoo"
+        a["manufacturer"] = ZidooKeys.brandOf(s.model)
         s.model?.let { a["model"] = it }
         s.firmware?.let { a["sw_version"] = it }
         if (s.apps.isNotEmpty()) a["source_list"] = s.apps.keys.sortedWith(String.CASE_INSENSITIVE_ORDER)

@@ -235,7 +235,15 @@ function savePageTreeCollapsed() {
   try { localStorage.setItem('astrion.pageTreeCollapsed', JSON.stringify([...pageTreeCollapsed])); } catch (e) { /* private mode */ }
 }
 
+/** The "swipe between pages" box (1.4.9): dashboard.json's swipePages, true when absent. */
+function onSwipePagesChange(on) {
+  if (on) delete dashboardData.swipePages; else dashboardData.swipePages = false;
+  updateJsonOutput();
+}
+
 function renderTabs() {
+  const swipe = document.getElementById('swipePagesToggle');
+  if (swipe) swipe.checked = dashboardData.swipePages !== false;
   const tree = document.getElementById('pageTree');
   if (!tree) return;
   tree.innerHTML = '';
@@ -1202,7 +1210,15 @@ function enhanceCardControls(contentContainer) {
         downSpan.style.cursor = idx === cardEls.length - 1 ? 'default' : 'pointer';
         if (idx < cardEls.length - 1) downSpan.onclick = () => moveCard(idx, 1);
 
-        iconsSpan.prepend(downSpan, upSpan);
+        // 1.4.9: copy the card to other pages (js/card-copy.js).
+        const copySpan = document.createElement('span');
+        copySpan.className = 'remove card-copy';
+        copySpan.title = I18N.t('web_card_copy_title');
+        copySpan.textContent = '⧉';
+        copySpan.style.color = '#00E5FF';
+        copySpan.onclick = () => openCardCopyDialog(idx);
+
+        iconsSpan.prepend(copySpan, downSpan, upSpan);
       }
     }
 
@@ -1235,7 +1251,7 @@ function enhanceCardControls(contentContainer) {
 
 const ATV_PREVIEW_ICONS = {
   Menu: '☰', Home: '⌂', SeekBackward: '↺', SeekForward: '↻', Rewind: '⏪', FastForward: '⏩',
-  Previous: '⏮', Next: '⏭', Siri: '🎤', Screensaver: '🖼', Guide: '☷', VolumeUp: '🔊', VolumeDown: '🔉', ControlCenter: '▦'
+  Previous: '⏮', Next: '⏭', Siri: '🎤', Screensaver: '🖼', Guide: '☷', VolumeUp: '🔊', VolumeDown: '🔉', ControlCenter: '▦', AppPicker: '⊞'
 };
 const ATV_PREVIEW_DEFAULTS = { classic: ['Menu', 'Home'], compact: ['Menu', 'SeekBackward', 'SeekForward', 'Home'], full: ['Menu', 'Home'] };
 const ATV_APP_FALLBACK_COLORS = ['#B3261E', '#1F5FBF', '#3A3A40', '#B86E00', '#1E7A4A', '#5B3FA8'];
@@ -1294,7 +1310,7 @@ function appleTvRemotePreviewHtml(atv) {
   const showSkip = atv.showSkip !== false && isDirect;
   const showPad = atv.showClickpad !== false;
   const buttons = (Array.isArray(atv.buttons) && atv.buttons.length) ? atv.buttons : ATV_PREVIEW_DEFAULTS[layout];
-  const apps = hasMedia ? (atv.apps || []) : [];
+  const apps = hasMedia && atv.showApps !== false ? (atv.apps || []) : [];
   const box = inner => `<div class="preview-apple-remote" style="gap:${layout === 'classic' ? 18 : 12}px;padding:${layout === 'classic' ? 20 : 14}px">${inner}</div>`;
 
   if (layout === 'classic') {
