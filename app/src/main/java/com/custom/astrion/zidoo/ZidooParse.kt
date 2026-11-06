@@ -28,8 +28,38 @@ data class ZidooPlayback(
     val musicId: Long? = null,
     val musicType: Int? = null,
     /** A cover the player gives as a full URL (Eversolo, streaming apps such as Apple Music). */
-    val artUrl: String? = null
+    val artUrl: String? = null,
+    /** What it plays, as an audiophile reads it (1.5.0): "FLAC · 44.1 kHz · 16 bit · 913 kbps". */
+    val quality: String? = null,
+    /** False when the player says it can't seek (an AirPlay stream, 1.5.0). */
+    val canSeek: Boolean = true
 )
+
+/**
+ * An Eversolo's inputs (1.5.0, from Eversolo's command list for the DMP-A6): the name shown in the
+ * Sources pop-up, the key that selects it, and how its `getState` names it (`volumeData.intputTag`,
+ * "XMOS-XMOS" for the internal player).
+ */
+enum class EversoloInput(val label: String, val key: String, private val tags: List<String>) {
+    INTERNAL("Internal player", "Key.DAC.XMOS", listOf("XMOS")),
+    BLUETOOTH("Bluetooth In", "Key.DAC.BT", listOf("BT", "BLUETOOTH")),
+    USB("USB-C In", "Key.DAC.USB", listOf("USB")),
+
+    // Its coaxial input is "RCA" in its own calls (setInputList?tag=RCA, Neoheresy's Eversolo panel).
+    COAXIAL("Coaxial In", "Key.DAC.COA", listOf("COA", "RCA")),
+    OPTICAL("Optical In", "Key.DAC.SPDIF", listOf("SPDIF", "OPT"))
+    ;
+
+    companion object {
+        fun ofLabel(label: Any?): EversoloInput? = entries.firstOrNull { it.label == label }
+
+        fun ofTag(tag: String?): EversoloInput? {
+            val t = tag?.uppercase()?.takeIf { it.isNotBlank() } ?: return null
+            return entries.firstOrNull { input -> input.tags.any { t.startsWith(it) } }
+                ?: entries.firstOrNull { input -> input.tags.any { it in t } }
+        }
+    }
+}
 
 /** The film or episode a video file is, from the player's poster wall (for title and backdrop). */
 data class ZidooMovie(
@@ -55,7 +85,9 @@ data class ZidooMovie(
 object ZidooParse {
     private val json = Json { ignoreUnknownKeys = true }
 
-    fun parse(body: String): JsonObject? = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull()
+    fun parse(body: String): JsonObject? = parseAny(body) as? JsonObject
+
+    fun parseAny(body: String): JsonElement? = runCatching { json.parseToJsonElement(body) }.getOrNull()
 
     private fun JsonObject.obj(key: String) = this[key] as? JsonObject
 
@@ -135,7 +167,14 @@ object ZidooParse {
         if (state == 0) return null
         hostedApp(o, state == V2_PLAYING)?.let { return it }
         val m = o.obj("playingMusic") ?: return null
-        val art = (m.str("albumArtBig") ?: m.str("albumArt"))?.takeIf { it.startsWith("http") }
+        val art = coverUrl(m.str("albumArtBig") ?: m.str("albumArt"))
+        val quality =
+            qualityOf(
+                m.str("extension")?.uppercase(),
+                m.str("sampleRate"),
+                m.str("bits")?.takeIf { it != "0" }?.let { "$it bit" },
+                m.str("bitrate")?.let(::kbps)
+            )
         return ZidooPlayback(
             source = ZidooSource.MUSIC,
             playing = state == V2_PLAYING,
@@ -147,17 +186,47 @@ object ZidooParse {
             positionMs = o.long("position"),
             musicId = m.long("id"),
             musicType = m.int("type"),
-            artUrl = art
+            artUrl = art,
+            quality = quality
         )
     }
 
-    /** What an app the Eversolo hosts plays (see [musicV2]); null when its own player plays. */
+    /** `getState`'s mute on an Eversolo (`volumeData.isMute`); null when not said. */
+    fun muted(o: JsonObject?): Boolean? = o?.obj("volumeData")?.bool("isMute")
+
+    /** `getState`'s input on an Eversolo (`volumeData.intputTag`, sic); null on a Zidoo or when not said. */
+    fun input(o: JsonObject?): EversoloInput? = EversoloInput.ofTag(o?.obj("volumeData")?.str("intputTag"))
+
+    private fun qualityOf(vararg parts: String?): String? = parts.filterNotNull().filter {
+        it.isNotBlank()
+    }.joinToString(" · ").ifEmpty { null }
+
+    /** "912,99 Kbps" → "913 kbps". */
+    private fun kbps(raw: String): String? {
+        val n = raw.lowercase().substringBefore("kbps").trim().replace(',', '.').toDoubleOrNull() ?: return null
+        return if (n > 0) "${Math.round(n)} kbps" else null
+    }
+
+    /** 44100 → "44.1 kHz". */
+    private fun khz(hz: Long): String {
+        val k = hz / HZ_PER_KHZ
+        return (if (k == Math.floor(k)) "${k.toLong()}" else "%.1f".format(java.util.Locale.ROOT, k)) + " kHz"
+    }
+
+    /**
+     * What an app the Eversolo hosts plays (see [musicV2]), or what is streamed to it — AirPlay,
+     * Spotify Connect (1.5.0: `playType` 6 / 4, `isOpenApp` false there, and `playingMusic` still the
+     * last track of its own player); null when its own player plays.
+     */
     private fun hostedApp(o: JsonObject, playing: Boolean): ZidooPlayback? {
         val info = o.obj("everSoloPlayInfo") ?: return null
-        if (info.bool("isOpenApp") != true) return null
+        val app = info.bool("isOpenApp") == true
+        val streamed = (info.long("playType") ?: o.long("playType"))?.toInt() in STREAMED
+        if (!app && !streamed) return null
         val track = info.obj("everSoloPlayAudioInfo") ?: return null
         val title = track.str("songName") ?: return null
-        val art = (track.str("albumUrl") ?: info.str("onlineIcon"))?.takeIf { it.startsWith("http") }
+        // A streamed track's cover is the player's `icon` call (an app's `icon` is the app's own).
+        val art = coverUrl(track.str("albumUrl")) ?: coverUrl(info.str("onlineIcon")) ?: if (app) null else coverUrl(info.str("icon"))
         return ZidooPlayback(
             source = ZidooSource.MUSIC,
             playing = playing,
@@ -166,9 +235,37 @@ object ZidooParse {
             album = track.str("albumName"),
             durationMs = info.long("duration") ?: o.long("duration"),
             positionMs = info.long("currentPosition") ?: o.long("position"),
-            artUrl = art
+            artUrl = art,
+            quality =
+            qualityOf(
+                track.long("audioSampleRate")?.takeIf { it > 0 }?.let(::khz),
+                track.long("audioBitsPerSample")?.takeIf { it > 0 }?.let { "$it bit" }
+            ),
+            canSeek = info.bool("isCanSeek") != false
         )
     }
+
+    /**
+     * A cover as the player gives it (1.5.0), made into one an image can be read from, or null:
+     * - a full URL, an Apple-style template (`…/{w}x{h}bb.jpg`) filled with a size;
+     * - one of the player's own calls (`/SystemSettings/getItemSettingIcon?iconName=…`, an app it
+     *   hosts: the official Apple Music's cover of a track not cached as a URL) kept as is, relative:
+     *   the registry puts the player's address in front;
+     * - a file on the player (`/storage/emulated/0/…`) or a video (an animated cover): null.
+     */
+    fun coverUrl(url: String?): String? {
+        val raw = url?.trim().orEmpty()
+        val u = raw.takeIf { it.startsWith("http") || isPlayerCall(it) } ?: return null
+        val path = u.substringBefore('?').lowercase()
+        if (VIDEO_COVER.any { path.endsWith(it) }) return null
+        return u
+            .replace("{w}", COVER_PX)
+            .replace("{h}", COVER_PX)
+            .replace("{c}", "bb")
+            .replace("{f}", "jpg")
+    }
+
+    private fun isPlayerCall(path: String) = path.startsWith("/") && '?' in path && LOCAL_FILE.none { path.startsWith(it) }
 
     /** `ZidooControlCenter/Apps/getApps`: label → package, the apps it can open. */
     fun apps(o: JsonObject?): Map<String, String> {
@@ -205,7 +302,14 @@ object ZidooParse {
     }
 
     private const val HTTP_OK = 200
+    private const val COVER_PX = "600"
+    private val VIDEO_COVER = listOf(".m3u8", ".mp4", ".mov", ".webm")
+    private val LOCAL_FILE = listOf("/storage/", "/sdcard/", "/data/", "/mnt/")
     private const val V2_PLAYING = 3
+    private const val HZ_PER_KHZ = 1000.0
+
+    /** `playType` of what is streamed to an Eversolo: Spotify Connect, AirPlay. */
+    private val STREAMED = setOf(4, 6)
     private val MAC = Regex("^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$")
 }
 

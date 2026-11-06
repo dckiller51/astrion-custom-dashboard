@@ -145,6 +145,16 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .form-section-name { flex: 1; }
   .form-section-badge { font-size: 0.75rem; font-weight: 600; color: #00E5FF; background: rgba(0,229,255,0.12); border-radius: 10px; padding: 2px 9px; }
   .form-section-body { padding: 2px 14px 14px; border-top: 1px solid #333; }
+  /* Tick boxes that follow each other share a row (1.5.0). */
+  .form-check-row { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 10px 0 4px; }
+  .form-check-row > label { margin: 0; flex: 0 1 auto; max-width: 100%; }
+  /* A sectioned card form, two fields side by side (1.5.0, the device page's look). */
+  .ha-dialog.form-wide:not(.gallery-mode) { width: min(960px, 94vw); }
+  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; align-items: start; }
+  .form-field { min-width: 0; }
+  .form-field.wide { grid-column: 1 / -1; }
+  .form-field > label:first-child { margin-top: 10px; }
+  @media (max-width: 720px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
   .gallery-suggestions-title { font-size: 0.9rem; color: #a0a0a0; margin-bottom: 10px; }
   .inline-check { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #ccc; }
   .inline-check input { width: auto; }

@@ -65,7 +65,29 @@ import kotlinx.coroutines.delay
  *
  * [library]: the card's `music_search` player (1.3.9, a "Search music" button next to Browse) and
  * the player whose queue a "Queue" button opens (1.4.0).
+ *
+ * [MediaLibraryPlayers.showVolume] false (1.5.0: the TV remote card's `show_volume: false`, a volume set elsewhere such
+ * as an amplifier): no volume row. Power is only the round button at the bottom, not also first in
+ * the transport row (it showed twice).
  */
+/**
+ * Under the title (1.5.0, players added in Astrion): a web radio's "● Live" (no length, so no bar)
+ * and what plays as an audiophile reads it, "FLAC · 44.1 kHz · 16 bit · 913 kbps". Nothing when
+ * the player says neither.
+ */
+@Composable
+internal fun MediaQualityLine(e: EntityState?, theme: ThemeColors) {
+    val live = e?.attrString("astrion_live") == "true" && e.attrDouble("media_duration") == null
+    val quality = e?.attrString("astrion_quality")
+    if (!live && quality == null) return
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (live) {
+            Text("● " + stringResource(R.string.media_live), color = theme.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+        quality?.let { Text(it, color = theme.mutedText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+    }
+}
+
 @Composable
 fun MediaPlayerDetailDialog(
     entityId: String,
@@ -76,10 +98,12 @@ fun MediaPlayerDetailDialog(
     library: MediaLibraryPlayers = MediaLibraryPlayers(),
     onClose: () -> Unit
 ) {
-    val mediaButtons = remember(e) { computeMediaButtons(e, MediaPlayerCard.MEDIA_CONTROL_KEYS) }
+    val mediaButtons = remember(e) { computeMediaButtons(e, MediaPlayerCard.MEDIA_CONTROL_KEYS - "on_off") }
     val volumeButtons = remember(e) { computeVolumeButtons(e, listOf("mute")) }
     val hasVolumeSet = e?.supports(Feature.VOLUME_SET) == true
     val hasVolumeStep = e?.supports(Feature.VOLUME_STEP) == true
+    val hasVolumeControl = hasVolumeSet || hasVolumeStep || volumeButtons.isNotEmpty()
+    val volumeRow = library.showVolume && hasVolumeControl
 
     val title = e?.attrString("media_title") ?: name
     val subtitle =
@@ -140,12 +164,23 @@ fun MediaPlayerDetailDialog(
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center
                 )
+                MediaQualityLine(e, theme)
             }
 
             DetailLibraryButtons(entityId, e, client, theme, library)
 
             if (e != null && e.attrDouble("media_duration") != null) {
-                DialogProgressBar(e, theme)
+                // A player that can seek (1.5.0): tap or drag the bar, as on the full card. It was
+                // display-only here, so the TV remote card's now-playing pop-up couldn't seek.
+                if (e.supports(Feature.SEEK)) {
+                    AtvProgress(e, theme, thick = true) { seconds ->
+                        client.callService(
+                            ServiceCall.of("media_player", "media_seek", entityId, "seek_position" to seconds.coerceAtLeast(0.0))
+                        )
+                    }
+                } else {
+                    DialogProgressBar(e, theme)
+                }
             }
 
             if (mediaButtons.isNotEmpty()) {
@@ -163,7 +198,7 @@ fun MediaPlayerDetailDialog(
                 }
             }
 
-            if (hasVolumeSet || hasVolumeStep || volumeButtons.isNotEmpty()) {
+            if (volumeRow) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -202,7 +237,14 @@ fun MediaPlayerDetailDialog(
 }
 
 /** The music players behind the detail dialog's library buttons: `music_search` (1.3.9) and the queue (1.4.0). */
-data class MediaLibraryPlayers(val musicSearch: String? = null, val queue: String? = null)
+data class MediaLibraryPlayers(
+    val musicSearch: String? = null,
+    val queue: String? = null,
+    /** Another entity of the same device (1.5.0: the TV remote card's remote): its Zidoo library opens on Browse. */
+    val browseAlso: String? = null,
+    /** The volume row (1.5.0): false from a TV remote card with `show_volume: false`. */
+    val showVolume: Boolean = true
+)
 
 /** Browse, Search music and Queue, each opening its own window. */
 @Composable
@@ -212,12 +254,12 @@ private fun DetailLibraryButtons(entityId: String, e: EntityState?, client: HaCl
     var showQueue by remember { mutableStateOf(false) }
     MediaLibraryButtons(
         theme,
-        onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) ({ showBrowser = true }) else null,
+        onBrowse = if (canBrowse(entityId, e, library.browseAlso)) ({ showBrowser = true }) else null,
         onSearch = library.musicSearch?.let { { showSearch = true } },
         onQueue = library.queue?.let { { showQueue = true } }
     )
     if (showBrowser) {
-        MediaBrowser(entityId = entityId, client = client, theme = theme) { showBrowser = false }
+        BrowseDialog(entityId = entityId, client = client, theme = theme, also = library.browseAlso) { showBrowser = false }
     }
     library.musicSearch?.takeIf { showSearch }?.let { MusicSearchDialog(client, it, theme) { showSearch = false } }
     library.queue?.takeIf { showQueue }?.let { MediaQueueDialog(client, it, theme) { showQueue = false } }

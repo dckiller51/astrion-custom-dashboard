@@ -45,10 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.custom.astrion.R
+import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ui.LocalTapFeedback
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
+import com.custom.astrion.zidoo.ZidooRegistry
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -153,6 +155,29 @@ private fun handleItemClick(
         // it and plays the item instead.
         isAppsOrRadiosContentType(item.contentType) ->
             stack.add(item.contentId to item.contentType)
+    }
+}
+
+/**
+ * Browse: a Zidoo added in Astrion opens its films and series, an Eversolo its music (1.5.0), any
+ * other player Home Assistant's media browser.
+ */
+/** Whether Browse has something to open: the player's own browsing, or a Zidoo's library (1.5.0). */
+internal fun canBrowse(entityId: String, e: EntityState?, also: String? = null): Boolean =
+    hasLibrary(entityId, also) || e?.supports(Feature.BROWSE_MEDIA) == true
+
+/** A Zidoo's or an Eversolo's own library for [entityId] (or [also]'s media player). */
+internal fun hasLibrary(entityId: String, also: String? = null): Boolean =
+    ZidooRegistry.libraryOf(entityId, also) != null || ZidooRegistry.musicLibraryOf(entityId, also) != null
+
+@Composable
+fun BrowseDialog(entityId: String, client: HaClient, theme: ThemeColors, also: String? = null, onClose: () -> Unit) {
+    val zidoo = ZidooRegistry.libraryOf(entityId, also)
+    val eversolo = ZidooRegistry.musicLibraryOf(entityId, also)
+    when {
+        zidoo != null -> ZidooLibraryDialog(zidoo, theme, onClose)
+        eversolo != null -> ZidooMusicDialog(eversolo, theme, onClose)
+        else -> MediaBrowser(entityId = entityId, client = client, theme = theme, onClose = onClose)
     }
 }
 

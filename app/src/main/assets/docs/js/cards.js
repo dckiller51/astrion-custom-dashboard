@@ -1,3 +1,7 @@
+// Card forms: updateCardFormInputs() draws a type's form, fillCardForm() fills it, addCardToPage()
+// collects it. Since 1.4.9, js/card-sections.js wraps the first two (folding sections and their
+// "settings changed" badges) and js/card-gallery.js opens the gallery before them: a new form
+// keeps working as long as its fields have ids (list them in CARD_SECTIONS to fold them).
 // ---- Cards ---------------------------------------------------------------
 
 const NAME_ENTITY_TYPES = ['source_select'];
@@ -298,6 +302,15 @@ function updateCardFormInputs() {
       ${type === 'scene_grid' ? `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_labels')}</label><label><input type="checkbox" id="optIconFill"> ${I18N.t('web_card_grid_icon_fill')}</label>` : `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_button_labels')}</label>`}
       <label>${I18N.t('web_card_grid_tile_height')}</label><input type="number" id="optTileHeight" min="30" max="300" placeholder="${I18N.t(type === 'scene_grid' ? 'web_card_ph_tile_height' : 'web_card_ph_button_height')}">
       <label>${I18N.t('web_card_grid_font_size')}</label><input type="number" id="optFontSize" min="8" max="60" placeholder="${I18N.t('web_card_ph_font_size')}">
+      <label>${I18N.t('web_card_grid_icon_size')}</label><input type="number" id="optIconSize" min="12" max="200" placeholder="${type === 'scene_grid' ? 28 : 32}">
+      <label>${I18N.t('web_card_grid_icon_fit')}</label>
+      <select id="optIconFit">
+        <option value="contain">${I18N.t('web_card_grid_icon_fit_contain')}</option>
+        <option value="fill">${I18N.t('web_card_grid_icon_fit_fill')}</option>
+        <option value="stretch">${I18N.t('web_card_grid_icon_fit_stretch')}</option>
+      </select>
+      <label class="inline-check"><input type="checkbox" id="optIconTrim"> ${I18N.t('web_card_grid_icon_trim')}</label>
+      <div class="hint">${I18N.t('web_card_grid_icon_hint')}</div>
       <label class="inline-check"><input type="checkbox" id="optCenterLastRow"> ${I18N.t('web_card_grid_center_last_row')}</label>
       <div id="gridItemsList"></div>
       <div class="section-box" style="margin-top:8px">
@@ -637,11 +650,18 @@ let gridEditSnapshot = null; // the form's text fields as the edited item filled
 /** The grid item form's text fields (selects are left out: some are filled later, asynchronously). */
 const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand',
   'giIrDelay', 'giActivityId', 'giHarmonyDevice', 'giHarmonyCommand', 'giStateEntity', 'giStateValue', 'giLongPress',
-  'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder'];
-function gridItemTextSnapshot() {
-  return GRID_ITEM_TEXT_FIELDS.map(id => {
+  'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder',
+  // 1.5.0: the colours too. A tile whose only change was its colour wasn't seen as changed, so
+  // saving the card dropped it (a tester's Activities grid kept its default colours).
+  'giColorHex', 'giTextColorHex', 'giActiveColorHex'];
+// A select always holds a value: counted only when comparing an edited item with itself (1.5.0:
+// a changed Activity, page mode or Harmony action was dropped the same way).
+const GRID_ITEM_SELECTS = ['giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice'];
+function gridItemTextSnapshot(withSelects) {
+  const fields = withSelects ? GRID_ITEM_TEXT_FIELDS.concat(GRID_ITEM_SELECTS) : GRID_ITEM_TEXT_FIELDS;
+  return fields.map(id => {
     const el = document.getElementById(id);
-    if (!el || el.tagName === 'SELECT') return '';
+    if (!el || (el.tagName === 'SELECT' && !withSelects)) return '';
     return el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value.trim();
   }).join('\u0001');
 }
@@ -1123,7 +1143,7 @@ async function editGridItem(type, i) {
   const item = window._pendingGridItems[i];
   fillGridItemForm(type, item);
   await fillGiHarmonySection(item);
-  gridEditSnapshot = gridItemTextSnapshot();
+  gridEditSnapshot = gridItemTextSnapshot(true);
   const submit = document.getElementById('giSubmitBtn');
   submit.textContent = I18N.t(type === 'button_grid' ? 'web_card_grid_save_button' : 'web_card_grid_save_scene');
   submit.classList.add('editing'); // 1.4.0: green "Save scene" next to a red "Cancel edit" while editing one
@@ -1356,6 +1376,12 @@ function collectGridSizeOptions(o) {
   const fs = parseInt(document.getElementById('optFontSize').value, 10);
   if (fs > 0) o.font_size = fs;
   if (document.getElementById('optCenterLastRow').checked) o.center_last_row = true;
+  // 1.5.0: icon size, fit and trim.
+  const is = parseInt(document.getElementById('optIconSize').value, 10);
+  if (is > 0) o.icon_size = is;
+  const fit = document.getElementById('optIconFit').value;
+  if (fit !== 'contain') o.icon_fit = fit;
+  if (document.getElementById('optIconTrim').checked) o.icon_trim = true;
 }
 
 /** An empty cell (1.3.7) to place the other buttons, e.g. empty, 0, empty under 7 8 9. */
@@ -1602,6 +1628,9 @@ function fillCardForm(card) {
     if (type === 'scene_grid') document.getElementById('optIconFill').checked = o.icon_fill === true;
     document.getElementById('optTileHeight').value = o.tile_height || '';
     document.getElementById('optFontSize').value = o.font_size || '';
+    document.getElementById('optIconSize').value = o.icon_size || '';
+    document.getElementById('optIconFit').value = ['fill', 'stretch'].includes(o.icon_fit) ? o.icon_fit : 'contain';
+    document.getElementById('optIconTrim').checked = o.icon_trim === true;
     document.getElementById('optCenterLastRow').checked = o.center_last_row === true;
     window._pendingGridItems = JSON.parse(JSON.stringify(o.buttons || o.scenes || []));
     renderGridItemsList(type);
@@ -1700,7 +1729,7 @@ function confirmPendingGridItems() {
   const name = document.getElementById('giName');
   // Pending = something was really typed: any field of a new item, or a change to the edited one
   // (just opening a button with ✎ and saving the card asks nothing — 1.4.1).
-  const now = gridItemTextSnapshot();
+  const now = gridItemTextSnapshot(editingGridItem !== null);
   const pending = editingGridItem !== null ? gridEditSnapshot !== null && now !== gridEditSnapshot : now.replace(/\u0001/g, '') !== '';
   if (!pending) return true;
   const what = (name && name.value.trim()) || I18N.t(type === 'button_grid' ? 'web_card_grid_this_button' : 'web_card_grid_this_scene');

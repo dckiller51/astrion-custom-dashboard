@@ -290,8 +290,9 @@ const TV_COMMAND_KEYS = [
 ];
 
 function tvRemoteFormHtml() {
+  // An Eversolo's own commands follow (1.5.0: input, output, screen), with what they do.
   const cmdList = (typeof ANDROID_TV_COMMANDS !== 'undefined' ? ANDROID_TV_COMMANDS : [])
-    .map(c => `<option value="${cxEsc(c)}">`).join('');
+    .map(c => `<option value="${cxEsc(c)}">`).join('') + (typeof eversoloCommandOptions === 'function' ? eversoloCommandOptions('') : '');
   return `
     <label>${I18N.t('web_card_name')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_tv_name')}">
     <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" list="tvRemoteEntities" placeholder="${I18N.t('web_card_ph_remote')}" onchange="onTvEntityChange()">
@@ -300,6 +301,7 @@ function tvRemoteFormHtml() {
     <div class="hint">${I18N.t('web_card_tv_media_hint')}</div>
     <label class="inline-check"><input type="checkbox" id="optTvShowDpad" checked> ${I18N.t('web_card_tv_show_dpad')}</label>
     <label class="inline-check"><input type="checkbox" id="optTvShowSources" checked> ${I18N.t('web_card_tv_show_sources')}</label>
+    <label class="inline-check"><input type="checkbox" id="optTvShowBrowse" checked> ${I18N.t('web_card_tv_show_browse')}</label>
     <label class="inline-check"><input type="checkbox" id="optTvShowKeypad" onchange="setDisplayIf('tvKeypadBox', this.checked)"> ${I18N.t('web_card_tv_show_keypad')}</label>
     <div id="tvKeypadBox" style="display:none">${keypadFieldsHtml(I18N.t('web_card_keypad_tv_remote_ph'))}</div>
     <label class="inline-check"><input type="checkbox" id="optTvShowVolume" checked> ${I18N.t('web_card_tv_show_volume')}</label>
@@ -490,6 +492,7 @@ function fillTvRemoteForm(o) {
   document.getElementById('optTvShowVolume').checked = o.show_volume !== false;
   document.getElementById('optTvShowDpad').checked = o.show_dpad !== false;
   document.getElementById('optTvShowSources').checked = o.show_sources !== false;
+  document.getElementById('optTvShowBrowse').checked = o.show_browse !== false;
   document.getElementById('optTvShowKeypad').checked = o.show_keypad === true;
   setDisplayIf('tvKeypadBox', o.show_keypad === true);
   fillKeypadFields(o);
@@ -508,7 +511,7 @@ function fillTvRemoteForm(o) {
   const cmds = o.commands || {};
   document.querySelectorAll('.tv-cmd').forEach(el => { el.value = cmds[el.dataset.key] || ''; });
   window._tvExtra = cxWithout(o, ['name', 'remote_entity', 'media_entity', 'mute_entity', 'show_volume', 'apps', 'commands',
-    'show_now_playing', 'now_playing_entity', 'now_playing_tap', 'show_transport', 'apps_style', 'layout', 'show_skip', 'show_dpad', 'show_sources', 'show_keypad', 'show_apps',
+    'show_now_playing', 'now_playing_entity', 'now_playing_tap', 'show_transport', 'apps_style', 'layout', 'show_skip', 'show_dpad', 'show_sources', 'show_browse', 'show_keypad', 'show_apps',
     'keypad_entity', 'keypad_remote_device', 'keypad_ir_device', 'keypad_harmony_device', 'keypad_hub', 'keypad_commands', 'keypad_ok']);
   // Command renames for keys this form doesn't list are kept too.
   window._tvExtraCommands = cxWithout(cmds, TV_COMMAND_KEYS.map(([k]) => k));
@@ -534,6 +537,7 @@ function collectTvRemoteOptions() {
   if (!document.getElementById('optTvShowVolume').checked) out.show_volume = false;
   if (!document.getElementById('optTvShowDpad').checked) out.show_dpad = false;
   if (!document.getElementById('optTvShowSources').checked) out.show_sources = false;
+  if (!document.getElementById('optTvShowBrowse').checked) out.show_browse = false;
   if (document.getElementById('optTvShowKeypad').checked) {
     out.show_keypad = true;
     collectKeypadFields(out); // nothing set: the card's own remote

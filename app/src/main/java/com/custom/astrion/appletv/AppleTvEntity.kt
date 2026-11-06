@@ -2,6 +2,7 @@ package com.custom.astrion.appletv
 
 import com.custom.astrion.appletv.mrp.MrpPlayState
 import com.custom.astrion.appletv.mrp.MrpPlaying
+import com.custom.astrion.ha.HaTime
 
 /** Where a discovered/stored Apple TV can currently be reached. */
 data class AppleTvEndpoint(val host: String, val port: Int)
@@ -138,7 +139,7 @@ object AppleTvEntityMapper {
         np?.genre?.let { attributes["media_genre"] = it }
         np?.durationSeconds?.let { attributes["media_duration"] = it.toInt() }
         np?.elapsedTimeSeconds?.let { attributes["media_position"] = it.toInt() }
-        np?.positionUpdatedAtUnixMs?.let { attributes["media_position_updated_at"] = isoInstant(it) }
+        np?.positionUpdatedAtUnixMs?.let { attributes["media_position_updated_at"] = HaTime.isoInstant(it) }
         playing.appBundleId?.let { bundleId ->
             attributes["app_id"] = bundleId
             val name = playing.appName?.takeIf { it.isNotBlank() } ?: snapshot.apps[bundleId]
@@ -152,12 +153,6 @@ object AppleTvEntityMapper {
             // configured at all. Requires the local web server (Settings) to stay enabled.
             attributes["entity_picture"] = "http://127.0.0.1:8080/appletv-artwork/${spec.localId}?v=${snapshot.artworkVersion}"
         }
-    }
-
-    private fun isoInstant(unixMs: Long): String {
-        val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", java.util.Locale.US)
-        formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        return formatter.format(java.util.Date(unixMs))
     }
 
     fun stateOf(s: AppleTvSnapshot): String {

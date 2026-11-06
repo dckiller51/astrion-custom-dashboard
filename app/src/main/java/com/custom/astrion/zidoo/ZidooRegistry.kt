@@ -35,6 +35,11 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
 
         @Volatile var appsReadAt = 0L
 
+        @Volatile var appsTriedAt = 0L
+
+        /** The app list didn't come once: said in the log, once. */
+        @Volatile var appsWarned = false
+
         /** The video file whose film was last looked up, and what was found. */
         var moviePath: String? = null
         var movie: ZidooMovie? = null
@@ -60,6 +65,7 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "Zidoo-${cfg.localId}").apply { isDaemon = true } }
             val device = Device(spec, ZidooClient { cfg.host }, executor)
             devices[spec.entityId] = device
+            libraries[spec.entityId] = Library(device.client) { device.state.model }
             byRemoteEntity[spec.remoteEntityId] = device
             publish(device)
             schedule(device, 0L)
@@ -76,6 +82,7 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
     fun stop() {
         stopped = true
         devices.values.forEach { it.executor.shutdownNow() }
+        devices.keys.forEach { libraries.remove(it) }
         sender.shutdownNow()
         client?.let { c ->
             devices.values.forEach {
@@ -129,7 +136,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
                 reachable = true,
                 model = model?.model ?: before.model,
                 firmware = model?.firmware ?: before.firmware,
-                apps = apps
+                apps = apps,
+                input = c.lastInput,
+                muted = c.lastMuted
             )
         return if (playback == null) base else withPlayback(device, base, playback, now)
     }
@@ -137,7 +146,18 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
     /** The installed apps: read once it answers, then every [APPS_REFRESH_MS]. */
     private fun appsOf(device: Device, before: ZidooState, now: Long): Map<String, String> {
         if (before.apps.isNotEmpty() && now - device.appsReadAt <= APPS_REFRESH_MS) return before.apps
-        return device.client.apps().takeIf { it.isNotEmpty() }?.also { device.appsReadAt = now } ?: before.apps
+        // A list that didn't come is asked again a minute later, not at every read: the call may
+        // take a while, and the player's state would wait for it.
+        if (now - device.appsTriedAt < APPS_RETRY_MS) return before.apps
+        device.appsTriedAt = now
+        val apps = device.client.apps()
+        if (apps.isEmpty()) {
+            if (!device.appsWarned) log("[${device.spec.name}] its app list didn't come (ZidooControlCenter/Apps/getApps)")
+            device.appsWarned = true
+            return before.apps
+        }
+        device.appsReadAt = now
+        return apps
     }
 
     private fun withPlayback(device: Device, base: ZidooState, p: ZidooPlayback, now: Long): ZidooState {
@@ -155,7 +175,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             picture = device.moviePicture
         } else {
             val id = p.musicId
-            picture = p.artUrl ?: if (id != null && id > 0) c.musicArtUrl(id, p.musicType ?: 0) else null
+            // A cover the player serves itself comes as one of its calls (1.5.0): its address in front.
+            val art = p.artUrl?.let { if (it.startsWith("/")) c.base() + it.trimStart('/') else it }
+            picture = art ?: if (id != null && id > 0) c.musicArtUrl(id, p.musicType ?: 0) else null
         }
         return base.copy(
             source = p.source,
@@ -169,7 +191,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             durationMs = p.durationMs,
             positionMs = p.positionMs,
             positionAt = now,
-            pictureUrl = picture
+            pictureUrl = picture,
+            quality = p.quality,
+            canSeek = p.canSeek
         )
     }
 
@@ -240,12 +264,40 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
     )
 
     companion object {
+        /** A player added in Astrion, for the library pop-up (1.5.0), which talks to the player itself. */
+        private class Library(val client: ZidooClient, val model: () -> String?) {
+            val isZidoo: Boolean get() = ZidooKeys.brandOf(model()) == "Zidoo"
+        }
+
+        private val libraries = java.util.concurrent.ConcurrentHashMap<String, Library>()
+
+        /**
+         * The Zidoo whose library Browse opens for [entityId]: the one published as that entity or,
+         * given [also] (the TV remote card's `remote.zidoo_…` beside Home Assistant's own media
+         * player of the Zidoo), as that one's media player; else, for an entity of Home
+         * Assistant's Zidoo integration (`media_player.…zidoo…`), the only Zidoo added in
+         * Astrion. Null for an Eversolo (no film poster wall) or any other player.
+         */
+        fun libraryOf(entityId: String, also: String? = null): ZidooClient? {
+            libraries[entityId]?.let { return if (it.isZidoo) it.client else null }
+            also?.let { libraries["media_player." + it.substringAfter('.')] }?.let { return if (it.isZidoo) it.client else null }
+            if (!entityId.startsWith("media_player.") || !entityId.contains("zidoo", ignoreCase = true)) return null
+            return libraries.values.filter { it.isZidoo }.singleOrNull()?.client
+        }
+
+        /** The Eversolo whose music library Browse opens for [entityId] (or [also]'s media player), 1.5.0. */
+        fun musicLibraryOf(entityId: String, also: String? = null): ZidooClient? {
+            val lib = libraries[entityId] ?: also?.let { libraries["media_player." + it.substringAfter('.')] } ?: return null
+            return if (lib.isZidoo) null else lib.client
+        }
+
         private const val TAG = "ZidooRegistry"
         private const val ON_POLL_MS = 3_000L
         private const val OFF_POLL_MS = 15_000L
         private const val QUIET_POLL_MS = 60_000L
         private const val AFTER_COMMAND_MS = 700L
         private const val APPS_REFRESH_MS = 10 * 60_000L
+        private const val APPS_RETRY_MS = 60_000L
         private const val KEY_GAP_MS = 60L
     }
 }

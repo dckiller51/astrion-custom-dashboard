@@ -1,5 +1,7 @@
 package com.custom.astrion.androidtv
 
+import com.custom.astrion.ha.HaTime
+
 /** One paired Android TV, as the registry drives it. */
 data class AndroidTvSpec(
     val localId: String,
@@ -177,17 +179,11 @@ object AndroidTvEntityMapper {
         np.album?.let { a["media_album_name"] = it }
         np.durationMs?.let { a["media_duration"] = (it / MS_PER_S).toInt() }
         np.positionMs?.let { a["media_position"] = (it / MS_PER_S).toInt() }
-        np.positionUpdatedAt?.let { a["media_position_updated_at"] = isoInstant(it) }
+        np.positionUpdatedAt?.let { a["media_position_updated_at"] = HaTime.isoInstant(it) }
         // Same pattern as the Apple TV: the cover is served by this remote's own web server, which
         // fetched it from the helper (cards load it without Home Assistant).
         val picture = np.artVersion?.let { "http://127.0.0.1:8080/androidtv-artwork/${spec.localId}?v=$it" } ?: np.artUrl
         picture?.let { a["entity_picture"] = it }
-    }
-
-    private fun isoInstant(unixMs: Long): String {
-        val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", java.util.Locale.US)
-        formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        return formatter.format(java.util.Date(unixMs))
     }
 
     private const val MS_PER_S = 1000L

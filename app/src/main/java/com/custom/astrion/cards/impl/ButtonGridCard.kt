@@ -1,6 +1,5 @@
 package com.custom.astrion.cards.impl
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -14,12 +13,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,7 +29,6 @@ import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
-import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapCombinedClickable
 
 /**
@@ -117,7 +113,8 @@ class ButtonGridCard : CardRenderer {
                 iconPosition = IconPosition.from(config.string("iconPosition")),
                 tileHeight = config.int("tile_height").takeIf { it > 0 },
                 fontSize = config.int("font_size").takeIf { it > 0 },
-                showLabels = config.bool("show_labels", true)
+                showLabels = config.bool("show_labels", true),
+                iconStyle = GridIconStyle.of(config, DEFAULT_ICON_DP)
             )
 
         GridRows(buttons, columns, config.bool("center_last_row")) { b ->
@@ -220,7 +217,14 @@ class ButtonGridCard : CardRenderer {
 
     /** Card-wide look of every button: icon position, and the optional height / text size. */
     /** [showLabels] false (1.4.0): a button with an icon shows the icon only; its name stays for accessibility. */
-    private class GridStyle(val iconPosition: IconPosition, val tileHeight: Int?, val fontSize: Int?, val showLabels: Boolean = true) {
+    private class GridStyle(
+        val iconPosition: IconPosition,
+        val tileHeight: Int?,
+        val fontSize: Int?,
+        val showLabels: Boolean = true,
+        /** `icon_size`, `icon_fit`, `icon_trim` (1.5.0). */
+        val iconStyle: GridIconStyle = GridIconStyle(DEFAULT_ICON_DP, GridIconStyle.FIT_CONTAIN, false)
+    ) {
         /** A button's name shows when it has one, unless the label is hidden and the button has an icon. */
         fun showsLabel(name: String?, hasIcon: Boolean): Boolean = !name.isNullOrBlank() && (showLabels || !hasIcon)
     }
@@ -236,11 +240,7 @@ class ButtonGridCard : CardRenderer {
     ) {
         val name = b["name"] as? String
         val iconPath = b["icon"] as? String
-        val targetPx = with(LocalDensity.current) { 32.dp.toPx() }.toInt()
-        val bitmap =
-            remember(iconPath, targetPx) {
-                iconPath?.let { decodeIconSampled(it, targetPx) }
-            }
+        val bitmap = rememberGridIcon(iconPath, style.iconStyle)
         val hasIcon = bitmap != null
         val hasName = style.showsLabel(name, hasIcon)
         val active = isConditionActive(b, entities)
@@ -250,7 +250,7 @@ class ButtonGridCard : CardRenderer {
         val sideBySide = iconPosition.sideBySide
 
         val icon: @Composable () -> Unit = {
-            if (bitmap != null) Image(bitmap = bitmap, contentDescription = name, modifier = Modifier.size(32.dp))
+            if (bitmap != null) GridIconImage(bitmap, name, style.iconStyle)
         }
         val label: @Composable () -> Unit = {
             if (hasName) {
@@ -268,7 +268,7 @@ class ButtonGridCard : CardRenderer {
 
         val boxModifier =
             modifier
-                .height((style.tileHeight ?: if (hasIcon && !sideBySide) 68 else 48).dp)
+                .height((style.tileHeight ?: defaultHeight(hasIcon, sideBySide, style.iconStyle.size)).dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(tileBackground(b, active, theme))
                 .then(activeBorderModifier(b, active, theme))
@@ -329,4 +329,15 @@ class ButtonGridCard : CardRenderer {
             }
         }
     }
+}
+
+/** The icon's height when the card sets no `icon_size`. */
+private const val DEFAULT_ICON_DP = 32
+
+/** A tile's height without `tile_height`: 68 dp with an icon over its label, 48 beside it or
+ * without one; taller for a bigger icon (1.5.0). */
+private fun defaultHeight(hasIcon: Boolean, sideBySide: Boolean, iconDp: Int): Int = when {
+    !hasIcon -> 48
+    sideBySide -> maxOf(48, iconDp + 16)
+    else -> maxOf(68, iconDp + 36)
 }

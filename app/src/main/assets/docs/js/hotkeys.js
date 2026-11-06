@@ -130,6 +130,24 @@ async function populateHkAndroidTvSelect(selected) {
   }
 }
 
+// An Eversolo's own commands (1.5.0, from Eversolo's "TCP" command list for the DMP-A6): input,
+// output, its screen. Any Key.* name goes to a Zidoo / Eversolo as is; these are offered with a
+// readable label for a remote / media player of one added in Astrion.
+const EVERSOLO_COMMANDS = [
+  ['Key.DAC.XMOS', 'web_evs_in_internal'], ['Key.DAC.BT', 'web_evs_in_bt'], ['Key.DAC.USB', 'web_evs_in_usb'],
+  ['Key.DAC.SPDIF', 'web_evs_in_optical'], ['Key.DAC.COA', 'web_evs_in_coax'], ['Key.DAC.Switch', 'web_evs_in_next'],
+  ['Key.OUT.XLR', 'web_evs_out_xlr'], ['Key.OUT.RCA', 'web_evs_out_rca'], ['Key.OUT.XLRRCA', 'web_evs_out_xlrrca'],
+  ['Key.OUT.HDMI', 'web_evs_out_hdmi'], ['Key.OUT.SPDIF', 'web_evs_out_spdif'], ['Key.OUT.USB', 'web_evs_out_usb'],
+  ['Key.Screen.ON', 'web_evs_screen_on'], ['Key.Screen.OFF', 'web_evs_screen_off'], ['Key.Screen.Display', 'web_evs_screen_display'],
+  ['Key.Repeat', 'web_evs_repeat'], ['Key.Info', 'web_evs_info'], ['Key.Reboot', 'web_evs_reboot']
+];
+
+/** The Eversolo commands as <option>s (value: the key, label: what it does); '' for any other entity. */
+function eversoloCommandOptions(entityId) {
+  if (entityId && !/zidoo|eversolo/i.test(entityId)) return '';
+  return EVERSOLO_COMMANDS.map(([key, label]) => `<option value="${key}" label="${escapeAttr('Eversolo · ' + I18N.t(label))}"></option>`).join('');
+}
+
 /** Key names or app names as suggestions, depending on the chosen kind. */
 function onHkAndroidTvKindChange() {
   const kind = document.getElementById('hkAndroidTvKind').value;
@@ -143,7 +161,7 @@ function onHkAndroidTvKindChange() {
   const apps = /^media_player\.zidoo_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
   list.innerHTML = kind === 'app'
     ? apps.map(([n, p]) => `<option value="${escapeAttr(p)}">${escapeAttr(n)}</option>`).join('')
-    : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('');
+    : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(tv) ? eversoloCommandOptions(tv) : '');
   input.placeholder = kind === 'app' ? 'com.canal.android.canal' : 'CHANNEL_UP';
   document.getElementById('hkAndroidTvHint').textContent = I18N.t(kind === 'app' ? 'web_hotkey_adtv_app_hint' : 'web_hotkey_adtv_key_hint');
 }
@@ -187,7 +205,7 @@ function refreshRemoteCommandDatalist() {
   if (!dl) return;
   const entityId = document.getElementById('hkEntityId') ? document.getElementById('hkEntityId').value.trim() : '';
   const suggestions = remoteCommandSuggestions(entityId) || [];
-  dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('');
+  dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(entityId) ? eversoloCommandOptions(entityId) : '');
 }
 
 // Selecting "Settings" or "Active Activities" here is a shortcut, not a

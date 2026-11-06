@@ -1690,8 +1690,8 @@ class ConfigServer(
      * Lists the category ids actually present in [irDatabaseDir] — e.g.
      * `["ac","tv"]` for a folder containing `ac.json` and `TV.json` (case
      * doesn't matter, see [IrDatabaseRuntime]'s own lookup). Feeds the
-     * dashboard builder's "Reference the ir-database" device form
-     * (`docs/js/ir.js`): when this device actually has some files copied
+     * Devices page's "Reference the ir-database" IR device form
+     * (`docs/js/devices-page.js`): when this device actually has some files copied
      * over already, the builder can offer them directly instead of asking
      * for category/brand/model to be typed by hand. Only meaningful when
      * the builder is opened from this device (`/builder/`) — same

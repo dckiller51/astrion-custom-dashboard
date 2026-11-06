@@ -22,23 +22,7 @@ function haFriendlyName(entityId) {
   return e.friendly_name || prettyEntityName(entityId);
 }
 
-// Numeric attribute helper for live entities (mirrors HaModels.attrDouble).
-function haAttrNum(entityId, key) {
-  const e = haEntity(entityId);
-  if (!e || !e.attributes) return null;
-  const v = e.attributes[key];
-  if (v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
 
-// String attribute helper for live entities.
-function haAttrStr(entityId, key) {
-  const e = haEntity(entityId);
-  if (!e || !e.attributes) return null;
-  const v = e.attributes[key];
-  return v == null ? null : String(v);
-}
 
 // ---- Entity ID autocomplete for the card edit form --------------------------
 //
@@ -1025,6 +1009,14 @@ function renderPreview() {
       // stay a uniform height — even tiles with no icon of their own get a
       // blank spacer instead of dropping to the shorter 58dp layout.
       const hasIconGrid = isScene && items.some(i => !i.spacer && i.icon);
+      // 1.5.0: icon_size / icon_fit, as GridIconStyle.kt draws them (icon_trim can't be shown here).
+      const iconSize = card.options?.icon_size || 0;
+      const iconFit = card.options?.icon_fit || 'contain';
+      const iconImgStyle = (iconSize || iconFit !== 'contain')
+        ? ` style="height:${iconSize || (isScene ? 28 : 32)}px;${iconFit === 'contain' ? 'width:auto;max-width:100%;object-fit:contain' : 'width:100%;object-fit:' + (iconFit === 'fill' ? 'cover' : 'fill')}"`
+        : '';
+      const autoHeight = iconSize && !tileHeight && !iconFill
+        ? (isScene ? Math.max(74, iconSize + 46) : Math.max(68, iconSize + 36)) : 0;
 
       const tileHtml = (item) => {
         const label = item.name || '?';
@@ -1034,12 +1026,12 @@ function renderPreview() {
           const textColor = parseHexColorCss(item.text_color) || textColorForBg(bg);
           const isFillTile = iconFill && src && !showLabels;
           const tileClass = isFillTile ? 'fill' : (hasIconGrid ? 'has-icon' : 'no-icon');
-          const heightStyle = tileHeight ? `height:${tileHeight}px;` : '';
+          const heightStyle = tileHeight ? `height:${tileHeight}px;` : (autoHeight && hasIconGrid ? `height:${autoHeight}px;` : '');
           const iconCell = isFillTile
             ? `<img class="st-icon" src="${src}" alt="" onerror="onSceneIconError(this)">`
             : (hasIconGrid
                 ? (src
-                    ? `<img class="st-icon" src="${src}" alt="" onerror="onSceneIconError(this)">`
+                    ? `<img class="st-icon" src="${src}" alt=""${iconImgStyle} onerror="onSceneIconError(this)">`
                     : `<div class="st-icon-spacer"></div>`)
                 : '');
           return `<div class="preview-scene-tile ${tileClass}" style="background:${bg}; color:${textColor};${heightStyle}">
@@ -1049,11 +1041,11 @@ function renderPreview() {
         } else {
           const hasIcon = !!src;
           const iconCell = hasIcon
-            ? `<img class="bt-icon" src="${src}" alt="" onerror="onButtonIconError(this)">`
+            ? `<img class="bt-icon" src="${src}" alt=""${iconImgStyle} onerror="onButtonIconError(this)">`
             : '';
           // 1.4.4: the button's own colors, over the theme's.
           const btnStyle = [
-            tileHeight ? `height:${tileHeight}px` : '',
+            tileHeight ? `height:${tileHeight}px` : (autoHeight && hasIcon ? `height:${autoHeight}px` : ''),
             parseHexColorCss(item.color) ? `background:${parseHexColorCss(item.color)}` : '',
             parseHexColorCss(item.text_color) ? `color:${parseHexColorCss(item.text_color)}` : ''
           ].filter(Boolean).join(';');
