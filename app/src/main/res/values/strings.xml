@@ -93,82 +93,24 @@
     <string name="log_save_failed">Couldn\'t save the log (storage refused).</string>
 
     <!-- Web Config: Header & General -->
-    <string name="web_config_title">Astrion Custom — Local configuration</string>
-    <string name="web_config_save_button">Save &amp; reconnect</string>
-    <string name="web_config_save_note">The app restarts itself to reconnect after saving.</string>
     <string name="web_config_saved_reconnecting">Settings saved — reconnecting</string>
-    <string name="web_config_status_not_set">not set</string>
-    <string name="web_config_status_hub_singular">hub</string>
-    <string name="web_config_status_hub_plural">hubs</string>
-
-    <!-- Web Config: Home Assistant -->
-    <string name="web_config_ha_heading">Home Assistant</string>
-    <string name="web_config_ha_url_label">Home Assistant URL</string>
-    <string name="web_config_ha_token_label">Home Assistant long-lived access token</string>
-    <string name="web_config_ha_webhook_label">Webhook ID (optional — instant push instead of polling)</string>
-    <string name="web_config_ha_webhook_hint">If your companion Home Assistant integration registers a webhook, paste its id here so Astrion can push the current page and active Activity the instant they change, instead of Home Assistant polling for them. Leave blank to keep polling only — everything still works either way.</string>
-
-    <!-- Web Config: Harmony Hubs -->
-    <string name="web_config_harmony_heading">Harmony Hubs</string>
-    <string name="web_config_harmony_name_label">Name</string>
-    <string name="web_config_harmony_ip_label">IP address</string>
-    <string name="web_config_harmony_id_label">Hub ID (optional)</string>
-    <string name="web_config_harmony_add_button">+ Add a hub</string>
-    <string name="web_config_harmony_remove_button">Remove</string>
-    <string name="web_config_harmony_fetch_link">Fetch config from hub</string>
-    <string name="web_config_harmony_fetching">Fetching…</string>
-    <string name="web_config_harmony_discover_button">Auto-detect ID</string>
-    <string name="web_config_harmony_discover_need_ip">Enter the IP address first</string>
-    <string name="web_config_harmony_discover_failed">Could not detect hub ID</string>
 
     <!-- Web Config: Dashboard & Builder -->
-    <string name="web_config_dashboard_heading">dashboard.json</string>
-    <string name="web_config_dashboard_sub">Build and edit your dashboard.json visually, right from this device.</string>
-    <string name="web_config_dashboard_builder_link">Open the dashboard editor</string>
-    <string name="web_config_dashboard_download">Download current dashboard.json</string>
-    <string name="web_config_dashboard_upload_button">Upload &amp; reload dashboard</string>
     <string name="web_config_dashboard_updated">dashboard.json updated</string>
 
     <!-- Web Config: Icons -->
-    <string name="web_config_icons_heading">Icons</string>
-    <string name="web_config_icons_upload_button">Upload icon</string>
-    <string name="web_config_icons_note">Saved to /sdcard/astrion/icons/&lt;filename&gt; — reference it in dashboard.json as \"/sdcard/astrion/icons/&lt;filename&gt;\".</string>
     <string name="web_config_icon_uploaded">Icon uploaded</string>
 
     <!-- Web Config: IR Database -->
-    <string name="web_config_ir_database_heading">IR devices</string>
-    <string name="web_config_ir_database_sub">Reference a device from the ir-database picker in the dashboard builder, or upload its curated files here so it works immediately.</string>
-    <string name="web_config_ir_database_picker_link">Pick your IR devices \u2192</string>
-    <string name="web_config_ir_database_upload_button">Upload ir-database file</string>
-    <string name="web_config_ir_database_note">Saved to /sdcard/astrion/ir-database/&lt;category&gt;.json — picked up immediately, no restart needed.</string>
     <string name="web_config_ir_database_uploaded">ir-database file uploaded</string>
 
     <!-- Charging screen -->
     <string name="charging_screen_charging">Charging</string>
     <string name="charging_screen_full">Charged</string>
 
-    <!-- Web Config: Find my remote (ring) -->
-    <string name="web_config_ring_heading">Find my remote</string>
-    <string name="web_config_ring_sub">Test the ring sound and volume right from here, before wiring it up in Home Assistant.</string>
-    <string name="web_config_ring_volume_label">Volume</string>
-    <string name="web_config_ring_sound_label">Sound</string>
-    <string name="web_config_ring_sound_ringtone">Ringtone</string>
-    <string name="web_config_ring_sound_alarm">Alarm</string>
-    <string name="web_config_ring_sound_notification">Notification</string>
-    <string name="web_config_ring_duration_label">Duration (seconds)</string>
-    <string name="web_config_ring_button">Ring</string>
-    <string name="web_config_ring_stop_button">Stop</string>
-    <string name="web_config_ring_status_ringing">Ringing…</string>
-    <string name="web_config_ring_status_stopped">Stopped</string>
-    <string name="web_config_ring_status_error">Could not ring:</string>
-
     <!-- Web Config: OTA / Updates -->
-    <string name="web_config_updates_heading">Updates</string>
-    <string name="web_config_current_version">Current version</string>
-    <string name="web_config_check_update_link">Check for updates</string>
     <string name="web_config_update_found">Update available: v%1$s</string>
     <string name="web_config_update_none">Already up to date</string>
-    <string name="web_config_install_update_button">Download &amp; install</string>
     <string name="web_config_update_installing">Installer launched — approve the install prompt on the panel screen</string>
     <string name="web_config_update_needs_permission">Allow \"Install unknown apps\" for this app on the screen that just opened, then tap Download &amp; install again.</string>
     <string name="web_config_update_failed">Update check failed: %1$s</string>
@@ -191,6 +133,29 @@
     <string name="media_load_timeout">Couldn\'t load media (timeout)</string>
     <string name="media_load_failed">Couldn\'t load media</string>
     <string name="media_browse">Browse</string>
+    <string name="media_live">Live</string>
+    <!-- Zidoo library pop-up (1.5.0) -->
+    <string name="zidoo_library_title">Library</string>
+    <string name="zidoo_library_all">All</string>
+    <string name="zidoo_library_in_progress">In progress</string>
+    <string name="zidoo_library_series">Series</string>
+    <string name="zidoo_library_recent">Recent</string>
+    <string name="zidoo_library_favorites">Favourites</string>
+    <string name="zidoo_library_search">Search</string>
+    <string name="zidoo_library_search_hint">A film, a series…</string>
+    <string name="zidoo_library_play">Play</string>
+    <string name="zidoo_library_starting">Starting on the player…</string>
+    <string name="zidoo_library_play_failed">The player didn\'t start it.</string>
+    <string name="zidoo_library_unreachable">The player doesn\'t answer.</string>
+    <string name="zidoo_library_watched">Watched</string>
+    <string name="zidoo_library_stopped_at">Stopped at %1$s of %2$s</string>
+    <string name="zidoo_library_sorting">Putting them in order, latest watched first…</string>
+    <string name="zidoo_music_title">Music</string>
+    <string name="zidoo_music_albums">Albums</string>
+    <string name="zidoo_music_artists">Artists</string>
+    <string name="zidoo_music_playlists">Playlists</string>
+    <string name="zidoo_music_search_hint">An album, an artist…</string>
+    <string name="zidoo_music_artist">Artist</string>
     <string name="music_search">Music search</string>
     <string name="music_search_button">Search music</string>
     <string name="music_search_hint">Title, artist, album…</string>

@@ -93,82 +93,24 @@
     <string name="log_save_failed">Impossible d\'enregistrer le journal (stockage refusé).</string>
 
     <!-- Web Config: Header & General -->
-    <string name="web_config_title">Astrion Custom — Configuration locale</string>
-    <string name="web_config_save_button">Enregistrer &amp; reconnecter</string>
-    <string name="web_config_save_note">L\'application redémarre automatiquement pour se reconnecter après l\'enregistrement.</string>
     <string name="web_config_saved_reconnecting">Paramètres enregistrés — reconnexion</string>
-    <string name="web_config_status_not_set">non configuré</string>
-    <string name="web_config_status_hub_singular">hub</string>
-    <string name="web_config_status_hub_plural">hubs</string>
-
-    <!-- Web Config: Home Assistant -->
-    <string name="web_config_ha_heading">Home Assistant</string>
-    <string name="web_config_ha_url_label">URL Home Assistant</string>
-    <string name="web_config_ha_token_label">Jeton d\'accès longue durée Home Assistant</string>
-    <string name="web_config_ha_webhook_label">ID webhook (optionnel — push instantané au lieu du polling)</string>
-    <string name="web_config_ha_webhook_hint">Si votre intégration Home Assistant compagnon enregistre un webhook, collez son id ici pour qu\'Astrion envoie la page en cours et l\'Activité active dès qu\'elles changent, plutôt que Home Assistant ait à les interroger périodiquement. Laissez vide pour rester en polling uniquement — tout continue de fonctionner dans les deux cas.</string>
-
-    <!-- Web Config: Harmony Hubs -->
-    <string name="web_config_harmony_heading">Hubs Harmony</string>
-    <string name="web_config_harmony_name_label">Nom</string>
-    <string name="web_config_harmony_ip_label">Adresse IP</string>
-    <string name="web_config_harmony_id_label">ID du hub (optionnel)</string>
-    <string name="web_config_harmony_add_button">+ Ajouter un hub</string>
-    <string name="web_config_harmony_remove_button">Supprimer</string>
-    <string name="web_config_harmony_fetch_link">Récupérer la config du hub</string>
-    <string name="web_config_harmony_fetching">Récupération…</string>
-    <string name="web_config_harmony_discover_button">Détecter l\'ID</string>
-    <string name="web_config_harmony_discover_need_ip">Renseigne d\'abord l\'adresse IP</string>
-    <string name="web_config_harmony_discover_failed">Impossible de détecter l\'ID du hub</string>
 
     <!-- Web Config: Dashboard & Builder -->
-    <string name="web_config_dashboard_heading">dashboard.json</string>
-    <string name="web_config_dashboard_sub">Construis et modifie ton dashboard.json visuellement, directement depuis cet appareil.</string>
-    <string name="web_config_dashboard_builder_link">Ouvrir l\'éditeur de dashboard</string>
-    <string name="web_config_dashboard_download">Télécharger le dashboard.json actuel</string>
-    <string name="web_config_dashboard_upload_button">Envoyer &amp; recharger le tableau de bord</string>
     <string name="web_config_dashboard_updated">dashboard.json mis à jour</string>
 
     <!-- Web Config: Icons -->
-    <string name="web_config_icons_heading">Icônes</string>
-    <string name="web_config_icons_upload_button">Envoyer une icône</string>
-    <string name="web_config_icons_note">Enregistrée dans /sdcard/astrion/icons/&lt;nom&gt; — à référencer dans dashboard.json en tant que \"/sdcard/astrion/icons/&lt;nom&gt;\".</string>
     <string name="web_config_icon_uploaded">Icône envoyée</string>
 
     <!-- Web Config: IR Database -->
-    <string name="web_config_ir_database_heading">Appareils IR</string>
-    <string name="web_config_ir_database_sub">Référencez un appareil depuis le sélecteur ir-database dans l\'éditeur de dashboard, ou envoyez ses fichiers ici pour qu\'il fonctionne immédiatement.</string>
-    <string name="web_config_ir_database_picker_link">Choisir mes appareils IR \u2192</string>
-    <string name="web_config_ir_database_upload_button">Envoyer un fichier ir-database</string>
-    <string name="web_config_ir_database_note">Enregistré dans /sdcard/astrion/ir-database/&lt;catégorie&gt;.json — pris en compte immédiatement, pas besoin de redémarrer.</string>
     <string name="web_config_ir_database_uploaded">Fichier ir-database envoyé</string>
 
     <!-- Charging screen -->
     <string name="charging_screen_charging">En charge</string>
     <string name="charging_screen_full">Chargée</string>
 
-    <!-- Web Config: Find my remote (ring) -->
-    <string name="web_config_ring_heading">Où est ma télécommande</string>
-    <string name="web_config_ring_sub">Teste le son et le volume de la sonnerie directement ici, avant de la configurer dans Home Assistant.</string>
-    <string name="web_config_ring_volume_label">Volume</string>
-    <string name="web_config_ring_sound_label">Son</string>
-    <string name="web_config_ring_sound_ringtone">Sonnerie</string>
-    <string name="web_config_ring_sound_alarm">Alarme</string>
-    <string name="web_config_ring_sound_notification">Notification</string>
-    <string name="web_config_ring_duration_label">Durée (secondes)</string>
-    <string name="web_config_ring_button">Sonner</string>
-    <string name="web_config_ring_stop_button">Arrêter</string>
-    <string name="web_config_ring_status_ringing">Ça sonne…</string>
-    <string name="web_config_ring_status_stopped">Arrêté</string>
-    <string name="web_config_ring_status_error">Impossible de sonner :</string>
-
     <!-- Web Config: OTA / Updates -->
-    <string name="web_config_updates_heading">Mises à jour</string>
-    <string name="web_config_current_version">Version actuelle</string>
-    <string name="web_config_check_update_link">Vérifier les mises à jour</string>
     <string name="web_config_update_found">Mise à jour disponible : v%1$s</string>
     <string name="web_config_update_none">Déjà à jour</string>
-    <string name="web_config_install_update_button">Télécharger &amp; installer</string>
     <string name="web_config_update_installing">Installation lancée — validez l\'invite sur l\'écran du panneau</string>
     <string name="web_config_update_needs_permission">Autorisez « Installer des applications inconnues » pour cette app sur l\'écran qui vient de s\'ouvrir, puis appuyez de nouveau sur Télécharger &amp; installer.</string>
     <string name="web_config_update_failed">Échec de la vérification : %1$s</string>
@@ -191,6 +133,29 @@
     <string name="media_load_timeout">Impossible de charger les médias (délai dépassé)</string>
     <string name="media_load_failed">Impossible de charger les médias</string>
     <string name="media_browse">Parcourir</string>
+    <string name="media_live">En direct</string>
+    <!-- Zidoo library pop-up (1.5.0) -->
+    <string name="zidoo_library_title">Médiathèque</string>
+    <string name="zidoo_library_all">Tout</string>
+    <string name="zidoo_library_in_progress">En cours</string>
+    <string name="zidoo_library_series">Séries</string>
+    <string name="zidoo_library_recent">Récents</string>
+    <string name="zidoo_library_favorites">Favoris</string>
+    <string name="zidoo_library_search">Recherche</string>
+    <string name="zidoo_library_search_hint">Un film, une série…</string>
+    <string name="zidoo_library_play">Lecture</string>
+    <string name="zidoo_library_starting">Lancement sur le lecteur…</string>
+    <string name="zidoo_library_play_failed">Le lecteur ne l\'a pas lancé.</string>
+    <string name="zidoo_library_unreachable">Le lecteur ne répond pas.</string>
+    <string name="zidoo_library_watched">Vu</string>
+    <string name="zidoo_library_stopped_at">Arrêté à %1$s sur %2$s</string>
+    <string name="zidoo_library_sorting">Classement du plus récent au plus ancien…</string>
+    <string name="zidoo_music_title">Musique</string>
+    <string name="zidoo_music_albums">Albums</string>
+    <string name="zidoo_music_artists">Artistes</string>
+    <string name="zidoo_music_playlists">Playlists</string>
+    <string name="zidoo_music_search_hint">Un album, un artiste…</string>
+    <string name="zidoo_music_artist">Artiste</string>
     <string name="music_search">Recherche musicale</string>
     <string name="music_search_button">Rechercher</string>
     <string name="music_search_hint">Titre, artiste, album…</string>

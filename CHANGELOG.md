@@ -3,161 +3,100 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.4.9-beta] - 2026-11-04
+## [1.5.0] - 2026-11-06
+
+Everything since 1.4.0, from the 1.4.1 to 1.4.9 betas and 1.5.0.
+
+> ⚠️ **Good to know when updating from 1.4.0**
+>
+> - **The Home Assistant token and the Apple TV pairing keys never leave the remote once saved**: `/devices-config` only says whether they're set (`tokenSet`, `credentialsSet`) and an empty field keeps them. **Android backup is off** (`allowBackup`): an adb backup no longer copies the settings; the web page's full backup is the way to save the remote.
+> - **The web page can ask for a password** (Settings › Web configuration). Once set, the Home Assistant integration needs it too (2026.11.0 or later: Reconfigure or re-authenticate).
+> - **TV remote card: new header buttons, on by default**: *Sources / apps* (when the player has a list) and *Browse* (Zidoo, Eversolo). A tap on what plays opens the media player view. Turn them off with `show_sources`, `show_browse` and `now_playing_tap: none`.
+> - **Hotkeys on a button the remote doesn't have** (`F4`, `NUM_0`…) are flagged in the builder (⚠) and the log instead of being silently dropped; Android names (`MENU`, `MEDIA_PLAY_PAUSE`…) now work.
+> - **Restore only accepts a real dashboard** (JSON with a `pages` list); anything else is refused and the current dashboard stays.
 
 ### Added
 
-- **Sources / apps in a pop-up**: a button opens every source or app of the player in a grid (its icon when the card gives one, else its initials; the current one outlined), and a tap selects it. Works with any player that gives its list: Zidoo, Eversolo, Apple TV, Android TV, and a TV's or amplifier's inputs through Home Assistant.
-  - **TV remote card**: a button in the header, shown when the media player has a list (option *Sources / apps button*, on by default).
-  - **Apple TV remote card**: an **Apps (pop-up)** button to add among the card's buttons.
-  - **Media player card** (full view): a **Sources** button, option *Sources button*.
-  - **Icons**: an app without an icon in the card gets the icon uploaded on the web page (Icons) with the same name — `Netflix.png`, `disney.png` for *Disney+*, `apple-tv.png` for *Apple TV* (case, spaces, accents and signs don't matter).
-  - **Order**: the card's own apps come first, in the card's order (reorder them in the builder with ↑ ↓), then the player's other sources in its own order.
-  - **Shortcuts optional**: *Show the app shortcuts on the card* (TV remote `show_apps`, Apple TV `showApps`) unticked, the card's apps show no shortcut and only set the pop-up's order and icons.
-- **0–9 keypad in a pop-up**: for channels, or a Zidoo's skip speed; the pop-up stays open to type a number.
-  - **Where the digits go**: the card's remote entity, another remote entity (with a `device` for Home Assistant's Harmony remote), an **IR device** (the remote's blaster or an extender) or a **Harmony device**.
-  - **What each key sends**: a digit sends itself, unless renamed (e.g. `Num1`, `Digit1` on an IR device: the builder suggests the device's commands); OK sends what you set (the TV remote card's own OK command by default), or doesn't show.
-  - **TV remote card**: option *0–9 keypad button*. **Media player card** (full view): a **123** button once a keypad target is set.
+#### Zidoo & Eversolo, direct
 
-- **Apple TV paired directly: a `remote.appletv_<name>` entity**, like the Android TVs and Zidoos: `remote.send_command` takes the Apple TV's names (`Menu`, `Select`…) and the Android TV ones the TV remote card and hotkeys send (`DPAD_UP` → Up, `BACK` → Menu, `MEDIA_PLAY_PAUSE`…), POWER and `turn_on` / `turn_off` toggle it. So the TV remote card, keypad targets and *Call a service* hotkeys work with it too (held keys repeat fast). The Apple TV card and `astrion_appletv.send_command` are unchanged.
+- **Zidoo players and Eversolo streamers, without Home Assistant** (Devices › **Players**): add a Zidoo (Z9X, Z10, Z20, UHD3000, UHD8000…) or an Eversolo (DMP-A6…) by its IP address, no pairing. It shows up as `media_player.zidoo_…` (on / playing / paused, title, cover or backdrop, progress, its apps as sources) plus `remote.zidoo_…`, through the player's control API (port 9529, the one Zidoo's phone app uses). The TV remote card works with it as is (its Android key names are translated), and so do the media player and source cards, buttons, hotkeys and Activities. Play / pause / seek go to the player's own video or music player; *turn on* sends Wake-on-LAN (wired network) and the power key. Ideas taken from the HACS Zidoo integration.
+  - **Films and series**: title, episode and backdrop (an episode takes the series' or season's artwork), also for files whose path has spaces or accents.
+  - **Eversolo**: what it plays with its built-in player, a streaming app it hosts (the official Apple Music, Qobuz…) or **AirPlay**: title, artist, cover and a progress bar that follows. **Off** sends its own power-off, **Mute** its own mute (the media player knows whether it's muted), and its apps are read (its list takes a while to come). AirPlay can't seek: no draggable bar there, ±10 s fall back to the keys.
+  - **What plays, as an audiophile reads it**: "FLAC · 44.1 kHz · 16 bit · 913 kbps" under the title (media player card, its pop-up). A web radio (no length) says **● Live** instead of an empty bar.
+  - **Eversolo inputs in the Sources pop-up**: internal player, Bluetooth, USB-C, coaxial and optical, before its apps; the active one is shown, and choosing one switches the Eversolo to it.
+  - **Eversolo commands in the builder**: the TV remote card's commands and the hotkeys suggest them with what they do — input, output (XLR, RCA, HDMI, SPDIF, USB DAC), its screen on / off, repeat, restart.
+  - **Hotkeys**: the *Android TV key or app* action lists the Zidoos and Eversolos too (same key names, their own apps suggested).
+- **Zidoo library**: **Browse** opens the player's own library (its poster wall), read from the player itself.
+  - **Lists**: All, In progress, Series, Recent, Favourites, and a search, in a poster grid with 4K / HDR badges, a tick once watched and a bar where playback stopped. **In progress** is in the Zidoo app's order, latest watched first (a line says it's sorting while it reads the dates).
+  - **Open** a saga (its films), a series (its seasons), a season (its episodes, in order), a film (backdrop, year, rating, length, where it stopped). **Play** starts it on the Zidoo and closes the pop-up.
+  - The remote's arrows, OK and Back move around it. Posters are asked small and kept in memory only.
+  - A card using Home Assistant's Zidoo entity (the HACS integration) opens it too, when one Zidoo is added in Astrion.
+- **Eversolo music library**: **Browse** opens its **Albums** (each with its first track's cover), **Artists**, **Playlists** and a **Search**. Open one to see its tracks; **Play**, or a tap on a track, plays it from there on the Eversolo.
+- **Browse buttons**: on the media player card (full variant, the compact one's details), the TV remote card's header (`show_browse`) and its now-playing pop-up.
 
-- **Media player card: app shortcuts** (full view), like the TV remote card's: text buttons two a row or labelled icons, set in the builder (with *This device's apps* for a Zidoo / Eversolo). They also order the Sources pop-up and give it their icons.
+#### Cards & pop-ups
 
-- **TV remote card: a tap on what plays opens the media player view** (large cover, progress bar, controls) in a pop-up, which closes by itself when playback ends. Option *now_playing_tap: none* to turn it off.
-- **No swiping between pages** (option under the builder's page list, `swipePages: false`): pages then change only with buttons, tiles, hotkeys and the page dots.
-- **Builder: copy a card to other pages** (⧉ on the card), at the top or bottom of each: e.g. a row of page buttons on every page.
-- **Pages that open by themselves: several states** for opening or closing, separated by commas (`on, off, idle`).
+- **Sources / apps in a pop-up**: a button opens every source or app of the player in a grid (its icon, else its initials; the current one outlined), and a tap selects it. Works with any player that gives its list: Zidoo, Eversolo, Apple TV, Android TV, and a TV's or amplifier's inputs through Home Assistant.
+  - **TV remote card**: a button in the header (option *Sources / apps button*). **Apple TV remote card**: an **Apps (pop-up)** button. **Media player card** (full view): a **Sources** button.
+  - **Icons**: an app without an icon in the card gets the icon uploaded on the web page with the same name (`Netflix.png`, `disney.png` for *Disney+*…; case, spaces, accents and signs don't matter).
+  - **Order**: the card's own apps first, in the card's order (↑ ↓ in the builder), then the player's other sources. *Show the app shortcuts on the card* unticked, the card's apps only set the pop-up's order and icons.
+- **0–9 keypad in a pop-up**, for channels or a Zidoo's skip speed; it stays open to type a number. The digits go to the card's remote entity, another remote entity, an **IR device** or a **Harmony device**; each key can be renamed (`Num1`…) and OK sends what you set. TV remote card: option *0–9 keypad button*; media player card: a **123** button.
+- **TV remote card: a tap on what plays opens the media player view** (large cover, progress bar, controls) in a pop-up, which closes when playback ends (`now_playing_tap: none` to turn it off).
+- **TV remote card: the device's own apps**: **This device's apps** in the builder fills the card's app buttons with the apps of the player it drives (a Zidoo or Eversolo without its utilities).
+- **Media player card: app shortcuts** (full view), like the TV remote card's.
+- **Hide the pad** of the remote cards (`show_dpad: false` on the TV remote card, `showClickpad: false` on the Apple TV remote card), for when the remote's own arrow keys do the job.
+- **Xbox card: TrueAchievements' Lost Completions** (its 2026.10.2): a red trophy counter, and a long press lists the games with their progress.
+- **Button grid**: each button can have its own background and text colour (`color`, `text_color`); a scene grid tile gets `text_color` too. **Only on a long press** (`long_press_only: true`) for a key you don't want to press by mistake.
+- **Scene and button grids: icon size and fit** for logos: `icon_size` (dp; the tile grows with it), `icon_fit` (whole logo / fill the width / stretch) and `icon_trim` (cuts a logo's transparent margins). A rectangular logo keeps its shape.
+
+#### Devices & remote
+
+- **Apple TV paired directly: a `remote.appletv_<name>` entity**, like the Android TVs and Zidoos: `remote.send_command` takes the Apple TV's names and the Android TV ones the TV remote card and hotkeys send. So the TV remote card, keypad targets and *Call a service* hotkeys work with it too.
+- **IR extenders with several outputs**: an extender can have **3 IR outputs** (KinCony KC868-AGv3), and each IR device picks its output on the web page. Needs the astrion-ir-extender firmware for that box.
+- **Remote tweaks: a key that only wakes the screen** (`install.sh --wake-keys --wake-only ok`): with the screen off, that key just turns the screen on and isn't replayed.
+
+#### Web page & builder
+
+- **A password for the web page** (Settings › Web configuration): every page and endpoint of the configurator on port 8080 asks for it (HTTP Basic), the builder and backups included. The remote's own requests aren't asked; a wrong password slows the next try down. Only a salted hash is kept, carried by the full backup.
+- **QR code of the web page** in the remote's Settings › Web configuration, and **Add to Home screen** gives your phone an **Astrion** icon.
+- **Web page › Icons: delete several at once**, with one confirmation that says how many are still used by the dashboard.
+- **Page options**: **no swiping between pages** (`swipePages: false`); **no moving between buttons with the arrow keys** on a page used only by touch (`"focusNavigation": false`); pages that open by themselves take **several states** (`on, off, idle`).
+- **Builder: copy a card to other pages** (⧉ on the card), at the top or bottom of each.
+- **Builder: order your Activities** with ↑ / ↓ within their room.
 
 ### Changed
 
-- **Devices page: one *Direct devices* view, a tab per kind of device**: **TV & box** (Apple TV, Android TV), **Players** (Zidoo, Eversolo), **Audio** and **Lighting** (to come). An icon per kind; a Zidoo or Eversolo shows its model and a *Video player* / *Audio streamer* badge.
-- **Builder: a card gallery** instead of the dropdown: the card types as tiles with a line on what each does, grouped by use, with a search. **For a device** starts from a device of the catalogue and offers the cards that suit it, already filled in (a Zidoo's media player in full view with its apps, its TV remote…).
-- **Builder: folding sections** for the big forms (media player, TV remote, Apple TV remote): Essentials, Display, Controls, Apps & sources, Search / queue, Advanced, each showing how many settings it changes.
-- **Hotkeys: the *Android TV key or app* action lists the Zidoos and Eversolos** added in the remote too (same key names; their own apps suggested), so a Zidoo key no longer needs the generic *remote command* action.
-- **Builder: pickers instead of typing** for the keypad: the remote entity is chosen from every `remote` the builder sees (Home Assistant's and the ones the remote answers itself), the Harmony device from the hub's devices, and every key suggests the chosen IR or Harmony device's commands. The TV remote card's remote entity field suggests them too.
+- **Builder: a card gallery** instead of the dropdown: the card types as tiles with a line on what each does, grouped by use, with a search. **For a device** starts from a device of the catalogue and offers the cards that suit it, already filled in.
+- **Builder: every card form in sections** (Essentials, Content, Display, Controls, Advanced…), each with the count of settings changed. A short form opens them all; tick boxes that follow each other share a row; a sectioned form opens wider, its fields two by two.
+- **Builder: the pages as a tree beside the remote**: sub-pages indented under their parent, folding branches, drag a page onto another to move it or make it a sub-page, **+** adds a sub-page, ✎ opens its settings.
+- **Builder: less scrolling**: Hotkeys and Activities first; Theme & Colors, Dock screen, Standby & battery and **Import / export JSON** folded (remembered). Hotkeys say in the list where they apply (green: active on the page shown, amber: replaced by that page's own key).
+- **Builder: pickers instead of typing** for the keypad (remote entities, Harmony devices, commands), and **entity suggestions** show the name first and a long id shortened in the middle.
+- **Builder on a phone**: one column, preview and page list first, bigger buttons, no iPhone zoom.
+- **Builder**: the banner says which remote you're on (*Connected to Living room*) and the browser tab starts with its name; title cards show their real title in the preview; a beta and the release with the same number show as the same version.
+- **Devices page: one *Direct devices* view, a tab per kind of device**: TV & box (Apple TV, Android TV), Players (Zidoo, Eversolo), Audio and Lighting (to come).
+- **The progress bar seeks** wherever the player can (Zidoo, Eversolo, Plex, Cast, Kodi…): on the full media player card and in the media player pop-up (the compact card's details, the TV remote card's now-playing pop-up), tap or drag it.
+- **Media player pop-up: power shown once** (the round button at the bottom); opened from a TV remote card with `show_volume: false`, it has no volume row either.
+- **Clean-up after a repository audit** (nothing changes on the remote): 52 unused app texts and 2 web texts removed, dead web code removed (`js/ir.js`…), one shared function for Home Assistant's date format, the detekt baseline trimmed, `THIRD_PARTY_LICENSES.md` lists the libraries included in the app.
 
 ### Fixed
 
-- **Hotkeys written with Android names**: `MENU` (the remote's Menu button is `MAIN`), `FAST_FORWARD`, `MEDIA_PLAY_PAUSE`, `VOLUME_MUTE`, `PROG_RED`… now work. A hotkey on a button the remote doesn't have (`F4`, `NUM_0`, `PAUSE`…) was silently dropped: it is now said in the log, and the builder flags it with a ⚠.
-- **The remote's buttons work while a pop-up is open** (sources, keypad, the media player's details): a hotkey (volume, play, a player's arrows…) used to do nothing until the pop-up was closed. BACK still closes the pop-up.
-- **Zidoo series: the artwork shows for an episode**: an episode has no backdrop of its own on the poster wall, so the remote now takes the series' backdrop, else the season's, else their posters (the season's poster is the one a Zidoo has).
-- **Eversolo with the official Apple Music app**: the title, artist, cover and progress bar now follow what it plays (the Eversolo reports that app apart; the card kept the built-in player's last track and a frozen bar).
+- **The remote kept itself awake at night**: the TV Helper answered every few seconds during playback (776 requests in 51 minutes on a test remote), a switched-off Android TV was tried every 30 s and the Apple TV's *now playing* link reconnected every few minutes. With Home Assistant's quiet mode they now pause (an Android TV that doesn't answer is tried every 10 minutes) and resume the moment the screen comes on. Keys and Activities work as before. The processor (not the screen) stays awake only while the web page is in use (2 minutes after the last request) and while motion wake listens.
+- **Motion wake missed real pick-ups** (since 1.4.0): it now wakes on 3 moving samples within 0.45 s, a calm one in between allowed; a knock on the table is still too short.
+- **Waking up after a long sleep**: Home Assistant went live again only when Android said the screen was on, several seconds late. The app now wakes up as soon as it's back on screen.
+- **The first D-pad press after touching the screen did nothing**: Android swallowed it as it left touch mode. That press now runs on its release.
+- **Hotkeys written with Android names** (`MENU`, `FAST_FORWARD`, `MEDIA_PLAY_PAUSE`, `VOLUME_MUTE`, `PROG_RED`…) now work; a hotkey on a button the remote doesn't have is said in the log and flagged in the builder.
+- **The remote's buttons work while a pop-up is open** (a hotkey did nothing until it was closed); BACK still closes it.
+- **Updating from the remote's Settings**: each tap on *Update available* started another download into the same file, and Android answered "App not installed". The line now shows the progress and ignores taps meanwhile.
+- **Download the full backup**: each download gets its own file, so a second click or a retry can no longer spoil the first, and it no longer stalls with the screen off.
+- **A wrong file could replace the dashboard** through *Restore* (or `POST /dashboard.json`): only a real dashboard is accepted now.
+- **IR database upload said only "HTTP 400"**: the web page now says why a file is refused.
+- **Builder: a scene's or a button's colour is kept**: changing only a tile's colour (or its text or active colour, its Activity, page mode or Harmony action) and saving dropped the change.
+- **Builder: grids' "Active color" and "Accent border while active"** were dropped without an entity to watch; the builder now says what they need, and on a scene grid tile they also work while its Activity runs.
+- **Builder: "… is filled in but not added to the card yet"** showed up with nothing filled in.
 
-Requested by a user.
+### Removed
 
-## [1.4.8-beta] - 2026-11-04
-
-### Changed
-
-- **Media player card (full): the progress bar seeks** when the player can (Zidoo, Plex, Cast, Kodi…): tap or drag it, as on the TV and Apple TV remote cards, with the same bar (elapsed, thumb, time left). Players that can't seek keep the plain bar. Requested by a user.
-
-- **TV remote card: the device's own apps** (builder): a **This device's apps** button fills the card's app buttons with the apps of the player it drives, and the app field suggests them first. A Zidoo or Eversolo added in Astrion publishes its apps without its utilities (settings, updates, file manager…); its card gets them instead of Netflix & co. when picked, and on the remote when the card has no apps of its own. Requested by a user.
-
-- **Web page › Icons: delete several at once**: tick icons (or *Select all*), then **Delete selected**, with one confirmation that says how many are still used by the dashboard. The page also says how to replace an icon: upload a file with the same name. Requested by a user.
-
-### Fixed
-
-- **A button stayed highlighted on a page with arrow-key movement turned off** (1.4.7's page option, e.g. an Apple TV page): the first arrow press after a touch let Android focus a button on its own, and besides the accent outline (already hidden) the tap ripple kept its light "focused" overlay. Focus is now shown only by the outline, which such pages never show. Reported by a user.
-- **Zidoo: no film or episode title, no backdrop** for files whose path has a space (nearly all): the path was sent to the Zidoo's poster wall with `+` for spaces, which it doesn't read as spaces. Sent as `%20` now, like Zidoo's own app; and the Zidoo's answers are read as UTF-8 whatever charset it announces, so a folder with an accent (`Séries`) no longer garbles the path. Reported by a user (Z9X 8K).
-- **Eversolo (added as a Zidoo, same control API): no cover nor title for a streaming app** such as Apple Music: the remote now also reads the player's newer music status, which gives what the built-in player and the apps that share it play (Eversolo's own Apple Music, not Apple's), with the cover. Tested by a user (DMP-A6).
-
-## [1.4.7-beta] - 2026-11-03
-
-### Added
-
-- **Page option: moving between buttons with the arrow keys** (builder › page settings, on by default): untick it on a page you only use by touch, and its arrow and OK keys without a hotkey no longer move a highlight from button to button nor press one (`"focusNavigation": false`). Requested by a user.
-
-### Fixed
-
-- **The first D-pad press after touching the screen did nothing** (no haptic tick either): after tapping a tile, an Activity or a page, the next arrow, OK or page key was swallowed by Android itself as it left touch mode, before any hotkey saw it — with IR, Android TV or Home Assistant hotkeys alike, while BACK always worked. That press now runs on its release. Reported by a user.
-
-## [1.4.6-beta] - 2026-11-03
-
-### Added
-
-- **A password for the web page** (Settings › Web configuration): once set, every page and endpoint of the configurator on port 8080 asks for it (HTTP Basic, any user name), the builder and backups included. The remote's own requests aren't asked; a wrong password slows the next try down. Only a salted hash is kept, carried by the full backup. The Home Assistant integration 2026.11.0 takes the password (when adding the remote, Reconfigure, or re-authentication). Requested in an issue.
-- **Zidoo players, direct** (Devices › **Zidoo**): add a Zidoo (Z9X, Z10, Z20, UHD3000, UHD8000…) by its IP address, no pairing and no Home Assistant. It shows up as `media_player.zidoo_…` (on / playing / paused, title, cover or backdrop, progress, its apps as sources) plus `remote.zidoo_…`, through the player's control API (port 9529, the one Zidoo's phone app uses). The TV remote card works with it as is (its Android key names are translated to the Zidoo's), and so do the media player and source cards, buttons, hotkeys and Activities. Play / pause / seek go to the Zidoo's own video or music player; *turn on* sends Wake-on-LAN (wired network) and the power key. Ideas taken from the HACS Zidoo integration. Requested by a user.
-- **Hide the pad** of the remote cards: *D-pad* box on the TV remote card (`show_dpad: false`), *Trackpad* box on the Apple TV remote card (`showClickpad: false`), for when the remote's own arrow keys do the job. The other buttons stay (in the full layouts, the ones that sat beside the pad move to a row). Requested by a user.
-
-### Changed
-
-- **The Home Assistant token and the Apple TV pairing keys never leave the remote once saved**: `/devices-config` only says whether they're set (`tokenSet`, `credentialsSet`), the web page's token field shows *Saved on the remote*, and an empty field keeps them.
-
-## [1.4.5-beta] - 2026-11-02
-
-### Added
-
-- **Xbox card: TrueAchievements' Lost Completions** (its 2026.10.2): the counter of games no longer at 100 % gets a red trophy, comes right after *Completed Games* when the builder fills the card, and a long press lists the games with their progress (e.g. *Halo Infinite (Xbox Series): 120 / 135*).
-
-### Changed
-
-- **Builder: entity suggestions** show the entity's name first and a long id shortened in the middle, in a wider list: ids sharing a long start (`sensor.trueachievements_<gamertag>_…`) all looked the same. On the Xbox card, each counter's entity gets its own line.
-
-### Fixed
-
-- **Download the full backup stalled half-way** with the remote's screen off: its processor goes to sleep, and since 1.4.1 nothing else keeps it awake (the TV Helper pauses). While the web page is in use, the processor (not the screen) now stays awake, for 2 minutes after the last request. Each backup download also gets its own file, so a second click or a retry can no longer spoil the first. Reported by a user.
-- **A wrong file could replace the dashboard**: the web page's *Restore* (and `POST /dashboard.json`) wrote any file as `dashboard.json`, and the remote fell back to its built-in page ("dashboard.json invalid (missing "pages" array)"). Only a real dashboard (JSON with a `pages` list) is accepted now; anything else is refused with a message, and the current dashboard stays. To undo it on a 1.4.4 remote: builder › 🕘 **Version history** › restore the last good version.
-- **IR database upload said only "HTTP 400"**: the web page now shows why a file is refused (not a `.json` file, not valid JSON with the parser's message, or no `category` / `brands`), and the log records it. Reported by a user.
-
-## [1.4.4-beta] - 2026-11-01
-
-### Added
-
-- **Builder: order your Activities**: **↑** / **↓** in the Activities list move an Activity within its room (e.g. *Watch TV* then *Watch TV - Movies*). Suggested by a user.
-- **Button colours**: each button of a **button grid** can have its own background and text colour (`color`, `text_color`), over the theme's; a **scene grid** tile gets `text_color` too. The builder's preview shows them.
-
-### Fixed
-
-- **Grids: "Active color" and "Accent border while active" seemed not to save**: without an entity to watch, the builder dropped them silently. It now says what they need. On a scene grid tile, they also work **while the tile's Activity runs**, with no entity to watch. Reported by a user.
-
-## [1.4.3-beta] - 2026-10-30
-
-### Added
-
-- **IR extenders with several outputs**: an extender can have **3 IR outputs** (KinCony KC868-AGv3: built-in IR LEDs + 2 extension cables), and each IR device picks its **IR output** on the web page (*IR Devices*). Its commands go out as `/pronto?out=N`; Activities batch them per output. Needs the astrion-ir-extender firmware for that box.
-- **QR code of the web page** in the remote's **Settings › Web configuration**: scan it with a phone, no address to type.
-- **Add to Home screen**: the web page and the builder give your phone an **Astrion** icon and name.
-
-### Changed
-
-- **Builder on a phone**: one column, the preview and the page list first, bigger buttons, and fields that don't make an iPhone zoom in.
-- **Builder: less scrolling** (suggested by a user): Hotkeys and Activities come first; **Theme & Colors**, **Dock screen**, **Standby & battery** and the new **Import / export JSON** (the generated JSON and *Load an existing dashboard.json* together) are folded, and the builder remembers which ones you open. The theme still updates the preview live.
-- **Builder: hotkeys** show where they apply in the list itself: the **Global** / **Page** label is green when the key works on the page shown, amber when that page's own key replaces it. The *Hotkeys active on this page* box under the preview is gone.
-
-## [1.4.2-beta] - 2026-10-29
-
-### Added
-
-- **Remote tweaks: a key that only wakes the screen** (`install.sh --wake-keys --wake-only ok`): with the screen off, OK (or any key you pick by its name: `menu`, `back`, `red`…; table in the wiki) just turns the screen on and isn't replayed, so you can look at the dashboard without sending OK to the TV. The other keys still act on the first press (volume, channels…).
-
-### Changed
-
-- **Builder: the pages as a tree beside the remote**, instead of tabs above it: sub-pages indented under their parent, folding branches, 🏠 start page, ⧉ popup, 🎬 Activity-only. Drag a page onto the edge of another to move it, or onto its middle to make it a sub-page; **+** on a page adds a sub-page, ✎ opens its settings. On a narrow window the list goes above the remote. Suggested by a user.
-
-### Fixed
-
-- **Other connections kept the remote awake at night too**: overnight logs showed a switched-off NVIDIA SHIELD tried every 30 s (over 100 times an hour) and the Apple TV's *now playing* link reconnecting every few minutes (tvOS drops it by itself). With Home Assistant's quiet mode, an Android TV that doesn't answer is now tried every 10 minutes, and the Apple TV's *now playing* link is paused; both are back the moment the screen comes on. Keys and Activities use other connections and work as before.
-
-## [1.4.1-beta] - 2026-10-29
-
-### Added
-
-- **Button grid: "Only on a long press"** (`long_press_only: true`): a tap does nothing, holding the button sends its action. For a key you don't want to press by mistake, like **Record** next to a number pad. Suggested by a user.
-
-### Changed
-
-- **Builder**: the banner says which remote you're on (*Connected to Living room*), and the browser tab starts with its name, handy with several remotes. The page settings open with **✎** on the page's tab, like the cards (⚙ looked like a dot on some screens); it shows a hand pointer, not the tab's drag cursor. The beta switch is just **Beta**.
-- **Builder: title cards** show their real title and subtitle in the preview, aligned as on the remote (they said "title").
-- **Builder: versions**: on a beta build, the official release with the same number (e.g. 1.4.0-beta and v1.4.0) shows as the same version, without an install button.
-
-### Fixed
-
-- **The TV Helper kept the remote awake all night**: during playback the helper answers every few seconds (the position moves), and the remote kept asking with its screen off: 776 requests in 51 minutes on a test remote, each one waking its Wi-Fi and processor. The helper is now paused with Home Assistant's quiet mode (after *Go quiet with Home Assistant after the screen is off*, never on the dock) and resumes the moment the screen comes on. The TV connection itself stays, so keys and Activities work as before.
-- **Updating from the remote's Settings**: each tap on *Update available* started another download into the same file, with nothing on screen; a few taps and Android answered "App not installed". The line now shows the download's progress and ignores taps meanwhile, a failure says so, and the file is only handed to Android once complete. The web page's install buttons answer "already downloading" too.
-- **Builder: "… is filled in but not added to the card yet"** showed up with nothing filled in: a button opened with ✎ on a card closed earlier was still considered being edited. Every card form now starts fresh, and the question only comes when something was really typed (any field of a new button or scene, or a change to the one being edited).
-- **Motion wake stopped working a few minutes after the screen went off**: the HA100's motion sensor says nothing while the processor sleeps, and the processor only stayed awake by chance (Home Assistant's traffic, the TV Helper's polling). Once 1.4.1 paused the TV Helper, a test remote slept and missed every pick-up. The processor (not the screen) is now kept awake while motion wake listens: 5 minutes after the screen goes off by default, or always with *Always*.
-- **Motion wake missed real pick-ups** (since 1.4.0): it waited for 4 moving samples in a row, and a hand moves in jolts, so one calm sample reset the count (a test remote logged "move 1, 1, 2, 3/4" and stayed dark). It now wakes on 3 moving samples within 0.45 s, a calm one in between allowed; a knock on the table is still too short to wake it.
-- **Waking up after a long sleep**: Android can tell the app that the screen is on several seconds late (3.8 s seen after 51 minutes off), and Home Assistant only went live again then. The app now wakes up as soon as it's back on screen.
+- The `reference/` folder (key-code files taken from the stock app; the codes are in `HardwareKeys.kt`).
 
 ## [1.4.0] - 2026-10-28
 

@@ -1,5 +1,7 @@
 package com.custom.astrion.zidoo
 
+import com.custom.astrion.ha.HaTime
+
 /** One Zidoo player added on the web page (1.4.6), as the registry drives it. */
 data class ZidooSpec(
     val localId: String,
@@ -35,7 +37,15 @@ data class ZidooState(
     /** The cover or backdrop, served by the player itself (`http://<ip>:9529/…`). */
     val pictureUrl: String? = null,
     /** Installed apps that can be opened: label → package. */
-    val apps: Map<String, String> = emptyMap()
+    val apps: Map<String, String> = emptyMap(),
+    /** "FLAC · 44.1 kHz · 16 bit" (1.5.0). */
+    val quality: String? = null,
+    /** An Eversolo's input (1.5.0). */
+    val input: EversoloInput? = null,
+    /** Muted, when the player says (an Eversolo, 1.5.0). */
+    val muted: Boolean? = null,
+    /** False when what plays can't be moved in (an AirPlay stream, 1.5.0): no seek bar to drag. */
+    val canSeek: Boolean = true
 )
 
 /**
@@ -139,6 +149,10 @@ object ZidooEntityMapper {
     private const val SELECT_SOURCE = 2048
     private const val STOP = 4096
     private const val PLAY = 16384
+
+    // 1.5.0: the Browse button opens the player's own library when it answers: a Zidoo's films
+    // and series, an Eversolo's music (ZidooLibraryDialog).
+    private const val BROWSE_MEDIA = 131072
     const val FEATURES =
         PAUSE or VOLUME_MUTE or PREVIOUS_TRACK or NEXT_TRACK or TURN_ON or TURN_OFF or
             PLAY_MEDIA or VOLUME_STEP or SELECT_SOURCE or STOP or PLAY
@@ -158,13 +172,20 @@ object ZidooEntityMapper {
         // Seeking only while its own video or music player plays: otherwise the TV remote card's
         // ±10 s falls back to the rewind / fast-forward keys.
         val playing = s.reachable && s.source != ZidooSource.NONE
-        a["supported_features"] = if (playing) FEATURES or SEEK else FEATURES
-        a["manufacturer"] = ZidooKeys.brandOf(s.model)
+        val brand = ZidooKeys.brandOf(s.model)
+        val features = if (playing && s.canSeek) FEATURES or SEEK else FEATURES
+        a["supported_features"] = if (s.reachable) features or BROWSE_MEDIA else features
+        a["manufacturer"] = brand
         s.model?.let { a["model"] = it }
         s.firmware?.let { a["sw_version"] = it }
-        if (s.apps.isNotEmpty()) a["source_list"] = s.apps.keys.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        val eversolo = brand == "Eversolo"
+        // An Eversolo's inputs first in the Sources pop-up (1.5.0), then its apps.
+        val inputs = if (eversolo) EversoloInput.entries.map { it.label } else emptyList()
+        val sources = inputs + s.apps.keys.sortedWith(String.CASE_INSENSITIVE_ORDER)
+        if (sources.isNotEmpty()) a["source_list"] = sources
         mediaApps(s.apps).takeIf { it.isNotEmpty() }?.let { a["astrion_apps"] = it }
         if (playing) addNowPlaying(a, s)
+        if (s.reachable) addEversoloState(a, s, eversolo, playing)
         return ZidooEntityData(spec.entityId, stateOf(s), a)
     }
 
@@ -180,8 +201,22 @@ object ZidooEntityMapper {
         s.episode?.let { a["media_episode"] = it }
         s.durationMs?.takeIf { it > 0 }?.let { a["media_duration"] = (it / MS_PER_S).toInt() }
         s.positionMs?.let { a["media_position"] = (it / MS_PER_S).toInt() }
-        s.positionAt?.let { a["media_position_updated_at"] = isoInstant(it) }
+        s.positionAt?.let { a["media_position_updated_at"] = HaTime.isoInstant(it) }
         s.pictureUrl?.let { a["entity_picture"] = it }
+        addAudio(a, s)
+    }
+
+    /** Mute when the player says it; an Eversolo's input other than its own player as the source, its own player when idle (1.5.0). */
+    private fun addEversoloState(a: MutableMap<String, Any?>, s: ZidooState, eversolo: Boolean, playing: Boolean) {
+        s.muted?.let { a["is_volume_muted"] = it }
+        val input = s.input?.takeIf { eversolo } ?: return
+        if (input != EversoloInput.INTERNAL || !playing) a["source"] = input.label
+    }
+
+    /** What plays as an audiophile reads it, and a web radio's "Live" (no length: no bar), 1.5.0. */
+    private fun addAudio(a: MutableMap<String, Any?>, s: ZidooState) {
+        s.quality?.let { a["astrion_quality"] = it }
+        if (s.source == ZidooSource.MUSIC && (s.durationMs ?: 0) <= 0) a["astrion_live"] = true
     }
 
     /**
@@ -209,7 +244,10 @@ object ZidooEntityMapper {
             "com.zidoo.setupwizard",
             "com.zidoo.cnc",
             "com.android.quick.settings",
-            "com.android.chrome"
+            "com.android.chrome",
+            // An Eversolo's (1.5.0)
+            "com.eversolo.setting",
+            "com.android.traceur"
         )
 
     fun remote(spec: ZidooSpec, s: ZidooState): ZidooEntityData {
@@ -218,12 +256,6 @@ object ZidooEntityMapper {
             a["current_activity"] = if (s.source == ZidooSource.VIDEO) "Video player" else "Music player"
         }
         return ZidooEntityData(spec.remoteEntityId, if (s.reachable) "on" else "off", a)
-    }
-
-    private fun isoInstant(unixMs: Long): String {
-        val formatter = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX", java.util.Locale.US)
-        formatter.timeZone = java.util.TimeZone.getTimeZone("UTC")
-        return formatter.format(java.util.Date(unixMs))
     }
 }
 
@@ -257,6 +289,11 @@ object ZidooServices {
     private const val POWER_ON = "Key.PowerOn"
     private const val POWER_OFF = "Key.PowerOn.Poweroff"
 
+    /** An Eversolo's, in its own command list (1.5.0). */
+    private const val EVERSOLO_POWER_OFF = "Key.Poweroff"
+
+    private fun powerOff(state: ZidooState) = keys(if (ZidooKeys.brandOf(state.model) == "Eversolo") EVERSOLO_POWER_OFF else POWER_OFF)
+
     private fun keys(vararg k: String) = k.map { ZidooStep.Key(it) }
 
     private fun api(path: String) = listOf(ZidooStep.Api(path))
@@ -271,21 +308,32 @@ object ZidooServices {
 
     /** Home Assistant `media_player.*`; null when the service isn't supported. */
     fun media(service: String, data: Map<String, Any?>, state: ZidooState): List<ZidooStep>? {
+        mute(service, data, state)?.let { return it }
         keyServices[service]?.let { return keys(it) }
         power(service, state)?.let { return it }
         transport(service, state)?.let { return it }
         return when (service) {
             "media_seek" -> (data["seek_position"] as? Number)?.let { seek(state, (it.toDouble() * MS_PER_SECOND).toLong()) }
-            "select_source" -> launchOf(data["source"])
+            "select_source" -> EversoloInput.ofLabel(data["source"])?.let { keys(it.key) } ?: launchOf(data["source"])
             "play_media" -> launchOf(data["media_content_id"])
             else -> null
         }
     }
 
+    /**
+     * An Eversolo that says whether it's muted (1.5.0): muted or not as asked
+     * (`setMuteVolume?isMute=`, Neoheresy's Eversolo panel), not a toggle that may go the wrong way.
+     */
+    private fun mute(service: String, data: Map<String, Any?>, state: ZidooState): List<ZidooStep>? {
+        if (service != "volume_mute" || state.muted == null) return null
+        val want = data["is_volume_muted"] as? Boolean ?: !state.muted
+        return api("ZidooMusicControl/v2/setMuteVolume?isMute=${if (want) 1 else 0}")
+    }
+
     private fun power(service: String, state: ZidooState): List<ZidooStep>? = when (service) {
         "turn_on" -> turnOn(state)
-        "turn_off" -> if (state.reachable) keys(POWER_OFF) else emptyList()
-        "toggle" -> if (state.reachable) keys(POWER_OFF) else turnOn(state)
+        "turn_off" -> if (state.reachable) powerOff(state) else emptyList()
+        "toggle" -> if (state.reachable) powerOff(state) else turnOn(state)
         else -> null
     }
 
@@ -319,7 +367,12 @@ object ZidooServices {
         return when (state.source) {
             // "positon" is how the player's API spells it.
             ZidooSource.VIDEO -> api("ZidooVideoPlay/seekTo?positon=$at")
-            ZidooSource.MUSIC -> api("ZidooMusicControl/seekTo?time=$at")
+            // An Eversolo (1.5.0): the v2 call, the only one an app it hosts (the official Apple
+            // Music) obeys; its own player takes both. A Zidoo keeps the call it has always had.
+            ZidooSource.MUSIC -> {
+                val eversolo = ZidooKeys.brandOf(state.model) == "Eversolo"
+                api(if (eversolo) "MusicControl/v2/seekTo?time=$at" else "ZidooMusicControl/seekTo?time=$at")
+            }
             ZidooSource.NONE -> null
         }
     }
@@ -352,7 +405,7 @@ object ZidooServices {
     private fun command(name: String, state: ZidooState): List<ZidooStep> = when (name.trim().uppercase().removePrefix("KEYCODE_")) {
         "POWER" -> media("toggle", emptyMap(), state).orEmpty()
         "WAKEUP" -> turnOn(state)
-        "SLEEP" -> if (state.reachable) keys(POWER_OFF) else emptyList()
+        "SLEEP" -> if (state.reachable) powerOff(state) else emptyList()
         "MEDIA_PLAY_PAUSE", "PLAY_PAUSE" -> play(state, !state.playing)
         else -> listOfNotNull(ZidooKeys.of(name)?.let { ZidooStep.Key(it) })
     }

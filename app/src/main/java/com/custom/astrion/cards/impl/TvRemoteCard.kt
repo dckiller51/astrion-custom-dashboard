@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowLeft
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -159,18 +160,23 @@ class TvRemoteCard : CardRenderer {
                 }
             }
         }
-        if (playerOpen && nowPlaying != null) PlayerView(ctx, nowPlaying) { playerOpen = false }
+        if (playerOpen && nowPlaying != null) {
+            PlayerView(ctx, nowPlaying, remoteEntity, config.bool("show_volume", true)) { playerOpen = false }
+        }
     }
 
     /** The media player view of what plays (1.4.9): cover, progress, controls, in a pop-up. */
     @Composable
-    private fun PlayerView(ctx: CardContext, entity: EntityState, onClose: () -> Unit) {
+    private fun PlayerView(ctx: CardContext, entity: EntityState, remoteEntity: String, showVolume: Boolean, onClose: () -> Unit) {
         MediaPlayerDetailDialog(
             entityId = entity.entityId,
             name = entity.attrString("friendly_name") ?: entity.entityId,
             e = entity,
             client = ctx.client,
             theme = ctx.theme,
+            // 1.5.0: Home Assistant's media player of a Zidoo beside Astrion's remote.zidoo_…: Browse opens its library.
+            // The card's own volume setting (1.5.0): hidden on the card, hidden in its pop-up too.
+            library = MediaLibraryPlayers(browseAlso = remoteEntity, showVolume = showVolume),
             onClose = onClose
         )
     }
@@ -184,6 +190,9 @@ class TvRemoteCard : CardRenderer {
         val ctx = r.ctx
         var showSources by remember { mutableStateOf(false) }
         var showKeypad by remember { mutableStateOf(false) }
+        var showBrowse by remember { mutableStateOf(false) }
+        // 1.5.0: a Zidoo's films and series, an Eversolo's music (`show_browse`, on by default).
+        val browse = config.bool("show_browse", true) && hasLibrary(r.mediaEntity, r.remoteEntity)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -198,6 +207,9 @@ class TvRemoteCard : CardRenderer {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)
             )
+            if (browse) {
+                RoundIconButton(Icons.AutoMirrored.Filled.List, ctx.theme, size = HEADER_BUTTON.dp) { showBrowse = true }
+            }
             if (config.bool("show_sources", true) && QuickPickers.sourcesOf(ctx, r.mediaEntity).isNotEmpty()) {
                 RoundIconButton(Icons.Filled.Apps, ctx.theme, size = HEADER_BUTTON.dp) { showSources = true }
             }
@@ -209,6 +221,7 @@ class TvRemoteCard : CardRenderer {
             }
         }
         if (showSources) SourcePickerDialog(ctx, r.mediaEntity, r.appIcons(), r.appOrder()) { showSources = false }
+        if (showBrowse) BrowseDialog(r.mediaEntity, ctx.client, ctx.theme, also = r.remoteEntity) { showBrowse = false }
         val keypad = KeypadTarget.from(config, r.remoteEntity, r.c("center", "DPAD_CENTER"))
         if (showKeypad && keypad != null) KeypadDialog(ctx.theme, keypad.hasOk, onKey = { keypad.send(ctx, it) }) { showKeypad = false }
     }

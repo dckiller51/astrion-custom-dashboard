@@ -1,6 +1,7 @@
 package com.custom.astrion.zidoo
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -26,6 +27,113 @@ class ZidooEntityTest {
         assertEquals(listOf("Kodi", "Netflix"), e.attributes["source_list"])
         assertEquals("remote.zidoo_z9x", ZidooEntityMapper.remote(spec, film).entityId)
         assertNull(ZidooEntityMapper.media(spec, idle).attributes["media_title"])
+    }
+
+    @Test
+    fun `browse opens the library of a player that answers`() {
+        fun browses(s: ZidooState) = (ZidooEntityMapper.media(spec, s).attributes["supported_features"] as Int) and 131072 != 0
+        assertTrue(browses(idle))
+        assertTrue(browses(film))
+        assertTrue(!browses(ZidooState()))
+        assertTrue(browses(idle.copy(model = "DMP-A6")))
+    }
+
+    @Test
+    fun `an Apple Music track whose cover is cached on the Eversolo gets the player's own cover call`() {
+        val text = javaClass.getResource("/zidoo/eversolo-apple-music-state.json")!!.readText(Charsets.UTF_8)
+        val p = ZidooParse.musicV2(ZidooParse.parse(text))!!
+        assertEquals("Fight Fire with Fire (Remastered)", p.title)
+        assertEquals("Ride the Lightning (Remastered)", p.album)
+        assertEquals("/SystemSettings/getItemSettingIcon?iconName=1440845421&type=1", p.artUrl)
+        assertTrue(p.playing)
+    }
+
+    private fun appleMusicState() = javaClass.getResource("/zidoo/eversolo-apple-music-state.json")!!.readText(Charsets.UTF_8)
+
+    @Test
+    fun `an Eversolo's input and what plays, as an audiophile reads it`() {
+        val o = ZidooParse.parse(appleMusicState())
+        assertEquals(EversoloInput.INTERNAL, ZidooParse.input(o)) // "XMOS-XMOS"
+        assertEquals("44.1 kHz", ZidooParse.musicV2(o)!!.quality) // Apple Music: rate only
+        // Its own player says more (same answer, no app hosted).
+        val own = ZidooParse.parse(appleMusicState().replace("\"isOpenApp\":true", "\"isOpenApp\":false"))
+        assertEquals("FLAC · 44.1 kHz · 16 bit · 913 kbps", ZidooParse.musicV2(own)!!.quality)
+        assertEquals(EversoloInput.OPTICAL, EversoloInput.ofTag("SPDIF-Optical"))
+        assertEquals(EversoloInput.BLUETOOTH, EversoloInput.ofTag("BT-xx"))
+        assertNull(EversoloInput.ofTag(""))
+    }
+
+    @Test
+    fun `an Eversolo's inputs are sources, and selecting one sends its key`() {
+        val evs = idle.copy(model = "DMP-A6", input = EversoloInput.OPTICAL)
+        val attrs = ZidooEntityMapper.media(spec, evs).attributes
+
+        @Suppress("UNCHECKED_CAST")
+        val sources = attrs["source_list"] as List<String>
+        assertEquals(listOf("Internal player", "Bluetooth In", "USB-C In", "Coaxial In", "Optical In"), sources.take(5))
+        assertEquals("Optical In", attrs["source"])
+        assertEquals(listOf(ZidooStep.Key("Key.DAC.SPDIF")), ZidooServices.media("select_source", mapOf("source" to "Optical In"), evs))
+        // A Zidoo has no inputs.
+        @Suppress("UNCHECKED_CAST")
+        val zidooSources = ZidooEntityMapper.media(spec, idle).attributes["source_list"] as List<String>?
+        assertTrue(zidooSources.orEmpty().none { it == "Optical In" })
+    }
+
+    @Test
+    fun `an Eversolo turns off and mutes with its own calls`() {
+        val evs = idle.copy(model = "DMP-A6", muted = false)
+        assertEquals(listOf(ZidooStep.Key("Key.Poweroff")), ZidooServices.media("turn_off", emptyMap(), evs))
+        assertEquals(listOf(ZidooStep.Key("Key.PowerOn.Poweroff")), ZidooServices.media("turn_off", emptyMap(), idle))
+        assertEquals(
+            listOf(ZidooStep.Api("ZidooMusicControl/v2/setMuteVolume?isMute=1")),
+            ZidooServices.media("volume_mute", mapOf("is_volume_muted" to true), evs)
+        )
+        // Without the asked state, the opposite of what it says.
+        assertEquals(
+            listOf(ZidooStep.Api("ZidooMusicControl/v2/setMuteVolume?isMute=0")),
+            ZidooServices.media("volume_mute", emptyMap(), evs.copy(muted = true))
+        )
+        assertEquals(listOf(ZidooStep.Key("Key.Mute")), ZidooServices.media("volume_mute", emptyMap(), idle))
+        assertEquals(false, ZidooEntityMapper.media(spec, evs).attributes["is_volume_muted"])
+        assertEquals(false, ZidooParse.muted(ZidooParse.parse(appleMusicState())))
+        assertEquals(EversoloInput.COAXIAL, EversoloInput.ofTag("RCA"))
+    }
+
+    @Test
+    fun `an AirPlay stream shows what is streamed, not the player's last track`() {
+        val text = javaClass.getResource("/zidoo/eversolo-airplay-state.json")!!.readText(Charsets.UTF_8)
+        val p = ZidooParse.musicV2(ZidooParse.parse(text))!!
+        assertEquals("Murders In the Rue Morgue", p.title)
+        assertEquals("Iron Maiden", p.artist)
+        assertEquals("Killers", p.album)
+        assertEquals("/SystemSettings/getItemSettingIcon?iconName=538faf3eca45505b5084a2c01b08eb52.png&type=1", p.artUrl)
+        assertEquals("44.1 kHz · 16 bit", p.quality)
+        assertFalse(p.canSeek) // isCanSeek false: no bar to drag
+        assertTrue(p.playing)
+    }
+
+    @Test
+    fun `a web radio is live`() {
+        val radio = idle.copy(source = ZidooSource.MUSIC, playing = true, title = "FIP", durationMs = 0)
+        assertEquals(true, ZidooEntityMapper.media(spec, radio).attributes["astrion_live"])
+        assertNull(ZidooEntityMapper.media(spec, radio.copy(durationMs = 200_000)).attributes["astrion_live"])
+    }
+
+    @Test
+    fun `streaming app covers are made readable`() {
+        assertEquals(
+            "https://is1-ssl.mzstatic.com/image/thumb/Music/x/600x600bb.jpg",
+            ZidooParse.coverUrl("https://is1-ssl.mzstatic.com/image/thumb/Music/x/{w}x{h}{c}.{f}")
+        )
+        assertEquals("https://a.b/c.jpg", ZidooParse.coverUrl("https://a.b/c.jpg"))
+        assertNull(ZidooParse.coverUrl("https://a.b/motion/cover.m3u8?x=1"))
+        // What an Eversolo said for Ride the Lightning in the official Apple Music: a file of its own, then its own call.
+        assertNull(ZidooParse.coverUrl("/storage/emulated/0/.zcontrol/cache/phonecontrol/1440845421"))
+        assertEquals(
+            "/SystemSettings/getItemSettingIcon?iconName=1440845421&type=1",
+            ZidooParse.coverUrl("/SystemSettings/getItemSettingIcon?iconName=1440845421&type=1")
+        )
+        assertNull(ZidooParse.coverUrl(null))
     }
 
     @Test
@@ -68,6 +176,14 @@ class ZidooEntityTest {
         assertEquals(emptyList<ZidooStep>(), ZidooServices.media("media_play", emptyMap(), song))
         assertEquals(listOf(ZidooStep.Key("Key.MediaNext")), ZidooServices.media("media_next_track", emptyMap(), idle))
         assertNull(ZidooServices.media("media_seek", mapOf("seek_position" to 5.0), idle))
+        assertEquals(
+            listOf(ZidooStep.Api("ZidooMusicControl/seekTo?time=60000")),
+            ZidooServices.media("media_seek", mapOf("seek_position" to 60.0), song)
+        )
+        assertEquals(
+            listOf(ZidooStep.Api("MusicControl/v2/seekTo?time=60000")),
+            ZidooServices.media("media_seek", mapOf("seek_position" to 60.0), song.copy(model = "DMP-A6"))
+        )
         assertEquals(listOf(ZidooStep.Launch("Netflix")), ZidooServices.media("select_source", mapOf("source" to "Netflix"), idle))
         assertNull(ZidooServices.media("shuffle_set", emptyMap(), idle))
     }

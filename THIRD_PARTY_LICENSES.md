@@ -32,3 +32,21 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Libraries included in the app (1.5.0)
+
+The APK ships these open-source libraries, each under its own license (unchanged, as published by
+its authors). None of them is GPL-incompatible.
+
+| Library | Version | License | Used for |
+| :--- | :--- | :--- | :--- |
+| [AndroidX Core, Activity, Jetpack Compose](https://developer.android.com/jetpack/androidx) (UI, Foundation, Material 3, Material icons) | see `app/build.gradle.kts` | Apache License 2.0 | The app's screens |
+| [Kotlin standard library, kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines) | 1.8.1 | Apache License 2.0 | Background work |
+| [kotlinx.serialization (JSON)](https://github.com/Kotlin/kotlinx.serialization) | 1.7.1 | Apache License 2.0 | `dashboard.json`, device APIs |
+| [OkHttp](https://github.com/square/okhttp) and Okio | 4.12.0 | Apache License 2.0 | HTTP / WebSocket (Home Assistant, Zidoo, updates) |
+| [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) | 2.3.1 | BSD 3-Clause | The remote's own web page |
+| [ZXing core](https://github.com/zxing/zxing) | 3.5.3 | Apache License 2.0 | QR code of the web page's address |
+| [Bouncy Castle (bcprov)](https://www.bouncycastle.org/licence.html) | 1.78.1 | Bouncy Castle License (MIT-style) | Apple TV pairing cryptography |
+
+The TV Helper app (`tvhelper/`) uses only the Android platform. JUnit (Eclipse Public License 1.0)
+is used for the unit tests only and is not part of the APK.

@@ -241,7 +241,7 @@ class MediaPlayerCard : CardRenderer {
             showKeypad = false
         })
         if (showBrowse) {
-            MediaBrowser(entityId = entityId, client = ctx.client, theme = ctx.theme) { showBrowse = false }
+            BrowseDialog(entityId = entityId, client = ctx.client, theme = ctx.theme) { showBrowse = false }
         }
         val search = playerConfig.musicSearch
         if (showSearch && search != null) {
@@ -559,9 +559,10 @@ class MediaPlayerCard : CardRenderer {
             FullTopButtons(ctx, playerConfig.topButtons)
             FullArtwork(ctx, e, data.art, playerConfig)
             FullTitleArtist(ctx.theme, data.title, data.artist)
+            MediaQualityLine(e, ctx.theme)
             MediaLibraryButtons(
                 ctx.theme,
-                onBrowse = if (e?.supports(Feature.BROWSE_MEDIA) == true) data.onBrowse else null,
+                onBrowse = if (canBrowse(data.entityId, e)) data.onBrowse else null,
                 onSearch = data.onSearch,
                 onQueue = data.onQueue,
                 onSources = data.onSources,

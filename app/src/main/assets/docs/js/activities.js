@@ -58,7 +58,7 @@ function irDeviceCommandEntries(dev) {
 // (power type, power-on delay, repeats, named input sequences) — lives in
 // /sdcard/astrion/ir-database/<category>.json on the remote, which the
 // remote's own server exposes at GET /ir-database/<category>.json (same
-// endpoint ir.js already uses). Only reachable when this builder is served
+// endpoint the Devices page's IR form, devices-page.js, already uses). Only reachable when this builder is served
 // by the remote itself; resolves to null anywhere else, and every caller
 // falls back to the old typed-in hints.
 

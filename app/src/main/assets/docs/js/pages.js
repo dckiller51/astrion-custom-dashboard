@@ -605,10 +605,6 @@ function reorderPage(fromIdx, toIdx) {
 // already referenced this) but nothing in this codebase currently opens it —
 // no ReferenceError either way now, and this'll do the right thing the day
 // something does.
-function closePreviewModal() {
-  document.getElementById('previewModal')?.classList.remove('open');
-}
-
 // ---- Modal backdrops: close only on a genuine click on the backdrop itself ---
 //
 // Every modal here is `<div class="preview-modal"><div class="preview-modal-inner">
