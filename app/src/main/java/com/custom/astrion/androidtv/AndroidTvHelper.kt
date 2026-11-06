@@ -84,13 +84,18 @@ class AndroidTvHelperClient(
     @Volatile private var running = false
     private var thread: Thread? = null
 
+    // A stopped thread may still sit in a long poll (a socket read isn't interrupted); a quick
+    // restart then starts a new one, and the old one sees a newer generation and exits (1.4.0).
+    @Volatile private var generation = 0
+
     @Volatile var link: HelperLink = HelperLink.NONE
         private set
 
     fun start() {
         if (running || code.isBlank()) return
         running = true
-        thread = Thread({ loop() }, "AndroidTv-helper").apply { isDaemon = true }.also { it.start() }
+        val gen = ++generation
+        thread = Thread({ loop(gen) }, "AndroidTv-helper").apply { isDaemon = true }.also { it.start() }
     }
 
     fun stop() {
@@ -104,9 +109,9 @@ class AndroidTvHelperClient(
     private var artVersion: Long? = null
     private var art: ByteArray? = null
 
-    private fun loop() {
+    private fun loop(gen: Int) {
         var failures = 0
-        while (running) {
+        while (running && gen == generation) {
             try {
                 poll()
                 failures = 0

@@ -853,14 +853,17 @@ private fun jumpToPageByName(pages: List<PageConfig>, name: String?, scope: Coro
 
 /** Whether [state] should trigger auto-opening [page] — see
  * [PageConfig.openWhenEntity]. */
-private fun entityPageOpens(page: PageConfig, state: String?): Boolean = state == page.openWhenState
+private fun entityPageOpens(page: PageConfig, state: String?): Boolean = stateIn(page.openWhenState, state)
+
+/** Whether [state] is one of [states], a comma-separated list (1.4.9: "on, off, idle"). */
+internal fun stateIn(states: String, state: String?): Boolean = state != null && states.split(',').any { it.trim() == state }
 
 /** Whether [state] should trigger auto-closing [page] — [PageConfig.closeWhenState]
  * if set, else any state other than [PageConfig.openWhenState] (the simple
  * on/off default). See that field's own doc comment for why an explicit
  * value matters for anything with more than two meaningful states. */
 private fun entityPageCloses(page: PageConfig, state: String?): Boolean =
-    page.closeWhenState?.let { state == it } ?: (state != page.openWhenState)
+    page.closeWhenState?.let { stateIn(it, state) } ?: !stateIn(page.openWhenState, state)
 
 /**
  * Watches every page's [PageConfig.openWhenEntity] against live entity
@@ -1041,6 +1044,8 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
 
             HorizontalPager(
                 state = pagerState,
+                // 1.4.9: swiping between pages can be turned off (a light touch landed on another page).
+                userScrollEnabled = config.swipePages,
                 modifier =
                 Modifier
                     .weight(1f)

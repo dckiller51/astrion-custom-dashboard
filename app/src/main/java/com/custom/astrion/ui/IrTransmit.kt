@@ -3,6 +3,7 @@ package com.custom.astrion.ui
 import android.hardware.ConsumerIrManager
 import android.util.Log
 import com.custom.astrion.config.IrStepConfig
+import com.custom.astrion.config.IrTarget
 
 /**
  * The one place an IR command leaves this device's own blaster — shared by
@@ -32,8 +33,10 @@ object IrTransmit {
     }
 
     /** Logs a command handed to an IR Extender (it transmits on its own). */
-    fun extender(deviceId: String, command: String, extenderId: String, pronto: String) {
-        Log.i(TAG, "sent $deviceId/$command — ${pronto.trim().split(Regex("\\s+")).size} Pronto words, extender $extenderId")
+    fun extender(deviceId: String, command: String, target: IrTarget.Extender, pronto: String) {
+        val output = if (target.output > 0) ", output ${target.output}" else ""
+        val words = pronto.trim().split(Regex("\\s+")).size
+        Log.i(TAG, "sent $deviceId/$command — $words Pronto words, extender ${target.extenderId}$output")
     }
 
     private fun describe(step: IrStepConfig): String {

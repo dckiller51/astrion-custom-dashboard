@@ -9,6 +9,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -140,6 +141,7 @@ object DashboardLoader {
                     val openWhenState = obj["openWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() } ?: "on"
                     val closeWhenState = obj["closeWhenState"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
                     val openMode = if (obj["openMode"]?.jsonPrimitive?.content == "popup") "popup" else "page"
+                    val focusNavigation = obj["focusNavigation"]?.jsonPrimitive?.booleanOrNull != false
                     PageConfig(
                         name = name,
                         cards = cards,
@@ -157,7 +159,8 @@ object DashboardLoader {
                         openWhenEntity = openWhenEntity,
                         openWhenState = openWhenState,
                         closeWhenState = closeWhenState,
-                        openMode = openMode
+                        openMode = openMode,
+                        focusNavigation = focusNavigation
                     )
                 }
             if (pages.isEmpty()) error("\"pages\" is empty")
@@ -185,7 +188,8 @@ object DashboardLoader {
                 dock,
                 power,
                 weather,
-                keepOn
+                keepOn,
+                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true
             )
         }
         else -> error("top level must be an object or array")
@@ -287,7 +291,8 @@ object DashboardLoader {
      * written before this field existed. `"target": "local"` is the
      * explicit spelling of the same thing (accepted, never written by the
      * encoder below — no reason to clutter every device's JSON with the
-     * default). `"target": {"extender": "<id>"}` -> [IrTarget.Extender].
+     * default). `"target": {"extender": "<id>"}` -> [IrTarget.Extender], with an optional
+     * `"output": 2` for an extender with several IR outputs (1.4.3).
      */
     private fun parseIrTarget(deviceId: String, value: JsonElement?): IrTarget = when {
         value == null -> IrTarget.Local
@@ -295,7 +300,8 @@ object DashboardLoader {
         value is JsonObject && value.containsKey("extender") -> {
             val extenderId = value["extender"]!!.jsonPrimitive.content
             if (extenderId.isBlank()) error("irDevice \"$deviceId\" has a blank \"target.extender\" id")
-            IrTarget.Extender(extenderId)
+            val output = (value["output"] as? JsonPrimitive)?.content?.toIntOrNull()?.takeIf { it > 0 } ?: 0
+            IrTarget.Extender(extenderId, output)
         }
         else -> error(
             "irDevice \"$deviceId\" has an unrecognized \"target\" " +
@@ -506,6 +512,7 @@ object DashboardLoader {
                                 put("hiddenUnlessActivity", it)
                                 if (page.hideMode == "full") put("hideMode", "full")
                             }
+                            if (!page.focusNavigation) put("focusNavigation", false)
                             page.openWhenEntity?.let {
                                 put("openWhenEntity", it)
                                 if (page.openWhenState != "on") put("openWhenState", page.openWhenState)
@@ -575,7 +582,10 @@ object DashboardLoader {
                                     IrTarget.Local -> {} // default, omitted rather than written explicitly
                                     is IrTarget.Extender -> put(
                                         "target",
-                                        buildJsonObject { put("extender", target.extenderId) }
+                                        buildJsonObject {
+                                            put("extender", target.extenderId)
+                                            if (target.output > 0) put("output", target.output)
+                                        }
                                     )
                                 }
                             }

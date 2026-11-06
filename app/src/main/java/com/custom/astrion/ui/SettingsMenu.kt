@@ -8,6 +8,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -474,6 +475,7 @@ private fun ConnectionSection(ctx: CardContext) {
 @Composable
 private fun WebConfigSection(ctx: CardContext) {
     ConfigServerRow(ctx)
+    if (ctx.deviceSettings.configServerEnabled) WebPasswordRow()
     localIpAddress()?.let { ip ->
         Text(
             if (ctx.deviceSettings.configServerEnabled) {
@@ -484,6 +486,13 @@ private fun WebConfigSection(ctx: CardContext) {
             color = if (ctx.deviceSettings.configServerEnabled) LocalTheme.current.accent else LocalTheme.current.mutedText,
             fontSize = 13.sp
         )
+        // 1.4.3: scan it with a phone instead of typing the address.
+        if (ctx.deviceSettings.configServerEnabled) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                QrCode("http://$ip:8080/", Modifier.clip(RoundedCornerShape(8.dp)))
+                Box(Modifier.weight(1f)) { Hint(stringResource(R.string.web_config_qr_hint)) }
+            }
+        }
     }
 }
 
@@ -634,13 +643,17 @@ private fun UpdateRow(context: Context, scope: CoroutineScope, info: UpdateCheck
         } else {
             stringResource(R.string.settings_update_available, info.version)
         }
-    SettingRow(icon = Icons.Filled.SystemUpdate, label = label) {
+    // 1.4.1: the row shows the download's progress and ignores taps meanwhile; a failure says so.
+    val progress by UpdateChecker.downloadProgress.collectAsState()
+    val downloading = progress?.let { stringResource(R.string.update_downloading, it) }
+    val failed = stringResource(R.string.update_download_failed)
+    SettingRow(icon = Icons.Filled.SystemUpdate, label = downloading ?: label) {
+        if (UpdateChecker.isDownloading) return@SettingRow
         scope.launch(Dispatchers.IO) {
             val file = UpdateChecker.download(context, info.apkUrl)
-            if (file != null) {
-                withContext(Dispatchers.Main) {
-                    UpdateChecker.promptInstall(context, file)
-                }
+            withContext(Dispatchers.Main) {
+                val shown = file != null && runCatching { UpdateChecker.promptInstall(context, file) }.isSuccess
+                if (!shown) Toast.makeText(context, failed, Toast.LENGTH_LONG).show()
             }
         }
     }

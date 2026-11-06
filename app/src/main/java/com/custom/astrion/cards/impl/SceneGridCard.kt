@@ -28,7 +28,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -38,7 +37,6 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.ServiceCall
-import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapCombinedClickable
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -262,11 +260,14 @@ class SceneGridCard : CardRenderer {
         val hasIcon = remember(scenes) { scenes.any { !isGridSpacer(it) && !iconOf(it).isNullOrBlank() } }
         val showLabels = remember(config) { config.options["show_labels"] as? Boolean ?: true }
         val iconFill = remember(config) { config.options["icon_fill"] as? Boolean ?: false }
+        val iconStyle = remember(config) { GridIconStyle.of(config, DEFAULT_ICON_DP) }
         // Text-only grids default to 58dp; `tile_height` applies to them too (1.3.7:
         // it used to be ignored there, while the builder's preview showed it).
         val tileHeight =
             remember(config, hasIcon) {
-                config.int("tile_height", if (iconFill) 120 else if (hasIcon) 74 else TEXT_TILE_HEIGHT_DP)
+                // A bigger icon (1.5.0, icon_size) makes the tile taller unless tile_height is set.
+                val iconTile = maxOf(ICON_TILE_HEIGHT_DP, iconStyle.size + ICON_TILE_EXTRA_DP)
+                config.int("tile_height", if (iconFill) 120 else if (hasIcon) iconTile else TEXT_TILE_HEIGHT_DP)
             }
 
         // Combines both highlighting mechanisms into the one border+background
@@ -277,8 +278,11 @@ class SceneGridCard : CardRenderer {
         fun stateFor(scene: Map<String, Any?>): SceneButtonState {
             val stateActive = isConditionActive(scene)
             val activityActive = isActive(scene)
-            val background = (if (stateActive) parseHexColor(scene["active_color"] as? String) else null) ?: colorOf(scene)
-            val stateBorder = if (stateActive) conditionBorderColor(scene) else null
+            // 1.4.4: a tile without "state_entity" also uses its "active_color" / "active_border"
+            // while its Activity runs (they used to be ignored without a watched entity).
+            val activeLook = stateActive || (activityActive && scene["state_entity"] == null)
+            val background = (if (activeLook) parseHexColor(scene["active_color"] as? String) else null) ?: colorOf(scene)
+            val stateBorder = if (activeLook) conditionBorderColor(scene) else null
             val (borderActive, borderColor) =
                 when {
                     stateBorder != null -> true to stateBorder
@@ -292,11 +296,12 @@ class SceneGridCard : CardRenderer {
                 hasIcon = hasIcon,
                 showLabel = showLabels,
                 active = borderActive,
-                borderColor = borderColor
+                borderColor = borderColor,
+                textColor = parseHexColor(scene["text_color"] as? String) ?: contrastText(background)
             )
         }
 
-        val layout = TileLayout(iconFill, tileHeight, iconPosition, config.int("font_size").takeIf { it > 0 })
+        val layout = TileLayout(iconFill, tileHeight, iconPosition, config.int("font_size").takeIf { it > 0 }, iconStyle)
         if (row) {
             Row(
                 modifier = Modifier
@@ -329,8 +334,6 @@ class SceneGridCard : CardRenderer {
         }
     }
 
-    private fun luminance(c: Color): Float = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
-
     /** [SceneButton]'s icon layout knobs, bundled into one parameter so
      * adding these didn't push the function over detekt's parameter-count
      * threshold. [iconPosition] only affects the icon+label tile shape
@@ -341,7 +344,9 @@ class SceneGridCard : CardRenderer {
         val tileHeight: Int,
         val iconPosition: IconPosition,
         /** `font_size` (1.3.7); null keeps 12 sp under an icon, 15 sp alone. */
-        val fontSize: Int? = null
+        val fontSize: Int? = null,
+        /** `icon_size`, `icon_fit`, `icon_trim` (1.5.0). */
+        val iconStyle: GridIconStyle = GridIconStyle(DEFAULT_ICON_DP, GridIconStyle.FIT_CONTAIN, false)
     )
 
     private data class SceneButtonState(
@@ -363,7 +368,9 @@ class SceneGridCard : CardRenderer {
          * in [Render]). Null draws no border even when [active] is true —
          * e.g. a state condition matched but no "active_border" was set,
          * so only the background changes via "active_color". */
-        val borderColor: Color? = null
+        val borderColor: Color? = null,
+        /** "text_color" (1.4.4) when set, else black or white for contrast with [color]. */
+        val textColor: Color = contrastText(color)
     )
 
     /** The border every tile shares when [SceneButtonState.active] is true
@@ -381,18 +388,12 @@ class SceneGridCard : CardRenderer {
         onLongClick: (() -> Unit)?,
         onClick: () -> Unit
     ) {
-        val textColor = if (luminance(state.color) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)
+        val textColor = state.textColor
         // iconFill tiles render the bitmap at the full tile height (ContentScale.
         // FillHeight), otherwise it's a 28dp square — pick the larger of the two
         // as the downsample target so the same bitmap stays sharp in either mode
         // without decoding at the source's full (often 2000+px) resolution.
-        val targetPx =
-            with(LocalDensity.current) {
-                (if (layout.iconFill) layout.tileHeight else 28).dp.toPx()
-            }.toInt()
-        val bitmap = remember(state.iconPath, targetPx) {
-            state.iconPath?.let { decodeIconSampled(it, targetPx) }
-        }
+        val bitmap = rememberGridIcon(state.iconPath, layout.iconStyle, if (layout.iconFill) layout.tileHeight else layout.iconStyle.size)
 
         if (state.hasIcon) {
             if (layout.iconFill && bitmap != null && !state.showLabel) {
@@ -402,13 +403,7 @@ class SceneGridCard : CardRenderer {
                 // an icon, even tiles with no icon of their own — a blank 28dp
                 // spacer keeps their label lined up with the others instead of
                 // sitting lower (in every position, not just top/bottom).
-                val icon: @Composable () -> Unit = {
-                    if (bitmap != null) {
-                        Image(bitmap = bitmap, contentDescription = state.name, modifier = Modifier.size(28.dp))
-                    } else {
-                        Spacer(Modifier.size(28.dp))
-                    }
-                }
+                val icon: @Composable () -> Unit = { GridIconImage(bitmap, state.name, layout.iconStyle) }
                 val label: @Composable () -> Unit = {
                     if (state.showLabel) {
                         Text(
@@ -540,3 +535,16 @@ class SceneGridCard : CardRenderer {
 
 /** Height of a text-only tile when the card sets no `tile_height`. */
 private const val TEXT_TILE_HEIGHT_DP = 58
+
+/** An icon tile's default height, and the room its label and padding need beside a bigger icon. */
+private const val ICON_TILE_HEIGHT_DP = 74
+private const val ICON_TILE_EXTRA_DP = 46
+
+/** The icon's height when the card sets no `icon_size`. */
+private const val DEFAULT_ICON_DP = 28
+
+private fun luminance(c: Color): Float = 0.2126f * c.red + 0.7152f * c.green + 0.0722f * c.blue
+
+/** Black or white, whichever reads best on [background]. Top-level so [SceneGridCard]'s nested
+ * tile state can use it as a default. */
+private fun contrastText(background: Color): Color = if (luminance(background) > 0.75f) Color(0xFF141414) else Color(0xFFF0F2F6)

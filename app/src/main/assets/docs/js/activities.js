@@ -58,7 +58,7 @@ function irDeviceCommandEntries(dev) {
 // (power type, power-on delay, repeats, named input sequences) — lives in
 // /sdcard/astrion/ir-database/<category>.json on the remote, which the
 // remote's own server exposes at GET /ir-database/<category>.json (same
-// endpoint ir.js already uses). Only reachable when this builder is served
+// endpoint the Devices page's IR form, devices-page.js, already uses). Only reachable when this builder is served
 // by the remote itself; resolves to null anywhere else, and every caller
 // falls back to the old typed-in hints.
 
@@ -879,13 +879,30 @@ function renderActivitiesList() {
     heading.className = 'list-group-heading';
     heading.textContent = room;
     list.appendChild(heading);
-    byRoom[room].forEach(act => {
+    byRoom[room].forEach((act, i, acts) => {
       const el = document.createElement('div');
       el.className = 'list-item';
-      el.innerHTML = `<span>${act.name} <span style="color:#888">${I18N.t(act.devices.length === 1 ? 'web_activity_device_count_one' : 'web_activity_device_count_many', act.devices.length)}</span></span><span><span class="remove" style="color:#00E5FF" onclick="startActivityWizard('${act.id}')">✎</span> <span class="remove" onclick="removeActivity('${act.id}')">✕</span></span>`;
+      // 1.4.4: ↑ ↓ set the order (within the room), used everywhere Activities are listed.
+      const up = i > 0 ? `<span class="remove move" title="${I18N.t('web_activity_move_up')}" onclick="moveActivity('${act.id}', -1)">↑</span>` : '<span class="move-spacer"></span>';
+      const down = i < acts.length - 1 ? `<span class="remove move" title="${I18N.t('web_activity_move_down')}" onclick="moveActivity('${act.id}', 1)">↓</span>` : '<span class="move-spacer"></span>';
+      el.innerHTML = `<span>${act.name} <span style="color:#888">${I18N.t(act.devices.length === 1 ? 'web_activity_device_count_one' : 'web_activity_device_count_many', act.devices.length)}</span></span><span>${up} ${down} <span class="remove" style="color:#00E5FF" onclick="startActivityWizard('${act.id}')">✎</span> <span class="remove" onclick="removeActivity('${act.id}')">✕</span></span>`;
       list.appendChild(el);
     });
   });
+}
+
+/** 1.4.4: moves an Activity up (-1) or down (+1) among the Activities of its own room. */
+function moveActivity(id, dir) {
+  const acts = dashboardData.activities || [];
+  const from = acts.findIndex(a => a.id === id);
+  if (from < 0) return;
+  let to = from + dir;
+  while (to >= 0 && to < acts.length && acts[to].room !== acts[from].room) to += dir;
+  if (to < 0 || to >= acts.length) return;
+  [acts[from], acts[to]] = [acts[to], acts[from]];
+  renderActivitiesList();
+  updateCardFormInputs();
+  updateJsonOutput();
 }
 
 function removeActivity(id) {

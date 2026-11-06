@@ -10,6 +10,7 @@
 #   ADB_ALLOW="ip mac ..."   computers allowed to reach it (IPv4 addresses and/or MAC addresses)
 #   WIFI_POWERSAVE_OFF=1|0   keep the Wi-Fi driver's power save off
 #   WAKE_KEYS=1|0            replay the key that woke the screen (Android drops it)
+#   WAKE_ONLY="353 ..."      keys (Linux codes) that only wake the screen, never replayed
 #
 # Why a firewall: this firmware is a userdebug build. adbd runs as root and asks
 # no key, so with adb over Wi-Fi anyone on the network gets a root shell.
@@ -24,6 +25,7 @@ ADB_WIFI=0
 ADB_ALLOW=
 WIFI_POWERSAVE_OFF=0
 WAKE_KEYS=0
+WAKE_ONLY=
 # shellcheck disable=SC1090
 [ -f "$CONF" ] && . "$CONF"
 
@@ -155,6 +157,10 @@ wake_keys() {
             level=$(cat "$bl" 2>/dev/null)
             [ "$level" = 0 ] || continue
             dev=${dev%:}
+            # A wake-only key (1.4.2): it just turns the screen on (Android does that), no action.
+            case " $WAKE_ONLY " in
+                *" $key "*) say "wake keys: key $key only wakes the screen (wake-only)"; continue ;;
+            esac
             say "wake keys: key $key on $dev with the screen off"
             # Wait (up to 2 s) for the screen; Android then passes keys on again.
             n=0

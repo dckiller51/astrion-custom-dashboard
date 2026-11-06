@@ -48,6 +48,33 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   @keyframes spin { to { transform: rotate(360deg); } }
   /* 1.4.0: the preview's header (Save to device, undo, history…) stays on screen while the page scrolls. */
   .preview-head { display: flex; align-items: center; gap: 8px; margin: -20px -20px 12px; padding: 14px 20px 10px; position: sticky; top: 0; z-index: 50; background: #181818; border-radius: 12px 12px 0 0; }
+  /* 1.4.2: preview = remote (left) + page tree (right); the tree goes above on a narrow pane. */
+  #saveToDeviceFab { white-space: nowrap; }
+  .preview-body { display: flex; gap: 16px; align-items: flex-start; }
+  .preview-remote-col { flex: 0 0 208px; min-width: 0; }
+  .page-tree-col { flex: 1; min-width: 150px; position: sticky; top: 64px; }
+  .preview-pane.narrow .preview-body { flex-direction: column; align-items: stretch; }
+  .preview-pane.narrow .preview-remote-col { flex-basis: auto; order: 2; }
+  .preview-pane.narrow .page-tree-col { order: 1; position: static; }
+  .page-tree-head { display: flex; align-items: center; justify-content: space-between; color: #aaa; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+  .page-tree { display: flex; flex-direction: column; gap: 3px; }
+  .page-tree-hint { margin-top: 8px; font-size: 0.72rem; }
+  .pt-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 6px; background: #2d2d2d; border: 1px solid #3a3a3a; cursor: grab; font-size: 0.85rem; color: #eee; min-height: 30px; box-sizing: border-box; }
+  .pt-row:hover { border-color: #555; }
+  .pt-row.active { background: #00E5FF; color: #121212; border-color: #00E5FF; }
+  .pt-row.dragging { opacity: 0.4; }
+  .pt-row.drop-before { box-shadow: inset 0 3px 0 #00E5FF; }
+  .pt-row.drop-after { box-shadow: inset 0 -3px 0 #00E5FF; }
+  .pt-row.drop-inside { outline: 2px dashed #00E5FF; outline-offset: -2px; }
+  .pt-row.active.drop-before, .pt-row.active.drop-after { box-shadow: inset 0 3px 0 #121212; }
+  .pt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pt-toggle { width: 14px; text-align: center; cursor: pointer; opacity: 0.7; flex: none; }
+  .pt-badge { font-size: 0.75rem; opacity: 0.85; flex: none; }
+  .pt-btn { cursor: pointer; padding: 1px 5px; border-radius: 4px; opacity: 0.6; flex: none; }
+  .pt-btn:hover { opacity: 1; background: rgba(255,255,255,0.15); }
+  .pt-row.active .pt-btn:hover { background: rgba(0,0,0,0.15); }
+  .pt-row .pt-add { visibility: hidden; }
+  .pt-row:hover .pt-add, .pt-row.active .pt-add { visibility: visible; }
   /* Grid scene/button form: "+ Add" in the accent colour; while editing one, a green "Save" and a red "Cancel". */
   button.grid-add { background: #00E5FF; color: #121212; }
   button.grid-add.editing { background: #2e7d32; color: #fff; }
@@ -65,8 +92,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .tabs { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; padding-bottom: 6px; }
   .tab { background: #2d2d2d; border: 1px solid #444; padding: 6px 12px; cursor: pointer; border-radius: 6px; color: #fff; white-space: nowrap; font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
   .tab.active { background: #00E5FF; color: #121212; font-weight: bold; border-color: #00E5FF; }
-  .tab-settings { opacity: 0.7; }
-  .tab-settings:hover { opacity: 1; }
+  /* The page tab's ✎ is a button, not a drag handle (1.4.1): its own cursor, a hover background. */
+  .tab .tab-settings { opacity: 0.7; cursor: pointer; padding: 1px 5px; margin: -1px -5px -1px 0; border-radius: 4px; }
+  .tab .tab-settings:hover { opacity: 1; background: rgba(255,255,255,0.18); }
+  .tab.active .tab-settings:hover { background: rgba(0,0,0,0.15); }
   .tab.active .tab-settings { color: #121212; }
   /* Drag-to-reorder page tabs — same visual language as the card reorder
      affordances below (.ha-draggable-card), just applied to the tab bar. */
@@ -78,6 +107,55 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
      and left-aligned like the rest of the form fields, mirroring the way
      Home Assistant edits a card in a dedicated dialog rather than inline. */
   .ha-dialog { width: min(520px, 90vw); max-height: 85vh; overflow-y: auto; text-align: left; }
+  .ha-dialog.gallery-mode { width: min(880px, 94vw); }
+
+  /* Card gallery (1.4.9): the card types as tiles, by use, with a search and a "For a device" tab. */
+  .gallery-head { display: flex; gap: 10px; margin-bottom: 12px; }
+  .gallery-search { flex: 1; display: flex; align-items: center; gap: 8px; background: #252525; border: 1px solid #444; border-radius: 10px; padding: 0 12px; min-height: 42px; color: #888; margin: 0; }
+  .gallery-search input { flex: 1; background: transparent; border: none; color: #e0e0e0; font-size: 0.95rem; outline: none; margin: 0; padding: 0; min-width: 0; }
+  .gallery-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .gallery-tab { min-height: 38px; padding: 0 14px; margin: 0; border-radius: 19px; border: 1px solid #444; background: #252525; color: #ddd; font-size: 0.88rem; cursor: pointer; }
+  .gallery-tab:hover { border-color: #777; }
+  .gallery-tab.active { border-color: #00E5FF; background: #00363d; color: #00E5FF; font-weight: 600; }
+  .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .gallery-tile, .gallery-device {
+    display: flex; gap: 12px; align-items: flex-start; text-align: left; margin: 0; padding: 14px; min-height: 64px;
+    background: #222; border: 1px solid #383838; border-radius: 12px; color: #e0e0e0; cursor: pointer; font-family: inherit;
+  }
+  .gallery-tile:hover, .gallery-device:hover { border-color: #00E5FF; }
+  .gallery-tile.recommended, .gallery-device.active { border-color: #00E5FF; background: #0f2d33; }
+  .gallery-tile-icon { flex-shrink: 0; width: 42px; height: 42px; border-radius: 10px; background: rgba(0,229,255,0.1); color: #00E5FF; display: flex; align-items: center; justify-content: center; }
+  .gallery-tile-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .gallery-tile-text b { font-size: 0.95rem; color: #f0f0f0; }
+  .gallery-tile-text span { font-size: 0.8rem; color: #a0a0a0; line-height: 1.35; overflow-wrap: anywhere; }
+  .gallery-tile-text .gallery-badge { color: #00E5FF; font-weight: 600; }
+  .gallery-devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+  .gallery-device { align-items: center; padding: 10px 12px; min-height: 56px; }
+  .gallery-device .gallery-tile-icon { width: 36px; height: 36px; }
+  .gallery-suggestions { margin-top: 16px; background: #141414; border: 1px solid #333; border-radius: 12px; padding: 14px; }
+  /* Card forms in folding sections (1.4.9). */
+  .form-section { border: 1px solid #383838; border-radius: 10px; background: #222; margin: 0 0 10px; }
+  .form-section > summary {
+    display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 14px; cursor: pointer;
+    list-style: none; font-weight: 600; color: #f0f0f0; user-select: none;
+  }
+  .form-section > summary::-webkit-details-marker { display: none; }
+  .form-section > summary::before { content: '▸'; color: #888; font-size: 0.85rem; width: 12px; transition: transform 150ms; }
+  .form-section[open] > summary::before { transform: rotate(90deg); color: #00E5FF; }
+  .form-section-name { flex: 1; }
+  .form-section-badge { font-size: 0.75rem; font-weight: 600; color: #00E5FF; background: rgba(0,229,255,0.12); border-radius: 10px; padding: 2px 9px; }
+  .form-section-body { padding: 2px 14px 14px; border-top: 1px solid #333; }
+  /* Tick boxes that follow each other share a row (1.5.0). */
+  .form-check-row { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 10px 0 4px; }
+  .form-check-row > label { margin: 0; flex: 0 1 auto; max-width: 100%; }
+  /* A sectioned card form, two fields side by side (1.5.0, the device page's look). */
+  .ha-dialog.form-wide:not(.gallery-mode) { width: min(960px, 94vw); }
+  .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; align-items: start; }
+  .form-field { min-width: 0; }
+  .form-field.wide { grid-column: 1 / -1; }
+  .form-field > label:first-child { margin-top: 10px; }
+  @media (max-width: 720px) { .form-grid { grid-template-columns: minmax(0, 1fr); } }
+  .gallery-suggestions-title { font-size: 0.9rem; color: #a0a0a0; margin-bottom: 10px; }
   .inline-check { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #ccc; }
   .inline-check input { width: auto; }
   /* Drag-and-drop card reordering in the preview, same interaction as
@@ -108,7 +186,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .list-item .remove { color: #ff8a8a; cursor: pointer; font-weight: bold; flex-shrink: 0; }
   .card-title .remove { cursor: pointer; color: #ccc; }
   .card-title .remove:hover { color: #fff; }
-  .hotkeys-badge { background: #0d2b30; border: 1px solid #00E5FF; padding: 8px 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.78rem; }
   .hint { font-size: 0.75rem; color: #777; margin-top: 4px; }
   .hint-row { display: flex; flex-wrap: wrap; gap: 4px 16px; }
   .hint-row .inline-check { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: #ccc; margin: 0; }
@@ -156,6 +233,50 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .tile.tile-appletv .tile-icon { background: rgba(216,216,216,0.1); color: #d8d8d8; }
   .tile.tile-androidtv { border-color: #24452f; } .tile.tile-androidtv:hover, .tile.tile-androidtv:focus-visible { border-color: #3DDC84; }
   .tile.tile-androidtv .tile-icon { background: rgba(61,220,132,0.12); color: #3DDC84; }
+  .tile.tile-zidoo { border-color: #4a3a1a; } .tile.tile-zidoo:hover, .tile.tile-zidoo:focus-visible { border-color: #F5A623; }
+  .tile.tile-zidoo .tile-icon { background: rgba(245,166,35,0.12); color: #F5A623; }
+
+  .tile.tile-direct { border-color: #1f3d44; } .tile.tile-direct:hover, .tile.tile-direct:focus-visible { border-color: #00E5FF; }
+  .tile.tile-direct .tile-icon { background: rgba(0,229,255,0.12); color: #00E5FF; }
+
+  /* Direct devices (1.4.9): a tab per kind of device. */
+  .view-title { display: flex; align-items: center; gap: 10px; margin-top: 0; }
+  .view-title svg { color: #00E5FF; flex-shrink: 0; }
+  .direct-tabs { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #333; padding-bottom: 12px; margin-bottom: 18px; }
+  .direct-tab {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 14px; margin: 0;
+    border-radius: 10px; border: 1px solid #444; background: #1a1a1a; color: #ddd; font-size: 0.92rem; cursor: pointer;
+  }
+  .direct-tab:hover { border-color: #777; }
+  .direct-tab.active { border-color: #00E5FF; background: #00363d; color: #00E5FF; font-weight: 600; }
+  .direct-count { font-size: 0.78rem; color: #999; background: #2a2a2a; border-radius: 9px; padding: 1px 7px; }
+  .direct-tab.active .direct-count { color: #00E5FF; background: rgba(0,229,255,0.12); }
+  .direct-block + .direct-block { margin-top: 28px; padding-top: 22px; border-top: 1px solid #2c2c2c; }
+  .direct-block-title { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 1.1rem; color: #f0f0f0; }
+  .direct-block-title svg { color: #00E5FF; }
+  .direct-soon { display: flex; align-items: center; gap: 12px; color: #999; background: #1a1a1a; border: 1px dashed #444; border-radius: 12px; padding: 18px; }
+  #appleTvsList, #androidTvsList, #zidoosList, #haDevicesList, #harmonyHubsList, #extendersList, #irDevicesList { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .device-card { display: flex; gap: 14px; align-items: center; background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 14px 16px; min-width: 0; }
+  .device-card-icon { flex-shrink: 0; width: 52px; height: 52px; border-radius: 12px; background: #252525; display: flex; align-items: center; justify-content: center; }
+  .device-card-icon .device-kind-icon { margin: 0; vertical-align: 0; }
+  .device-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .device-card-text b { font-size: 1rem; color: #f0f0f0; }
+  .device-card-details { font-size: 0.8rem; color: #999; overflow-wrap: anywhere; }
+  .device-card-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .device-card-tags .device-badge { margin-left: 0; }
+  .device-card-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; white-space: nowrap; font-size: 0.85rem; }
+  .device-state { font-size: 0.75rem; border-radius: 9px; padding: 1px 8px; background: #2a2a2a; color: #bbb; white-space: nowrap; }
+  .device-state.tone-ok { background: #16351c; color: #8fe09a; }
+  .device-state.tone-warn { background: #3a3220; color: #f1cf7a; }
+  .device-state.tone-bad { background: #3d1f1f; color: #ff9a9a; }
+  .device-state.tone-off { background: #2a2a2a; color: #aaa; }
+  .direct-about { margin: 0 0 14px; }
+  .direct-about > summary { cursor: pointer; color: #9fdfe6; font-size: 0.85rem; list-style: none; }
+  .direct-about > summary::-webkit-details-marker { display: none; }
+  .direct-about > summary::before { content: 'ⓘ '; }
+  .direct-about[open] > summary { margin-bottom: 8px; }
+  .device-kind-icon { display: inline-flex; vertical-align: -4px; margin-right: 8px; color: #00E5FF; }
+  .device-badge { font-size: 0.75rem; color: #ccc; background: #2d2d2d; border-radius: 9px; padding: 1px 8px; margin-left: 4px; white-space: nowrap; }
 
   .utility-row { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 28px; }
   .utility-row a, .utility-row button.link-btn {
@@ -501,11 +622,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   }
   .preview-scene-tile.no-icon .st-label { font-size: 15px; margin-top: 0; }
   .preview-button-tile .bt-label {
-    color: var(--text); font-size: 12px; font-weight: 500; text-align: center; max-width: 100%;
+    color: inherit; font-size: 12px; font-weight: 500; text-align: center; max-width: 100%;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  .preview-button-tile.no-icon { background: var(--control); }
-  .preview-button-tile.has-icon { background: var(--control); }
+  .preview-button-tile.no-icon { background: var(--control); color: var(--text); }
+  .preview-button-tile.has-icon { background: var(--control); color: var(--text); }
   .preview-button-tile.no-icon .bt-label { font-size: 15px; }
 
   /* cover card — mirrors CoverCard.kt's 3 layouts (default / horizontal / vertical)[cite: 1] */
@@ -627,12 +748,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
      edit form by attachEntityAutocomplete() in preview.js. Floats below the
      input, same width, dark theme to match the editor. */
   .ea-dropdown { position: fixed; z-index: 9999; background: #2d2d2d; border: 1px solid #444; border-radius: 6px; max-height: 260px; overflow-y: auto; box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
-  .ea-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; cursor: pointer; font-size: 0.82rem; gap: 8px; }
+  .ea-item { display: flex; flex-direction: column; align-items: stretch; padding: 6px 10px; cursor: pointer; font-size: 0.82rem; gap: 1px; }
   .ea-item:hover { background: #383838; }
   .ea-item.ea-selected { background: #00E5FF; color: #121212; }
   .ea-item.ea-selected .ea-name { color: #333; }
-  .ea-id { font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ea-name { color: #888; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; max-width: 45%; }
+  .ea-id { font-family: monospace; font-size: 0.74rem; color: #9a9a9a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ea-name { color: #e0e0e0; overflow-wrap: anywhere; }
+  .ea-item.ea-selected .ea-id { color: #333; }
   .ea-more { padding: 4px 10px; font-size: 0.75rem; color: #666; font-style: italic; }
 
   /* ---- Theme & Colors form ---- */
@@ -673,8 +795,46 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 @keyframes deeplinkFlash { 0%, 40% { background: rgba(0, 229, 255, .22); box-shadow: 0 0 0 6px rgba(0, 229, 255, .22); } 100% { background: transparent; box-shadow: none; } }
 
 /* Built-in weather (js/weather.js) */
+.tile.tile-extender { border-color: #2e2a45; } .tile.tile-extender:hover, .tile.tile-extender:focus-visible { border-color: #B39DFF; }
+.tile.tile-extender .tile-icon { background: rgba(179,157,255,0.14); color: #B39DFF; }
 .tile.tile-weather { border-color: #2a3550; } .tile.tile-weather:hover, .tile.tile-weather:focus-visible { border-color: #8AB4FF; }
 .tile.tile-weather .tile-icon { background: rgba(138,180,255,0.14); color: #8AB4FF; }
 .weather-place { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .weather-place button { margin-left: auto; }
 .weather-result { display: block; width: 100%; text-align: left; margin-top: 6px; }
+
+  /* 1.4.3: the builder on a phone. One column, the preview first (no longer sticky), bigger
+     touch targets, and 16px inputs so iOS doesn't zoom in on every field. */
+  @media (max-width: 760px) {
+    body { padding: 12px; }
+    .layout { flex-direction: column; align-items: stretch; gap: 14px; }
+    .editor-pane, .preview-pane { padding: 14px; }
+    .preview-pane { position: static; order: -1; }
+    .preview-head { flex-wrap: wrap; row-gap: 8px; margin: -14px -14px 12px; padding: 12px 14px 10px; }
+    input, select, textarea { font-size: 16px; }
+    button { min-height: 40px; }
+    .preview-head { gap: 6px; }
+    .preview-head .ha-icon-btn { min-width: 36px; min-height: 36px; width: 36px; height: 36px; padding: 0; }
+    pre, table { max-width: 100%; overflow-x: auto; }
+  }
+
+  /* 1.4.3: hotkey scope labels, green when the key applies on the page shown, amber when not. */
+  .hk-scope { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 0.74rem; font-weight: 600; border: 1px solid; }
+  .hk-scope.hk-on { color: #4caf50; border-color: #4caf50; background: rgba(76, 175, 80, 0.12); }
+  .hk-scope.hk-off { color: #ffb300; border-color: #ffb300; background: rgba(255, 179, 0, 0.12); }
+  .list-item.hk-active { border-left: 3px solid #4caf50; }
+  .list-item.hk-replaced { border-left: 3px solid #ffb300; color: #9a9a9a; }
+  .list-item.hk-replaced b { color: #9a9a9a; }
+  .hk-legend { margin-top: 8px; }
+
+  /* 1.4.3: folded sections of the builder's left pane. */
+  details.fold { margin: 0; }
+  details.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 8px; margin: 18px 0 10px; }
+  details.fold > summary::-webkit-details-marker { display: none; }
+  details.fold > summary::before { content: "▸"; color: #00E5FF; font-size: 0.9rem; transition: transform 150ms; }
+  details.fold[open] > summary::before { transform: rotate(90deg); }
+  details.fold > summary h2 { display: inline-block; margin: 0; }
+
+  /* 1.4.4: ↑ ↓ to reorder Activities. */
+  .list-item .move { color: #bbb; }
+  .list-item .move-spacer { display: inline-block; width: 1em; }

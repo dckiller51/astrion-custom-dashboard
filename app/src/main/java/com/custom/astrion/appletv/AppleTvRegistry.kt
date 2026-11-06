@@ -39,6 +39,8 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
     companion object {
         private const val TAG = "AppleTvRegistry"
         const val REMOTE_DOMAIN = "astrion_appletv"
+        private const val MAX_REPEATS = 20
+        private const val MS_PER_SECOND = 1000
         private const val PAIRING_TTL_MS = 3 * 60_000L
     }
 
@@ -71,7 +73,10 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
                 AppleTvDevice(
                     spec = spec,
                     resolver = discovery,
-                    onEntity = { data -> haClient.setLocalEntity(toEntityState(data)) },
+                    onEntity = { data ->
+                        haClient.setLocalEntity(toEntityState(data))
+                        haClient.setLocalEntity(toEntityState(remoteEntityOf(data)))
+                    },
                     onEndpointChanged = { endpoint -> persistEndpoint(cfg, endpoint) },
                     onMrpEndpointChanged = { endpoint -> persistMrpEndpoint(cfg, endpoint) },
                     log = log
@@ -99,6 +104,11 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
         RemoteSettings.saveAppleTvs(appContext, updated)
     }
 
+    /** Quiet mode on/off (1.4.1): see [AppleTvDevice.setQuiet]. */
+    fun setQuiet(quiet: Boolean) {
+        devices.values.forEach { it.setQuiet(quiet) }
+    }
+
     /** The remote's screen came back on after a long sleep (1.3.9): each Apple TV checks its link. */
     fun onWake() {
         devices.values.forEach { it.checkAlive() }
@@ -107,7 +117,10 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
     fun stop() {
         devices.values.forEach { it.stop() }
         client?.let { c ->
-            devices.keys.forEach { c.removeLocalEntity(it) }
+            devices.keys.forEach {
+                c.removeLocalEntity(it)
+                c.removeLocalEntity(remoteIdOf(it))
+            }
             c.localServiceHandler = null
             c.localBrowseMediaHandler = null
         }
@@ -136,6 +149,7 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
     fun artworkFor(ref: String?): ByteArray? = device(ref)?.snapshotArtwork
 
     private fun handle(call: ServiceCall): Boolean {
+        if (call.domain == "remote") return handleRemote(call)
         if (call.domain == REMOTE_DOMAIN) {
             if (call.service == "send_command") {
                 val command = plainValue(call.data["command"]) as? String
@@ -154,6 +168,53 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
         }
         // Consumed even when unsupported: forwarding an Apple TV entity id to Home Assistant could only fail.
         return true
+    }
+
+    /**
+     * `remote.*` on an Apple TV's `remote.appletv_…` (1.4.9), like the Android TVs and Zidoos:
+     * `send_command` with `command` (one name or a list; Apple TV names or Android TV ones such as
+     * DPAD_UP, see [AppleTvCommands.fromAndroidName]), optional `num_repeats` and `hold_secs`;
+     * POWER and `turn_on` / `turn_off` / `toggle` as the media player's. False: not one of ours.
+     */
+    private fun handleRemote(call: ServiceCall): Boolean {
+        val target = call.entityId?.let { id -> devices.entries.firstOrNull { remoteIdOf(it.key) == id }?.value } ?: return false
+        val data = call.data.mapValues { plainValue(it.value) }
+        when (call.service) {
+            "send_command" -> {
+                val names =
+                    when (val c = data["command"]) {
+                        is String -> listOf(c)
+                        is List<*> -> c.filterIsInstance<String>()
+                        else -> emptyList()
+                    }
+                val repeats = ((data["num_repeats"] as? Number)?.toInt() ?: 1).coerceIn(1, MAX_REPEATS)
+                val holdMs = (data["hold_secs"] as? Number)?.let { (it.toDouble() * MS_PER_SECOND).toLong() }?.takeIf { it > 0 }
+                repeat(repeats) {
+                    names.forEach { name ->
+                        if (name.trim().equals("POWER", ignoreCase = true)) {
+                            target.handleService("toggle", emptyMap())
+                        } else {
+                            target.sendCommand(AppleTvCommands.fromAndroidName(name), holdMs)
+                        }
+                    }
+                }
+            }
+            "turn_on", "turn_off", "toggle" -> target.handleService(call.service, emptyMap())
+            else -> log("[${call.entityId}] unsupported service remote.${call.service}")
+        }
+        // Consumed: Home Assistant doesn't know this entity.
+        return true
+    }
+
+    /** `media_player.appletv_salon` → `remote.appletv_salon`. */
+    private fun remoteIdOf(mediaEntityId: String): String = "remote." + mediaEntityId.substringAfter('.')
+
+    /** The `remote` entity published beside the media player: on / off / unavailable as it is, and the app in front. */
+    private fun remoteEntityOf(media: AppleTvEntityData): AppleTvEntityData {
+        val state = if (media.state == "off" || media.state == "unavailable") media.state else "on"
+        val attributes = linkedMapOf<String, Any?>("friendly_name" to media.attributes["friendly_name"])
+        (media.attributes["app_name"] ?: media.attributes["source"])?.let { attributes["current_activity"] = it }
+        return AppleTvEntityData(remoteIdOf(media.entityId), state, attributes)
     }
 
     /**

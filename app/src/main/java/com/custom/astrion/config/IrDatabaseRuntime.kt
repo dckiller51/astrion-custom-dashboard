@@ -18,7 +18,7 @@ private const val TAG = "IrDatabaseRuntime"
  * Falls back to the repeat section if there's no "once" section (some
  * codes, e.g. a few Sony buttons, only carry a repeat burst).
  *
- * Ported from docs/js/ir.js's `prontoToPattern()` — keep both in sync if
+ * Ported from docs/js/devices-page.js's `prontoToPattern()` — keep both in sync if
  * this logic ever changes. The web builder's copy is still used when
  * hand-pasting a one-off Pronto code into an [IrDeviceSource.Inline]
  * device; everything sourced from ir-database/ resolves here instead, at

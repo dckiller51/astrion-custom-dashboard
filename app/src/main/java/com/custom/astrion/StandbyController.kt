@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import com.custom.astrion.config.PowerConfig
@@ -26,7 +27,10 @@ import java.util.concurrent.Executors
  *    dashboard is current the moment it's seen.
  *  - **Motion-wake for a limited time.** The accelerometer listens for
  *    [PowerConfig.motionWakeMinutes] after the screen goes off, then stops until the screen comes
- *    back (it's only needed to catch a pick-up shortly after the remote was put down).
+ *    back (it's only needed to catch a pick-up shortly after the remote was put down). The HA100's
+ *    accelerometer isn't a wake-up sensor: it says nothing while the processor sleeps, so the
+ *    processor is kept awake (screen off) for that time (1.4.1 — it used to stay awake only by
+ *    chance, e.g. while the TV Helper was polled, and the pick-up went unseen once it slept).
  *  - **Screen timeout.** When [PowerConfig.screenTimeoutSeconds] is set and the app may write
  *    system settings (`adb shell appops set com.custom.astrion WRITE_SETTINGS allow`, once), the
  *    system screen timeout is held at that value — some setups leave it at "never", which keeps
@@ -41,7 +45,9 @@ class StandbyController(
     private val activity: Activity,
     private val client: () -> HaClient?,
     private val isDocked: () -> Boolean,
-    private val motion: MotionHooks
+    private val motion: MotionHooks,
+    /** Quiet mode on/off for what else polls the network (the TV Helpers, 1.4.0). */
+    private val onQuiet: (Boolean) -> Unit = {}
 ) {
     /** Turns the motion-wake sensor listener on/off; [enabled] says whether the user wants it at all. */
     class MotionHooks(val enabled: () -> Boolean, val register: () -> Unit, val unregister: () -> Unit)
@@ -57,7 +63,10 @@ class StandbyController(
 
     private val goQuiet =
         Runnable {
-            if (!screenOn && !isDocked()) client()?.setQuiet(true, config.screenOffEntities.toSet())
+            if (!screenOn && !isDocked()) {
+                client()?.setQuiet(true, config.screenOffEntities.toSet())
+                onQuiet(true)
+            }
         }
     private val stopMotion =
         Runnable {
@@ -65,7 +74,25 @@ class StandbyController(
                 Log.i(TAG, "motion-wake window over (${config.motionWakeMinutes} min) — sensor off until the screen comes on")
                 motion.unregister()
             }
+            releaseMotionLock()
         }
+
+    private val motionLock: PowerManager.WakeLock? =
+        (activity.getSystemService(Context.POWER_SERVICE) as? PowerManager)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "astrion:motionwake-window")
+            ?.apply { setReferenceCounted(false) }
+
+    /** Keeps the processor (not the screen) awake for [ms], so the accelerometer keeps reporting. */
+    private fun holdMotionLock(ms: Long) {
+        val lock = motionLock ?: return
+        runCatching { lock.acquire(ms) }.onFailure { Log.w(TAG, "motion-wake lock refused", it) }
+        Log.i(TAG, "motion wake: processor kept awake for ${ms / SECOND_MS} s so the sensor keeps reporting")
+    }
+
+    private fun releaseMotionLock() {
+        val lock = motionLock ?: return
+        if (lock.isHeld) runCatching { lock.release() }
+    }
 
     private val connectivity = activity.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
     private val networkCallback =
@@ -85,6 +112,7 @@ class StandbyController(
 
     fun stop() {
         handler.removeCallbacksAndMessages(null)
+        releaseMotionLock()
         runCatching { connectivity?.unregisterNetworkCallback(networkCallback) }
     }
 
@@ -100,10 +128,14 @@ class StandbyController(
         handler.removeCallbacks(stopMotion)
         val filter = config.screenOffFilterSeconds
         if (filter >= 0) handler.postDelayed(goQuiet, filter * SECOND_MS)
+        val listening = motion.enabled() && !isDocked()
         when (val minutes = config.motionWakeMinutes) {
-            -1 -> Unit // listen as long as the screen is off (the old behaviour)
+            -1 -> if (listening) holdMotionLock(ALWAYS_LOCK_MS) // as long as the screen is off: "Always"
             0 -> motion.unregister()
-            else -> handler.postDelayed(stopMotion, minutes * MINUTE_MS)
+            else -> {
+                if (listening) holdMotionLock(minutes * MINUTE_MS)
+                handler.postDelayed(stopMotion, minutes * MINUTE_MS)
+            }
         }
     }
 
@@ -112,7 +144,9 @@ class StandbyController(
         writeScreenState(true)
         handler.removeCallbacks(goQuiet)
         handler.removeCallbacks(stopMotion)
+        releaseMotionLock()
         client()?.setQuiet(false)
+        onQuiet(false)
         if (motion.enabled()) motion.register()
         applyScreenTimeout()
     }
@@ -155,5 +189,8 @@ class StandbyController(
         const val SCREEN_FILE = ".screen"
         const val SECOND_MS = 1000L
         const val MINUTE_MS = 60_000L
+
+        /** "Always": re-held at every screen-off; a cap so a lost release can't keep it forever. */
+        const val ALWAYS_LOCK_MS = 12 * 60 * MINUTE_MS
     }
 }

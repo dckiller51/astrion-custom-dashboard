@@ -59,6 +59,7 @@ import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.harmony.HarmonyHubRegistry
+import com.custom.astrion.input.DialogKeys
 import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
 import com.custom.astrion.ui.ChargingScreen
@@ -77,6 +78,8 @@ import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.weather.LocalWeather
 import com.custom.astrion.web.ConfigServer
+import com.custom.astrion.zidoo.ZidooRegistry
+import com.custom.astrion.zidoo.installZidoo
 import java.util.concurrent.TimeUnit
 import kotlin.math.acos
 import kotlin.math.sqrt
@@ -120,12 +123,14 @@ class MainActivity : ComponentActivity() {
         const val TILT_WAKE_DEG = 30f
         const val LIN_ACC_WAKE = 2.5f
 
-        // 1.4.0: picking the remote up wakes it sooner (~0.3–0.5 s instead of ~1–1.2 s), so a key
-        // pressed right after lands on a lit screen — Android drops the key that wakes the screen.
-        // Sampled ~15/s (SENSOR_DELAY_UI) instead of 5/s; 4 samples in a row (~0.27 s of motion)
-        // instead of 3 at 5/s (0.6 s); baseline after a sensor pause settled in 0.25 s, not 0.4 s.
+        // Picking the remote up wakes it sooner, so a key pressed right after lands on a lit screen
+        // (Android drops the key that wakes the screen). Sampled ~15/s (SENSOR_DELAY_UI, 1.4.0);
+        // baseline after a sensor pause settled in 0.25 s. 1.4.1: 3 moving samples within 0.45 s,
+        // a calm one in between allowed — 1.4.0's "4 in a row" missed real pick-ups (a hand moves
+        // in jolts: move 1, 1, 2, 3/4 then nothing), and a knock on the table is only 1–2 samples.
         const val MOTION_SENSOR_DELAY = SensorManager.SENSOR_DELAY_UI
-        const val MOTION_CONSECUTIVE_N = 4
+        const val MOTION_SAMPLES_N = 3
+        const val MOTION_WINDOW_MS = 450L
         const val SCREEN_OFF_WARMUP_MS = 1500L
         const val MAGNITUDE_SANITY_FLOOR = 5f
         const val BUTTON_EVENT = "astrion_button"
@@ -142,6 +147,9 @@ class MainActivity : ComponentActivity() {
         // fires an HA service call — see runHotkey()'s bottom branch.
         val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
 
+        // remote.* entities the remote answers itself (see serviceRepeatMs()).
+        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_")
+
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
         val DIRECTIONAL_KEYS = setOf(HardwareKey.UP, HardwareKey.DOWN, HardwareKey.LEFT, HardwareKey.RIGHT)
@@ -149,6 +157,24 @@ class MainActivity : ComponentActivity() {
         // Activation keys Compose's clickable reacts to — see
         // shouldSwallowHiddenFocusActivation().
         val ACTIVATION_KEYCODES = setOf(KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER)
+
+        // The keys Android's ViewRootImpl treats as navigation keys: in touch mode, the first press
+        // of one can be swallowed (see noteKey()).
+        val TOUCH_MODE_NAV_KEYCODES =
+            setOf(
+                KeyEvent.KEYCODE_DPAD_UP,
+                KeyEvent.KEYCODE_DPAD_DOWN,
+                KeyEvent.KEYCODE_DPAD_LEFT,
+                KeyEvent.KEYCODE_DPAD_RIGHT,
+                KeyEvent.KEYCODE_DPAD_CENTER,
+                KeyEvent.KEYCODE_PAGE_UP,
+                KeyEvent.KEYCODE_PAGE_DOWN,
+                KeyEvent.KEYCODE_MOVE_HOME,
+                KeyEvent.KEYCODE_MOVE_END,
+                KeyEvent.KEYCODE_TAB,
+                KeyEvent.KEYCODE_SPACE,
+                KeyEvent.KEYCODE_ENTER
+            )
     }
 
     private val keyHandler = Handler(Looper.getMainLooper())
@@ -158,6 +184,16 @@ class MainActivity : ComponentActivity() {
 
     /** When the held short-press key last ran its action (see [repeatDue]). */
     private var lastRepeatAt = 0L
+
+    /** Keys whose press (ACTION_DOWN) reached [dispatchKeyEvent] and that aren't released yet. */
+    private val keysDown = HashSet<Int>()
+
+    /**
+     * Set when a key takes the window out of touch mode, cleared when a press reaches
+     * [dispatchKeyEvent]. Android swallows that first press when it moves focus while leaving
+     * touch mode (ViewRootImpl, before any key handler): see [noteKey].
+     */
+    private var leftTouchModeByKey = false
 
     private var sensorManager: SensorManager? = null
     private var motionSensor: Sensor? = null
@@ -177,7 +213,7 @@ class MainActivity : ComponentActivity() {
     private var gravY = 0f
     private var gravZ = 0f
     private var lastSampleMs = 0L
-    private var overCount = 0
+    private val moveTimes = ArrayDeque<Long>() // moving samples within MOTION_WINDOW_MS (screen off)
     private val motionListener =
         object : SensorEventListener {
             override fun onSensorChanged(event: SensorEvent) {
@@ -214,16 +250,17 @@ class MainActivity : ComponentActivity() {
                 val moving = tilt > TILT_WAKE_DEG || lin > LIN_ACC_WAKE
                 if (moving && screenOn) {
                     // Already lit: only keep it on while in hand (no wake to detect, no log per sample).
-                    overCount = 0
+                    moveTimes.clear()
                     gravX = x
                     gravY = y
                     gravZ = z
                     holdScreenWhileInHand()
                 } else if (moving) {
                     ambientOverThreshold++
-                    overCount++
-                    if (overCount >= MOTION_CONSECUTIVE_N) {
-                        overCount = 0
+                    moveTimes.addLast(now)
+                    while (moveTimes.isNotEmpty() && now - moveTimes.first() > MOTION_WINDOW_MS) moveTimes.removeFirst()
+                    if (moveTimes.size >= MOTION_SAMPLES_N) {
+                        moveTimes.clear()
                         gravX = x
                         gravY = y
                         gravZ = z
@@ -236,12 +273,11 @@ class MainActivity : ComponentActivity() {
                     } else {
                         Log.i(
                             MOTION_TAG,
-                            "move $overCount/$MOTION_CONSECUTIVE_N x=${f2(x)} y=${f2(y)} z=${f2(z)} " +
+                            "move ${moveTimes.size}/$MOTION_SAMPLES_N x=${f2(x)} y=${f2(y)} z=${f2(z)} " +
                                 "tilt=${f1(tilt)} lin=${f2(lin)}"
                         )
                     }
                 } else {
-                    overCount = 0
                     gravX = 0.9f * gravX + 0.1f * x
                     gravY = 0.9f * gravY + 0.1f * y
                     gravZ = 0.9f * gravZ + 0.1f * z
@@ -275,7 +311,7 @@ class MainActivity : ComponentActivity() {
             settleX = 0f
             settleY = 0f
             settleZ = 0f
-            overCount = 0
+            moveTimes.clear()
         }
         if (settleUntilMs == 0L) return false
         settleN++
@@ -374,15 +410,7 @@ class MainActivity : ComponentActivity() {
                         Log.i(SCREEN_TAG, "SCREEN_OFF — was on for ${onFor}ms, system timeout=${timeoutMs}ms")
                         standby.onScreenOff()
                     }
-                    Intent.ACTION_SCREEN_ON -> {
-                        screenOn = true
-                        screenOnSinceMs = now
-                        val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
-                        Log.i(SCREEN_TAG, "SCREEN_ON — was off for ${offFor}ms")
-                        standby.onScreenOn()
-                        // A long sleep can leave the Apple TV link dead while it looks open (1.3.9).
-                        if (offFor >= LONG_SLEEP_MS && ::appleTvRegistry.isInitialized) appleTvRegistry.onWake()
-                    }
+                    Intent.ACTION_SCREEN_ON -> markScreenOn("SCREEN_ON")
                 }
             }
         }
@@ -408,6 +436,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
     private lateinit var androidTvRegistry: AndroidTvRegistry // Android TV, direct (1.3.6)
+    private lateinit var zidooRegistry: ZidooRegistry // Zidoo players, direct (1.4.6)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -520,7 +549,12 @@ class MainActivity : ComponentActivity() {
                 enabled = { wakeOnMotionEnabled },
                 register = ::registerMotionListener,
                 unregister = ::unregisterMotionListener
-            )
+            ),
+            onQuiet = { quiet ->
+                if (::androidTvRegistry.isInitialized) androidTvRegistry.setQuiet(quiet)
+                if (::appleTvRegistry.isInitialized) appleTvRegistry.setQuiet(quiet)
+                if (::zidooRegistry.isInitialized) zidooRegistry.setQuiet(quiet)
+            }
         )
     }
 
@@ -545,6 +579,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Log.i("MainActivity", "onCreate — activity instance ${this.hashCode()}")
+        DialogKeys.forward = ::dispatchHotkeyFromDialog
+        // Only a key takes the window out of touch mode (a touch puts it back in): see noteKey().
+        window.decorView.viewTreeObserver.addOnTouchModeChangeListener { inTouchMode ->
+            if (!inTouchMode) {
+                leftTouchModeByKey = true
+                // That key may hand focus to a button before any handler sees it (1.4.8): on a
+                // page with arrow-key movement turned off, no outline for it, not even until release.
+                if (dashboard.config.pages.getOrNull(currentPageIndex)?.focusNavigation == false) FocusHighlight.visible = false
+            }
+        }
 
         // Enable full-screen immersive sticky mode for dedicated wall/remote tablet mode
         @Suppress("DEPRECATION")
@@ -655,6 +699,8 @@ class MainActivity : ComponentActivity() {
         appleTvRegistry = installAppleTv(this, client, configServer, log = { Log.i("AppleTv", it) })
         // After the Apple TV one: it chains to its service handler.
         androidTvRegistry = installAndroidTv(this, client, configServer, log = { Log.i("AndroidTv", it) })
+        // After the Android TV one, chained the same way.
+        zidooRegistry = installZidoo(this, client, log = { Log.i("Zidoo", it) })
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
         // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
@@ -670,6 +716,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        zidooRegistry.stop()
         androidTvRegistry.stop()
         appleTvRegistry.stop()
 
@@ -854,9 +901,30 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The screen came on: Home Assistant live again, motion sensor, Apple TV check… Android's
+     * SCREEN_ON broadcast can come seconds late after a long sleep (3.8 s seen on an HA100), so
+     * [onResume] calls this too when the screen is already on (1.4.0); the later one does nothing.
+     */
+    private fun markScreenOn(source: String) {
+        val now = System.currentTimeMillis()
+        if (screenOn) {
+            if (screenOnSinceMs > 0) Log.i(SCREEN_TAG, "$source — already handled ${now - screenOnSinceMs}ms ago")
+            return
+        }
+        screenOn = true
+        screenOnSinceMs = now
+        val offFor = if (screenOffSinceMs > 0) now - screenOffSinceMs else -1L
+        Log.i(SCREEN_TAG, "$source — screen on, was off for ${offFor}ms")
+        standby.onScreenOn()
+        // A long sleep can leave the Apple TV link dead while it looks open (1.3.9).
+        if (offFor >= LONG_SLEEP_MS && ::appleTvRegistry.isInitialized) appleTvRegistry.onWake()
+    }
+
     override fun onResume() {
         super.onResume()
         Log.i("MainActivity", "onResume — instance ${this.hashCode()} screenOn=$screenOn")
+        if (!screenOn && (getSystemService(POWER_SERVICE) as? PowerManager)?.isInteractive == true) markScreenOn("onResume")
         reloadDashboard()
     }
 
@@ -904,7 +972,7 @@ class MainActivity : ComponentActivity() {
         bindSettingsFallback()
 
         if (page?.parent != null) {
-            val key = runCatching { HardwareKey.valueOf(page.parentKey.uppercase()) }.getOrNull()
+            val key = HardwareKey.fromName(page.parentKey)
             if (key != null && !keyRouter.isShortBound(key)) {
                 keyRouter.on(key) { goToParent() }
             }
@@ -938,17 +1006,18 @@ class MainActivity : ComponentActivity() {
     private fun bindHotkeys(short: List<HotkeyConfig>, long: List<HotkeyConfig>) {
         keyRouter.clear()
         short.forEach { hk ->
-            val key =
-                runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
-                    ?: return@forEach
+            val key = buttonOf(hk) ?: return@forEach
             keyRouter.on(key, repeatIntervalFor(hk)) { runHotkey(hk) }
         }
         long.forEach { hk ->
-            val key =
-                runCatching { HardwareKey.valueOf(hk.key.uppercase()) }.getOrNull()
-                    ?: return@forEach
+            val key = buttonOf(hk) ?: return@forEach
             keyRouter.onLong(key) { runHotkey(hk, long = true) }
         }
+    }
+
+    /** The button [hk] is on; null (and said in the log, 1.4.9) when this remote has no such button. */
+    private fun buttonOf(hk: HotkeyConfig): HardwareKey? = HardwareKey.fromName(hk.key).also {
+        if (it == null) Log.w(KEY_TAG, "hotkey on \"${hk.key}\" ignored: this remote has no such button")
     }
 
     /**
@@ -967,8 +1036,9 @@ class MainActivity : ComponentActivity() {
     private fun serviceRepeatMs(service: String, entityId: String?): Long? = when {
         // Opening an app (1.3.6 Android TV hotkeys): once, not again and again while held.
         service == "media_player.select_source" || service == "media_player.play_media" -> null
-        // An Android TV paired with Astrion answers directly, as fast as IR: smooth D-pad scrolling.
-        service == "remote.send_command" && entityId?.startsWith("remote.androidtv_") == true -> IR_REPEAT_MS
+        // A device paired with Astrion (Android TV, Zidoo 1.4.6, Apple TV 1.4.9) answers directly,
+        // as fast as IR: smooth D-pad scrolling.
+        service == "remote.send_command" && entityId != null && DIRECT_REMOTE_PREFIXES.any { entityId.startsWith(it) } -> IR_REPEAT_MS
         else -> HA_REPEAT_MS
     }
 
@@ -1106,8 +1176,8 @@ class MainActivity : ComponentActivity() {
         if (client == null) {
             Log.w(IrTransmit.TAG, "NOT SENT $irDevice/$irCommand: extender ${target.extenderId} isn't registered")
         } else {
-            IrTransmit.extender(irDevice, irCommand, target.extenderId, prontoCode)
-            lifecycleScope.launch { client.send(prontoCode) }
+            IrTransmit.extender(irDevice, irCommand, target, prontoCode)
+            lifecycleScope.launch { client.send(prontoCode, target.output) }
         }
     }
 
@@ -1204,7 +1274,19 @@ class MainActivity : ComponentActivity() {
             Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)})")
             if (DEBUG_KEYS) Toast.makeText(this, "Unmapped key: $code", Toast.LENGTH_SHORT).show()
         }
-        return shouldSwallowHiddenFocusActivation(event, code) || super.dispatchKeyEvent(event)
+        return focusNavigationOff(code) || shouldSwallowHiddenFocusActivation(event, code) || super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * A page with `"focusNavigation": false` (1.4.7): its arrow and OK keys without a hotkey are
+     * swallowed, so no highlight moves from button to button and OK presses nothing unseen.
+     */
+    private fun focusNavigationOff(code: Int): Boolean {
+        val page = dashboard.config.pages.getOrNull(currentPageIndex) ?: return false
+        if (page.focusNavigation) return false
+        val nav = HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS || code in ACTIVATION_KEYCODES
+        if (nav) FocusHighlight.visible = false
+        return nav
     }
 
     /**
@@ -1241,10 +1323,12 @@ class MainActivity : ComponentActivity() {
         }
         val code = event.keyCode
         logKeyEventDown(event)
+        val lostPress = noteKey(event)
         val shortH = keyRouter.shortHandler(code)
         val longH = keyRouter.longHandler(code)
 
         if (shortH == null && longH == null) return dispatchUnmappedKey(event, code)
+        if (lostPress) return replayLostPress(code, shortH)
 
         // This key is about to be fully consumed as a hotkey below (never
         // reaching Compose's own focus-navigation via super.dispatchKeyEvent).
@@ -1276,18 +1360,33 @@ class MainActivity : ComponentActivity() {
                 return true
             }
             KeyEvent.ACTION_UP -> {
-                if (longH != null && code == activeLongKey) {
-                    cancelPendingLong()
-                    activeLongKey = -1
-                    if (!longFired) {
-                        fireButtonTap()
-                        shortH?.invoke()
-                    }
-                }
+                onMappedKeyUp(code, shortH, longH)
                 return true
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /**
+     * A key pressed while a pop-up is open (1.4.9, see [DialogKeys]): run as a hotkey when it is
+     * one, else false and the pop-up keeps it.
+     */
+    private fun dispatchHotkeyFromDialog(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        if (keyRouter.shortHandler(code) == null && keyRouter.longHandler(code) == null) return false
+        return dispatchKeyEvent(event)
+    }
+
+    /** Release of a mapped key: a key with a long action runs its short one here, if the long one didn't fire. */
+    private fun onMappedKeyUp(code: Int, shortH: (() -> Boolean)?, longH: (() -> Boolean)?) {
+        if (longH != null && code == activeLongKey) {
+            cancelPendingLong()
+            activeLongKey = -1
+            if (!longFired) {
+                fireButtonTap()
+                shortH?.invoke()
+            }
+        }
     }
 
     /** A held key's next repeat, once its interval has passed (see [repeatIntervalFor]). */
@@ -1302,6 +1401,42 @@ class MainActivity : ComponentActivity() {
     private fun cancelPendingLong() {
         pendingLong?.let { keyHandler.removeCallbacks(it) }
         pendingLong = null
+    }
+
+    /**
+     * Tracks presses, and returns true for the release of a press Android swallowed (1.4.7).
+     *
+     * After a touch (tapping a tile, an Activity, a page) the window is in touch mode. The next
+     * D-pad / OK / page key takes it out of touch mode, and when that moves the focus, ViewRootImpl
+     * consumes that press before any key handler sees it — so the first arrow after a tap did
+     * nothing, without the haptic tick, while BACK (not a navigation key) worked. Its release
+     * still arrives: a release with no press seen, right after a key left touch mode, is that key.
+     */
+    private fun noteKey(event: KeyEvent): Boolean {
+        val code = event.keyCode
+        return when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                keysDown.add(code)
+                leftTouchModeByKey = false
+                false
+            }
+            KeyEvent.ACTION_UP -> {
+                val lost = keysDown.remove(code).not() && leftTouchModeByKey && code in TOUCH_MODE_NAV_KEYCODES
+                if (lost) leftTouchModeByKey = false
+                lost
+            }
+            else -> false
+        }
+    }
+
+    /** Runs the short action of a key whose press Android swallowed (see [noteKey]), on its release. */
+    private fun replayLostPress(code: Int, shortH: (() -> Boolean)?): Boolean {
+        Log.i(KEY_TAG, "keyCode=$code (${KeyEvent.keyCodeToString(code)}): press swallowed leaving touch mode, run on release")
+        if (shortH != null) {
+            fireButtonTap()
+            shortH.invoke()
+        }
+        return true
     }
 
     private fun logKeyEventDown(event: KeyEvent) {
@@ -1333,7 +1468,7 @@ class MainActivity : ComponentActivity() {
                 MOTION_TAG,
                 "setup: sensor='${s.name}' vendor='${s.vendor}' " +
                     "wakeUp=${s.isWakeUpSensor} minDelay=${s.minDelay}us wakeOnMotion=$wakeOnMotionEnabled " +
-                    "tiltWake=${TILT_WAKE_DEG}deg linWake=${LIN_ACC_WAKE} consecutive=$MOTION_CONSECUTIVE_N " +
+                    "tiltWake=${TILT_WAKE_DEG}deg linWake=${LIN_ACC_WAKE} samples=$MOTION_SAMPLES_N/${MOTION_WINDOW_MS}ms " +
                     "warmup=${SCREEN_OFF_WARMUP_MS}ms floor=$MAGNITUDE_SANITY_FLOOR"
             )
         }
@@ -1542,6 +1677,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         Log.i("MainActivity", "onDestroy — activity instance ${this.hashCode()}")
+        if (DialogKeys.forward == ::dispatchHotkeyFromDialog) DialogKeys.forward = null
         unregisterMotionListener()
         runCatching { unregisterReceiver(screenStateReceiver) }
         standby.stop()
@@ -1552,6 +1688,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        zidooRegistry.stop()
         androidTvRegistry.stop()
         appleTvRegistry.stop()
         super.onDestroy()

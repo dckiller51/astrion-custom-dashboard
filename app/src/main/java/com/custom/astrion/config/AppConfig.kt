@@ -46,7 +46,10 @@ data class AppConfig(
      * Activity takes the room, whatever each Activity says (1.3.5) — e.g. the Android TV entity used
      * to launch apps, which is the same TV as the one the next Activity uses. Stopping an Activity
      * ("Off") still follows that Activity's own "power off when it ends". */
-    val keepOnDevices: Set<String> = emptySet()
+    val keepOnDevices: Set<String> = emptySet(),
+    /** `swipePages: false` (1.4.9): no swiping left / right between pages; they change with
+     * buttons, tiles, hotkeys and the page dots only. */
+    val swipePages: Boolean = true
 )
 
 /**
@@ -252,6 +255,9 @@ data class PageConfig(
      * Activity stops while it's on screen. A jump from a tile, hotkey or Home Assistant still
      * lands on it (that's how "start Activity + open page" works). */
     val hideMode: String = "dots",
+    /** `"focusNavigation": false` (1.4.7): arrow keys and OK without a hotkey on this page don't
+     * move or press Compose's focus (no highlight going from button to button). */
+    val focusNavigation: Boolean = true,
     /** Optional Home Assistant entity id to watch: when its state matches
      * [openWhenState] (default `"on"`), automatically navigates to this
      * page — e.g. a doorbell `switch` turning on pops open a "Doorbell"
@@ -445,7 +451,9 @@ data class IrDeviceConfig(
 sealed class IrTarget {
     data object Local : IrTarget()
 
-    data class Extender(val extenderId: String) : IrTarget()
+    /** [output]: which of the extender's IR outputs to use (1.4.3; KinCony KC868-AGv3: 1 built-in
+     * LEDs, 2 and 3 its extension cables), sent as `/pronto?out=N`. 0 = the extender's default. */
+    data class Extender(val extenderId: String, val output: Int = 0) : IrTarget()
 }
 
 /**
@@ -553,11 +561,12 @@ data class ActivityConfig(
      * `media_entities` logic. */
     val nowPlayingEntity: String? = null
 ) {
-    /** [nowPlayingEntity], or the first Apple TV / Android TV paired directly with Astrion among [devices]. */
+    /** [nowPlayingEntity], or the first Apple TV / Android TV / Zidoo (1.4.6) added in Astrion among [devices]. */
     val effectiveNowPlayingEntity: String?
         get() =
             nowPlayingEntity ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.appletv_") }?.deviceId
                 ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.androidtv_") }?.deviceId
+                ?: devices.firstOrNull { it.source == "ha" && it.deviceId.startsWith("media_player.zidoo_") }?.deviceId
 }
 
 /**

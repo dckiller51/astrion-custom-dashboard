@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title data-i18n="web_ui_title">Astrion Custom — dashboard.json Editor</title>
     <link rel="stylesheet" href="styles.css">
+    <!-- Add to home screen (1.4.3): Astrion's icon and name on a phone's home screen. -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="Astrion">
 </head>
 <body>
 
@@ -32,15 +41,6 @@
 <div class="layout">
     <!-- LEFT PANE -->
     <div class="editor-pane">
-
-        <h2 data-i18n="web_ui_load_heading">Load an existing dashboard.json (optional)</h2>
-        <div class="section-box">
-            <textarea id="importBox" rows="4" data-i18n-attr="placeholder:web_ui_import_placeholder" placeholder="Paste your current dashboard.json here to edit it, or leave empty to start fresh."></textarea>
-            <div class="btn-row">
-                <button data-i18n="web_ui_load_button" onclick="importJson()">Load</button>
-                <button class="secondary" data-i18n="web_ui_start_over" onclick="resetAll()">Start over</button>
-            </div>
-        </div>
 
         <div class="hint" style="margin-bottom:20px" data-i18n-html="web_ui_devices_hint">
             Home Assistant, Harmony Hub(s), and IR Devices are configured once from
@@ -84,7 +84,7 @@
                 <option value="service" data-i18n="web_ui_action_service">Home Assistant service call</option>
                 <option value="remoteCommand" data-i18n="web_ui_action_remote_command">Home Assistant remote command</option>
                 <option value="appleTvCommand" data-i18n="web_ui_apple_tv_command_direct_no_home">Apple TV command (direct — no Home Assistant needed)</option>
-                <option value="androidTvCommand" data-i18n="web_ui_action_android_tv">Android TV key or app (direct — no Home Assistant needed)</option>
+                <option value="androidTvCommand" data-i18n="web_ui_action_android_tv">Android TV / Zidoo / Eversolo key or app (direct — no Home Assistant needed)</option>
                 <option value="irCommand" data-i18n="web_ui_action_ir_command">IR command (remote's own blaster or IR extender)</option>
                 <option value="harmonyCommand" data-i18n="web_ui_action_harmony_command">Harmony IR command (direct to hub)</option>
                 <option value="harmonyActivity" data-i18n="web_ui_action_harmony_activity">Harmony activity (direct to hub)</option>
@@ -114,20 +114,41 @@
             <div id="activitiesList" style="margin-top:12px"></div>
         </div>
 
-        <h2 data-i18n="web_ui_3_theme_amp_colors">3. Theme &amp; Colors</h2>
-        <div class="section-box" id="themeBox"></div>
+        <!-- 1.4.3: the sections used once, folded (the builder remembers which ones are open). -->
+        <details class="fold" id="foldTheme">
+            <summary><h2 data-i18n="web_ui_3_theme_amp_colors">3. Theme &amp; Colors</h2></summary>
+            <div class="section-box" id="themeBox"></div>
+        </details>
 
-        <h2 data-i18n="web_ui_4_dock_screen">4. Dock screen</h2>
-        <div class="section-box" id="dockBox"></div>
+        <details class="fold" id="foldDock">
+            <summary><h2 data-i18n="web_ui_4_dock_screen">4. Dock screen</h2></summary>
+            <div class="section-box" id="dockBox"></div>
+        </details>
 
-        <h2 data-i18n="web_ui_5_standby_amp_battery">5. Standby &amp; battery</h2>
-        <div class="section-box" id="powerBox"></div>
+        <details class="fold" id="foldPower">
+            <summary><h2 data-i18n="web_ui_5_standby_amp_battery">5. Standby &amp; battery</h2></summary>
+            <div class="section-box" id="powerBox"></div>
+        </details>
 
-        <h2 data-i18n="web_ui_6_generated_json">6. Generated JSON</h2>
-        <textarea id="jsonOutput" readonly></textarea>
+        <details class="fold" id="foldJson">
+            <summary><h2 data-i18n="web_ui_6_import_export_json">6. Import / export JSON</h2></summary>
+            <h3 class="subsection-title" data-i18n="web_ui_6_generated_json">Generated JSON</h3>
+            <textarea id="jsonOutput" readonly></textarea>
+            <div class="btn-row">
+                <button data-i18n="web_ui_copy_json" onclick="copyJson()">Copy JSON</button>
+                <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
+            </div>
+            <h3 class="subsection-title" data-i18n="web_ui_load_heading">Load an existing dashboard.json (optional)</h3>
+            <div class="section-box">
+                <textarea id="importBox" rows="4" data-i18n-attr="placeholder:web_ui_import_placeholder" placeholder="Paste your current dashboard.json here to edit it, or leave empty to start fresh."></textarea>
+                <div class="btn-row">
+                    <button data-i18n="web_ui_load_button" onclick="importJson()">Load</button>
+                    <button class="secondary" data-i18n="web_ui_start_over" onclick="resetAll()">Start over</button>
+                </div>
+            </div>
+        </details>
+
         <div class="btn-row">
-            <button data-i18n="web_ui_copy_json" onclick="copyJson()">Copy JSON</button>
-            <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
             <button id="saveToDeviceBtn" style="display:none" data-i18n="web_ui_save_to_device" onclick="saveDashboardToDevice()">Save to device</button>
         </div>
         <input type="text" id="saveNote" maxlength="200" style="display:none;margin-top:8px" data-i18n-attr="placeholder:web_history_save_note_ph" placeholder="Note for this version (optional), e.g. new Apple TV page">
@@ -144,10 +165,9 @@
             <button type="button" id="haReloadBtn" class="ha-icon-btn" style="display:none" onclick="reloadHaStates()" data-i18n-attr="title:web_device_reload_ha" title="Reload from Home Assistant">🔄</button>
             <button type="button" id="historyBtn" class="ha-icon-btn" style="display:none" onclick="openHistory()" data-i18n-attr="title:web_history_title" title="Version history">🕘</button>
         </div>
-        <div class="ha-toolbar">
-            <div id="tabs" class="tabs"></div>
-            <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
-        </div>
+        <!-- 1.4.2: the remote on the left, the pages as a tree on the right (above it on a narrow pane). -->
+        <div class="preview-body">
+        <div class="preview-remote-col">
         <div class="remote-frame-scale-wrap">
             <div class="remote-frame">
 
@@ -265,7 +285,18 @@
             </div>
         </div>
         <div class="remote-tap-hint" data-i18n="web_ui_tap_hint">🔍 Tap the screen to edit at full size</div>
-        <div id="hotkeysInfo"></div>
+        </div>
+        <div class="page-tree-col">
+            <div class="page-tree-head">
+                <span data-i18n="web_tree_pages">Pages</span>
+                <button type="button" class="ha-icon-btn" data-i18n-attr="title:web_modal_add_page" title="Add page" onclick="openPageDialog(null)">+</button>
+            </div>
+            <div id="pageTree" class="page-tree"></div>
+            <label class="inline-check page-tree-swipe"><input type="checkbox" id="swipePagesToggle" checked onchange="onSwipePagesChange(this.checked)"> <span data-i18n="web_tree_swipe_pages">Swipe left / right to change page</span></label>
+            <div class="hint page-tree-hint" data-i18n="web_tree_swipe_pages_hint">Unticked, pages change only with buttons and tiles, hotkeys and the page dots: no more landing on another page by accident.</div>
+            <div class="hint page-tree-hint" data-i18n="web_tree_hint">Click a page to show it. Drag it to reorder, or onto another page to make it a sub-page.</div>
+        </div>
+        </div>
     </div>
 </div>
 
@@ -280,7 +311,10 @@
     <div class="preview-modal-inner ha-dialog">
         <button class="preview-modal-close" data-i18n="web_modal_close" onclick="cancelCardEdit()">✕ Close</button>
         <h2 style="margin-top:0" id="cardEditorTitle" data-i18n="web_modal_add_card">Add card</h2>
-        <div class="section-box">
+        <div id="cardGallery" class="card-gallery" style="display:none"></div>
+        <div class="section-box" id="cardFormBox">
+            <button type="button" id="cardBackToGallery" class="back-link" style="display:none" onclick="showCardGallery()" data-i18n="web_gallery_back">← Other card types</button>
+            <div id="cardTypeRow">
             <label data-i18n="web_modal_card_type">Card type</label>
             <select id="cardTypeSelect" onchange="updateCardFormInputs()">
                 <optgroup data-i18n-attr="label:web_modal_optgroup_common" label="Common">
@@ -319,6 +353,7 @@
                     <option value="custom" data-i18n="web_modal_type_custom">Other / custom type…</option>
                 </optgroup>
             </select>
+            </div>
 
             <div id="dynamicCardInputs"></div>
             <div class="btn-row">
@@ -337,6 +372,8 @@
             <label data-i18n="web_modal_page_name">Page name</label>
             <input type="text" id="pageDialogName" placeholder="e.g., Living Room, Apple TV..." data-i18n-attr="placeholder:web_modal_page_name_placeholder">
             <label class="inline-check" style="margin-top:10px"><input type="checkbox" id="pageDialogStart"> <span data-i18n="web_modal_start_page">Start page (shown on launch)</span></label>
+            <label class="inline-check" style="margin-top:6px"><input type="checkbox" id="pageDialogFocusNav" checked> <span data-i18n="web_modal_focus_nav">Move between the page's buttons with the arrow keys</span></label>
+            <div class="hint" style="margin-top:4px" data-i18n="web_modal_focus_nav_hint">Arrow keys without a hotkey on this page move a highlight from button to button, and OK presses it. Untick it if you only use the touch screen: arrow keys and OK without a hotkey then do nothing here.</div>
             <label style="margin-top:10px" data-i18n="web_modal_parent_page_label">Parent page (optional)</label>
             <select id="pageDialogParent" onchange="onPageDialogParentChange()"></select>
             <div class="hint" style="margin-top:4px" data-i18n="web_modal_parent_hint">Makes this a child page — navigate to it via a card's own "Page to open" (e.g. a scene_grid tile), and a physical button jumps back to the parent automatically.</div>
@@ -375,6 +412,7 @@
             </div>
             <label style="margin-top:10px" data-i18n="web_ui_and_auto_close_when_its_state">...and auto-close when its state is (optional)</label>
             <input type="text" id="pageDialogCloseWhenState" placeholder="leave blank for &quot;anything else&quot;" data-i18n-attr="placeholder:web_ui_leave_blank_for_anything_else">
+            <div class="hint" style="margin-top:4px" data-i18n="web_ui_states_comma_hint">Several states: separate them with commas, e.g. on, off, idle.</div>
             <div class="hint" style="margin-top:4px" data-i18n="web_ui_automatically_jumps_to_this_page_the">Automatically jumps to this page the moment the entity's state matches the "open" one above (e.g. a doorbell switch turning on) — remembering wherever you were, so BACK/the chevron return there. Leave "close when" blank for the simple on/off case: closes on any state other than the open one. Set it explicitly for anything with more than two meaningful states — a cover's open/opening/closing/closed, a lock's locked/unlocked — so a transitional state doesn't force the page shut mid-way (e.g. open="open", close="closed" ignores "opening"/"closing" entirely). You can always close it yourself too, the same way as tapping "‹ back". For BACK on the remote itself to also close it, also set a "Parent page" above — the hardware BACK button only knows about that static field, not this dynamic close.</div>
             <div id="pageDialogOpenModeRow" style="display:none">
                 <label style="margin-top:10px" data-i18n="web_ui_how_it_opens">How it opens</label>
@@ -458,6 +496,9 @@
 <script src="js/pages.js"></script>
 <script src="js/cards.js"></script>
 <script src="js/cards-extra.js"></script>
+<script src="js/card-gallery.js"></script>
+<script src="js/card-sections.js"></script>
+<script src="js/card-copy.js"></script>
 <script src="js/cards-xbox.js"></script>
 <script src="js/history.js"></script>
 <script src="js/deeplink.js"></script>

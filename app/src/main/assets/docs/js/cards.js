@@ -1,3 +1,7 @@
+// Card forms: updateCardFormInputs() draws a type's form, fillCardForm() fills it, addCardToPage()
+// collects it. Since 1.4.9, js/card-sections.js wraps the first two (folding sections and their
+// "settings changed" badges) and js/card-gallery.js opens the gallery before them: a new form
+// keeps working as long as its fields have ids (list them in CARD_SECTIONS to fold them).
 // ---- Cards ---------------------------------------------------------------
 
 const NAME_ENTITY_TYPES = ['source_select'];
@@ -38,6 +42,10 @@ function haEntityFieldHtml(domain, fieldId, label) {
 }
 
 function updateCardFormInputs() {
+  // A fresh form: nothing being edited (an edit left open on a card closed earlier used to stay,
+  // and "Save changes" then warned about a button that wasn't there — 1.4.1).
+  editingGridItem = null;
+  gridEditSnapshot = null;
   const type = document.getElementById('cardTypeSelect').value;
   const container = document.getElementById('dynamicCardInputs');
 
@@ -168,6 +176,15 @@ function updateCardFormInputs() {
       <div id="mediaMusicSearchHint" class="hint" style="display:none">${I18N.t('web_card_media_music_search_hint')}</div>
       <label class="inline-check"><input type="checkbox" id="optMediaQueue" checked onchange="updateMusicSearchFields()"> ${I18N.t('web_card_media_queue')}</label>
       <div id="mediaQueueHint" class="hint">${I18N.t('web_card_media_queue_hint')}</div>
+      <label class="inline-check"><input type="checkbox" id="optMediaSources"> ${I18N.t('web_card_media_sources')}</label>
+      <div id="mediaAppsField" style="display:none">
+        <h4 style="margin:12px 0 0">${I18N.t('web_card_tv_apps')}</h4>
+        <div class="hint">${I18N.t('web_card_media_apps_hint')}</div>
+        ${tvAppsSectionHtml(false)}
+      </div>
+      <h4 style="margin:12px 0 0">${I18N.t('web_card_media_keypad_title')}</h4>
+      <div class="hint">${I18N.t('web_card_media_keypad_hint')}</div>
+      ${keypadFieldsHtml(I18N.t('web_card_keypad_none'))}
       <div id="mediaMusicSearchFields">
         <label>${I18N.t('web_card_media_search_player')}</label>
         <select id="optMediaSearchPlayer"></select>
@@ -201,6 +218,7 @@ function updateCardFormInputs() {
     document.getElementById('optMediaVariant').addEventListener('change', updateMediaTopButtonsVisibility);
     updateMediaTopButtonsVisibility();
     fillMusicSearchPlayers('');
+    fillMediaApps({});
   } else if (type === 'camera') {
     container.innerHTML = `
       <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_camera_name')}">
@@ -284,6 +302,15 @@ function updateCardFormInputs() {
       ${type === 'scene_grid' ? `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_labels')}</label><label><input type="checkbox" id="optIconFill"> ${I18N.t('web_card_grid_icon_fill')}</label>` : `<label><input type="checkbox" id="optShowLabels" checked> ${I18N.t('web_card_grid_show_button_labels')}</label>`}
       <label>${I18N.t('web_card_grid_tile_height')}</label><input type="number" id="optTileHeight" min="30" max="300" placeholder="${I18N.t(type === 'scene_grid' ? 'web_card_ph_tile_height' : 'web_card_ph_button_height')}">
       <label>${I18N.t('web_card_grid_font_size')}</label><input type="number" id="optFontSize" min="8" max="60" placeholder="${I18N.t('web_card_ph_font_size')}">
+      <label>${I18N.t('web_card_grid_icon_size')}</label><input type="number" id="optIconSize" min="12" max="200" placeholder="${type === 'scene_grid' ? 28 : 32}">
+      <label>${I18N.t('web_card_grid_icon_fit')}</label>
+      <select id="optIconFit">
+        <option value="contain">${I18N.t('web_card_grid_icon_fit_contain')}</option>
+        <option value="fill">${I18N.t('web_card_grid_icon_fit_fill')}</option>
+        <option value="stretch">${I18N.t('web_card_grid_icon_fit_stretch')}</option>
+      </select>
+      <label class="inline-check"><input type="checkbox" id="optIconTrim"> ${I18N.t('web_card_grid_icon_trim')}</label>
+      <div class="hint">${I18N.t('web_card_grid_icon_hint')}</div>
       <label class="inline-check"><input type="checkbox" id="optCenterLastRow"> ${I18N.t('web_card_grid_center_last_row')}</label>
       <div id="gridItemsList"></div>
       <div class="section-box" style="margin-top:8px">
@@ -312,6 +339,9 @@ function updateCardFormInputs() {
           ${(dashboardData.irDevices || []).length === 0 ? `<div class="hint">${I18N.t('web_card_no_ir_devices_yet_add_one')}</div>` : ''}
           <label class="inline-check"><input type="checkbox" id="giClosePopup"> ${I18N.t('web_card_close_the_open_popup_after_this')}</label>
           <div class="hint">${I18N.t('web_card_for_a_button_placed_inside_a')}</div>
+          <label>${I18N.t('web_card_grid_button_color')}</label>${colorFieldHtml('giColor', '', themeDefault('controlBackground', '#2C4C58'))}
+          <label>${I18N.t('web_card_grid_text_color')}</label>${colorFieldHtml('giTextColor', '', themeDefault('primaryText', '#F0F2F6'))}
+          <div class="hint">${I18N.t('web_card_grid_colors_hint')}</div>
           <div class="divider" style="margin:12px 0"></div>
           <label>${I18N.t('web_card_state_entity_optional_highlights_this_button')}</label><input type="text" id="giStateEntity" placeholder="${I18N.t('web_card_e_g_input_select_living_room')}">
           <label>${I18N.t('web_card_target_state_optional_comma_separated_for')}</label><input type="text" id="giStateValue" placeholder="e.g., TV">
@@ -352,12 +382,14 @@ function updateCardFormInputs() {
           </select>
           ${(dashboardData.activities || []).length === 0 ? `<div class="hint">${I18N.t('web_card_grid_no_activities_hint')}</div>` : `<div class="hint">${I18N.t('web_card_saving_this_tile_sets_this_as')}</div>`}
           <label>${I18N.t('web_card_grid_color')}</label>${colorFieldHtml('giColor', '', '#66009688')}
+          <label>${I18N.t('web_card_grid_text_color')}</label>${colorFieldHtml('giTextColor', '', '')}
+          <div class="hint">${I18N.t('web_card_grid_scene_text_color_hint')}</div>
           <div class="divider" style="margin:12px 0"></div>
           <label>${I18N.t('web_card_state_entity_optional_highlights_this_tile')}</label><input type="text" id="giStateEntity" placeholder="${I18N.t('web_card_ph_light')}">
           <label>${I18N.t('web_card_target_state_optional_comma_separated_for')}</label><input type="text" id="giStateValue" placeholder="e.g., on">
           <label>${I18N.t('web_card_active_color_optional_hex_background_while')}</label>${colorFieldHtml('giActiveColor', '', '#FF2A4954')}
           <label class="inline-check"><input type="checkbox" id="giActiveBorder"> ${I18N.t('web_card_accent_border_while_active')}</label>
-          <div class="hint">${I18N.t('web_card_independent_of_track_as_activity_below')}</div>
+          <div class="hint">${I18N.t('web_card_independent_of_track_as_activity_below')} ${I18N.t('web_card_grid_active_with_activity_hint')}</div>
           <div class="divider" style="margin:12px 0"></div>
           <label><input type="checkbox" id="giTrack" onchange="onGiTrackChange()"> ${I18N.t('web_card_grid_track')}</label>
           <div class="hint">${I18N.t('web_card_grid_track_hint')}</div>
@@ -377,6 +409,8 @@ function updateCardFormInputs() {
         <input type="text" id="giStopActivity" list="giStopRooms" placeholder="${I18N.t('web_hotkey_stop_room_ph')}">
         <datalist id="giStopRooms">${activityRoomOptionsHtml()}</datalist>
         <div class="hint">${I18N.t('web_card_stops_whatever_activity_is_running_in')}</div>
+        ${type === 'button_grid' ? `<label class="inline-check"><input type="checkbox" id="giLongOnly"> ${I18N.t('web_card_grid_long_only')}</label>
+        <div class="hint">${I18N.t('web_card_grid_long_only_hint')}</div>` : ''}
         <label>${I18N.t('web_card_long_press_action_optional_json_fired')}</label>
         <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
         <div class="hint">${I18N.t('web_card_long_press_hint', type)}</div>
@@ -407,6 +441,7 @@ function updateCardFormInputs() {
         <option value="compact">${I18N.t('web_card_compact_remote_first_now_playing_strip')}</option>
         <option value="full">${I18N.t('web_card_full_artwork_seek_bar_10_s')}</option>
       </select>
+      <label class="inline-check"><input type="checkbox" id="atvShowClickpad" checked> ${I18N.t('web_card_atv_show_clickpad')}</label>
       <div id="atvRichBox" style="display:none">
         <label class="inline-check"><input type="checkbox" id="atvShowArtwork" checked> ${I18N.t('web_card_show_artwork')}</label>
         <label class="inline-check"><input type="checkbox" id="atvShowProgress" checked> ${I18N.t('web_card_show_title_progress_bar')}</label>
@@ -423,7 +458,9 @@ function updateCardFormInputs() {
       <div id="atvAppsList"></div>
       <datalist id="atvSourceHints"></datalist>
       <button type="button" class="secondary" onclick="addAtvApp()">${I18N.t('web_card_add_an_app')}</button>
-      <div class="hint">${I18N.t('web_card_app_is_the_name_as_the')}</div>`;
+      <div class="hint">${I18N.t('web_card_app_is_the_name_as_the')}</div>
+      <label class="inline-check"><input type="checkbox" id="atvShowApps" checked> ${I18N.t('web_card_show_app_shortcuts')}</label>
+      <div class="hint">${I18N.t('web_card_show_app_shortcuts_hint')}</div>`;
     window._pendingAtvApps = [];
     renderAtvAppsList();
     renderAppleTvHarmonyFields();
@@ -593,6 +630,8 @@ function updateMediaTopButtonsVisibility() {
   if (!variantEl || !field) return;
   field.style.display = variantEl.value === 'full' ? '' : 'none';
   if (artworkField) artworkField.style.display = variantEl.value === 'full' ? '' : 'none';
+  const appsField = document.getElementById('mediaAppsField');
+  if (appsField) appsField.style.display = variantEl.value === 'full' ? '' : 'none';
 }
 
 // fan card: percentage step only applies to simple/full layouts — the
@@ -606,6 +645,26 @@ function updateFanStepVisibility() {
 }
 
 let editingGridItem = null; // index of the button/scene being edited within _pendingGridItems, or null
+let gridEditSnapshot = null; // the form's text fields as the edited item filled them (see confirmPendingGridItems)
+
+/** The grid item form's text fields (selects are left out: some are filled later, asynchronously). */
+const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand',
+  'giIrDelay', 'giActivityId', 'giHarmonyDevice', 'giHarmonyCommand', 'giStateEntity', 'giStateValue', 'giLongPress',
+  'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder',
+  // 1.5.0: the colours too. A tile whose only change was its colour wasn't seen as changed, so
+  // saving the card dropped it (a tester's Activities grid kept its default colours).
+  'giColorHex', 'giTextColorHex', 'giActiveColorHex'];
+// A select always holds a value: counted only when comparing an edited item with itself (1.5.0:
+// a changed Activity, page mode or Harmony action was dropped the same way).
+const GRID_ITEM_SELECTS = ['giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice'];
+function gridItemTextSnapshot(withSelects) {
+  const fields = withSelects ? GRID_ITEM_TEXT_FIELDS.concat(GRID_ITEM_SELECTS) : GRID_ITEM_TEXT_FIELDS;
+  return fields.map(id => {
+    const el = document.getElementById(id);
+    if (!el || (el.tagName === 'SELECT' && !withSelects)) return '';
+    return el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value.trim();
+  }).join('\u0001');
+}
 
 function onGiTrackChange() {
   const checked = document.getElementById('giTrack').checked;
@@ -695,7 +754,9 @@ const ATV_EXTRA_BUTTONS = [
   { id: 'Guide', label: 'Guide', labelKey: 'web_atv_btn_guide' },
   { id: 'VolumeUp', label: 'Volume +', labelKey: 'web_atv_btn_volume_up' },
   { id: 'VolumeDown', label: 'Volume −', labelKey: 'web_atv_btn_volume_down' },
-  { id: 'ControlCenter', label: 'Control Center', labelKey: 'web_atv_btn_control_center' }
+  { id: 'ControlCenter', label: 'Control Center', labelKey: 'web_atv_btn_control_center' },
+  // 1.4.9: not sent to the Apple TV, it opens the pop-up of its apps.
+  { id: 'AppPicker', label: 'Apps (pop-up)', labelKey: 'web_atv_btn_app_picker' }
 ];
 const ATV_DEFAULT_BUTTONS = ['Menu', 'Home'];
 // Per-layout defaults (AppleTvRemoteCard.kt: DEFAULT_IDS for classic and full, COMPACT_DEFAULT_IDS).
@@ -894,6 +955,8 @@ async function fillAppleTvHarmonyFields(o) {
   document.getElementById('atvShowArtwork').checked = o.showArtwork !== false;
   document.getElementById('atvShowProgress').checked = o.showProgress !== false;
   document.getElementById('atvShowSkip').checked = o.showSkip !== false;
+  document.getElementById('atvShowClickpad').checked = o.showClickpad !== false;
+  document.getElementById('atvShowApps').checked = o.showApps !== false;
   document.getElementById('atvEntity').innerHTML = atvEntityOptionsHtml(o.entity || '');
   window._pendingAtvApps = JSON.parse(JSON.stringify(o.apps || [])).map(a => ({
     source: a.source || '', label: a.label || '', icon: a.icon || '', color: a.color || ''
@@ -957,7 +1020,9 @@ function renderGridItemsList(type) {
     el.className = 'list-item';
     const upDisabled = i === 0 ? ' style="opacity:.3;pointer-events:none"' : '';
     const downDisabled = i === items.length - 1 ? ' style="opacity:.3;pointer-events:none"' : '';
-    const label = item.spacer ? `<i style="color:#888">${I18N.t('web_card_grid_spacer')}</i>` : (item.name || I18N.t('web_unnamed'));
+    const label = item.spacer
+      ? `<i style="color:#888">${I18N.t('web_card_grid_spacer')}</i>`
+      : (item.name || I18N.t('web_unnamed')) + (item.long_press_only ? ` <small style="color:#888">(${I18N.t('web_card_grid_long_only_badge')})</small>` : '');
     const editBtn = item.spacer ? '' : `<span class="remove" style="color:#00E5FF" onclick="editGridItem('${type}', ${i})">✎</span> `;
     el.innerHTML = `<span>${label}</span><span>` +
       `<span class="remove"${upDisabled} onclick="moveGridItem('${type}', ${i}, -1)" title="${I18N.t('web_preview_move_up')}">↑</span> ` +
@@ -1004,6 +1069,10 @@ function fillGridItemForm(type, item) {
     document.getElementById('giIrDevice').value = item.irDevice || '';
     fillGiIrCommands(item);
     document.getElementById('giClosePopup').checked = item.closePopup === true;
+    const longOnlyEl = document.getElementById('giLongOnly');
+    if (longOnlyEl) longOnlyEl.checked = item.long_press_only === true;
+    setColorFieldValue('giColor', item.color || '');
+    setColorFieldValue('giTextColor', item.text_color || '');
     document.getElementById('giStateEntity').value = item.state_entity || '';
     document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
     setColorFieldValue('giActiveColor', item.active_color || '');
@@ -1021,6 +1090,7 @@ function fillGridItemForm(type, item) {
     const actRefSel = document.getElementById('giActivityRef');
     if (actRefSel) actRefSel.value = item.activity || '';
     setColorFieldValue('giColor', item.color || '');
+    setColorFieldValue('giTextColor', item.text_color || '');
     document.getElementById('giStateEntity').value = item.state_entity || '';
     document.getElementById('giStateValue').value = Array.isArray(item.state_value) ? item.state_value.join(', ') : (item.state_value || '');
     setColorFieldValue('giActiveColor', item.active_color || '');
@@ -1073,6 +1143,7 @@ async function editGridItem(type, i) {
   const item = window._pendingGridItems[i];
   fillGridItemForm(type, item);
   await fillGiHarmonySection(item);
+  gridEditSnapshot = gridItemTextSnapshot(true);
   const submit = document.getElementById('giSubmitBtn');
   submit.textContent = I18N.t(type === 'button_grid' ? 'web_card_grid_save_button' : 'web_card_grid_save_scene');
   submit.classList.add('editing'); // 1.4.0: green "Save scene" next to a red "Cancel edit" while editing one
@@ -1081,6 +1152,7 @@ async function editGridItem(type, i) {
 
 function cancelGridItemEdit() {
   editingGridItem = null;
+  gridEditSnapshot = null;
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
@@ -1092,7 +1164,10 @@ function cancelGridItemEdit() {
   if (pageModeEl) pageModeEl.value = 'page';
   const closePopupEl = document.getElementById('giClosePopup');
   if (closePopupEl) closePopupEl.checked = false;
+  const longOnlyEl = document.getElementById('giLongOnly');
+  if (longOnlyEl) longOnlyEl.checked = false;
   setColorFieldValue('giColor', '');
+  setColorFieldValue('giTextColor', '');
   setColorFieldValue('giActiveColor', '');
   const activeBorderEl = document.getElementById('giActiveBorder');
   if (activeBorderEl) activeBorderEl.checked = false;
@@ -1134,6 +1209,7 @@ function addGridItem(type) {
     }
     if (!collectGiIrCommands(item)) return;
     if (document.getElementById('giClosePopup')?.checked) item.closePopup = true;
+    if (document.getElementById('giLongOnly')?.checked) item.long_press_only = true; // 1.4.1: a tap does nothing
 
     const harmonyMode = document.getElementById('giHarmonyMode')?.value || '';
     if (harmonyMode === 'activity') {
@@ -1171,6 +1247,8 @@ function addGridItem(type) {
     const activeColor = colorFieldValue('giActiveColor');
     const activeBorder = document.getElementById('giActiveBorder').checked;
     if (stateEntity && !stateValueRaw) { alert(I18N.t('web_card_err_target_state')); return; }
+    // 1.4.4: they used to be dropped silently without a watched entity, as if never saved.
+    if (!stateEntity && (activeColor || activeBorder)) { alert(I18N.t('web_card_err_active_needs_state')); return; }
     if (stateEntity) {
       item.state_entity = stateEntity;
       const values = stateValueRaw.split(',').map(s => s.trim()).filter(Boolean);
@@ -1178,6 +1256,10 @@ function addGridItem(type) {
       if (activeColor) item.active_color = activeColor;
       if (activeBorder) item.active_border = true;
     }
+    const btnColor = colorFieldValue('giColor');
+    const btnTextColor = colorFieldValue('giTextColor');
+    if (btnColor) item.color = btnColor;
+    if (btnTextColor) item.text_color = btnTextColor;
   } else {
     const entityId = document.getElementById('giEntityId').value.trim();
     const page = document.getElementById('giPage').value.trim();
@@ -1261,13 +1343,20 @@ function addGridItem(type) {
     const activeColor = colorFieldValue('giActiveColor');
     const activeBorder = document.getElementById('giActiveBorder').checked;
     if (stateEntity && !stateValueRaw) { alert(I18N.t('web_card_err_target_state')); return; }
+    // 1.4.4: a tile's Activity (tracked tile or composed Activity) also turns them on.
+    const hasActivity = !!(item.activity || item.track);
+    if (!stateEntity && !hasActivity && (activeColor || activeBorder)) { alert(I18N.t('web_card_err_active_needs_state_or_activity')); return; }
     if (stateEntity) {
       item.state_entity = stateEntity;
       const values = stateValueRaw.split(',').map(s => s.trim()).filter(Boolean);
       item.state_value = values.length > 1 ? values : values[0];
+    }
+    if (stateEntity || hasActivity) {
       if (activeColor) item.active_color = activeColor;
       if (activeBorder) item.active_border = true;
     }
+    const sceneTextColor = colorFieldValue('giTextColor');
+    if (sceneTextColor) item.text_color = sceneTextColor;
   }
   if (longPress) item.long_press = longPress;
   window._pendingGridItems = window._pendingGridItems || [];
@@ -1287,6 +1376,12 @@ function collectGridSizeOptions(o) {
   const fs = parseInt(document.getElementById('optFontSize').value, 10);
   if (fs > 0) o.font_size = fs;
   if (document.getElementById('optCenterLastRow').checked) o.center_last_row = true;
+  // 1.5.0: icon size, fit and trim.
+  const is = parseInt(document.getElementById('optIconSize').value, 10);
+  if (is > 0) o.icon_size = is;
+  const fit = document.getElementById('optIconFit').value;
+  if (fit !== 'contain') o.icon_fit = fit;
+  if (document.getElementById('optIconTrim').checked) o.icon_trim = true;
 }
 
 /** An empty cell (1.3.7) to place the other buttons, e.g. empty, 0, empty under 7 8 9. */
@@ -1367,7 +1462,9 @@ function openCardDialog(idx) {
   if (isNew) {
     select.value = select.options[0].value;
     updateCardFormInputs();
+    showCardGallery(); // 1.4.9: the card types as a gallery first
   } else {
+    hideCardGallery(false);
     const card = dashboardData.pages[currentActivePage].cards[idx];
     const known = Array.from(select.options).map(o => o.value).filter(v => v !== 'custom');
     select.value = known.includes(card.type) ? card.type : 'custom';
@@ -1489,6 +1586,9 @@ function fillCardForm(card) {
     updateMediaTopButtonsVisibility();
     document.getElementById('optMediaMusicSearch').checked = o.music_search === true;
     document.getElementById('optMediaQueue').checked = o.show_queue !== false;
+    document.getElementById('optMediaSources').checked = o.show_sources === true;
+    fillMediaApps(o);
+    fillKeypadFields(o);
     fillMusicSearchPlayers(o.search_player || '');
     updateMusicSearchFields();
   } else if (type === 'camera') {
@@ -1528,6 +1628,9 @@ function fillCardForm(card) {
     if (type === 'scene_grid') document.getElementById('optIconFill').checked = o.icon_fill === true;
     document.getElementById('optTileHeight').value = o.tile_height || '';
     document.getElementById('optFontSize').value = o.font_size || '';
+    document.getElementById('optIconSize').value = o.icon_size || '';
+    document.getElementById('optIconFit').value = ['fill', 'stretch'].includes(o.icon_fit) ? o.icon_fit : 'contain';
+    document.getElementById('optIconTrim').checked = o.icon_trim === true;
     document.getElementById('optCenterLastRow').checked = o.center_last_row === true;
     window._pendingGridItems = JSON.parse(JSON.stringify(o.buttons || o.scenes || []));
     renderGridItemsList(type);
@@ -1624,14 +1727,16 @@ function confirmPendingGridItems() {
   const type = document.getElementById('cardTypeSelect')?.value;
   if (type !== 'button_grid' && type !== 'scene_grid') return true;
   const name = document.getElementById('giName');
-  const icon = document.getElementById('giIcon');
-  const pending = (name && name.value.trim()) || (icon && icon.value.trim()) || editingGridItem !== null;
+  // Pending = something was really typed: any field of a new item, or a change to the edited one
+  // (just opening a button with ✎ and saving the card asks nothing — 1.4.1).
+  const now = gridItemTextSnapshot(editingGridItem !== null);
+  const pending = editingGridItem !== null ? gridEditSnapshot !== null && now !== gridEditSnapshot : now.replace(/\u0001/g, '') !== '';
   if (!pending) return true;
   const what = (name && name.value.trim()) || I18N.t(type === 'button_grid' ? 'web_card_grid_this_button' : 'web_card_grid_this_scene');
   if (!confirm(I18N.t('web_card_grid_pending_confirm', what))) return false;
   addGridItem(type);
   // addGridItem clears the form once the item is in; still filled = it refused it (and said why).
-  return !(name && name.value.trim()) && editingGridItem === null;
+  return editingGridItem === null && gridItemTextSnapshot().replace(/\u0001/g, '') === '';
 }
 
 function addCardToPage() {
@@ -1730,6 +1835,9 @@ function addCardToPage() {
     const showQueue = document.getElementById('optMediaQueue').checked;
     if (musicSearch) newCard.options.music_search = true;
     if (!showQueue) newCard.options.show_queue = false;
+    if (document.getElementById('optMediaSources').checked) newCard.options.show_sources = true;
+    if (mediaVariant === 'full') collectMediaApps(newCard.options);
+    collectKeypadFields(newCard.options);
     if (musicSearch || showQueue) {
       const searchPlayer = document.getElementById('optMediaSearchPlayer').value;
       if (searchPlayer) newCard.options.search_player = searchPlayer;
@@ -1810,6 +1918,7 @@ function addCardToPage() {
     }
     newCard.options.buttons = selectedAtvButtons();
     const atvLayout = document.getElementById('atvLayout').value;
+    if (!document.getElementById('atvShowClickpad').checked) newCard.options.showClickpad = false;
     if (atvLayout !== 'classic') {
       newCard.options.layout = atvLayout;
       if (!document.getElementById('atvShowArtwork').checked) newCard.options.showArtwork = false;
@@ -1820,6 +1929,7 @@ function addCardToPage() {
     if (atvEntity) newCard.options.entity = atvEntity;
     const atvApps = collectAtvApps();
     if (atvApps.length) newCard.options.apps = atvApps;
+    if (!document.getElementById('atvShowApps').checked) newCard.options.showApps = false;
     window._pendingAtvApps = [];
   } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row' || type === 'xbox') {
     const collect = { tv_remote: collectTvRemoteOptions, xbox: collectXboxOptions, speaker_group: collectSpeakerGroupOptions,

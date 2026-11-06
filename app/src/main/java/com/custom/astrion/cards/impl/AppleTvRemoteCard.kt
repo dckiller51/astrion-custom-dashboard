@@ -28,11 +28,13 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Wallpaper
+import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +96,8 @@ import com.custom.astrion.ui.tapClickable
  *    now-playing strip and brings back the classic Play/Pause button.
  *  - `showSkip` (default true): the −10 s / +10 s buttons of the full layout, and holding the
  *    trackpad's left/right arrows to jump 10 s. Direct Apple TV only.
+ *  - `showClickpad` (default true, 1.4.6): false hides the trackpad, for an Apple TV driven
+ *    with the remote's own D-pad keys (or a card used only for what's playing and the apps).
  *  - `apps`: `[{ "source": "Netflix", "label": "Netflix", "icon": "/sdcard/astrion/icons/n.png",
  *    "color": "#B3261E" }]` — `source` is the app name as in the entity's `source_list` and is
  *    launched with `media_player.select_source`; `icon` is a local PNG path or an image URL
@@ -124,11 +128,16 @@ object ExtraButtons {
             Spec("Guide", "Guide", Icons.AutoMirrored.Filled.List),
             Spec("VolumeUp", "Vol +", Icons.AutoMirrored.Filled.VolumeUp),
             Spec("VolumeDown", "Vol −", Icons.AutoMirrored.Filled.VolumeDown),
-            Spec("ControlCenter", "Control Center", Icons.Filled.Apps)
+            Spec("ControlCenter", "Control Center", Icons.Filled.Apps),
+            // Not sent to the Apple TV (1.4.9): opens the pop-up of its apps (AtvRender.send).
+            Spec(APP_PICKER, "Apps", Icons.Filled.Widgets)
         )
     private val byCommand = CATALOG.associateBy { it.command.lowercase() }
 
     val DEFAULT_IDS = listOf("Menu", "Home")
+
+    /** The button id that opens the apps pop-up instead of sending a command. */
+    const val APP_PICKER = "AppPicker"
 
     /** Default row for the compact layout, where ±10 s live in the button row. */
     val COMPACT_DEFAULT_IDS = listOf("Menu", "SeekBackward", "SeekForward", "Home")
@@ -191,15 +200,26 @@ internal class AtvRender(
     val target: AtvTarget,
     val entity: EntityState?,
     val localPlaying: MutableState<Boolean>,
-    val fit: AtvFit
+    val fit: AtvFit,
+    /** The apps pop-up is open (1.4.9). */
+    val appPicker: MutableState<Boolean> = mutableStateOf(false)
 ) {
     val theme: ThemeColors get() = ctx.theme
     val apps: List<AtvApp> = if (target.mediaEntity != null) AtvApp.listFrom(config.options["apps"]) else emptyList()
+
+    /** `showApps: false` (1.4.9): the apps stay (order and icons of the apps pop-up) but no shortcut row. */
+    val appsShown: Boolean = config.bool("showApps", true) && apps.isNotEmpty()
     val showArtwork = config.bool("showArtwork", true)
     val showProgress = config.bool("showProgress", true)
     val showSkip = config.bool("showSkip", true) && target.isDirect
+    val showClickpad = config.bool("showClickpad", true)
 
-    fun send(command: String) = target.send(ctx, command)
+    fun send(command: String) {
+        if (command.equals(ExtraButtons.APP_PICKER, ignoreCase = true)) appPicker.value = true else target.send(ctx, command)
+    }
+
+    /** The card's own app icons, by source name, for the pop-up. */
+    fun appIcons(): Map<String, String?> = apps.associate { it.source to it.icon }
 
     /** Real state when the target reports one; otherwise (Harmony) our own toggle guess. */
     val isPlaying: Boolean get() = entity?.state?.let { it == "playing" } ?: localPlaying.value
@@ -248,7 +268,11 @@ class AppleTvRemoteCard : CardRenderer {
                 else -> AtvLayout.CLASSIC
             }
         val fit = remember(config) { AtvFit() }
-        val r = AtvRender(ctx, config, target, entity, rememberLocalPlaying(target.mediaEntity), fit)
+        val picker = remember(config) { mutableStateOf(false) }
+        val r = AtvRender(ctx, config, target, entity, rememberLocalPlaying(target.mediaEntity), fit, picker)
+        target.mediaEntity?.let { media ->
+            if (picker.value) SourcePickerDialog(ctx, media, r.appIcons(), r.apps.map { it.source }) { picker.value = false }
+        }
         val density = LocalDensity.current
         Column(
             modifier =
@@ -273,7 +297,7 @@ class AppleTvRemoteCard : CardRenderer {
 
     @Composable
     private fun ClassicLayout(r: AtvRender) {
-        AtvTrackpad(220.dp, r.theme, r::send, r.holds)
+        if (r.showClickpad) AtvTrackpad(220.dp, r.theme, r::send, r.holds)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             r.buttons(ExtraButtons.DEFAULT_IDS).forEach { id ->
                 val spec = ExtraButtons.resolve(id)
@@ -281,7 +305,7 @@ class AppleTvRemoteCard : CardRenderer {
             }
         }
         PlayPauseButton(r, 56)
-        if (r.apps.isNotEmpty()) {
+        if (r.appsShown) {
             val width = cardInnerWidthDp(CLASSIC_PADDING).dp
             AtvAppsRow(r.ctx, r.apps.take(WIDE_MAX_APPS), 52.dp, labels = false, rowWidth = width, launch = r::launch)
         }
@@ -298,14 +322,13 @@ class AppleTvRemoteCard : CardRenderer {
                 STRIP_H.takeIf { strip },
                 BUTTON_ROW_H,
                 PLAY_ROW_H.takeIf { !strip },
-                APPS_ICONS_H.takeIf { r.apps.isNotEmpty() }
+                APPS_ICONS_H.takeIf { r.appsShown }
             )
-        val pad = trackpadFor(blocks, min = 150, max = 212)
         if (stripEntity != null) NowPlayingStrip(r, stripEntity)
-        AtvTrackpad(pad.dp, r.theme, r::send, r.holds)
+        if (r.showClickpad) AtvTrackpad(trackpadFor(blocks, min = 150, max = 212).dp, r.theme, r::send, r.holds)
         RoundButtonRow(r, ExtraButtons.COMPACT_DEFAULT_IDS, size = 52, labels = false)
         if (!strip) PlayPauseButton(r, 56)
-        if (r.apps.isNotEmpty()) {
+        if (r.appsShown) {
             Box(Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 val width = cardInnerWidthDp(CARD_PADDING).dp
                 AtvAppsRow(r.ctx, r.apps.take(COMPACT_MAX_APPS), 52.dp, labels = false, rowWidth = width, launch = r::launch)
@@ -358,17 +381,22 @@ class AppleTvRemoteCard : CardRenderer {
         // others sit in two short columns either side of the trackpad (up to 3 each), so the card
         // gains no extra row.
         val sideButtons = buttons.drop(2).take(SIDE_MAX_BUTTONS * 2)
-        val pad = trackpadFor(fullBlocks(r), min = 140, max = 220, fit = r.fit)
         if (entity != null) FullNowPlaying(r, entity)
         FullTransportRow(r, buttons.take(2))
-        if (r.apps.isNotEmpty()) {
+        if (r.appsShown) {
             val width = cardInnerWidthDp(CARD_PADDING).dp
             AtvAppsRow(r.ctx, r.apps.take(WIDE_MAX_APPS), 44.dp, labels = true, rowWidth = width, launch = r::launch)
         }
-        if (sideButtons.isEmpty()) {
-            AtvTrackpad(pad.dp, r.theme, r::send, r.holds)
-        } else {
-            TrackpadWithSides(r, pad, sideButtons)
+        when {
+            // No trackpad (1.4.6): the side buttons, if any, become one row.
+            !r.showClickpad -> if (sideButtons.isNotEmpty()) ButtonsRow(r, sideButtons)
+            sideButtons.isEmpty() -> AtvTrackpad(
+                trackpadFor(fullBlocks(r), min = 140, max = 220, fit = r.fit).dp,
+                r.theme,
+                r::send,
+                r.holds
+            )
+            else -> TrackpadWithSides(r, trackpadFor(fullBlocks(r), min = 140, max = 220, fit = r.fit), sideButtons)
         }
     }
 
@@ -481,6 +509,17 @@ class AppleTvRemoteCard : CardRenderer {
     }
 
     // ---- shared ---------------------------------------------------------------------------
+
+    /** [ids] as one row of round buttons (the full layout without its trackpad). */
+    @Composable
+    private fun ButtonsRow(r: AtvRender, ids: List<String>) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            ids.forEach { id ->
+                val spec = ExtraButtons.resolve(id)
+                AtvRoundButton(spec.icon, spec.label, SIDE_BUTTON.dp, r.theme) { r.send(spec.command) }
+            }
+        }
+    }
 
     @Composable
     private fun RoundButtonRow(r: AtvRender, defaults: List<String>, size: Int, labels: Boolean) {
@@ -597,6 +636,6 @@ private fun fullBlocks(r: AtvRender): List<Int> {
         FULL_HEADER_H.takeIf { hasEntity },
         PROGRESS_H.takeIf { hasEntity && r.showProgress },
         TRANSPORT_H,
-        APPS_LABELLED_H.takeIf { r.apps.isNotEmpty() }
+        APPS_LABELLED_H.takeIf { r.appsShown }
     )
 }

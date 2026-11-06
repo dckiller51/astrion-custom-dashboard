@@ -196,6 +196,20 @@ function initEditor() {
   if (typeof applyThemeToPreview === 'function') applyThemeToPreview();
   updateJsonOutput();
   updateHotkeyActionInputs();
+  initFolds();
+}
+
+/** 1.4.3: the folded sections (theme, dock, standby, JSON) stay as the person left them. */
+function initFolds() {
+  document.querySelectorAll('details.fold').forEach(el => {
+    const key = 'astrion.fold.' + el.id;
+    try { if (localStorage.getItem(key) === '1') el.open = true; } catch (e) { /* no storage: folded */ }
+    if (el.dataset.foldBound) return;
+    el.dataset.foldBound = '1';
+    el.addEventListener('toggle', () => {
+      try { localStorage.setItem(key, el.open ? '1' : '0'); } catch (e) { /* ignore */ }
+    });
+  });
 }
 
 // ---- Pages: add / rename / delete, all via the page dialog -----------------
@@ -253,6 +267,7 @@ function openPageDialog(index) {
   onPageDialogOpenModeChange();
   attachEntityAutocomplete(document.getElementById('pageDialogOpenWhenEntity'), null);
   document.getElementById('pageDialogStart').checked = isNew ? false : (dashboardData.startPage === index);
+  document.getElementById('pageDialogFocusNav').checked = isNew || dashboardData.pages[index].focusNavigation !== false;
   document.getElementById('pageDialogDeleteBtn').style.display = isNew ? 'none' : '';
   document.getElementById('pageDialogModal').classList.add('open');
   document.getElementById('pageDialogName').focus();
@@ -408,6 +423,7 @@ function savePageDialog() {
   const closeWhenState = document.getElementById('pageDialogCloseWhenState').value.trim() || undefined;
   const openMode = document.getElementById('pageDialogOpenMode').value;
   const makeStart = document.getElementById('pageDialogStart').checked;
+  const focusNav = document.getElementById('pageDialogFocusNav').checked;
 
   if (editingPage === null) {
     const page = { name, cards: [], hotkeys: [], longHotkeys: [] };
@@ -421,6 +437,7 @@ function savePageDialog() {
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity;
     if (hideFull) page.hideMode = 'full';
+    if (!focusNav) page.focusNavigation = false;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState;
@@ -455,6 +472,7 @@ function savePageDialog() {
     }
     if (hiddenUnlessActivity) page.hiddenUnlessActivity = hiddenUnlessActivity; else delete page.hiddenUnlessActivity;
     if (hideFull) page.hideMode = 'full'; else delete page.hideMode;
+    if (!focusNav) page.focusNavigation = false; else delete page.focusNavigation;
     if (openWhenEntity) {
       page.openWhenEntity = openWhenEntity;
       if (openWhenState && openWhenState !== 'on') page.openWhenState = openWhenState; else delete page.openWhenState;
@@ -524,6 +542,49 @@ function deletePageFromDialog() {
 // page) and currentActivePage (the tab being viewed in the editor). Both must
 // follow the page they point to across the splice, otherwise a drag would
 // silently change which page launches at boot or which one is shown.
+/**
+ * Page tree drop (1.4.2): [where] "before" / "after" puts page [fromIdx] next to page [targetIdx]
+ * with the same parent; "inside" makes it a sub-page of [targetIdx], right after it. A page can't
+ * go under itself or one of its own sub-pages.
+ */
+function movePageInTree(fromIdx, targetIdx, where) {
+  const pages = dashboardData.pages;
+  if (fromIdx === targetIdx || !pages[fromIdx] || !pages[targetIdx]) return;
+  const moved = pages[fromIdx];
+  const target = pages[targetIdx];
+  const newParent = where === 'inside' ? target.name : (target.parent || undefined);
+  if (newParent && pagesUnavailableAsParentOf(fromIdx).has(newParent)) {
+    showToast(I18N.t('web_tree_cannot_nest'), 'error');
+    return;
+  }
+  if (newParent) {
+    if (moved.parent !== newParent) delete moved.parentKey; // its key went with the old parent
+    moved.parent = newParent;
+  } else {
+    delete moved.parent;
+    delete moved.parentKey;
+  }
+  const after = where !== 'before';
+  let toIdx = fromIdx < targetIdx ? (after ? targetIdx : targetIdx - 1) : (after ? targetIdx + 1 : targetIdx);
+  toIdx = Math.max(0, Math.min(pages.length - 1, toIdx));
+  if (where === 'inside') pageTreeCollapsed.delete(target.name);
+  if (toIdx === fromIdx) {
+    renderTabs(); renderPreview(); updateJsonOutput();
+  } else {
+    reorderPage(fromIdx, toIdx);
+  }
+}
+
+/** "+" on a page of the tree: the new page dialog, with that page already picked as its parent. */
+function openSubPageDialog(parentIdx) {
+  openPageDialog(null);
+  const select = document.getElementById('pageDialogParent');
+  if (select) {
+    select.value = dashboardData.pages[parentIdx].name;
+    select.dispatchEvent(new Event('change'));
+  }
+}
+
 function reorderPage(fromIdx, toIdx) {
   const pages = dashboardData.pages;
   if (fromIdx < 0 || fromIdx >= pages.length || toIdx < 0 || toIdx >= pages.length || fromIdx === toIdx) return;
@@ -544,10 +605,6 @@ function reorderPage(fromIdx, toIdx) {
 // already referenced this) but nothing in this codebase currently opens it —
 // no ReferenceError either way now, and this'll do the right thing the day
 // something does.
-function closePreviewModal() {
-  document.getElementById('previewModal')?.classList.remove('open');
-}
-
 // ---- Modal backdrops: close only on a genuine click on the backdrop itself ---
 //
 // Every modal here is `<div class="preview-modal"><div class="preview-modal-inner">

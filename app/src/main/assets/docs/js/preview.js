@@ -22,23 +22,7 @@ function haFriendlyName(entityId) {
   return e.friendly_name || prettyEntityName(entityId);
 }
 
-// Numeric attribute helper for live entities (mirrors HaModels.attrDouble).
-function haAttrNum(entityId, key) {
-  const e = haEntity(entityId);
-  if (!e || !e.attributes) return null;
-  const v = e.attributes[key];
-  if (v == null) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
 
-// String attribute helper for live entities.
-function haAttrStr(entityId, key) {
-  const e = haEntity(entityId);
-  if (!e || !e.attributes) return null;
-  const v = e.attributes[key];
-  return v == null ? null : String(v);
-}
 
 // ---- Entity ID autocomplete for the card edit form --------------------------
 //
@@ -107,9 +91,12 @@ function attachEntityAutocomplete(inputEl, domain) {
       const row = document.createElement('div');
       row.className = 'ea-item';
       row.dataset.id = it.id;
+      // 1.4.5: the name first, and a long id shortened in the middle, so ids sharing a long
+      // start (sensor.trueachievements_<gamertag>_…) can be told apart.
+      row.title = it.id;
       row.innerHTML =
-        `<span class="ea-id">${it.id}</span>` +
-        `<span class="ea-name">${it.name}</span>`;
+        `<span class="ea-name">${it.name}</span>` +
+        `<span class="ea-id">${_eaShortId(it.id)}</span>`;
       row.addEventListener('mousedown', (e) => {
         e.preventDefault();
         accept(it.id);
@@ -189,9 +176,19 @@ function _eaClose() {
 function _eaPosition() {
   if (!_eaState.dropdown || !_eaState.input) return;
   const rect = _eaState.input.getBoundingClientRect();
-  _eaState.dropdown.style.left = rect.left + 'px';
+  // 1.4.5: at least 340 px wide (a narrow field cut every id), never past the window's edge.
+  const width = Math.min(Math.max(rect.width, 340), window.innerWidth - 16);
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  _eaState.dropdown.style.left = left + 'px';
   _eaState.dropdown.style.top = (rect.bottom + 2) + 'px';
-  _eaState.dropdown.style.width = rect.width + 'px';
+  _eaState.dropdown.style.width = width + 'px';
+}
+
+/** An entity id short enough for the dropdown: its start and its end, with … in between. */
+function _eaShortId(id) {
+  const MAX = 38;
+  if (id.length <= MAX) return id;
+  return id.slice(0, 7) + '…' + id.slice(-(MAX - 8));
 }
 
 function _eaHighlight(idx) {
@@ -207,52 +204,145 @@ function _eaHighlight(idx) {
   }
 }
 
+/**
+ * The pages as a tree beside the remote (1.4.2; tabs before): sub-pages indented under their
+ * `parent`, in the dashboard's order. Click a page to show it; drag it onto the top or bottom
+ * edge of another to place it there (same parent as that one), or onto its middle to make it a
+ * sub-page; ✎ opens its settings, + adds a sub-page. Branches fold with ▸ / ▾.
+ * Kept under its old name: every caller refreshes "the tabs" with renderTabs().
+ */
+let pageTreeCollapsed = (() => {
+  try { return new Set(JSON.parse(localStorage.getItem('astrion.pageTreeCollapsed') || '[]')); } catch (e) { return new Set(); }
+})();
+
+function savePageTreeCollapsed() {
+  try { localStorage.setItem('astrion.pageTreeCollapsed', JSON.stringify([...pageTreeCollapsed])); } catch (e) { /* private mode */ }
+}
+
+/** The "swipe between pages" box (1.4.9): dashboard.json's swipePages, true when absent. */
+function onSwipePagesChange(on) {
+  if (on) delete dashboardData.swipePages; else dashboardData.swipePages = false;
+  updateJsonOutput();
+}
+
 function renderTabs() {
-  const tabsContainer = document.getElementById('tabs');
-  tabsContainer.innerHTML = '';
-  dashboardData.pages.forEach((page, index) => {
-    const tab = document.createElement('div');
-    const isActive = index === currentActivePage;
-    tab.className = `tab ${isActive ? 'active' : ''}`;
-    tab.dataset.pageIdx = String(index);
-
-    const label = document.createElement('span');
-    label.textContent = (page.parent ? '↳ ' : '') + page.name + (index === dashboardData.startPage ? ' 🏠' : '');
-    if (page.parent) label.title = I18N.t('web_preview_child_of', page.parent);
-    tab.appendChild(label);
-    tab.onclick = () => onPageChange(index);
-
-    // Drag-to-reorder, mirroring enhanceCardControls() below. Dropping a tab
-    // onto another tab repositions its page in dashboardData.pages; the active
-    // tab and start page follow their pages via reorderPage()'s index fixup.
-    tab.setAttribute('draggable', 'true');
-    tab.addEventListener('dragstart', (e) => {
-      tab.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(index));
-    });
-    tab.addEventListener('dragend', () => tab.classList.remove('dragging'));
-    tab.addEventListener('dragover', (e) => { e.preventDefault(); tab.classList.add('drag-over'); });
-    tab.addEventListener('dragleave', () => tab.classList.remove('drag-over'));
-    tab.addEventListener('drop', (e) => {
-      e.preventDefault();
-      tab.classList.remove('drag-over');
-      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
-      const toIdx = parseInt(tab.dataset.pageIdx, 10);
-      if (!isNaN(fromIdx) && !isNaN(toIdx) && fromIdx !== toIdx) reorderPage(fromIdx, toIdx);
-    });
-
-    if (isActive) {
-      const gear = document.createElement('span');
-      gear.className = 'tab-settings';
-      gear.title = I18N.t('web_modal_page_settings');
-      gear.textContent = '⚙';
-      gear.onclick = (e) => { e.stopPropagation(); openPageDialog(index); };
-      tab.appendChild(gear);
-    }
-
-    tabsContainer.appendChild(tab);
+  const swipe = document.getElementById('swipePagesToggle');
+  if (swipe) swipe.checked = dashboardData.swipePages !== false;
+  const tree = document.getElementById('pageTree');
+  if (!tree) return;
+  tree.innerHTML = '';
+  const pages = dashboardData.pages;
+  const names = new Set(pages.map(p => p.name));
+  const childrenOf = new Map(); // parent name ('' = top level) -> page indexes, in dashboard order
+  pages.forEach((p, i) => {
+    const key = p.parent && names.has(p.parent) && p.parent !== p.name ? p.parent : '';
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key).push(i);
   });
+  const seen = new Set();
+  const addRows = (parentName, depth) => {
+    (childrenOf.get(parentName) || []).forEach(index => {
+      if (seen.has(index)) return; // a loop in hand-written JSON: show each page once
+      seen.add(index);
+      const page = pages[index];
+      const kids = childrenOf.get(page.name) || [];
+      const collapsed = pageTreeCollapsed.has(page.name);
+      tree.appendChild(pageTreeRow(index, depth, kids.length > 0, collapsed));
+      if (collapsed) hideRows(page.name); else addRows(page.name, depth + 1);
+    });
+  };
+  // A folded branch: its sub-pages are known, just not shown (else they'd land at the end).
+  const hideRows = (parentName) => {
+    (childrenOf.get(parentName) || []).forEach(index => {
+      if (seen.has(index)) return;
+      seen.add(index);
+      hideRows(pages[index].name);
+    });
+  };
+  addRows('', 0);
+  pages.forEach((p, i) => { if (!seen.has(i)) tree.appendChild(pageTreeRow(i, 0, false, false)); });
+}
+
+function pageTreeRow(index, depth, hasKids, collapsed) {
+  const page = dashboardData.pages[index];
+  const row = document.createElement('div');
+  row.className = 'pt-row' + (index === currentActivePage ? ' active' : '');
+  row.style.marginLeft = `${depth * 16}px`;
+  row.dataset.pageIdx = String(index);
+  row.onclick = () => onPageChange(index);
+
+  const toggle = document.createElement('span');
+  toggle.className = 'pt-toggle';
+  if (hasKids) {
+    toggle.textContent = collapsed ? '▸' : '▾';
+    toggle.title = I18N.t(collapsed ? 'web_tree_expand' : 'web_tree_collapse');
+    toggle.onclick = (e) => {
+      e.stopPropagation();
+      if (collapsed) pageTreeCollapsed.delete(page.name); else pageTreeCollapsed.add(page.name);
+      savePageTreeCollapsed();
+      renderTabs();
+    };
+  }
+  row.appendChild(toggle);
+
+  const name = document.createElement('span');
+  name.className = 'pt-name';
+  name.textContent = page.name;
+  if (page.parent) name.title = I18N.t('web_preview_child_of', page.parent);
+  row.appendChild(name);
+
+  const badge = (text, titleKey) => {
+    const b = document.createElement('span');
+    b.className = 'pt-badge';
+    b.textContent = text;
+    b.title = I18N.t(titleKey);
+    row.appendChild(b);
+  };
+  if (index === dashboardData.startPage) badge('🏠', 'web_tree_start_page');
+  if (page.popupWidth != null || (typeof popupOpenersOf === 'function' && popupOpenersOf(page.name) > 0)) badge('⧉', 'web_tree_popup');
+  if (page.hiddenUnlessActivity) badge('🎬', 'web_tree_activity_only');
+
+  const button = (text, titleKey, onClick, extraClass) => {
+    const b = document.createElement('span');
+    b.className = 'pt-btn' + (extraClass ? ' ' + extraClass : '');
+    b.textContent = text;
+    b.title = I18N.t(titleKey);
+    b.draggable = false;
+    b.addEventListener('dragstart', (e) => { e.preventDefault(); e.stopPropagation(); });
+    b.onclick = (e) => { e.stopPropagation(); onClick(); };
+    row.appendChild(b);
+  };
+  button('+', 'web_tree_add_subpage', () => openSubPageDialog(index), 'pt-add');
+  button('✎', 'web_modal_page_settings', () => openPageDialog(index));
+
+  // Drag and drop: top / bottom quarter = before / after that page, the middle = inside it.
+  row.setAttribute('draggable', 'true');
+  const zone = (e) => {
+    const r = row.getBoundingClientRect();
+    const y = (e.clientY - r.top) / r.height;
+    return y < 0.28 ? 'before' : (y > 0.72 ? 'after' : 'inside');
+  };
+  const clear = () => row.classList.remove('drop-before', 'drop-after', 'drop-inside');
+  row.addEventListener('dragstart', (e) => {
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', String(index));
+  });
+  row.addEventListener('dragend', () => row.classList.remove('dragging'));
+  row.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    clear();
+    row.classList.add('drop-' + zone(e));
+  });
+  row.addEventListener('dragleave', clear);
+  row.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const where = zone(e);
+    clear();
+    const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+    if (!isNaN(fromIdx)) movePageInTree(fromIdx, index, where);
+  });
+  return row;
 }
 
 // Mimics the real status bar clock so the preview's proportions match what
@@ -333,6 +423,9 @@ function updateRemoteScreenScale() {
 function updateRemoteFrameScale() {
   const wrap = document.querySelector('.remote-frame-scale-wrap');
   const frame = document.querySelector('.remote-frame');
+  // 1.4.2: a narrow pane puts the page tree above the remote instead of beside it.
+  const pane = document.querySelector('.preview-pane');
+  if (pane) pane.classList.toggle('narrow', pane.clientWidth < 420);
   if (!wrap || !frame || wrap.clientWidth === 0) return;
   const scale = Math.min(wrap.clientWidth / 208, 1);
   frame.style.transform = `scale(${scale})`;
@@ -362,30 +455,8 @@ function renderPreview() {
 
   updateStatusBarClock();
 
-  // 1.4.0: only the keys that really apply on this page. A page key overrides the global key of
-  // the same press type, so that global one is left out (it used to be listed as well).
-  const effective = (globalList, pageList) => {
-    const overridden = new Set((pageList || []).map(h => String(h.key).toUpperCase()));
-    return (globalList || []).filter(h => !overridden.has(String(h.key).toUpperCase()));
-  };
-  const globalShort = effective(dashboardData.hotkeys, page.hotkeys);
-  const globalLong = effective(dashboardData.longHotkeys, page.longHotkeys);
-  const pageKeys = (page.hotkeys || []).length + (page.longHotkeys || []).length;
-  const hkInfo = document.getElementById('hotkeysInfo');
-  if (hkInfo) {
-    if (globalShort.length + globalLong.length + pageKeys > 0) {
-      let hkHtml = `<div class="hotkeys-badge"><strong>${I18N.t('web_preview_hotkeys_active')}</strong><br>`;
-      const hkRow = (scopeKey, h) => `• [${I18N.t(scopeKey)}] <b>${hwKeyLabel(h.key)}</b> ${describeHotkey(h)}<br>`;
-      globalShort.forEach(h => hkHtml += hkRow('web_hotkey_scope_global', h));
-      globalLong.forEach(h => hkHtml += hkRow('web_hotkey_scope_global_long', h));
-      (page.hotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page', h));
-      (page.longHotkeys || []).forEach(h => hkHtml += hkRow('web_hotkey_scope_page_long', h));
-      hkHtml += `</div>`;
-      hkInfo.innerHTML = hkHtml;
-    } else {
-      hkInfo.innerHTML = '';
-    }
-  }
+  // 1.4.3: which hotkeys apply on this page now shows in the hotkey list itself (green / amber),
+  // see renderHotkeysList(); the "Hotkeys active on this page" box is gone.
 
   if (!page.cards || page.cards.length === 0) {
     contentContainer.innerHTML += `<p style="color:#666; font-style:italic;">${I18N.t('web_preview_no_cards')}</p>`;
@@ -938,21 +1009,29 @@ function renderPreview() {
       // stay a uniform height — even tiles with no icon of their own get a
       // blank spacer instead of dropping to the shorter 58dp layout.
       const hasIconGrid = isScene && items.some(i => !i.spacer && i.icon);
+      // 1.5.0: icon_size / icon_fit, as GridIconStyle.kt draws them (icon_trim can't be shown here).
+      const iconSize = card.options?.icon_size || 0;
+      const iconFit = card.options?.icon_fit || 'contain';
+      const iconImgStyle = (iconSize || iconFit !== 'contain')
+        ? ` style="height:${iconSize || (isScene ? 28 : 32)}px;${iconFit === 'contain' ? 'width:auto;max-width:100%;object-fit:contain' : 'width:100%;object-fit:' + (iconFit === 'fill' ? 'cover' : 'fill')}"`
+        : '';
+      const autoHeight = iconSize && !tileHeight && !iconFill
+        ? (isScene ? Math.max(74, iconSize + 46) : Math.max(68, iconSize + 36)) : 0;
 
       const tileHtml = (item) => {
         const label = item.name || '?';
         const src = iconUrl(item.icon);
         if (isScene) {
           const bg = parseHexColorCss(item.color) || (typeof themeValues === 'function' ? themeValues().controlBackground : '#2C4C58');
-          const textColor = textColorForBg(bg);
+          const textColor = parseHexColorCss(item.text_color) || textColorForBg(bg);
           const isFillTile = iconFill && src && !showLabels;
           const tileClass = isFillTile ? 'fill' : (hasIconGrid ? 'has-icon' : 'no-icon');
-          const heightStyle = tileHeight ? `height:${tileHeight}px;` : '';
+          const heightStyle = tileHeight ? `height:${tileHeight}px;` : (autoHeight && hasIconGrid ? `height:${autoHeight}px;` : '');
           const iconCell = isFillTile
             ? `<img class="st-icon" src="${src}" alt="" onerror="onSceneIconError(this)">`
             : (hasIconGrid
                 ? (src
-                    ? `<img class="st-icon" src="${src}" alt="" onerror="onSceneIconError(this)">`
+                    ? `<img class="st-icon" src="${src}" alt=""${iconImgStyle} onerror="onSceneIconError(this)">`
                     : `<div class="st-icon-spacer"></div>`)
                 : '');
           return `<div class="preview-scene-tile ${tileClass}" style="background:${bg}; color:${textColor};${heightStyle}">
@@ -962,9 +1041,15 @@ function renderPreview() {
         } else {
           const hasIcon = !!src;
           const iconCell = hasIcon
-            ? `<img class="bt-icon" src="${src}" alt="" onerror="onButtonIconError(this)">`
+            ? `<img class="bt-icon" src="${src}" alt=""${iconImgStyle} onerror="onButtonIconError(this)">`
             : '';
-          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${tileHeight ? ` style="height:${tileHeight}px"` : ''}>
+          // 1.4.4: the button's own colors, over the theme's.
+          const btnStyle = [
+            tileHeight ? `height:${tileHeight}px` : (autoHeight && hasIcon ? `height:${autoHeight}px` : ''),
+            parseHexColorCss(item.color) ? `background:${parseHexColorCss(item.color)}` : '',
+            parseHexColorCss(item.text_color) ? `color:${parseHexColorCss(item.text_color)}` : ''
+          ].filter(Boolean).join(';');
+          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${btnStyle ? ` style="${btnStyle}"` : ''}>
             ${iconCell}
             ${label && (showLabels || !hasIcon) ? `<div class="bt-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
@@ -1050,6 +1135,26 @@ function renderPreview() {
           ${rowsHtml}
           <div class="hint" style="margin-top:8px">${I18N.t('web_preview_plex_placeholder')} ${I18N.t('web_preview_server', o.host || I18N.t('web_preview_not_set'))} · ${I18N.t('web_preview_playback_entity', o.media_entity || I18N.t('web_preview_not_set'))}${o.play_entity ? ' · ' + I18N.t('web_preview_direct_client', o.play_entity) : ''} · ${I18N.t('web_preview_items_per_row', o.items_per_row ?? 12)}.</div>
         </div>`;
+    } else if (card.type === 'title') {
+      // 1.4.1: the real title and subtitle, aligned as on the remote (it used to say "title").
+      const o = card.options || {};
+      const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      const iconSrc = o.icon ? iconUrl(o.icon) : '';
+      const forceStart = !!iconSrc || o.divider === true; // icon or divider: left-aligned row, like TitleCard.kt
+      const align = { center: 'center', end: 'right', justify: 'justify' }[o.alignment] || 'left';
+      const color = parseHexColorCss(o.color) || '#E6EEF2';
+      const titleRow = (o.title || iconSrc || o.divider)
+        ? `<div style="display:flex;align-items:center;gap:8px">
+            ${iconSrc ? `<img src="${iconSrc}" alt="" style="width:22px;height:22px;object-fit:contain">` : ''}
+            ${o.title ? `<b style="font-size:20px;color:${color};${forceStart ? '' : `flex:1;text-align:${align}`}">${esc(o.title)}</b>` : ''}
+            ${o.divider ? `<div style="flex:1;height:1px;background:${color};opacity:0.3"></div>` : ''}
+          </div>`
+        : '';
+      cardEl.className = 'card';
+      cardEl.innerHTML = `
+        <div class="card-title"><span>title</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+        ${titleRow}
+        ${o.subtitle ? `<div style="font-size:14px;color:#9AA7AE;text-align:${align}">${esc(o.subtitle)}</div>` : ''}`;
     } else if (card.type === 'monitor') {
       cardEl.className = 'card';
       cardEl.innerHTML = `
@@ -1097,7 +1202,15 @@ function enhanceCardControls(contentContainer) {
         downSpan.style.cursor = idx === cardEls.length - 1 ? 'default' : 'pointer';
         if (idx < cardEls.length - 1) downSpan.onclick = () => moveCard(idx, 1);
 
-        iconsSpan.prepend(downSpan, upSpan);
+        // 1.4.9: copy the card to other pages (js/card-copy.js).
+        const copySpan = document.createElement('span');
+        copySpan.className = 'remove card-copy';
+        copySpan.title = I18N.t('web_card_copy_title');
+        copySpan.textContent = '⧉';
+        copySpan.style.color = '#00E5FF';
+        copySpan.onclick = () => openCardCopyDialog(idx);
+
+        iconsSpan.prepend(copySpan, downSpan, upSpan);
       }
     }
 
@@ -1130,7 +1243,7 @@ function enhanceCardControls(contentContainer) {
 
 const ATV_PREVIEW_ICONS = {
   Menu: '☰', Home: '⌂', SeekBackward: '↺', SeekForward: '↻', Rewind: '⏪', FastForward: '⏩',
-  Previous: '⏮', Next: '⏭', Siri: '🎤', Screensaver: '🖼', Guide: '☷', VolumeUp: '🔊', VolumeDown: '🔉', ControlCenter: '▦'
+  Previous: '⏮', Next: '⏭', Siri: '🎤', Screensaver: '🖼', Guide: '☷', VolumeUp: '🔊', VolumeDown: '🔉', ControlCenter: '▦', AppPicker: '⊞'
 };
 const ATV_PREVIEW_DEFAULTS = { classic: ['Menu', 'Home'], compact: ['Menu', 'SeekBackward', 'SeekForward', 'Home'], full: ['Menu', 'Home'] };
 const ATV_APP_FALLBACK_COLORS = ['#B3261E', '#1F5FBF', '#3A3A40', '#B86E00', '#1E7A4A', '#5B3FA8'];
@@ -1187,13 +1300,14 @@ function appleTvRemotePreviewHtml(atv) {
   const showArtwork = atv.showArtwork !== false;
   const showProgress = atv.showProgress !== false;
   const showSkip = atv.showSkip !== false && isDirect;
+  const showPad = atv.showClickpad !== false;
   const buttons = (Array.isArray(atv.buttons) && atv.buttons.length) ? atv.buttons : ATV_PREVIEW_DEFAULTS[layout];
-  const apps = hasMedia ? (atv.apps || []) : [];
+  const apps = hasMedia && atv.showApps !== false ? (atv.apps || []) : [];
   const box = inner => `<div class="preview-apple-remote" style="gap:${layout === 'classic' ? 18 : 12}px;padding:${layout === 'classic' ? 20 : 14}px">${inner}</div>`;
 
   if (layout === 'classic') {
     return box(`
-      ${atvPreviewTrackpad(160)}
+      ${showPad ? atvPreviewTrackpad(160) : ''}
       <div class="preview-row-buttons">${buttons.map(id => `<div class="preview-pill">${ATV_PREVIEW_ICONS[id] ? ATV_PREVIEW_ICONS[id] + ' ' : ''}${atvPreviewButtonLabel(id)}</div>`).join('')}</div>
       <div class="preview-play-btn">⏯</div>
       ${atvPreviewApps(apps.slice(0, 5), 34, false)}`);
@@ -1206,7 +1320,7 @@ function appleTvRemotePreviewHtml(atv) {
           ${showArtwork ? '<div style="width:34px;height:34px;border-radius:7px;background:#2a3550;flex:none"></div>' : ''}
           <div style="flex:1;min-width:0;font-size:11px;text-align:left;display:flex;flex-direction:column;gap:4px"><b>${I18N.t('web_preview_now_playing')}</b>${showProgress ? atvPreviewProgress(false) : ''}</div>
           ${atvPreviewPlay(30, true)}</div>` : ''}
-      ${atvPreviewTrackpad(strip ? 130 : 145)}
+      ${showPad ? atvPreviewTrackpad(strip ? 130 : 145) : ''}
       <div style="display:flex;justify-content:space-evenly;width:100%">${buttons.map(id => atvPreviewRound(id, 34)).join('')}</div>
       ${strip ? '' : atvPreviewPlay(40, false)}
       ${atvPreviewApps(apps.slice(0, 6), 34, false)}`);
@@ -1233,7 +1347,9 @@ function appleTvRemotePreviewHtml(atv) {
       ${flank[1] ? atvPreviewRound(flank[1], 32) : ''}
     </div>`;
   const column = ids => `<div style="display:flex;flex-direction:column;gap:7px;width:30px;align-items:center">${ids.map(id => atvPreviewRound(id, 30)).join('')}</div>`;
-  const pad = side.length
+  const pad = !showPad
+    ? (side.length ? `<div style="display:flex;justify-content:space-evenly;width:100%">${side.map(id => atvPreviewRound(id, 30)).join('')}</div>` : '')
+    : side.length
     ? `<div style="display:flex;align-items:center;justify-content:space-between;width:100%">
          ${column(side.filter((_, i) => i % 2 === 0))}${atvPreviewTrackpad(130)}${column(side.filter((_, i) => i % 2 === 1))}
        </div>`

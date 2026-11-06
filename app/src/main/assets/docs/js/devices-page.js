@@ -26,6 +26,7 @@ let appleTvMrpScanResults = []; // last /appletv-mrp-scan result
 let androidTvs = [];       // full [{localId, name, entityId, host, serviceName, mac, certSha256}] (1.3.6)
 let androidTvScanResults = []; // last /androidtv-scan result
 let androidTvPairing = null; // { sessionId, device: {host, serviceName, name} } while waiting for the code
+let zidoos = [];           // full [{localId, name, entityId, host, mac}] (1.4.6)
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
 
@@ -73,6 +74,7 @@ async function loadAll() {
     extenders = Array.isArray(data.extenders) ? data.extenders : [];
     appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
     androidTvs = Array.isArray(data.androidTvs) ? data.androidTvs : [];
+    zidoos = Array.isArray(data.zidoos) ? data.zidoos : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -101,7 +103,8 @@ async function reconcileAppleTvHaDevices() {
   dashboardData.haDevices = dashboardData.haDevices || [];
   let changed = false;
   const paired = appleTvs.map(tv => ({ id: 'appletv_' + tv.localId, tv }))
-    .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })));
+    .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })))
+    .concat(zidoos.map(tv => ({ id: 'zidoo_' + tv.localId, tv })));
   paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
@@ -145,10 +148,15 @@ function renderDevicesList() {
   const haList = document.getElementById('haDevicesList');
   if (haList) {
     haList.innerHTML = dashboardData.haDevices.length
-      ? dashboardData.haDevices.map(dev =>
-          `<div class="list-item"><span>${dev.name} <span style="color:#888">(${HA_DOMAIN_LABELS[dev.domain] ? I18N.t(HA_DOMAIN_LABELS[dev.domain]) : dev.domain} · ${dev.entityId})</span></span>` +
-          `<span><span class="remove" style="color:#00E5FF" onclick="editHaEntity('${dev.id}')">✎</span> <span class="remove" onclick="removeHaEntityFromList('${dev.id}')">✕</span></span></div>`
-        ).join('')
+      ? dashboardData.haDevices.map(dev => {
+          const st = haStates && haStates[dev.entityId] ? haStates[dev.entityId].state : '';
+          return deviceCardHtml({
+            kind: haDeviceKind(dev), name: atvEsc(dev.name), details: `<code>${atvEsc(dev.entityId)}</code>`,
+            badge: HA_DOMAIN_LABELS[dev.domain] ? I18N.t(HA_DOMAIN_LABELS[dev.domain]) : atvEsc(dev.domain),
+            state: st ? atvEsc(st) : '', tone: deviceStateTone(dev.entityId),
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editHaEntity('${dev.id}')">✎</span> <span class="remove" onclick="removeHaEntityFromList('${dev.id}')">✕</span>`
+          });
+        }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_devices')}</div>`;
   }
 
@@ -162,9 +170,12 @@ function renderDevicesList() {
   if (harmonyList) {
     harmonyList.innerHTML = harmonyHubs.length
       ? harmonyHubs.map(hub => {
-          const summary = hub.ip ? `${hub.ip}${hub.hubId ? ' · id ' + hub.hubId : ''}` : I18N.t('web_dev_no_ip_set');
-          return `<div class="list-item"><span><span class="remove" style="color:#00E5FF;cursor:pointer" onclick="browseHarmonyDevices('${hub.localId}')">${hub.name}</span> <span style="color:#888">(${summary})</span></span>` +
-            `<span><span class="remove" style="color:#00E5FF" onclick="editHarmonyHub('${hub.localId}')">✎</span> <span class="remove" onclick="removeHarmonyHub('${hub.localId}')">✕</span></span></div>`;
+          const summary = hub.ip ? `${atvEsc(hub.ip)}${hub.hubId ? ' · id ' + atvEsc(hub.hubId) : ''}` : I18N.t('web_dev_no_ip_set');
+          return deviceCardHtml({
+            kind: 'hub', name: `<span class="remove" style="color:#00E5FF;cursor:pointer" onclick="browseHarmonyDevices('${hub.localId}')">${atvEsc(hub.name)}</span>`,
+            details: summary,
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editHarmonyHub('${hub.localId}')">✎</span> <span class="remove" onclick="removeHarmonyHub('${hub.localId}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_hub')}</div>`;
   }
@@ -179,9 +190,15 @@ function renderDevicesList() {
   if (extenderList) {
     extenderList.innerHTML = extenders.length
       ? extenders.map(ext => {
-          const summary = [ext.host || I18N.t('web_dev_no_host_set'), ext.mac ? 'MAC ' + ext.mac : null].filter(Boolean).join(' · ');
-          return `<div class="list-item"><span>${ext.name} <span style="color:#888">(${summary})</span></span>` +
-            `<span><span class="remove" style="color:#00E5FF" onclick="editExtender('${ext.localId}')">✎</span> <span class="remove" onclick="removeExtender('${ext.localId}')">✕</span></span></div>`;
+          const summary = [
+            ext.host || I18N.t('web_dev_no_host_set'),
+            ext.mac ? 'MAC ' + ext.mac : null,
+            (ext.outputs || 1) > 1 ? I18N.t('web_dev_extender_outputs_count', ext.outputs) : null
+          ].filter(Boolean).join(' · ');
+          return deviceCardHtml({
+            kind: 'extender', name: atvEsc(ext.name), details: atvEsc(summary),
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editExtender('${ext.localId}')">✎</span> <span class="remove" onclick="removeExtender('${ext.localId}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_extender')}</div>`;
   }
@@ -201,13 +218,18 @@ function renderDevicesList() {
           const nowPlayingAction = tv.mrpCredentials
             ? `<span style="color:#888">${I18N.t('web_dev_atv_np_on')}</span>`
             : `<span class="remove" style="color:#00E5FF" onclick="scanAppleTvMrp('${tv.localId}')">${I18N.t('web_dev_atv_np_add')}</span>`;
-          return `<div class="list-item"><span>${atvEsc(tv.name)} <span style="color:#888">(<code>${atvEsc(tv.entityId)}</code>${status ? ' · ' + status : ''})</span></span>` +
-            `<span>${nowPlayingAction} <span class="remove" style="color:#00E5FF" onclick="renameAppleTv('${tv.localId}')">✎</span> <span class="remove" onclick="removeAppleTv('${tv.localId}')">✕</span></span></div>`;
+          return deviceCardHtml({
+            kind: 'box', name: atvEsc(tv.name), details: `<code>${atvEsc(tv.entityId)}</code>`,
+            state: status, tone: deviceStateTone(tv.entityId),
+            actions: `${nowPlayingAction} <span class="remove" style="color:#00E5FF" onclick="renameAppleTv('${tv.localId}')">✎</span> <span class="remove" onclick="removeAppleTv('${tv.localId}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_atv')}</div>`;
   }
 
   renderAndroidTvs();
+  renderZidoos();
+  renderDirectCounts();
 
   const tileIrCount = document.getElementById('tileIrCount');
   if (tileIrCount) {
@@ -222,8 +244,10 @@ function renderDevicesList() {
           const summary = dev.commands
             ? I18N.t(Object.keys(dev.commands).length === 1 ? 'web_ir_summary_inline_one' : 'web_ir_summary_inline_many', Object.keys(dev.commands).length)
             : I18N.t('web_ir_summary_reference', dev.brand, dev.model, dev.category);
-          return `<div class="list-item"><span>${dev.name} <span style="color:#888">(${summary})</span></span>` +
-            `<span><span class="remove" style="color:#00E5FF" onclick="editIrDevice('${dev.id}')">✎</span> <span class="remove" onclick="removeIrDeviceFromList('${dev.id}')">✕</span></span></div>`;
+          return deviceCardHtml({
+            kind: 'ir', name: atvEsc(dev.name), details: atvEsc(summary),
+            actions: `<span class="remove" style="color:#00E5FF" onclick="editIrDevice('${dev.id}')">✎</span> <span class="remove" onclick="removeIrDeviceFromList('${dev.id}')">✕</span>`
+          });
         }).join('')
       : `<div class="hint">${I18N.t('web_dev_list_no_devices')}</div>`;
   }
@@ -231,12 +255,111 @@ function renderDevicesList() {
 
 // ---- navigation: home tiles <-> one category view at a time ---------------
 
+// The direct devices (1.4.9) live in one view, a tab per kind of device: the old views' ids
+// still open it, on their tab.
+const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewZidoo: 'players' };
+
 function showView(id) {
+  if (DIRECT_TABS[id]) {
+    showDirectTab(DIRECT_TABS[id]);
+    id = 'viewDirect';
+  } else if (id === 'viewDirect' && !document.querySelector('.direct-tab.active')) {
+    let saved = null;
+    try { saved = localStorage.getItem('astrion.directTab'); } catch (e) { /* private mode */ }
+    showDirectTab(['tv', 'players', 'audio', 'light'].includes(saved) ? saved : 'tv');
+  }
   document.querySelectorAll('#viewHome, .category-view').forEach(el => {
     el.style.display = el.id === id ? 'block' : 'none';
   });
   if (id !== 'viewHome') closeDeviceForms();
   window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function showDirectTab(tab) {
+  document.querySelectorAll('.direct-tab').forEach(b => {
+    const on = b.dataset.tab === tab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  document.querySelectorAll('.direct-pane').forEach(p => { p.style.display = p.dataset.pane === tab ? '' : 'none'; });
+  try { localStorage.setItem('astrion.directTab', tab); } catch (e) { /* private mode */ }
+}
+
+/** Counts on the home tile and the tabs. */
+function renderDirectCounts() {
+  const tv = appleTvs.length + androidTvs.length;
+  const players = zidoos.length;
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set('directCountTv', tv);
+  set('directCountPlayers', players);
+  set('tileDirectCount', tv + players ? countLabel(tv + players, 'web_dev_count_direct') : I18N.t('web_dev_direct_none'));
+}
+
+/** A small icon for a kind of device (tv, box, player, audio), as in the tabs. */
+function deviceKindIcon(kind) {
+  const paths = {
+    tv: '<rect x="3" y="5" width="18" height="12" rx="2"></rect><path d="M8 21h8"></path>',
+    box: '<rect x="4" y="8" width="16" height="9" rx="2"></rect><path d="M9 20h6"></path>',
+    player: '<rect x="3" y="7" width="18" height="10" rx="2"></rect><path d="M10 10l4 2-4 2z"></path>',
+    audio: '<rect x="6" y="3" width="12" height="18" rx="2"></rect><circle cx="12" cy="14" r="3"></circle><circle cx="12" cy="7" r="1"></circle>',
+    light: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z"></path>',
+    switch: '<path d="M12 3v9"></path><path d="M6.3 7.5a8 8 0 1 0 11.4 0"></path>',
+    cover: '<rect x="4" y="3" width="16" height="18" rx="1"></rect><path d="M4 8h16M4 13h16M12 21v-3"></path>',
+    climate: '<path d="M10 14V5a2 2 0 0 1 4 0v9a4 4 0 1 1-4 0z"></path>',
+    fan: '<circle cx="12" cy="12" r="2"></circle><path d="M12 10c0-4 1-7 4-7s2 5-2 7M14 12c4 0 7 1 7 4s-5 2-7-2M12 14c0 4-1 7-4 7s-2-5 2-7M10 12c-4 0-7-1-7-4s5-2 7 2"></path>',
+    camera: '<path d="M3 7h4l2-3h6l2 3h4v13H3z"></path><circle cx="12" cy="13" r="4"></circle>',
+    media: '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M10 9l5 3-5 3z"></path>',
+    sensor: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>',
+    remote: '<rect x="7" y="2" width="10" height="20" rx="3"></rect><circle cx="12" cy="8" r="2"></circle>',
+    hub: '<circle cx="12" cy="13" r="2"></circle><path d="M8.5 9.5a5 5 0 0 1 7 0M5.6 6.6a9 9 0 0 1 12.8 0M12 15v6"></path>',
+    ir: '<rect x="3" y="6" width="12" height="12" rx="2"></rect><path d="M18 9a4 4 0 0 1 0 6M20.5 7a7 7 0 0 1 0 10"></path>',
+    extender: '<circle cx="12" cy="12" r="3"></circle><path d="M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14M8 8a5 5 0 0 0 0 8M16 8a5 5 0 0 1 0 8"></path>',
+    generic: '<rect x="4" y="4" width="16" height="16" rx="3"></rect><circle cx="12" cy="12" r="2"></circle>'
+  };
+  return `<span class="device-kind-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${paths[kind] || paths.generic}</svg></span>`;
+}
+
+/** The icon of a catalogue entity, by its domain (and a direct device's prefix). */
+function haDeviceKind(dev) {
+  const obj = (dev.entityId || '').split('.')[1] || '';
+  if (dev.domain === 'media_player') {
+    if (/^appletv_/.test(obj)) return 'box';
+    if (/^androidtv_/.test(obj)) return 'tv';
+    if (/^zidoo_/.test(obj)) return zidooKind({ entityId: dev.entityId }) === 'audio' ? 'audio' : 'player';
+    return 'media';
+  }
+  return { light: 'light', switch: 'switch', input_boolean: 'switch', cover: 'cover', climate: 'climate', fan: 'fan',
+    camera: 'camera', sensor: 'sensor', binary_sensor: 'sensor', remote: 'remote' }[dev.domain] || 'generic';
+}
+
+/** The colour of an entity's state on a device card: on / playing green, paused or standby amber,
+ * off grey, unreachable red. */
+function deviceStateTone(entityId) {
+  const e = haStates && haStates[entityId];
+  if (!e) return 'none';
+  if (e.attributes && e.attributes.astrion_needs_pairing) return 'warn';
+  if (e.state === 'unavailable') return 'bad';
+  if (e.state === 'on' || e.state === 'playing' || e.state === 'idle') return 'ok';
+  if (e.state === 'paused' || e.state === 'standby') return 'warn';
+  return 'off';
+}
+
+/**
+ * One device of the Direct devices view as a card (1.4.9, as in the mock-up): its kind's icon,
+ * name, details line, an optional badge, its state as a coloured pill, and its actions.
+ * [o]: {kind, name, details, badge, state, tone, extra, actions} — details, badge, state and
+ * extra are HTML already escaped by the caller.
+ */
+function deviceCardHtml(o) {
+  return `<div class="device-card">
+      <span class="device-card-icon">${deviceKindIcon(o.kind).replace('width="18" height="18"', 'width="28" height="28"')}</span>
+      <span class="device-card-text">
+        <b>${o.name}</b>
+        <span class="device-card-details">${o.details}</span>
+        <span class="device-card-tags">${o.badge ? `<span class="device-badge">${o.badge}</span>` : ''}${o.state ? `<span class="device-state tone-${o.tone || 'none'}">${o.state}</span>` : ''}${o.extra || ''}</span>
+      </span>
+      <span class="device-card-actions">${o.actions}</span>
+    </div>`;
 }
 
 // ---- form show/hide ---------------------------------------------------------
@@ -263,6 +386,7 @@ function closeDeviceForms() {
   appleTvMrpPairing = null;
   setDisplay('androidTvForm', 'none');
   androidTvPairing = null;
+  setDisplay('zidooForm', 'none');
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -274,7 +398,9 @@ async function openDeviceForm(type) {
   if (type === 'ha') {
     document.getElementById('haForm').style.display = '';
     document.getElementById('haUrl').value = haConfig.url || '';
-    document.getElementById('haToken').value = haConfig.token || '';
+    // 1.4.6: the remote never sends the saved token back; empty keeps it.
+    document.getElementById('haToken').value = '';
+    document.getElementById('haToken').placeholder = haConfig.tokenSet ? I18N.t('web_dev_token_saved') : '';
     document.getElementById('haWebhookId').value = haConfig.webhookId || '';
     document.getElementById('removeHaBtn').style.display = haConfig.url ? '' : 'none';
     document.getElementById('haForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -300,6 +426,7 @@ async function openDeviceForm(type) {
     document.getElementById('extenderName').value = '';
     document.getElementById('extenderHost').value = '';
     document.getElementById('extenderMac').value = '';
+    document.getElementById('extenderOutputs').value = '1';
     editingExtenderId = null;
     document.getElementById('saveExtenderBtn').textContent = I18N.t('web_save');
     document.getElementById('removeExtenderBtn').style.display = 'none';
@@ -312,6 +439,12 @@ async function openDeviceForm(type) {
     document.getElementById('androidTvForm').style.display = '';
     document.getElementById('androidTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     scanAndroidTvs();
+  } else if (type === 'zidoo') {
+    document.getElementById('zidooForm').style.display = '';
+    document.getElementById('zidooHost').value = '';
+    document.getElementById('zidooName').value = '';
+    document.getElementById('zidooForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('zidooHost').focus();
   } else if (type === 'ir') {
     document.getElementById('irForm').style.display = '';
     renderIrTargetOptions();
@@ -331,6 +464,16 @@ function renderIrTargetOptions() {
   select.innerHTML = `<option value="">${I18N.t('web_dev_this_remote_s_own_ir_blaster')}</option>` +
     extenders.map(ext => `<option value="${ext.localId}">${ext.name}</option>`).join('');
   if (extenders.some(ext => ext.localId === current)) select.value = current;
+  updateIrOutputRow();
+}
+
+/** Shows the "IR output" choice (1.4.3) only when the chosen extender has several outputs. */
+function updateIrOutputRow() {
+  const row = document.getElementById('irOutputRow');
+  if (!row) return;
+  const id = document.getElementById('irTargetSelect').value;
+  const ext = extenders.find(e => e.localId === id);
+  row.style.display = ext && (ext.outputs || 1) > 1 ? '' : 'none';
 }
 
 // ---- This remote --------------------------------------------------------------
@@ -400,6 +543,7 @@ async function persistHaAndHubs() {
       body.append('extender_name[]', ext.name || '');
       body.append('extender_host[]', ext.host || '');
       body.append('extender_mac[]', ext.mac || '');
+      body.append('extender_outputs[]', String(ext.outputs || 1));
     });
     body.set('atv_present', '1'); // tells the device this form carries the Apple TV list (even if empty)
     appleTvs.forEach(tv => {
@@ -426,6 +570,14 @@ async function persistHaAndHubs() {
       body.append('adtv_mac[]', tv.mac || '');
       body.append('adtv_cert[]', tv.certSha256 || '');
       body.append('adtv_helper[]', tv.helperCode || '');
+    });
+    body.set('zidoo_present', '1'); // same for the Zidoo list (1.4.6)
+    zidoos.forEach(z => {
+      body.append('zidoo_localid[]', z.localId || '');
+      body.append('zidoo_name[]', z.name || '');
+      body.append('zidoo_entityid[]', z.entityId || '');
+      body.append('zidoo_host[]', z.host || '');
+      body.append('zidoo_mac[]', z.mac || '');
     });
     const res = await fetch('/save-connection', {
       method: 'POST',
@@ -805,6 +957,7 @@ function editExtender(localId) {
   document.getElementById('extenderName').value = ext.name || '';
   document.getElementById('extenderHost').value = ext.host || '';
   document.getElementById('extenderMac').value = ext.mac || '';
+  document.getElementById('extenderOutputs').value = String(ext.outputs || 1) === '3' ? '3' : '1';
   document.getElementById('saveExtenderBtn').textContent = I18N.t('web_save');
   document.getElementById('removeExtenderBtn').style.display = '';
 }
@@ -813,6 +966,7 @@ async function saveExtender() {
   const name = document.getElementById('extenderName').value.trim();
   const host = document.getElementById('extenderHost').value.trim();
   const macRaw = document.getElementById('extenderMac').value.trim();
+  const outputs = parseInt(document.getElementById('extenderOutputs').value, 10) || 1;
   if (!name) { alert(I18N.t('web_dev_err_extender_name')); return; }
   if (!host) { alert(I18N.t('web_dev_err_extender_host')); return; }
   const mac = normalizeMac(macRaw);
@@ -840,12 +994,13 @@ async function saveExtender() {
     ext.name = name;
     ext.host = host;
     ext.mac = mac;
+    ext.outputs = outputs;
   } else {
     if (existing) {
       alert(I18N.t('web_dev_err_mac_exists', existing.name));
       return;
     }
-    extenders.push({ localId, name, host, mac });
+    extenders.push({ localId, name, host, mac, outputs });
   }
   await persistHaAndHubs();
 }
@@ -1283,6 +1438,8 @@ function editIrDevice(id) {
   editingIrDevice = id;
   document.getElementById('irDevName').value = dev.name;
   document.getElementById('irTargetSelect').value = (dev.target && dev.target.extender) || '';
+  document.getElementById('irOutputSelect').value = String((dev.target && dev.target.output) || 1);
+  updateIrOutputRow();
 
   const isReference = !dev.commands;
   document.querySelector(`input[name="irSourceMode"][value="${isReference ? 'reference' : 'inline'}"]`).checked = true;
@@ -1311,6 +1468,9 @@ function cancelIrDeviceEdit() {
   document.getElementById('irRefKnownCommands').value = '';
   const targetSelect = document.getElementById('irTargetSelect');
   if (targetSelect) targetSelect.value = '';
+  const outputSelect = document.getElementById('irOutputSelect');
+  if (outputSelect) outputSelect.value = '1';
+  updateIrOutputRow();
   document.querySelector('input[name="irSourceMode"][value="inline"]').checked = true;
   onIrSourceModeChange();
   document.getElementById('saveIrDeviceBtn').textContent = I18N.t('web_save');
@@ -1347,7 +1507,15 @@ async function saveIrDevice() {
     alert(I18N.t('web_dev_err_inline_extender'));
     return;
   }
-  deviceFields.target = targetExtenderId ? { extender: targetExtenderId } : undefined;
+  const targetExt = extenders.find(e => e.localId === targetExtenderId);
+  const output = parseInt(document.getElementById('irOutputSelect').value, 10) || 1;
+  if (!targetExtenderId) {
+    deviceFields.target = undefined;
+  } else if (targetExt && (targetExt.outputs || 1) > 1) {
+    deviceFields.target = { extender: targetExtenderId, output };
+  } else {
+    deviceFields.target = { extender: targetExtenderId };
+  }
 
   dashboardData.irDevices = dashboardData.irDevices || [];
   let savedId;
@@ -1476,7 +1644,11 @@ async function uploadIrDatabase() {
     const form = new FormData();
     form.append('file', file, file.name);
     const res = await fetch('/ir-database', { method: 'POST', body: form });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      // 1.4.5: the remote says why (not valid JSON, not a category file…), not just "HTTP 400".
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || ('HTTP ' + res.status));
+    }
     showToast(I18N.t('web_dev_irdb_updated'));
     input.value = '';
     irOnDeviceCache = {};
@@ -1585,11 +1757,24 @@ async function loadIconsList() {
       list.innerHTML = `<div class="hint">${I18N.t('web_dev_no_icons')}</div>`;
       return;
     }
+    // 1.4.8: tick several icons, then delete them with one confirmation.
+    const bar = document.createElement('div');
+    bar.className = 'list-item';
+    bar.style.cssText = 'gap:8px;align-items:center';
+    bar.innerHTML = `<label class="inline-check" style="margin:0"><input type="checkbox" id="iconSelectAll" onchange="selectAllIcons(this.checked)"> ${I18N.t('web_dev_icons_select_all')}</label>` +
+      `<button type="button" class="secondary" id="deleteIconsBtn" style="margin:0" disabled onclick="deleteSelectedIcons()">${I18N.t('web_dev_icons_delete_selected', 0)}</button>`;
+    list.appendChild(bar);
     names.forEach(name => {
       const row = document.createElement('div');
       row.className = 'list-item';
-      const label = document.createElement('span');
-      label.style.cssText = 'display:flex;align-items:center;gap:8px';
+      const label = document.createElement('label');
+      label.style.cssText = 'display:flex;align-items:center;gap:8px;margin:0;cursor:pointer';
+      const check = document.createElement('input');
+      check.type = 'checkbox';
+      check.className = 'icon-select';
+      check.value = name;
+      check.addEventListener('change', updateIconSelection);
+      label.appendChild(check);
       const img = document.createElement('img');
       img.src = `/icons/${encodeURIComponent(name)}`;
       img.alt = '';
@@ -1608,6 +1793,54 @@ async function loadIconsList() {
     list.innerHTML = `<div class="hint">${I18N.t('web_dev_icons_load_failed')}</div>`;
     console.error('Failed to load /icons-list', e);
   }
+}
+
+function selectedIconNames() {
+  return Array.from(document.querySelectorAll('#iconsList .icon-select:checked')).map(el => el.value);
+}
+
+function updateIconSelection() {
+  const all = document.querySelectorAll('#iconsList .icon-select');
+  const n = selectedIconNames().length;
+  const btn = document.getElementById('deleteIconsBtn');
+  if (btn) { btn.disabled = n === 0; btn.textContent = I18N.t('web_dev_icons_delete_selected', n); }
+  const box = document.getElementById('iconSelectAll');
+  if (box) { box.checked = n > 0 && n === all.length; box.indeterminate = n > 0 && n < all.length; }
+}
+
+function selectAllIcons(on) {
+  document.querySelectorAll('#iconsList .icon-select').forEach(el => { el.checked = on; });
+  updateIconSelection();
+}
+
+/** 1.4.8: the ticked icons, one confirmation for all (with how many are still used by the dashboard). */
+async function deleteSelectedIcons() {
+  const names = selectedIconNames();
+  if (!names.length) return;
+  let text = '';
+  try {
+    const res = await fetch('/dashboard.json');
+    if (res.ok) text = await res.text();
+  } catch (e) { /* no dashboard: nothing is in use */ }
+  const used = names.filter(n => text.includes(`/icons/${n}"`)).length;
+  const warning = used ? '\n\n' + I18N.t('web_dev_icons_still_used_n', used) : '';
+  if (!confirm(I18N.t('web_dev_icons_confirm_delete_n', names.length) + warning)) return;
+  const btn = document.getElementById('deleteIconsBtn');
+  if (btn) btn.disabled = true;
+  const failed = [];
+  for (let i = 0; i < names.length; i++) {
+    if (btn) btn.textContent = I18N.t('web_dev_icons_deleting_n', i + 1, names.length);
+    try {
+      const res = await fetch(`/icons/${encodeURIComponent(names[i])}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+    } catch (e) {
+      console.error('Icon delete failed', names[i], e);
+      failed.push(names[i]);
+    }
+  }
+  if (failed.length) showToast(I18N.t('web_dev_icons_delete_failed_n', failed.length, failed.join(', ')), 'error');
+  else showToast(I18N.t('web_dev_icons_deleted_n', names.length));
+  await loadIconsList();
 }
 
 /** How many times dashboard.json mentions this icon's file (cards, scene/

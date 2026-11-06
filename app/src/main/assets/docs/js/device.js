@@ -6,6 +6,20 @@
 // as a manual override (importing a shared config, or a plain-text backup),
 // not a fallback for a missing connection.
 
+let remoteName = ''; // this remote's name (web page › its name), from /info (1.4.1)
+
+/** The remote's name for the banner and the tab title; the banner without it if /info doesn't answer. */
+async function loadRemoteName() {
+  try {
+    const res = await fetch('/info');
+    if (res.ok) remoteName = ((await res.json()).name || '').trim();
+  } catch (e) {
+    remoteName = '';
+  }
+  if (remoteName) document.title = `${remoteName} — ${document.title}`;
+  updateDeviceModeUi();
+}
+
 let deviceModeAvailable = false; // true once dashboard.json has actually loaded — used to gate "Save to device" while that first fetch is in flight
 
 // Slide-up toast notification. Replaces the blocking alert() that "Save to
@@ -50,6 +64,7 @@ async function loadDashboardFromDevice() {
   }
   hideLoadingOverlay();
   updateDeviceModeUi();
+  if (deviceModeAvailable) loadRemoteName();
   if (typeof openFromHash === 'function') openFromHash(); // deep links: #history, #page=…, #activity=…, #hotkeys
   if (typeof loadInstalledVersion === 'function') loadInstalledVersion(); // js/hotkeys.js
   if (loaded) {
@@ -165,8 +180,9 @@ function updateDeviceModeUi() {
   const saveBtn = document.getElementById('saveToDeviceBtn');
   if (banner) {
     banner.style.display = 'block';
+    // 1.4.1: says which remote (several remotes, several tabs): "Connected to Living room".
     banner.textContent = deviceModeAvailable
-      ? I18N.t('web_device_connected_banner')
+      ? (remoteName ? I18N.t('web_device_connected_to', remoteName) : I18N.t('web_device_connected_banner'))
       : I18N.t('web_device_connecting');
   }
   if (saveBtn) saveBtn.style.display = deviceModeAvailable ? 'inline-block' : 'none';

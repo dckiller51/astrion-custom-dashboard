@@ -44,6 +44,27 @@ adb connect <remote IP>:5555
   again (`sendevent`, same input device) once the screen is on, and Android delivers
   it to Astrion like any other. Screen on, it does nothing: no key is ever doubled.
   The real power key (Linux `KEY_POWER`) is left out. Idea from a user's report.
+  `--wake-only KEY` (1.4.2; repeat for several keys): with the screen off, that key
+  only wakes the screen and isn't replayed, e.g. `--wake-only ok` to look at the
+  dashboard without sending OK to the TV. A key is given by its name (the builder's)
+  or its Linux code (decimal, or hex like `0x161`):
+
+  | Key | Name | Linux code |
+  |---|---|---|
+  | Back | `back` | 158 |
+  | Home | `home` | 59 |
+  | Power | `power` | 60 |
+  | Volume + / − | `volume_up` / `volume_down` | 115 / 114 |
+  | Mute | `mute` | 113 |
+  | Page + / − | `page_up` / `page_down` | 104 / 109 |
+  | Up / Down | `up` / `down` | 103 / 108 |
+  | Left / Right | `left` / `right` | 105 / 106 |
+  | OK | `ok` | 353 |
+  | Microphone | `voice` | 61 |
+  | Menu | `menu` | 139 |
+  | The 4 shortcut keys (light, curtain, scene, AC) | `rewind` / `play` / `stop` / `fastforward` | 62 / 63 / 64 / 65 |
+  | Red / Green | `red` / `green` | 66 / 67 |
+  | Blue / Yellow | `blue` / `yellow` | 68 / 87 |
 
 ## Safety
 

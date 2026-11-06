@@ -22,7 +22,8 @@ function xboxTaAccounts() {
     acc.all.push({ id, unit: a.unit_of_measurement || '', icon: a.icon || '' });
   });
   // The four counters of the usual TA dashboard first: Gamerscore, TA score, completion, games finished.
-  const rank = s => s.unit === 'G' ? 0 : s.unit === 'TA' ? 1 : s.unit === '%' ? 2 : s.icon === 'mdi:trophy' ? 3 : s.icon === 'mdi:controller' ? 4 : 5;
+  // 1.4.5: Lost Completions (mdi:trophy-broken) right after them.
+  const rank = s => s.unit === 'G' ? 0 : s.unit === 'TA' ? 1 : s.unit === '%' ? 2 : s.icon === 'mdi:trophy' ? 3 : s.icon === 'mdi:trophy-broken' ? 4 : s.icon === 'mdi:controller' ? 5 : 6;
   return Object.values(byTag).map(acc => ({ ...acc, stats: acc.all.sort((x, y) => rank(x) - rank(y)).map(s => s.id) }));
 }
 
@@ -99,7 +100,7 @@ function xboxFormHtml() {
 const XBOX_STAT_ICONS = [
   ['auto', 'web_card_xbox_icon_auto', ''], ['gamerscore', 'web_card_xbox_icon_gamerscore', 'G'],
   ['star', 'web_card_xbox_icon_star', '★'], ['percent', 'web_card_xbox_icon_percent', '%'],
-  ['trophy', 'web_card_xbox_icon_trophy', '🏆'], ['medal', 'web_card_xbox_icon_medal', '🎖'],
+  ['trophy', 'web_card_xbox_icon_trophy', '🏆'], ['lost_completions', 'web_card_xbox_icon_lost_completions', '💔'], ['medal', 'web_card_xbox_icon_medal', '🎖'],
   ['controller', 'web_card_xbox_icon_controller', '🎮'], ['people', 'web_card_xbox_icon_people', '👥'],
   ['chart', 'web_card_xbox_icon_chart', '📈'], ['none', 'web_card_xbox_icon_none', ''], ['file', 'web_card_xbox_icon_file', '🖼']
 ];
@@ -121,9 +122,10 @@ function renderXboxStats() {
       `<option value="${k}"${k === choice ? ' selected' : ''}>${glyph ? glyph + ' ' : ''}${I18N.t(key)}</option>`).join('');
     return `
     <div class="list-item xbox-stat-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <!-- 1.4.5: the entity on its own line, long TrueAchievements ids were cut to their common start. -->
+      <input type="text" class="xbox-stat-id" id="xboxStat${i}" value="${cxEsc(st.entity_id || '')}" placeholder="sensor.…" style="margin:0">
       <div style="display:flex;gap:6px;align-items:center">
-        <input type="text" class="xbox-stat-id" id="xboxStat${i}" value="${cxEsc(st.entity_id || '')}" placeholder="sensor.…" style="flex:3;min-width:0;margin:0">
-        <input type="text" class="xbox-stat-name" value="${cxEsc(st.name || '')}" placeholder="${I18N.t('web_card_xbox_stat_name_ph')}" style="flex:2;min-width:0;margin:0">
+        <input type="text" class="xbox-stat-name" value="${cxEsc(st.name || '')}" placeholder="${I18N.t('web_card_xbox_stat_name_ph')}" style="flex:1;min-width:0;margin:0">
         ${cxMoveButtons('moveXboxStat', i)}
         <span class="remove" onclick="removeXboxStat(${i})">✕</span>
       </div>

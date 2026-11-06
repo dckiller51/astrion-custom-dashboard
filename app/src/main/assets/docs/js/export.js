@@ -33,6 +33,8 @@ async function copyJson() {
   } else {
     // Last resort: select it in the JSON box so Ctrl+C / long-press copies it.
     const box = document.getElementById('jsonOutput');
+    const fold = document.getElementById('foldJson');
+    if (fold) fold.open = true;
     box.focus();
     box.select();
     showToast(I18N.t('web_export_copy_failed'), 'error');

@@ -7,6 +7,10 @@ import com.custom.astrion.BuildConfig
 import java.io.File
 import java.io.IOException
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -179,23 +183,61 @@ object UpdateChecker {
         return false
     }
 
+    // One download at a time (1.4.1): every tap on Settings' update row (or on the web page) used
+    // to start another download into the same file; with a few taps they wrote over each other
+    // and Android's installer answered "App not installed".
+    private val downloadLock = AtomicBoolean(false)
+    private val progress = MutableStateFlow<Int?>(null)
+
+    /** The running download's progress in % (0 while the size is unknown), null when none runs. */
+    val downloadProgress: StateFlow<Int?> = progress.asStateFlow()
+
+    val isDownloading: Boolean get() = downloadLock.get()
+
     /** Downloads the APK into the app cache dir. Blocking — invoke off the main thread.
      * Streamed straight to the file: reading the whole APK into memory first
-     * (as this used to) briefly held tens of MB of RAM on a small device. */
+     * (as this used to) briefly held tens of MB of RAM on a small device.
+     * Written to a `.part` file, checked complete, then renamed (1.4.1): the installer never gets
+     * a partial APK. Null when it failed, or when another download is already running. */
     fun download(context: Context, apkUrl: String): File? {
-        val request = Request.Builder().url(apkUrl).build()
+        if (!downloadLock.compareAndSet(false, true)) return null
+        val part = File(context.cacheDir, "$UPDATE_APK_NAME.part")
         val file = File(context.cacheDir, UPDATE_APK_NAME)
-        val ok =
-            http.newCall(request).execute().use { resp ->
+        return try {
+            progress.value = 0
+            part.delete()
+            val ok = http.newCall(Request.Builder().url(apkUrl).build()).execute().use { resp ->
                 val body = resp.body
-                if (resp.isSuccessful && body != null) {
-                    file.outputStream().use { out -> body.byteStream().copyTo(out) }
-                    true
-                } else {
-                    false
-                }
+                resp.isSuccessful && body != null && copyWithProgress(body.byteStream(), part, body.contentLength())
             }
-        return if (ok) file else null
+            if (ok && part.renameTo(file)) file else null
+        } catch (_: IOException) {
+            null
+        } finally {
+            part.delete()
+            progress.value = null
+            downloadLock.set(false)
+        }
+    }
+
+    /** True when every byte announced ([total], -1 if unknown) arrived. */
+    private fun copyWithProgress(input: java.io.InputStream, target: File, total: Long): Boolean {
+        val done = input.use { source -> target.outputStream().use { out -> pump(source, out, total) } }
+        return total <= 0 || done == total
+    }
+
+    /** Copies everything, updating [progress] when [total] is known; the number of bytes copied. */
+    private fun pump(source: java.io.InputStream, out: java.io.OutputStream, total: Long): Long {
+        var done = 0L
+        val buffer = ByteArray(COPY_BUFFER)
+        var n = source.read(buffer)
+        while (n >= 0) {
+            out.write(buffer, 0, n)
+            done += n
+            if (total > 0) progress.value = (done * PERCENT / total).toInt()
+            n = source.read(buffer)
+        }
+        return done
     }
 
     /**
@@ -216,9 +258,12 @@ object UpdateChecker {
             ?.forEach { it.delete() }
     }
 
-    private fun isDisposable(name: String): Boolean = name == UPDATE_APK_NAME || name.startsWith("NanoHTTPD-")
+    private fun isDisposable(name: String): Boolean =
+        name == UPDATE_APK_NAME || name == "$UPDATE_APK_NAME.part" || name.startsWith("NanoHTTPD-")
 
     private const val UPDATE_APK_NAME = "astrion-update.apk"
+    private const val COPY_BUFFER = 64 * 1024
+    private const val PERCENT = 100
     private const val STALE_AFTER_MS = 10 * 60 * 1000L
 
     /**

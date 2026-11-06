@@ -29,9 +29,12 @@ function renderAndroidTvs() {
     ? androidTvs.map(tv => {
         const status = androidTvStatus(tv);
         const helper = androidTvHelperStatus(tv);
-        return `<div class="list-item"><span>${atvEsc(tv.name)} <span style="color:#888">(<code>${atvEsc(tv.entityId)}</code>${status ? ' · ' + status : ''}${helper ? ' · ' + helper : ''})</span></span>` +
-          `<span><span class="remove" style="color:#00E5FF" onclick="linkAndroidTvHelper('${atvEsc(tv.localId)}')">${I18N.t(tv.helperCode ? 'web_dev_adtv_helper_edit' : 'web_dev_adtv_helper_add')}</span> ` +
-          `<span class="remove" style="color:#00E5FF" onclick="renameAndroidTv('${atvEsc(tv.localId)}')">✎</span> <span class="remove" onclick="removeAndroidTv('${atvEsc(tv.localId)}')">✕</span></span></div>`;
+        return deviceCardHtml({
+          kind: 'tv', name: atvEsc(tv.name), details: `<code>${atvEsc(tv.entityId)}</code>${tv.host ? ' · ' + atvEsc(tv.host) : ''}`,
+          state: status, tone: deviceStateTone(tv.entityId), extra: helper ? `<span class="device-badge">${helper}</span>` : '',
+          actions: `<span class="remove" style="color:#00E5FF" onclick="linkAndroidTvHelper('${atvEsc(tv.localId)}')">${I18N.t(tv.helperCode ? 'web_dev_adtv_helper_edit' : 'web_dev_adtv_helper_add')}</span> ` +
+            `<span class="remove" style="color:#00E5FF" onclick="renameAndroidTv('${atvEsc(tv.localId)}')">✎</span> <span class="remove" onclick="removeAndroidTv('${atvEsc(tv.localId)}')">✕</span>`
+        });
       }).join('')
     : `<div class="hint">${I18N.t('web_dev_list_no_adtv')}</div>`;
 }

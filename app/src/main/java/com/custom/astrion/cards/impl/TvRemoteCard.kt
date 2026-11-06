@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,9 +16,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowLeft
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Forward10
@@ -34,7 +36,11 @@ import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,6 +61,9 @@ import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * TV / Android-TV remote card.
@@ -84,11 +93,13 @@ import com.custom.astrion.ui.tapClickable
  *                   "icon": "/sdcard/astrion/icons/netflix.png", "color": "#B3261E" },   // icon/color: 1.3.6
  *                 { "name": "Night mode", "service": "script.night", "entity_id": null, "data": {} } ],
  *       "apps_style": "icons",          // optional (1.3.6): "buttons" (default) or "icons"
+ *       "show_apps": false,             // optional (1.4.9): no shortcuts; the apps still order the pop-up
  *       "show_now_playing": true,       // optional (1.3.6): the app in front / title, cover, progress
  *       "now_playing_entity": "media_player.shield_cast",   // optional (1.3.6): default media_entity
  *       "show_transport": false,        // optional (1.3.6): rewind / play-pause / fast forward
  *       "layout": "full",               // optional (1.3.6): large cover, draggable progress, ±10 s, app icons
  *       "show_skip": true,              // optional (1.3.6, full layout): the −10 s / Play-Pause / +10 s row
+ *       "show_dpad": false,             // optional (1.4.6): hides the D-pad (the remote's own keys do it)
  *       "commands": { "power": "POWER", "volume_up": "VOLUME_UP" }   // optional renames
  *   } }
  *
@@ -99,22 +110,29 @@ import com.custom.astrion.ui.tapClickable
 class TvRemoteCard : CardRenderer {
     override val type = "tv_remote"
 
+    /** What every part of the card needs, from its options. */
     @Suppress("UNCHECKED_CAST")
+    private fun renderOf(config: CardConfig, ctx: CardContext, remoteEntity: String, mediaEntity: String, onOpenPlayer: () -> Unit) =
+        TvRender(
+            ctx = ctx,
+            remoteEntity = remoteEntity,
+            muteEntity = config.string("mute_entity") ?: remoteEntity,
+            mediaEntity = mediaEntity,
+            commands = (config.options["commands"] as? Map<String, Any?>).orEmpty(),
+            apps = (config.options["apps"] as? List<Map<String, Any?>>) ?: deviceApps(ctx, mediaEntity) ?: DEFAULT_APPS,
+            showApps = config.bool("show_apps", true),
+            onOpenPlayer = onOpenPlayer.takeIf { config.string("now_playing_tap") != "none" }
+        )
+
     @Composable
     override fun Render(config: CardConfig, ctx: CardContext) {
         val remoteEntity = config.string("remote_entity") ?: return
-        val commands = (config.options["commands"] as? Map<String, Any?>).orEmpty()
         val mediaEntity = config.string("media_entity") ?: "media_player.${remoteEntity.substringAfter('.')}"
-        val r =
-            TvRender(
-                ctx = ctx,
-                remoteEntity = remoteEntity,
-                muteEntity = config.string("mute_entity") ?: remoteEntity,
-                mediaEntity = mediaEntity,
-                commands = commands,
-                apps = (config.options["apps"] as? List<Map<String, Any?>>) ?: DEFAULT_APPS
-            )
         val nowPlaying = nowPlayingOf(config, ctx, mediaEntity)
+        // 1.4.9: a tap on what plays opens the media player view; it closes once nothing plays.
+        var playerOpen by remember { mutableStateOf(false) }
+        LaunchedEffect(nowPlaying == null) { if (nowPlaying == null) playerOpen = false }
+        val r = renderOf(config, ctx, remoteEntity, mediaEntity) { playerOpen = true }
         val full = config.string("layout") == "full"
         val fit = remember(config) { AtvFit() }
         val density = LocalDensity.current
@@ -130,34 +148,82 @@ class TvRemoteCard : CardRenderer {
                 .padding(if (full) FULL_PADDING.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (full) FULL_GAP.dp else 14.dp)
         ) {
-            // Header row: name + power. A long name is cut, never pushed under the power button.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    config.string("name") ?: "TV",
-                    color = ctx.theme.primaryText,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                RoundIconButton(Icons.Filled.PowerSettingsNew, ctx.theme, tint = ctx.theme.danger) {
-                    r.send(r.c("power", "POWER"))
-                }
-            }
+            Header(r, config)
 
             if (full) {
                 FullLayout(r, config, nowPlaying, fit)
             } else {
                 if (nowPlaying != null) NowPlayingStrip(r, nowPlaying)
                 RemoteControls(r, config)
-                if (config.string("apps_style") == "icons") AppIcons(r) else AppButtons(r)
+                if (r.showApps) {
+                    r.shortcuts.Rows(iconsStyle = config.string("apps_style") == "icons", cardPadding = CARD_PADDING)
+                }
             }
         }
+        if (playerOpen && nowPlaying != null) {
+            PlayerView(ctx, nowPlaying, remoteEntity, config.bool("show_volume", true)) { playerOpen = false }
+        }
+    }
+
+    /** The media player view of what plays (1.4.9): cover, progress, controls, in a pop-up. */
+    @Composable
+    private fun PlayerView(ctx: CardContext, entity: EntityState, remoteEntity: String, showVolume: Boolean, onClose: () -> Unit) {
+        MediaPlayerDetailDialog(
+            entityId = entity.entityId,
+            name = entity.attrString("friendly_name") ?: entity.entityId,
+            e = entity,
+            client = ctx.client,
+            theme = ctx.theme,
+            // 1.5.0: Home Assistant's media player of a Zidoo beside Astrion's remote.zidoo_…: Browse opens its library.
+            // The card's own volume setting (1.5.0): hidden on the card, hidden in its pop-up too.
+            library = MediaLibraryPlayers(browseAlso = remoteEntity, showVolume = showVolume),
+            onClose = onClose
+        )
+    }
+
+    /**
+     * Header row: name, the sources and keypad buttons (1.4.9), power. A long name is cut, never
+     * pushed under the buttons. The pop-ups those buttons open live here too.
+     */
+    @Composable
+    private fun Header(r: TvRender, config: CardConfig) {
+        val ctx = r.ctx
+        var showSources by remember { mutableStateOf(false) }
+        var showKeypad by remember { mutableStateOf(false) }
+        var showBrowse by remember { mutableStateOf(false) }
+        // 1.5.0: a Zidoo's films and series, an Eversolo's music (`show_browse`, on by default).
+        val browse = config.bool("show_browse", true) && hasLibrary(r.mediaEntity, r.remoteEntity)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                config.string("name") ?: "TV",
+                color = ctx.theme.primaryText,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+            if (browse) {
+                RoundIconButton(Icons.AutoMirrored.Filled.List, ctx.theme, size = HEADER_BUTTON.dp) { showBrowse = true }
+            }
+            if (config.bool("show_sources", true) && QuickPickers.sourcesOf(ctx, r.mediaEntity).isNotEmpty()) {
+                RoundIconButton(Icons.Filled.Apps, ctx.theme, size = HEADER_BUTTON.dp) { showSources = true }
+            }
+            if (config.bool("show_keypad", false)) {
+                RoundIconButton(Icons.Filled.Dialpad, ctx.theme, size = HEADER_BUTTON.dp) { showKeypad = true }
+            }
+            RoundIconButton(Icons.Filled.PowerSettingsNew, ctx.theme, tint = ctx.theme.danger) {
+                r.send(r.c("power", "POWER"))
+            }
+        }
+        if (showSources) SourcePickerDialog(ctx, r.mediaEntity, r.appIcons(), r.appOrder()) { showSources = false }
+        if (showBrowse) BrowseDialog(r.mediaEntity, ctx.client, ctx.theme, also = r.remoteEntity) { showBrowse = false }
+        val keypad = KeypadTarget.from(config, r.remoteEntity, r.c("center", "DPAD_CENTER"))
+        if (showKeypad && keypad != null) KeypadDialog(ctx.theme, keypad.hasOk, onKey = { keypad.send(ctx, it) }) { showKeypad = false }
     }
 
     /**
@@ -170,7 +236,7 @@ class TvRemoteCard : CardRenderer {
         // −10 s / Play-Pause / +10 s can go: the progress bar still seeks, and it leaves the D-pad more room.
         val showSkip = config.bool("show_skip", true)
         if (nowPlaying != null) FullNowPlaying(r, nowPlaying, showSkip)
-        if (r.apps.isNotEmpty()) {
+        if (r.showApps && r.apps.isNotEmpty()) {
             AtvAppsRow(
                 r.ctx,
                 r.apps.map(r::tileOf).take(ICONS_PER_ROW),
@@ -181,13 +247,18 @@ class TvRemoteCard : CardRenderer {
                 r.apps.firstOrNull { r.tileOf(it) == tile }?.let(r::launch)
             }
         }
+        if (!config.bool("show_dpad", true)) {
+            // No D-pad (1.4.6): back / home / menu and the volume as rows, like the classic layout.
+            NoDpadRows(r, config)
+            return
+        }
         val blocks =
             listOfNotNull(
                 HEADER_H,
                 FULL_NOW_PLAYING_H.takeIf { nowPlaying != null },
                 FULL_PROGRESS_H.takeIf { nowPlaying != null },
                 FULL_TRANSPORT_H.takeIf { nowPlaying != null && showSkip },
-                FULL_APPS_H.takeIf { r.apps.isNotEmpty() }
+                FULL_APPS_H.takeIf { r.showApps && r.apps.isNotEmpty() }
             )
         val widthCap = cardInnerWidthDp(FULL_PADDING) - (SIDE_BUTTON + SIDE_GAP) * 2
         val pad = minOf(trackpadFor(blocks, min = MIN_PAD, max = MAX_PAD, fit = fit), widthCap)
@@ -228,6 +299,25 @@ class TvRemoteCard : CardRenderer {
     }
 
     @Composable
+    private fun NoDpadRows(r: TvRender, config: CardConfig) {
+        val theme = r.ctx.theme
+        ButtonRow(
+            theme,
+            Icons.AutoMirrored.Filled.ArrowBack to { r.send(r.c("back", "BACK")) },
+            Icons.Filled.Home to { r.send(r.c("home", "HOME")) },
+            Icons.Filled.Menu to { r.send(r.c("menu", "MENU")) }
+        )
+        if (config.bool("show_volume", true)) {
+            ButtonRow(
+                theme,
+                Icons.AutoMirrored.Filled.VolumeDown to { r.send(r.c("volume_down", "VOLUME_DOWN"), r.muteEntity) },
+                Icons.AutoMirrored.Filled.VolumeOff to { r.send(r.c("mute", "MUTE"), r.muteEntity) },
+                Icons.AutoMirrored.Filled.VolumeUp to { r.send(r.c("volume_up", "VOLUME_UP"), r.muteEntity) }
+            )
+        }
+    }
+
+    @Composable
     private fun SideColumn(content: @Composable () -> Unit) {
         Column(
             modifier = Modifier.width(SIDE_BUTTON.dp),
@@ -240,8 +330,8 @@ class TvRemoteCard : CardRenderer {
     @Composable
     private fun RemoteControls(r: TvRender, config: CardConfig) {
         val ctx = r.ctx
-        // D-pad cluster
-        DPad(r)
+        // D-pad cluster (1.4.6: can be hidden, e.g. when the remote's own keys drive the TV)
+        if (config.bool("show_dpad", true)) DPad(r)
 
         // Navigation row: back / home / menu
         ButtonRow(
@@ -272,6 +362,21 @@ class TvRemoteCard : CardRenderer {
         }
     }
 
+    /**
+     * The device's own apps (1.4.8), for a card with no `apps`: a player that publishes them as
+     * `astrion_apps` (a Zidoo or Eversolo added in Astrion) gets its apps, not Android TV's.
+     */
+    private fun deviceApps(ctx: CardContext, mediaEntity: String): List<Map<String, Any?>>? {
+        val list = ctx.entities[mediaEntity]?.attr("astrion_apps") as? JsonArray ?: return null
+        return list
+            .mapNotNull { el ->
+                val o = el as? JsonObject ?: return@mapNotNull null
+                val name = (o["name"] as? JsonPrimitive)?.content ?: return@mapNotNull null
+                val app = (o["app"] as? JsonPrimitive)?.content ?: return@mapNotNull null
+                mapOf("name" to name, "app" to app)
+            }.takeIf { it.isNotEmpty() }
+    }
+
     /** The player the now-playing part follows, when it's on and has something to show. */
     private fun nowPlayingOf(config: CardConfig, ctx: CardContext, mediaEntity: String): EntityState? {
         if (!config.bool("show_now_playing", true)) return null
@@ -290,8 +395,15 @@ class TvRemoteCard : CardRenderer {
         val muteEntity: String,
         val mediaEntity: String,
         val commands: Map<String, Any?>,
-        val apps: List<Map<String, Any?>>
+        val apps: List<Map<String, Any?>>,
+        /** `show_apps: false` (1.4.9): the apps stay in the card (order and icons of the sources pop-up) but no shortcut shows. */
+        val showApps: Boolean = true,
+        /** A tap on the cover or title of what plays (1.4.9, `now_playing_tap`, on unless "none"). */
+        val onOpenPlayer: (() -> Unit)? = null
     ) {
+        /** Makes the cover / title open the media player view, when [onOpenPlayer] is set. */
+        fun openModifier(): Modifier = onOpenPlayer?.let { Modifier.tapClickable(onClick = it) } ?: Modifier
+
         /** Per-button command names, overridable from config; defaults match Android TV's `remote.send_command`. */
         fun c(key: String, default: String): String = (commands[key] as? String) ?: default
 
@@ -299,30 +411,10 @@ class TvRemoteCard : CardRenderer {
             ctx.client.callService(ServiceCall.of(domain = "remote", service = "send_command", entityId = entity, "command" to command))
         }
 
-        /**
-         * An app button: `{ name, app }` is launched with media_player.play_media on `media_entity`,
-         * `{ name, service: "domain.service", entity_id, data }` calls that service.
-         */
-        @Suppress("UNCHECKED_CAST")
-        fun launch(app: Map<String, Any?>) {
-            val service = app["service"] as? String
-            if (service != null) {
-                val data = (app["data"] as? Map<String, Any?>).orEmpty()
-                ctx.client.callService(
-                    ServiceCall.of(
-                        service.substringBefore('.'),
-                        service.substringAfter('.'),
-                        app["entity_id"] as? String,
-                        *data.entries.map { it.key to it.value }.toTypedArray()
-                    )
-                )
-            } else {
-                val appId = app["app"] as? String ?: return
-                ctx.client.callService(
-                    ServiceCall.of("media_player", "play_media", mediaEntity, "media_content_type" to "app", "media_content_id" to appId)
-                )
-            }
-        }
+        /** The card's app shortcuts (shared with the media player card, 1.4.9). */
+        val shortcuts = AppShortcuts(ctx, apps, mediaEntity)
+
+        fun launch(app: Map<String, Any?>) = shortcuts.launch(app)
 
         /** Jumps to [seconds] in what [entity] plays (needs SEEK: the Astrion TV Helper, Plex, Cast…). */
         fun seek(entity: EntityState, seconds: Double) {
@@ -342,16 +434,13 @@ class TvRemoteCard : CardRenderer {
 
         fun playPause() = send(c("play_pause", "MEDIA_PLAY_PAUSE"))
 
-        /** [app] as an icon tile: its `icon` (file or URL), else its initials on `color`. */
-        fun tileOf(app: Map<String, Any?>): AtvApp {
-            val label = app["name"] as? String ?: "App"
-            return AtvApp(
-                source = (app["app"] as? String) ?: label,
-                label = label,
-                icon = (app["icon"] as? String)?.takeIf { it.isNotBlank() },
-                color = parseHexColor(app["color"] as? String)
-            )
-        }
+        /** The card's apps in its order (names, then packages), to order the sources pop-up. */
+        fun appOrder(): List<String> = shortcuts.order()
+
+        /** The icons the card gives its apps, by name and by package — for the sources pop-up. */
+        fun appIcons(): Map<String, String?> = shortcuts.icons()
+
+        fun tileOf(app: Map<String, Any?>): AtvApp = shortcuts.tileOf(app)
 
         /** The card's own entry for the app in front, matched on its package (`app_id`). */
         fun appInFront(entity: EntityState): Map<String, Any?>? {
@@ -384,7 +473,7 @@ class TvRemoteCard : CardRenderer {
             if (!hasCover && app != null) {
                 AtvAppTile(r.ctx, r.tileOf(app), 0, 52.dp, labelWidth = null) { r.launch(app) }
             } else {
-                AtvArtwork(r.ctx, entity, 52.dp, 10.dp)
+                Box(modifier = r.openModifier()) { AtvArtwork(r.ctx, entity, 52.dp, 10.dp) }
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -393,7 +482,8 @@ class TvRemoteCard : CardRenderer {
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = r.openModifier()
                 )
                 (np.subtitle ?: np.app)?.let {
                     Text(it, color = theme.mutedText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -427,7 +517,7 @@ class TvRemoteCard : CardRenderer {
             if (!hasCover && app != null) {
                 AtvAppTile(r.ctx, r.tileOf(app), 0, FULL_COVER_DP.dp, labelWidth = null) { r.launch(app) }
             } else {
-                AtvArtwork(r.ctx, entity, FULL_COVER_DP.dp, 14.dp)
+                Box(modifier = r.openModifier()) { AtvArtwork(r.ctx, entity, FULL_COVER_DP.dp, 14.dp) }
             }
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 // State and app on one line (not a chip of their own): keeps the block as tall as the cover.
@@ -445,7 +535,8 @@ class TvRemoteCard : CardRenderer {
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = r.openModifier()
                 )
                 np.subtitle?.let { Text(it, color = theme.mutedText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
@@ -471,56 +562,10 @@ class TvRemoteCard : CardRenderer {
         }
     }
 
-    /** App shortcuts as text buttons, two per row (the original look). */
-    @Composable
-    private fun AppButtons(r: TvRender) {
-        r.apps.chunked(2).forEach { pair ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                pair.forEach { app ->
-                    AppButton(
-                        label = app["name"] as? String ?: "App",
-                        modifier = Modifier.weight(1f),
-                        theme = r.ctx.theme
-                    ) { r.launch(app) }
-                }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-    }
-
-    /** App shortcuts as labelled icons (1.3.6), up to [ICONS_PER_ROW] per row. */
-    @Composable
-    private fun AppIcons(r: TvRender) {
-        val width = cardInnerWidthDp(CARD_PADDING).dp
-        r.apps.chunked(ICONS_PER_ROW).forEach { row ->
-            AtvAppsRow(r.ctx, row.map(r::tileOf), 52.dp, labels = true, rowWidth = width) { tile ->
-                row.firstOrNull { r.tileOf(it) == tile }?.let(r::launch)
-            }
-        }
-    }
-
     @Composable
     private fun ButtonRow(theme: ThemeColors, vararg buttons: Pair<ImageVector, () -> Unit>) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             buttons.forEach { (icon, onClick) -> RoundIconButton(icon, theme, onClick = onClick) }
-        }
-    }
-
-    @Composable
-    private fun AppButton(label: String, modifier: Modifier, theme: ThemeColors, onClick: () -> Unit) {
-        Box(
-            modifier =
-            modifier
-                .height(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(theme.controlBackground)
-                .tapClickable(onClick = onClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(label, color = theme.primaryText, fontSize = 15.sp, fontWeight = FontWeight.Medium)
         }
     }
 
@@ -542,6 +587,7 @@ class TvRemoteCard : CardRenderer {
         const val SIDE_GAP = 8
         const val MIN_PAD = 120
         const val MAX_PAD = 220
+        const val HEADER_BUTTON = 44
         const val MIN_DPAD_BUTTON = 36
         const val MIN_DPAD_CENTER = 48
         const val DPAD_BUTTON_RATIO = 0.26f

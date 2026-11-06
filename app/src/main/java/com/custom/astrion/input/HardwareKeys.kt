@@ -71,6 +71,37 @@ enum class HardwareKey {
             )
 
         fun fromKeyCode(code: Int): HardwareKey = MAP[code] ?: UNKNOWN
+
+        /**
+         * Names a hotkey may use for these buttons besides their own (1.4.9): the usual Android
+         * names. A hand-written or copied dashboard said "MENU" for MAIN (KEYCODE_MENU), and the
+         * hotkey was silently dropped, so that button did nothing.
+         */
+        private val ALIASES =
+            mapOf(
+                "MENU" to MAIN,
+                "FAST_FORWARD" to FASTFORWARD,
+                "MEDIA_FAST_FORWARD" to FASTFORWARD,
+                "MEDIA_REWIND" to REWIND,
+                "MEDIA_PLAY_PAUSE" to PLAY,
+                "PLAY_PAUSE" to PLAY,
+                "MEDIA_STOP" to STOP,
+                "VOLUME_MUTE" to MUTE,
+                "RED" to RED_BUTTON,
+                "GREEN" to GREEN_BUTTON,
+                "BLUE" to BLUE_BUTTON,
+                "YELLOW" to YELLOW_BUTTON,
+                "PROG_RED" to RED_BUTTON,
+                "PROG_GREEN" to GREEN_BUTTON,
+                "PROG_BLUE" to BLUE_BUTTON,
+                "PROG_YELLOW" to YELLOW_BUTTON
+            )
+
+        /** The button a hotkey's `key` names (its own name or an alias); null when this remote has none. */
+        fun fromName(name: String): HardwareKey? {
+            val n = name.trim().uppercase().removePrefix("KEYCODE_")
+            return entries.firstOrNull { it.name == n && it != UNKNOWN } ?: ALIASES[n]
+        }
     }
 }
 
