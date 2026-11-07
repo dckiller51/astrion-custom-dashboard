@@ -226,7 +226,7 @@ private fun EntityState.hasTitle(): Boolean = !attrString("media_title").isNullO
 private fun NowPlaying(e: EntityState, client: HaClient, palette: ClockPalette) {
     val artPath = e.attrString("entity_picture_local") ?: e.attrString("entity_picture")
     val art by produceState<ImageBitmap?>(initialValue = null, artPath) {
-        value = artPath?.let { runCatching { client.fetchBitmap(it) }.getOrNull() }
+        value = artPath?.let { runCatching { client.fetchBitmap(it, cache = true) }.getOrNull() }
     }
     val subtitle =
         listOfNotNull(e.attrString("media_series_title"), e.attrString("media_artist"))

@@ -113,7 +113,7 @@ fun MediaPlayerDetailDialog(
 
     val artPath = e?.attrString("entity_picture")
     var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(artPath) { art = artPath?.let { client.fetchBitmap(it) } }
+    LaunchedEffect(artPath) { art = artPath?.let { client.fetchBitmap(it, cache = true) } }
 
     fun mp(service: String, data: Array<out Pair<String, Any?>> = emptyArray()) {
         client.callService(ServiceCall.of("media_player", service, entityId, *data))
