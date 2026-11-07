@@ -202,8 +202,8 @@ function galleryDeviceIcon(d) {
       const a = (haStates && haStates[d.entityId] && haStates[d.entityId].attributes) || {};
       return /eversolo/i.test(a.manufacturer || '') || /^DMP/i.test(a.model || '') ? 'audio' : 'player';
     }
-    if (/^appletv_/.test(obj)) return 'box';
-    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj)) return 'tv';
+    if (/^appletv_/.test(obj) || /^sky_/.test(obj)) return 'box';
+    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj) || /^samsung_/.test(obj)) return 'tv';
     return 'play';
   }
   return { light: 'bulb', switch: 'power', cover: 'blind', fan: 'fan', climate: 'thermo', camera: 'camera', vacuum: 'vacuum',
@@ -275,11 +275,19 @@ function gallerySuggestionsFor(d) {
         { type: 'source_select', opts: source }
       ];
     }
-    if (/^lgtv_/.test(obj)) {
-      // An LG TV added in Astrion (1.5.2): its remote first, its apps already in.
+    if (/^lgtv_/.test(obj) || /^samsung_/.test(obj)) {
+      // An LG (1.5.2) or Samsung (1.5.3) TV added in Astrion: its remote first, its apps already in.
       const apps = galleryDeviceApps(e);
       return [
         { type: 'tv_remote', recommended: true, opts: apps ? { ...remote, apps } : remote },
+        { type: 'media_player', opts: full },
+        { type: 'source_select', opts: source }
+      ];
+    }
+    if (/^sky_/.test(obj)) {
+      // A Sky box added in Astrion (1.5.3): its remote first; a Sky Q's favourite channels are its sources.
+      return [
+        { type: 'tv_remote', recommended: true, opts: remote },
         { type: 'media_player', opts: full },
         { type: 'source_select', opts: source }
       ];

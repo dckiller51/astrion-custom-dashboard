@@ -64,6 +64,10 @@ import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
 import com.custom.astrion.lgtv.LgTvRegistry
 import com.custom.astrion.lgtv.installLgTv
+import com.custom.astrion.samsung.SamsungRegistry
+import com.custom.astrion.samsung.installSamsung
+import com.custom.astrion.sky.SkyRegistry
+import com.custom.astrion.sky.installSky
 import com.custom.astrion.ui.ChargingScreen
 import com.custom.astrion.ui.Dashboard
 import com.custom.astrion.ui.DashboardActivityCallbacks
@@ -150,7 +154,7 @@ class MainActivity : ComponentActivity() {
         val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
 
         // remote.* entities the remote answers itself (see serviceRepeatMs()).
-        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_", "remote.lgtv_")
+        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_", "remote.lgtv_", "remote.samsung_")
 
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
@@ -440,6 +444,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var androidTvRegistry: AndroidTvRegistry // Android TV, direct (1.3.6)
     private lateinit var zidooRegistry: ZidooRegistry // Zidoo players, direct (1.4.6)
     private lateinit var lgTvRegistry: LgTvRegistry // LG TVs, direct (1.5.2)
+    private lateinit var skyRegistry: SkyRegistry // Sky boxes, direct (1.5.3)
+    private lateinit var samsungRegistry: SamsungRegistry // Samsung TVs, direct (1.5.3)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -558,6 +564,8 @@ class MainActivity : ComponentActivity() {
                 if (::appleTvRegistry.isInitialized) appleTvRegistry.setQuiet(quiet)
                 if (::zidooRegistry.isInitialized) zidooRegistry.setQuiet(quiet)
                 if (::lgTvRegistry.isInitialized) lgTvRegistry.setQuiet(quiet)
+                if (::skyRegistry.isInitialized) skyRegistry.setQuiet(quiet)
+                if (::samsungRegistry.isInitialized) samsungRegistry.setQuiet(quiet)
             }
         )
     }
@@ -709,6 +717,12 @@ class MainActivity : ComponentActivity() {
         // After the Zidoo one, chained the same way (1.5.2).
         lgTvRegistry = installLgTv(this, client, log = { Log.i("LgTv", it) })
         configServer.lgTvRegistry = lgTvRegistry
+        // After the LG one, chained the same way (1.5.3).
+        skyRegistry = installSky(this, client, log = { Log.i("Sky", it) })
+        configServer.skyRegistry = skyRegistry
+        // After the Sky one, chained the same way (1.5.3).
+        samsungRegistry = installSamsung(this, client, log = { Log.i("Samsung", it) })
+        configServer.samsungRegistry = samsungRegistry
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
         // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
@@ -724,6 +738,8 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        samsungRegistry.stop()
+        skyRegistry.stop()
         lgTvRegistry.stop()
         zidooRegistry.stop()
         androidTvRegistry.stop()
@@ -1698,6 +1714,8 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        samsungRegistry.stop()
+        skyRegistry.stop()
         lgTvRegistry.stop()
         zidooRegistry.stop()
         androidTvRegistry.stop()

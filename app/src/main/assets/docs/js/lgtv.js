@@ -55,6 +55,7 @@ function upsertLgTvHaDevice(t) {
 function uniqueLgTvEntityId(name, ignoreLocalId) {
   const base = 'media_player.lgtv_' + slugify(name, 'tv');
   const taken = id => lgTvs.some(t => t.entityId === id && t.localId !== ignoreLocalId) || zidoos.some(z => z.entityId === id) ||
+    samsungs.some(t => t.entityId === id) || skys.some(b => b.entityId === id) ||
     androidTvs.some(t => t.entityId === id) || appleTvs.some(t => t.entityId === id) || (haStates && haStates[id]);
   let id = base;
   let n = 2;

@@ -3,6 +3,31 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.3-beta] - 2026-11-07
+
+### Added
+
+- **Sky boxes controlled directly** (Sky Q, and Sky+ HD for keys): Devices › Direct devices › TV & box › **+ Add Sky box**, its IP address. No pairing, no Home Assistant; the remote finds out which kind it is.
+  - Each box becomes `media_player.sky_<name>` and `remote.sky_<name>`, which takes Sky's key names (`sky`, `tvguide`, `search`, `i`, `boxoffice`, `red`…) and the Android names the TV remote card sends (`DPAD_UP`, `BACK`, `CHANNEL_UP`…). So the TV remote card, the media player and source cards, buttons, hotkeys and Activities work with it.
+  - **A Sky Q** says whether it's on or in standby, the **channel** and the **programme on now**, with its picture (from Sky's guide; the channel's logo otherwise), and whether it plays or is paused. Its **favourite channels** are the Sources, with their logos; a tap changes the channel. Power only presses Sky's power key when the box isn't already as asked. Previous / next change the channel.
+  - **A Sky+ HD** only takes the remote's keys (it says nothing over the network): shown on, as in Home Assistant's `sky_remote`.
+  - Polled every 5 s when on, 30 s in standby, not at all with Home Assistant's quiet mode.
+  - **Activities**: a *Sky box (network)* section: on when the Activity starts, standby when it ends, and a channel by its number.
+  - The builder's *For a device* tab offers its TV remote card; the hotkeys' *Device* action lists it, a channel by number or name, and the hotkeys and the TV remote card's commands suggest Sky's own keys with what they do. *Import my direct devices' icons* saves a Sky Q's channel logos.
+  - Protocol details from the pyskyqremote and skyboxremote libraries (both MIT), the ones Home Assistant's Sky integrations use.
+
+- **Samsung TVs controlled directly** (Tizen, 2016 onwards): Devices › Direct devices › TV & box › **+ Add Samsung TV**, its IP address, then **Allow** the remote on the TV. No Home Assistant.
+  - Each TV becomes `media_player.samsung_<name>` (on / standby, volume and mute, its apps as sources) and `remote.samsung_<name>`, which takes Samsung's key codes (`KEY_SOURCE`, `KEY_HDMI1`, `KEY_TOOLS`, `KEY_AMBIENT`… any `KEY_…`) and the Android names the TV remote card sends (`DPAD_UP`, `BACK`…). So the TV remote card, the media player and source cards, buttons, hotkeys and Activities work with it.
+  - **Power**: a TV in standby with its network on gets its power key; one fully off is woken with Wake-on-LAN (*Power On with Mobile* on the TV). Off: the power key, held on a Frame TV (a short press only switches it to Art Mode).
+  - **Sources**: *TV*, *HDMI* (the next input) and its apps; a tap opens the app. Recent TVs (2022 onwards) don't list their apps: the known ones (Netflix, YouTube, Prime Video, Disney+, Apple TV, Max, Plex, Spotify, Deezer…) are then looked for one by one, and any other opens by its Samsung id. The app opened from Astrion shows as the source, with its icon, while it's on screen (the TV doesn't say which app is in front otherwise).
+  - **Icons**: the TV's own icons for its apps, in the Sources pop-up and on the TV remote card's app buttons; *Import my direct devices' icons* saves them.
+  - **Volume** set and mute over the TV's UPnP service, up / down with its keys; **play / pause / stop**; previous / next change the channel, or rewind / fast-forward in an app.
+  - Polled every 5 s when on, 15 s off, not at all with Home Assistant's quiet mode (the connection closes too).
+  - The token the TV gives and its certificate stay on the remote (the web page only knows it's allowed); a later connection to another certificate is refused.
+  - **Activities**: a *Samsung TV (network)* section: on when the Activity starts, off when it ends, and an app chosen on the next screen.
+  - The builder's *For a device* tab offers its TV remote card (its apps already in); the hotkeys' *Device* action lists it, and the hotkeys, remote commands and TV remote card's commands suggest Samsung's own keys with what they do (sources, HDMI 1–4, tools, channel list, Ambient Mode…).
+  - Messages from the samsungtvws library (MIT) and Home Assistant's Samsung TV integration (Apache-2.0).
+
 ## [1.5.2-beta] - 2026-11-07
 
 ### Added

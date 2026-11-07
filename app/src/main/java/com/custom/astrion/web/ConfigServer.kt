@@ -103,6 +103,8 @@ import org.json.JSONObject
  *                        one; this is what a device's `entity_picture` attribute points at
  *  POST /zidoo-check    a Zidoo player's model and MAC address (host), see ZidooRoutes (1.4.6)
  *  POST /lgtv-pair      pairs an LG TV (host): its prompt, then {model, mac}, see LgTvRoutes (1.5.2)
+ *  POST /sky-check      a Sky box's kind (Sky Q / Sky+ HD) and model (host), see SkyRoutes (1.5.3)
+ *  POST /samsung-pair   allows the remote on a Samsung TV (host): its prompt, then {model, mac}, see SamsungRoutes (1.5.3)
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -251,6 +253,14 @@ class ConfigServer(
     var lgTvRegistry: com.custom.astrion.lgtv.LgTvRegistry? = null
     private val lgTvRoutes = LgTvRoutes(context) { lgTvRegistry }
 
+    /** Sky boxes (1.5.3): added by IP, no pairing. */
+    var skyRegistry: com.custom.astrion.sky.SkyRegistry? = null
+    private val skyRoutes = SkyRoutes(context)
+
+    /** Samsung TVs (1.5.3): allowed once on the TV. */
+    var samsungRegistry: com.custom.astrion.samsung.SamsungRegistry? = null
+    private val samsungRoutes = SamsungRoutes(context) { samsungRegistry }
+
     /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
     @Volatile
     var onBackupRestored: () -> Unit = {}
@@ -303,7 +313,9 @@ class ConfigServer(
         val method = session.method
         val uri = session.uri
         webAuth.check(session) ?: backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session)
-            ?: zidooRoutes.serve(uri, session) ?: lgTvRoutes.serve(uri, session) ?: when (uri) {
+            ?: zidooRoutes.serve(uri, session) ?: lgTvRoutes.serve(uri, session)
+            ?: skyRoutes.serve(uri, session)
+            ?: samsungRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -331,7 +343,7 @@ class ConfigServer(
             "/icons" -> if (method == Method.POST) handleIconUpload(session) else methodNotAllowed()
             "/icons-import-direct" ->
                 if (method == Method.POST) {
-                    val report = DirectIconImport(iconsDir, lgTvRegistry, appleTvRegistry).run()
+                    val report = DirectIconImport(iconsDir, lgTvRegistry, appleTvRegistry, skyRegistry, samsungRegistry).run()
                     jsonResponse(Response.Status.OK, JSONObject().put("devices", report))
                 } else {
                     methodNotAllowed()
@@ -432,8 +444,12 @@ class ConfigServer(
         }
         val content =
             runCatching {
-                lgTvRoutes.reconcileHaDevices(
-                    zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())))
+                samsungRoutes.reconcileHaDevices(
+                    skyRoutes.reconcileHaDevices(
+                        lgTvRoutes.reconcileHaDevices(
+                            zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())))
+                        )
+                    )
                 )
             }
                 .getOrElse { file.readText() }
@@ -614,6 +630,8 @@ class ConfigServer(
                 put("androidTvs", androidTvRoutes.configJson())
                 put("zidoos", zidooRoutes.configJson())
                 put("lgtvs", lgTvRoutes.configJson())
+                put("skys", skyRoutes.configJson())
+                put("samsungs", samsungRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1207,6 +1225,8 @@ class ConfigServer(
         androidTvRoutes.saveRows(params)
         zidooRoutes.saveRows(params)
         lgTvRoutes.saveRows(params)
+        skyRoutes.saveRows(params)
+        samsungRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }

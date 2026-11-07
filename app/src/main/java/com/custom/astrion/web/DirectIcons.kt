@@ -2,6 +2,8 @@ package com.custom.astrion.web
 
 import com.custom.astrion.appletv.AppleTvRegistry
 import com.custom.astrion.lgtv.LgTvRegistry
+import com.custom.astrion.samsung.SamsungRegistry
+import com.custom.astrion.sky.SkyRegistry
 import java.io.File
 import java.net.URLEncoder
 import java.util.Locale
@@ -67,13 +69,16 @@ object AppStoreIcons {
 /**
  * POST /icons-import-direct: each direct device's app icons saved into its own folder of the
  * icons, to use on cards and in the Sources pop-up. An LG TV gives its apps' and inputs' icons
- * itself; an Apple TV's are looked up on the App Store by bundle id (needs the internet). Zidoo,
+ * itself; an Apple TV's are looked up on the App Store by bundle id, a Sky Q's channel logos on
+ * Sky's image service (1.5.3) (both need the internet). Zidoo,
  * Eversolo and Android TV don't give their apps' icons: they're reported as such.
  */
 class DirectIconImport(
     private val root: File,
     private val lgTvs: LgTvRegistry?,
-    private val appleTvs: AppleTvRegistry?
+    private val appleTvs: AppleTvRegistry?,
+    private val skys: SkyRegistry? = null,
+    private val samsungs: SamsungRegistry? = null
 ) {
     private val http = OkHttpClient.Builder().connectTimeout(TIMEOUT_S, TimeUnit.SECONDS).readTimeout(TIMEOUT_S, TimeUnit.SECONDS).build()
 
@@ -84,7 +89,15 @@ class DirectIconImport(
             val saved = icons.count { (label, bytes) -> save(name, label, bytes) }
             report.put(JSONObject().put("name", name).put("kind", "lgtv").put("saved", saved).put("missing", 0))
         }
+        samsungs?.allIcons()?.forEach { (name, icons) ->
+            val saved = icons.count { (label, bytes) -> save(name, label, bytes) }
+            report.put(JSONObject().put("name", name).put("kind", "samsung").put("saved", saved).put("missing", 0))
+        }
         appleTvs?.installedApps()?.forEach { (name, apps) -> report.put(appleTv(name, apps)) }
+        skys?.channelLogos()?.forEach { (name, logos) ->
+            val saved = logos.count { (label, url) -> get(url)?.let { save(name, label, it) } == true }
+            report.put(JSONObject().put("name", name).put("kind", "sky").put("saved", saved).put("missing", logos.size - saved))
+        }
         return report
     }
 
