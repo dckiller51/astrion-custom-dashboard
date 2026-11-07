@@ -69,7 +69,7 @@ class ClockWeatherCard : CardRenderer {
 
     @Composable
     override fun Render(config: CardConfig, ctx: CardContext) {
-        val entityId = config.string("entity_id") ?: "weather.forecast_home"
+        val entityId = config.string("entity_id") ?: DEFAULT_ENTITY
         val e = ctx.entities[entityId]
         val is24 = config.int("time_format", 12) == 24
         val forecastRows = config.int("forecast_rows", 4)
@@ -291,5 +291,10 @@ class ClockWeatherCard : CardRenderer {
         "windy", "windy-variant" -> "💨"
         "hail" -> "🌨️"
         else -> "🌡️"
+    }
+
+    companion object {
+        /** The weather entity when the card has no `entity_id` (DashboardEntities subscribes to it too). */
+        const val DEFAULT_ENTITY = "weather.forecast_home"
     }
 }

@@ -1129,12 +1129,13 @@ class ConfigServer(
      *
      * `?refresh=1` (1.4.0, the builder on opening and its "Reload from Home Assistant") re-reads
      * them all from Home Assistant first, so entities renamed or added there show up even while
-     * the remote sleeps (screen off, only a few entities live).
+     * the remote sleeps (screen off, only a few entities live), and — since the remote only
+     * receives the dashboard's own entities (1.5.1) — so every other one can be picked too.
      */
     private fun serveHaStates(session: IHTTPSession): Response {
         if (session.parameters["refresh"]?.firstOrNull() == "1") runBlocking { haClient.refreshStates() }
         val connected = haClient.connection.value == ConnectionState.CONNECTED
-        val entities = haClient.entities.value
+        val entities = haClient.allEntities()
         val json =
             buildJsonObject {
                 put("connected", connected)
