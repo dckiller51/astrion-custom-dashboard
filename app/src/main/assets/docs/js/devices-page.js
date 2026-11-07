@@ -27,6 +27,8 @@ let androidTvs = [];       // full [{localId, name, entityId, host, serviceName,
 let androidTvScanResults = []; // last /androidtv-scan result
 let androidTvPairing = null; // { sessionId, device: {host, serviceName, name} } while waiting for the code
 let zidoos = [];           // full [{localId, name, entityId, host, mac}] (1.4.6)
+let samsungs = [];         // [{localId, name, entityId, host, mac, paired}] (1.5.3)
+let skys = [];             // [{localId, name, entityId, host, kind: 'skyq' | 'skyhd'}] (1.5.3)
 let lgTvs = [];            // [{localId, name, entityId, host, mac, paired}] (1.5.2), no key: it stays on the remote
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
@@ -77,6 +79,8 @@ async function loadAll() {
     androidTvs = Array.isArray(data.androidTvs) ? data.androidTvs : [];
     zidoos = Array.isArray(data.zidoos) ? data.zidoos : [];
     lgTvs = Array.isArray(data.lgtvs) ? data.lgtvs : [];
+    skys = Array.isArray(data.skys) ? data.skys : [];
+    samsungs = Array.isArray(data.samsungs) ? data.samsungs : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -107,7 +111,9 @@ async function reconcileAppleTvHaDevices() {
   const paired = appleTvs.map(tv => ({ id: 'appletv_' + tv.localId, tv }))
     .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })))
     .concat(zidoos.map(tv => ({ id: 'zidoo_' + tv.localId, tv })))
-    .concat(lgTvs.map(tv => ({ id: 'lgtv_' + tv.localId, tv })));
+    .concat(lgTvs.map(tv => ({ id: 'lgtv_' + tv.localId, tv })))
+    .concat(skys.map(tv => ({ id: 'sky_' + tv.localId, tv })))
+    .concat(samsungs.map(tv => ({ id: 'samsung_' + tv.localId, tv })));
   paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
@@ -233,6 +239,8 @@ function renderDevicesList() {
   renderAndroidTvs();
   renderZidoos();
   renderLgTvs();
+  renderSkys();
+  renderSamsungs();
   renderDirectCounts();
 
   const tileIrCount = document.getElementById('tileIrCount');
@@ -261,7 +269,7 @@ function renderDevicesList() {
 
 // The direct devices (1.4.9) live in one view, a tab per kind of device: the old views' ids
 // still open it, on their tab.
-const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewZidoo: 'players' };
+const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewSky: 'tv', viewSamsung: 'tv', viewZidoo: 'players' };
 
 function showView(id) {
   if (DIRECT_TABS[id]) {
@@ -291,7 +299,7 @@ function showDirectTab(tab) {
 
 /** Counts on the home tile and the tabs. */
 function renderDirectCounts() {
-  const tv = appleTvs.length + androidTvs.length + lgTvs.length;
+  const tv = appleTvs.length + androidTvs.length + lgTvs.length + skys.length + samsungs.length;
   const players = zidoos.length;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
   set('directCountTv', tv);
@@ -327,8 +335,8 @@ function deviceKindIcon(kind) {
 function haDeviceKind(dev) {
   const obj = (dev.entityId || '').split('.')[1] || '';
   if (dev.domain === 'media_player') {
-    if (/^appletv_/.test(obj)) return 'box';
-    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj)) return 'tv';
+    if (/^appletv_/.test(obj) || /^sky_/.test(obj)) return 'box';
+    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj) || /^samsung_/.test(obj)) return 'tv';
     if (/^zidoo_/.test(obj)) return zidooKind({ entityId: dev.entityId }) === 'audio' ? 'audio' : 'player';
     return 'media';
   }
@@ -392,6 +400,8 @@ function closeDeviceForms() {
   androidTvPairing = null;
   setDisplay('zidooForm', 'none');
   setDisplay('lgTvForm', 'none');
+  setDisplay('skyForm', 'none');
+  setDisplay('samsungForm', 'none');
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -450,6 +460,18 @@ async function openDeviceForm(type) {
     document.getElementById('zidooName').value = '';
     document.getElementById('zidooForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('zidooHost').focus();
+  } else if (type === 'samsung') {
+    document.getElementById('samsungForm').style.display = '';
+    document.getElementById('samsungHost').value = '';
+    document.getElementById('samsungName').value = '';
+    document.getElementById('samsungForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('samsungHost').focus();
+  } else if (type === 'sky') {
+    document.getElementById('skyForm').style.display = '';
+    document.getElementById('skyHost').value = '';
+    document.getElementById('skyName').value = '';
+    document.getElementById('skyForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('skyHost').focus();
   } else if (type === 'lgtv') {
     document.getElementById('lgTvForm').style.display = '';
     document.getElementById('lgTvHost').value = '';
@@ -597,6 +619,22 @@ async function persistHaAndHubs() {
       body.append('lgtv_entityid[]', t.entityId || '');
       body.append('lgtv_host[]', t.host || '');
       body.append('lgtv_mac[]', t.mac || '');
+    });
+    body.set('sky_present', '1'); // same for the Sky boxes (1.5.3)
+    skys.forEach(b => {
+      body.append('sky_localid[]', b.localId || '');
+      body.append('sky_name[]', b.name || '');
+      body.append('sky_entityid[]', b.entityId || '');
+      body.append('sky_host[]', b.host || '');
+      body.append('sky_kind[]', b.kind || 'skyq');
+    });
+    body.set('samsung_present', '1'); // same for the Samsung TVs (1.5.3); their tokens stay on the remote
+    samsungs.forEach(t => {
+      body.append('samsung_localid[]', t.localId || '');
+      body.append('samsung_name[]', t.name || '');
+      body.append('samsung_entityid[]', t.entityId || '');
+      body.append('samsung_host[]', t.host || '');
+      body.append('samsung_mac[]', t.mac || '');
     });
     const res = await fetch('/save-connection', {
       method: 'POST',

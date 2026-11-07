@@ -91,10 +91,10 @@ const ATV_ALL_COMMANDS = [
 function androidTvHotkeyParts(h) {
   // A Zidoo / Eversolo added in Astrion too (1.4.9): its remote.zidoo_… / media_player.zidoo_…
   // take the same Android key names and its apps by name.
-  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo|lgtv)_/.test(h.entityId || '')) {
+  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo|lgtv|sky|samsung)_/.test(h.entityId || '')) {
     return { tv: h.entityId.replace(/^remote\./, 'media_player.'), kind: 'key', value: (h.data && h.data.command) || '' };
   }
-  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo|lgtv)_/.test(h.entityId || '')) {
+  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo|lgtv|sky|samsung)_/.test(h.entityId || '')) {
     return { tv: h.entityId, kind: 'app', value: (h.data && h.data.source) || '' };
   }
   return null;
@@ -106,8 +106,11 @@ async function loadNativeAndroidTvs() {
     const data = await res.json();
     // The Zidoos / Eversolos added in Astrion (1.4.9) answer the same keys and apps.
     // And the LG TVs (1.5.2): the same Android key names, their apps and inputs by name.
+    // And the Samsung TVs (1.5.3): the same Android key names and Samsung's KEY_… codes, their apps by name.
+    // And the Sky boxes (1.5.3): the same Android key names and Sky's own, a channel by name or number.
     return [...(Array.isArray(data.androidTvs) ? data.androidTvs : []), ...(Array.isArray(data.zidoos) ? data.zidoos : []),
-      ...(Array.isArray(data.lgtvs) ? data.lgtvs : [])];
+      ...(Array.isArray(data.lgtvs) ? data.lgtvs : []), ...(Array.isArray(data.skys) ? data.skys : []),
+      ...(Array.isArray(data.samsungs) ? data.samsungs : [])];
   } catch (e) {
     return [];
   }
@@ -156,6 +159,44 @@ const LG_COMMANDS = [
   ['DASH', 'web_lg_dash'], ['NETFLIX', 'web_lg_netflix'], ['AMAZON', 'web_lg_amazon']
 ];
 
+// A Sky box's own keys (1.5.3), beyond the Android names every TV takes: sent as they are to the
+// remote.sky_… of a Sky box added in Astrion, offered here with what they do.
+const SKY_COMMANDS = [
+  ['sky', 'web_sky_sky'], ['home', 'web_sky_home'], ['tvguide', 'web_sky_tvguide'], ['search', 'web_sky_search'],
+  ['sidebar', 'web_sky_sidebar'], ['i', 'web_sky_i'], ['help', 'web_sky_help'], ['text', 'web_sky_text'],
+  ['boxoffice', 'web_sky_boxoffice'], ['dismiss', 'web_sky_dismiss'], ['record', 'web_sky_record'],
+  ['channelup', 'web_lg_channel_up'], ['channeldown', 'web_lg_channel_down']
+];
+
+/** The Sky keys as <option>s (value: the key, label: what it does); '' for any other entity. */
+function skyCommandOptions(entityId) {
+  if (entityId && !/\.sky_/i.test(entityId)) return '';
+  return SKY_COMMANDS.map(([key, label]) => `<option value="${key}" label="${escapeAttr('Sky · ' + I18N.t(label))}"></option>`).join('');
+}
+
+// A Samsung TV's sources and the apps it opens by name (1.5.3), for the hotkeys' app field when the
+// page doesn't know its list: as SamsungEntityMapper.SOURCES and SamsungProtocol.KNOWN_APPS.
+const SAMSUNG_SOURCES = ['TV', 'HDMI', 'Netflix', 'YouTube', 'Prime Video', 'Disney+', 'Apple TV', 'Max', 'Paramount+', 'Plex',
+  'Spotify', 'Deezer', 'Apple Music', 'Amazon Music', 'YouTube Music', 'Tidal', 'Twitch', 'DAZN', 'Crunchyroll', 'Pluto TV',
+  'Xbox', 'GeForce NOW', 'Steam Link', 'Internet'];
+
+// A Samsung TV's own keys (1.5.3), beyond the Android names every TV takes: sent as they are to the
+// remote.samsung_… of a Samsung TV added in Astrion (any KEY_… code works), offered here with what they do.
+const SAMSUNG_COMMANDS = [
+  ['KEY_SOURCE', 'web_samsung_source'], ['KEY_HDMI', 'web_samsung_hdmi'], ['KEY_HDMI1', 'web_samsung_hdmi1'],
+  ['KEY_HDMI2', 'web_samsung_hdmi2'], ['KEY_HDMI3', 'web_samsung_hdmi3'], ['KEY_HDMI4', 'web_samsung_hdmi4'],
+  ['KEY_TV', 'web_samsung_tv'], ['KEY_MENU', 'web_samsung_menu'], ['KEY_TOOLS', 'web_samsung_tools'],
+  ['KEY_GUIDE', 'web_samsung_guide'], ['KEY_CH_LIST', 'web_samsung_ch_list'], ['KEY_PRECH', 'web_samsung_prech'],
+  ['KEY_CAPTION', 'web_samsung_caption'], ['KEY_AD', 'web_samsung_ad'], ['KEY_PICTURE_SIZE', 'web_samsung_picture_size'],
+  ['KEY_AMBIENT', 'web_samsung_ambient'], ['KEY_E_MANUAL', 'web_samsung_e_manual'], ['KEY_EXIT', 'web_samsung_exit']
+];
+
+/** The Samsung keys as <option>s (value: the key, label: what it does); '' for any other entity. */
+function samsungCommandOptions(entityId) {
+  if (entityId && !/\.samsung_/i.test(entityId)) return '';
+  return SAMSUNG_COMMANDS.map(([key, label]) => `<option value="${key}" label="${escapeAttr('Samsung · ' + I18N.t(label))}"></option>`).join('');
+}
+
 /** The LG buttons as <option>s (value: the button, label: what it does); '' for any other entity. */
 function lgTvCommandOptions(entityId) {
   if (entityId && !/lgtv/i.test(entityId)) return '';
@@ -177,17 +218,27 @@ function onHkAndroidTvKindChange() {
   // The device's own apps first (a Zidoo has no Netflix), as its media player publishes them.
   const tv = (document.getElementById('hkAndroidTv') || {}).value || '';
   const attrs = (typeof haStates !== 'undefined' && haStates && haStates[tv] && haStates[tv].attributes) || {};
-  const own = Array.isArray(attrs.source_list) ? attrs.source_list.map(s => [String(s), String(s)]) : [];
-  const apps = /^media_player\.(zidoo|lgtv)_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
+  let own = Array.isArray(attrs.source_list) ? attrs.source_list.map(s => [String(s), String(s)]) : [];
+  // A Samsung TV the page can't see yet, or one that hasn't found its apps (1.5.3): its sources and the apps it knows by name.
+  if (/\.samsung_/.test(tv) && own.length <= 2) {
+    own = [...new Set([...own.map(([n]) => n), ...SAMSUNG_SOURCES])].map(n => [n, n]);
+  }
+  const apps = /^media_player\.(zidoo|lgtv|sky|samsung)_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
   list.innerHTML = kind === 'app'
     ? apps.map(([n, p]) => `<option value="${escapeAttr(p)}">${escapeAttr(n)}</option>`).join('')
     : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(tv) ? eversoloCommandOptions(tv) : '') +
-      (/lgtv/i.test(tv) ? lgTvCommandOptions(tv) : '');
-  input.placeholder = kind === 'app' ? 'com.canal.android.canal' : 'CHANNEL_UP';
+      (/lgtv/i.test(tv) ? lgTvCommandOptions(tv) : '') + (/\.sky_/.test(tv) ? skyCommandOptions(tv) : '') +
+      (/\.samsung_/.test(tv) ? samsungCommandOptions(tv) : '');
+  // A Sky box (1.5.3): a channel, by its number or name, instead of an app.
+  const sky = /\.sky_/.test(tv);
+  input.placeholder = kind === 'app' ? (sky ? '101' : /\.(samsung|lgtv)_/.test(tv) ? 'Netflix' : 'com.canal.android.canal') : 'CHANNEL_UP';
   // An LG TV (1.5.2) takes its own button names too, and an input as well as an app.
   const lg = /lgtv_/.test(tv);
-  document.getElementById('hkAndroidTvHint').textContent =
-    I18N.t(kind === 'app' ? (lg ? 'web_hotkey_lgtv_app_hint' : 'web_hotkey_adtv_app_hint') : (lg ? 'web_hotkey_lgtv_key_hint' : 'web_hotkey_adtv_key_hint'));
+  const samsung = /\.samsung_/.test(tv);
+  const hint = sky ? (kind === 'app' ? 'web_hotkey_sky_app_hint' : 'web_hotkey_sky_key_hint')
+    : samsung ? (kind === 'app' ? 'web_hotkey_samsung_app_hint' : 'web_hotkey_samsung_key_hint')
+    : kind === 'app' ? (lg ? 'web_hotkey_lgtv_app_hint' : 'web_hotkey_adtv_app_hint') : (lg ? 'web_hotkey_lgtv_key_hint' : 'web_hotkey_adtv_key_hint');
+  document.getElementById('hkAndroidTvHint').textContent = I18N.t(hint);
 }
 
 /** Populates the Apple TV picker for the hotkey form with every paired Apple TV, selecting [selectedEntityId] if given. */
@@ -230,7 +281,8 @@ function refreshRemoteCommandDatalist() {
   const entityId = document.getElementById('hkEntityId') ? document.getElementById('hkEntityId').value.trim() : '';
   const suggestions = remoteCommandSuggestions(entityId) || [];
   dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(entityId) ? eversoloCommandOptions(entityId) : '') +
-    (/lgtv/i.test(entityId) ? lgTvCommandOptions(entityId) : '');
+    (/lgtv/i.test(entityId) ? lgTvCommandOptions(entityId) : '') + (/\.sky_/.test(entityId) ? skyCommandOptions(entityId) : '') +
+    (/\.samsung_/.test(entityId) ? samsungCommandOptions(entityId) : '');
 }
 
 // Selecting "Settings" or "Active Activities" here is a shortcut, not a
@@ -414,6 +466,8 @@ function hkEffectiveAction() {
 /** "TV LG", "Android TV", "Zidoo", "Eversolo": the kind of a TV / player added in Astrion. */
 function hkTvKind(entityId) {
   if (/^media_player\.lgtv_/.test(entityId)) return I18N.t('web_hotkey_kind_lgtv');
+  if (/^media_player\.sky_/.test(entityId)) return 'Sky';
+  if (/^media_player\.samsung_/.test(entityId)) return I18N.t('web_hotkey_kind_samsung');
   if (/^media_player\.androidtv_/.test(entityId)) return 'Android TV';
   const a = (typeof haStates !== 'undefined' && haStates && haStates[entityId] && haStates[entityId].attributes) || {};
   return a.manufacturer === 'Eversolo' ? 'Eversolo' : 'Zidoo';
@@ -461,7 +515,7 @@ async function onHkTargetChange() {
       <label>${I18N.t('web_hotkey_adtv_kind')}</label>
       <select id="hkAndroidTvKind" onchange="onHkAndroidTvKindChange()">
         <option value="key">${I18N.t('web_hotkey_adtv_kind_key')}</option>
-        <option value="app">${I18N.t(/lgtv_/.test(id) ? 'web_hotkey_kind_app_or_input' : 'web_hotkey_adtv_kind_app')}</option>
+        <option value="app">${I18N.t(/lgtv_/.test(id) ? 'web_hotkey_kind_app_or_input' : /\.sky_/.test(id) ? 'web_hotkey_kind_channel' : 'web_hotkey_adtv_kind_app')}</option>
       </select>
       <input type="text" id="hkAndroidTvValue" list="hkAndroidTvValues" style="margin-top:6px" autocomplete="off">
       <datalist id="hkAndroidTvValues"></datalist>

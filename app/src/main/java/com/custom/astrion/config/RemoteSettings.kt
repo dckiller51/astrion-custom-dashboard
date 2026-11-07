@@ -107,6 +107,36 @@ data class ZidooConfig(
 )
 
 /**
+ * One Sky box added on the web page (1.5.3): a Sky Q ([skyQ], keys on port 49160 and its state) or
+ * a Sky+ HD (keys on 5900 only). No pairing. Published as [entityId] (`media_player.sky_…`) plus
+ * the matching `remote.sky_…`.
+ */
+data class SkyConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val skyQ: Boolean = true
+)
+
+/**
+ * One Samsung Tizen TV added on the web page (1.5.3), allowed once (the TV's prompt). Published as
+ * [entityId] (`media_player.samsung_…`) plus the matching `remote.samsung_…`. [token] and [pin]
+ * (the TV's certificate fingerprint) never leave the remote. [tls] false: a TV without tokens
+ * (2016–2017), on `ws://…:8001`.
+ */
+data class SamsungConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val mac: String = "",
+    val token: String = "",
+    val pin: String = "",
+    val tls: Boolean = true
+)
+
+/**
  * One LG webOS TV added on the web page (1.5.2), paired once (the TV's prompt). Published as
  * [entityId] (`media_player.lgtv_…`) plus the matching `remote.lgtv_…`. [clientKey] and [pin]
  * (the TV's certificate fingerprint) never leave the remote: the web page only learns it's paired.
@@ -161,6 +191,8 @@ object RemoteSettings {
     private const val KEY_ANDROID_TV_IDENTITY = "android_tv_identity" // key:cert, see AndroidTvIdentity
     private const val KEY_ZIDOOS = "zidoos" // JSON array, see ZidooConfig
     private const val KEY_LGTVS = "lgtvs" // JSON array, see LgTvConfig
+    private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
+    private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -456,6 +488,82 @@ object RemoteSettings {
                 }
             }
         prefs(context).edit(commit = true) { putString(KEY_LGTVS, array.toString()) }
+    }
+
+    /** All Samsung TVs, in the order they were added (1.5.3). */
+    fun samsungs(context: Context): List<SamsungConfig> {
+        val raw = prefs(context).getString(KEY_SAMSUNGS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                SamsungConfig(
+                    localId,
+                    str("name").ifBlank { "Samsung TV" },
+                    entityId,
+                    str("host"),
+                    str("mac"),
+                    str("token"),
+                    str("pin"),
+                    str("tls") != "false"
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSamsungs(context: Context, tvs: List<SamsungConfig>) {
+        val array =
+            buildJsonArray {
+                tvs.forEach { t ->
+                    addJsonObject {
+                        put("localId", t.localId)
+                        put("name", t.name)
+                        put("entityId", t.entityId)
+                        put("host", t.host)
+                        put("mac", t.mac)
+                        put("token", t.token)
+                        put("pin", t.pin)
+                        put("tls", t.tls.toString())
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_SAMSUNGS, array.toString()) }
+    }
+
+    /** All Sky boxes, in the order they were added (1.5.3). */
+    fun skys(context: Context): List<SkyConfig> {
+        val raw = prefs(context).getString(KEY_SKYS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                SkyConfig(localId, str("name").ifBlank { "Sky" }, entityId, str("host"), str("kind") != "skyhd")
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSkys(context: Context, skys: List<SkyConfig>) {
+        val array =
+            buildJsonArray {
+                skys.forEach { b ->
+                    addJsonObject {
+                        put("localId", b.localId)
+                        put("name", b.name)
+                        put("entityId", b.entityId)
+                        put("host", b.host)
+                        put("kind", if (b.skyQ) "skyq" else "skyhd")
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_SKYS, array.toString()) }
     }
 
     fun saveZidoos(context: Context, zidoos: List<ZidooConfig>) {
