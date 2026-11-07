@@ -32,7 +32,12 @@ data class ZidooPlayback(
     /** What it plays, as an audiophile reads it (1.5.0): "FLAC · 44.1 kHz · 16 bit · 913 kbps". */
     val quality: String? = null,
     /** False when the player says it can't seek (an AirPlay stream, 1.5.0). */
-    val canSeek: Boolean = true
+    val canSeek: Boolean = true,
+    /** The video player's subtitle and audio track, as it names them (1.5.1, the Zidoo card). */
+    val subtitle: String? = null,
+    val audio: String? = null,
+    /** The app an Eversolo hosts or the stream it gets: "Apple Music", "AirPlay" (1.5.1). */
+    val appName: String? = null
 )
 
 /**
@@ -128,7 +133,9 @@ object ZidooParse {
             title = v.str("title"),
             path = v.str("path"),
             durationMs = v.long("duration"),
-            positionMs = v.long("currentPosition")
+            positionMs = v.long("currentPosition"),
+            subtitle = ZidooControls.currentTrack(o, "subtitle")?.second,
+            audio = ZidooControls.currentTrack(o, "audio")?.second ?: v.str("audioInfo")
         )
     }
 
@@ -241,7 +248,8 @@ object ZidooParse {
                 track.long("audioSampleRate")?.takeIf { it > 0 }?.let(::khz),
                 track.long("audioBitsPerSample")?.takeIf { it > 0 }?.let { "$it bit" }
             ),
-            canSeek = info.bool("isCanSeek") != false
+            canSeek = info.bool("isCanSeek") != false,
+            appName = info.str("playTypeSubtitle")
         )
     }
 

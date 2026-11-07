@@ -242,7 +242,7 @@ private fun KeypadKey(label: String, theme: ThemeColors, onClick: () -> Unit) {
 
 /** The pop-up's frame: a title, a close button, then [content]. */
 @Composable
-private fun PickerFrame(theme: ThemeColors, title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
+internal fun PickerFrame(theme: ThemeColors, title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onClose) {
         // The remote's buttons keep working while the pop-up is open (1.4.9).
         ForwardHotkeys()

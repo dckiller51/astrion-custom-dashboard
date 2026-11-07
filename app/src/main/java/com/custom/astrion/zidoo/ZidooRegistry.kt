@@ -193,7 +193,10 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             positionAt = now,
             pictureUrl = picture,
             quality = p.quality,
-            canSeek = p.canSeek
+            canSeek = p.canSeek,
+            subtitle = p.subtitle,
+            audio = p.audio,
+            appName = p.appName
         )
     }
 
@@ -290,6 +293,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             val lib = libraries[entityId] ?: also?.let { libraries["media_player." + it.substringAfter('.')] } ?: return null
             return if (lib.isZidoo) null else lib.client
         }
+
+        /** The player added in Astrion published as [entityId], Zidoo or Eversolo: the Zidoo / Eversolo card's own calls (1.5.1). */
+        fun clientOf(entityId: String): ZidooClient? = libraries[entityId]?.client
 
         private const val TAG = "ZidooRegistry"
         private const val ON_POLL_MS = 3_000L

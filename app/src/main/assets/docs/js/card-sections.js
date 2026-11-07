@@ -67,6 +67,11 @@ const CARD_SECTIONS = {
     essential: ['optName', 'optEntityId'],
     display: ['optCameraMode', 'optCameraInterval', 'optCameraAspect', 'optCameraFit']
   },
+  zidoo: {
+    essential: ['optName', 'optZidooEntity'],
+    display: ['optZidooQuality', 'optZidooApps'],
+    controls: ['optZidooSources', 'optZidooKeypad', 'optZidooTracks', 'optZidooQueue', 'optZidooIo', 'optZidooSkip', 'optZidooRepeat', 'optZidooVolume']
+  },
   plex: {
     essential: ['optPlexHost', 'optPlexToken'],
     controls: ['optPlexMediaEntity', 'optPlexSource', 'optPlexPlayEntity', 'optPlexPlayContentType'],

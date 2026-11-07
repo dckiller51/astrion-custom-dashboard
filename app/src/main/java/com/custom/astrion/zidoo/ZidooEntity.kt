@@ -45,7 +45,12 @@ data class ZidooState(
     /** Muted, when the player says (an Eversolo, 1.5.0). */
     val muted: Boolean? = null,
     /** False when what plays can't be moved in (an AirPlay stream, 1.5.0): no seek bar to drag. */
-    val canSeek: Boolean = true
+    val canSeek: Boolean = true,
+    /** The video player's subtitle and audio track (1.5.1). */
+    val subtitle: String? = null,
+    val audio: String? = null,
+    /** The app an Eversolo hosts or the stream it gets (1.5.1). */
+    val appName: String? = null
 )
 
 /**
@@ -215,6 +220,10 @@ object ZidooEntityMapper {
 
     /** What plays as an audiophile reads it, and a web radio's "Live" (no length: no bar), 1.5.0. */
     private fun addAudio(a: MutableMap<String, Any?>, s: ZidooState) {
+        // The Zidoo / Eversolo card's (1.5.1): the app an Eversolo hosts, a film's tracks.
+        s.appName?.let { a["app_name"] = it }
+        s.subtitle?.let { a["astrion_subtitle"] = it }
+        s.audio?.let { a["astrion_audio"] = it }
         s.quality?.let { a["astrion_quality"] = it }
         if (s.source == ZidooSource.MUSIC && (s.durationMs ?: 0) <= 0) a["astrion_live"] = true
     }
