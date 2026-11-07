@@ -41,6 +41,71 @@ function haEntityFieldHtml(domain, fieldId, label) {
   `;
 }
 
+// "Show only when" (visibility, see Visibility.kt): Home Assistant's own rules, on a card's options
+// and on each button_grid / scene_grid item. The fields write one `state` rule; anything else
+// written in the JSON (several rules, numeric_state, and / or) is kept unless the fields replace it.
+function visibilityFieldsHtml(p) {
+  return `<div id="${p}VisBox">
+    <label>${I18N.t('web_card_vis_entity')}</label><input type="text" id="${p}VisEntity" placeholder="lock.front_door">
+    <select id="${p}VisOp"><option value="state">${I18N.t('web_card_vis_is')}</option><option value="state_not">${I18N.t('web_card_vis_is_not')}</option></select>
+    <input type="text" id="${p}VisValues" placeholder="${I18N.t('web_card_vis_values_ph')}">
+    <div class="hint">${I18N.t('web_card_vis_hint')}</div>
+    <div class="hint" id="${p}VisKept" hidden>${I18N.t('web_card_vis_kept')} <a href="#" onclick="clearKeptVisibility('${p}'); return false;">${I18N.t('web_card_vis_remove')}</a></div>
+  </div>`;
+}
+
+/** The rule as the fields show it ({ entity, op, values }), or null when it's more than one state rule. */
+function simpleVisibility(vis) {
+  const c = Array.isArray(vis) && vis.length === 1 ? vis[0] : null;
+  if (!c || c.condition !== 'state' || typeof c.entity !== 'string' || Object.keys(c).length !== 3) return null;
+  const op = 'state' in c ? 'state' : 'state_not';
+  const values = [].concat(c[op]);
+  return values.length && values.every(v => typeof v === 'string') ? { entity: c.entity, op, values } : null;
+}
+
+function fillVisibilityFields(p, vis) {
+  const entity = document.getElementById(p + 'VisEntity');
+  if (!entity) return;
+  const simple = simpleVisibility(vis);
+  entity.value = simple ? simple.entity : '';
+  document.getElementById(p + 'VisOp').value = simple ? simple.op : 'state';
+  document.getElementById(p + 'VisValues').value = simple ? simple.values.join(', ') : '';
+  const kept = document.getElementById(p + 'VisKept');
+  const advanced = !simple && Array.isArray(vis) && vis.length > 0;
+  kept.hidden = !advanced;
+  kept.dataset.rule = advanced ? JSON.stringify(vis) : '';
+  // The section is folded unless this card or item has a rule.
+  const section = document.getElementById(p + 'VisBox').closest('details');
+  if (section && Array.isArray(vis) && vis.length) section.open = true;
+}
+
+function clearKeptVisibility(p) {
+  const kept = document.getElementById(p + 'VisKept');
+  kept.dataset.rule = '';
+  kept.hidden = true;
+}
+
+/** The rule the fields ask for: undefined (no fields on this form), null (none), the rule, or false (alerted: a state is missing). */
+function readVisibility(p) {
+  const entityEl = document.getElementById(p + 'VisEntity');
+  if (!entityEl) return undefined;
+  const entity = entityEl.value.trim();
+  if (entity) {
+    const values = document.getElementById(p + 'VisValues').value.split(',').map(v => v.trim()).filter(Boolean);
+    if (!values.length) { alert(I18N.t('web_card_vis_err_values')); return false; }
+    const op = document.getElementById(p + 'VisOp').value;
+    return [{ condition: 'state', entity, [op]: values.length > 1 ? values : values[0] }];
+  }
+  const kept = document.getElementById(p + 'VisKept').dataset.rule;
+  return kept ? JSON.parse(kept) : null;
+}
+
+function applyVisibility(target, vis) {
+  if (vis === undefined) return;
+  if (vis) target.visibility = vis;
+  else delete target.visibility;
+}
+
 function updateCardFormInputs() {
   // A fresh form: nothing being edited (an edit left open on a card closed earlier used to stay,
   // and "Save changes" then warned about a button that wasn't there — 1.4.1).
@@ -412,6 +477,8 @@ function updateCardFormInputs() {
         <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
         <div class="hint">${I18N.t('web_card_long_press_hint', type)}</div>
         ${iconFieldHtml('giIcon')}
+        <div class="divider" style="margin:12px 0"></div>
+        ${visibilityFieldsHtml('gi')}
         <button type="button" class="grid-add" onclick="addGridItem('${type}')" id="giSubmitBtn" data-add-key="${type === 'button_grid' ? 'web_card_grid_add_button' : 'web_card_grid_add_scene'}">${type === 'button_grid' ? I18N.t('web_card_grid_add_button') : I18N.t('web_card_grid_add_scene')}</button>
         <button type="button" class="grid-cancel" onclick="cancelGridItemEdit()" id="giCancelBtn" style="display:none">${I18N.t('web_cancel_edit')}</button>
         <button type="button" class="secondary" onclick="addGridSpacer('${type}')">${I18N.t('web_card_grid_add_spacer')}</button>
@@ -567,6 +634,9 @@ function updateCardFormInputs() {
     `;
   }
 
+  // Every form but the raw JSON one (the options as typed) and a row (its cards have their own).
+  if (type !== 'row' && !document.getElementById('optRawJson')) container.insertAdjacentHTML('beforeend', visibilityFieldsHtml('opt'));
+
   // Attach live entity autocomplete to whichever entity_id fields this card
   // type created. Only attaches when /ha-states data is available (device mode
   // + HA connected); otherwise the inputs stay plain text fields. optEntityId
@@ -574,7 +644,7 @@ function updateCardFormInputs() {
   // (see haEntityFieldHtml above), not a free-text field to autocomplete.
   ['optRemoteEntity', 'optMediaEntity', 'optMuteEntity',
     'optCalendarEntity', 'optMapImage', 'giEntityId',
-    'optPlexMediaEntity', 'optPlexPlayEntity'].forEach(id => {
+    'optPlexMediaEntity', 'optPlexPlayEntity', 'optVisEntity', 'giVisEntity'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const dom = id === 'optRemoteEntity' ? 'remote'
@@ -584,7 +654,7 @@ function updateCardFormInputs() {
       : id === 'optMapImage' ? 'image'
       : id === 'optPlexMediaEntity' ? 'media_player'
       : id === 'optPlexPlayEntity' ? 'media_player'
-      : null; // giEntityId — any domain (scene.*, script.*, media_player.*, …)
+      : null; // giEntityId, optVisEntity, giVisEntity — any domain (scene.*, script.*, media_player.*, …)
     attachEntityAutocomplete(el, dom);
   });
 }
@@ -652,10 +722,10 @@ const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'g
   'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder',
   // 1.5.0: the colours too. A tile whose only change was its colour wasn't seen as changed, so
   // saving the card dropped it (a tester's Activities grid kept its default colours).
-  'giColorHex', 'giTextColorHex', 'giActiveColorHex'];
+  'giColorHex', 'giTextColorHex', 'giActiveColorHex', 'giVisEntity', 'giVisValues'];
 // A select always holds a value: counted only when comparing an edited item with itself (1.5.0:
 // a changed Activity, page mode or Harmony action was dropped the same way).
-const GRID_ITEM_SELECTS = ['giPage', 'giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice'];
+const GRID_ITEM_SELECTS = ['giPage', 'giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice', 'giVisOp'];
 /**
  * The page a grid item opens (1.5.2): a list of the dashboard's pages instead of a name typed by
  * hand (a typo opened nothing), then full page or popup. A page no longer in the dashboard is kept.
@@ -1090,6 +1160,7 @@ function fillGridItemForm(type, item) {
   if (stopEl) stopEl.value = item.stopActivity || '';
   document.getElementById('giIcon').value = item.icon || '';
   updateIconThumb('giIcon');
+  fillVisibilityFields('gi', item.visibility);
   if (type === 'button_grid') {
     document.getElementById('giService').value = item.service || '';
     document.getElementById('giEntityId').value = item.entity_id || '';
@@ -1184,6 +1255,7 @@ function cancelGridItemEdit() {
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
+  fillVisibilityFields('gi', null);
   ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giIrDelay', 'giActivityRef', 'giStateEntity', 'giStateValue', 'giLongPress', 'giStopActivity'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -1391,6 +1463,9 @@ function addGridItem(type) {
     if (sceneTextColor) item.text_color = sceneTextColor;
   }
   if (longPress) item.long_press = longPress;
+  const vis = readVisibility('gi');
+  if (vis === false) return;
+  applyVisibility(item, vis);
   window._pendingGridItems = window._pendingGridItems || [];
   if (editingGridItem !== null) {
     window._pendingGridItems[editingGridItem] = item;
@@ -1722,6 +1797,7 @@ function fillCardForm(card) {
     if (customField) customField.value = type;
     document.getElementById('optRawJson').value = JSON.stringify(o, null, 2);
   }
+  fillVisibilityFields('opt', o.visibility);
 }
 
 function cancelCardEdit() {
@@ -1777,6 +1853,9 @@ function addCardToPage() {
   const pageIndex = currentActivePage;
   const type = document.getElementById('cardTypeSelect').value;
   if (!confirmPendingGridItems()) return;
+  // Read before the branches below empty their pending lists, so a refused rule loses nothing.
+  const vis = readVisibility('opt');
+  if (vis === false) return;
   let newCard = { type: type, options: {} };
 
   if (NAME_ENTITY_TYPES.includes(type)) {
@@ -2053,6 +2132,8 @@ function addCardToPage() {
       newCard.options = JSON.parse(document.getElementById('optRawJson').value || '{}');
     } catch (e) { alert(I18N.t('web_card_alert_options_json')); return; }
   }
+
+  applyVisibility(newCard.options, vis);
 
   // Editing a card inside a row: it goes back into the row, not onto the page.
   if (window._rowCtx && window._rowCtx.active) {

@@ -1018,6 +1018,8 @@ function renderPreview() {
       const autoHeight = iconSize && !tileHeight && !iconFill
         ? (isScene ? Math.max(74, iconSize + 46) : Math.max(68, iconSize + 36)) : 0;
 
+      // A button / tile with "Show only when" rules is outlined, not hidden.
+      const visAttr = (item) => (Array.isArray(item.visibility) && item.visibility.length ? ` data-vis title="${I18N.t('web_card_vis_badge')}"` : '');
       const tileHtml = (item) => {
         const label = item.name || '?';
         const src = iconUrl(item.icon);
@@ -1034,7 +1036,7 @@ function renderPreview() {
                     ? `<img class="st-icon" src="${src}" alt=""${iconImgStyle} onerror="onSceneIconError(this)">`
                     : `<div class="st-icon-spacer"></div>`)
                 : '');
-          return `<div class="preview-scene-tile ${tileClass}" style="background:${bg}; color:${textColor};${heightStyle}">
+          return `<div class="preview-scene-tile ${tileClass}"${visAttr(item)} style="background:${bg}; color:${textColor};${heightStyle}">
             ${iconCell}
             ${showLabels ? `<div class="st-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
@@ -1049,7 +1051,7 @@ function renderPreview() {
             parseHexColorCss(item.color) ? `background:${parseHexColorCss(item.color)}` : '',
             parseHexColorCss(item.text_color) ? `color:${parseHexColorCss(item.text_color)}` : ''
           ].filter(Boolean).join(';');
-          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${btnStyle ? ` style="${btnStyle}"` : ''}>
+          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${visAttr(item)}${btnStyle ? ` style="${btnStyle}"` : ''}>
             ${iconCell}
             ${label && (showLabels || !hasIcon) ? `<div class="bt-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
@@ -1213,6 +1215,12 @@ function enhanceCardControls(contentContainer) {
         copySpan.onclick = () => openCardCopyDialog(idx);
 
         iconsSpan.prepend(copySpan, downSpan, upSpan);
+
+        // A card with "Show only when" rules (visibility) is marked, not hidden.
+        const vis = ((dashboardData.pages[currentActivePage].cards[idx] || {}).options || {}).visibility;
+        if (Array.isArray(vis) && vis.length) {
+          titleBar.firstElementChild.insertAdjacentHTML('beforeend', ` <span title="${I18N.t('web_card_vis_badge')}">👁</span>`);
+        }
       }
     }
 

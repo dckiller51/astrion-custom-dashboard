@@ -1658,5 +1658,15 @@
   "web_dev_icons_import_line_missing": "%1$s : %2$s icônes (%3$s introuvables)",
   "web_dev_icons_import_failed": "Échec de l'import : %1$s",
   "web_card_grid_page_none": "— Aucune page —",
-  "web_card_grid_button_page": "Page à ouvrir (facultatif)"
+  "web_card_grid_button_page": "Page à ouvrir (facultatif)",
+  "web_form_section_visibility": "Afficher seulement si",
+  "web_card_vis_entity": "Afficher seulement si cette entité (facultatif)",
+  "web_card_vis_is": "est",
+  "web_card_vis_is_not": "n'est pas",
+  "web_card_vis_values_ph": "État(s), séparés par des virgules : unlocked, open",
+  "web_card_vis_hint": "Masqué sur la télécommande le reste du temps, et ce qui suit remonte. Même règle que la visibilité de Home Assistant : plusieurs conditions, numeric_state, and / or s'écrivent dans le JSON.",
+  "web_card_vis_kept": "Une règle avancée du JSON est gardée telle quelle. Remplissez les champs ci-dessus pour la remplacer.",
+  "web_card_vis_remove": "La supprimer",
+  "web_card_vis_err_values": "Indiquez le ou les états pour « Afficher seulement si », ou videz son entité.",
+  "web_card_vis_badge": "Affiché seulement quand ses règles sont remplies (visibility)"
 }
