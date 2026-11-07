@@ -148,6 +148,9 @@ class AppleTvRegistry(context: Context, configs: List<AppleTvConfig>, private va
      * attribute points here), or null if MRP hasn't fetched one. */
     fun artworkFor(ref: String?): ByteArray? = device(ref)?.snapshotArtwork
 
+    /** Each Apple TV's name and installed apps (bundle id → name), for the web page's icon import (1.5.2). */
+    fun installedApps(): List<Pair<String, Map<String, String>>> = devices.values.map { it.name to it.snapshotApps }
+
     private fun handle(call: ServiceCall): Boolean {
         if (call.domain == "remote") return handleRemote(call)
         if (call.domain == REMOTE_DOMAIN) {

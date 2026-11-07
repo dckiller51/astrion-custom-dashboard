@@ -91,10 +91,10 @@ const ATV_ALL_COMMANDS = [
 function androidTvHotkeyParts(h) {
   // A Zidoo / Eversolo added in Astrion too (1.4.9): its remote.zidoo_… / media_player.zidoo_…
   // take the same Android key names and its apps by name.
-  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo)_/.test(h.entityId || '')) {
+  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo|lgtv)_/.test(h.entityId || '')) {
     return { tv: h.entityId.replace(/^remote\./, 'media_player.'), kind: 'key', value: (h.data && h.data.command) || '' };
   }
-  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo)_/.test(h.entityId || '')) {
+  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo|lgtv)_/.test(h.entityId || '')) {
     return { tv: h.entityId, kind: 'app', value: (h.data && h.data.source) || '' };
   }
   return null;
@@ -105,7 +105,9 @@ async function loadNativeAndroidTvs() {
     const res = await fetch('/devices-config');
     const data = await res.json();
     // The Zidoos / Eversolos added in Astrion (1.4.9) answer the same keys and apps.
-    return [...(Array.isArray(data.androidTvs) ? data.androidTvs : []), ...(Array.isArray(data.zidoos) ? data.zidoos : [])];
+    // And the LG TVs (1.5.2): the same Android key names, their apps and inputs by name.
+    return [...(Array.isArray(data.androidTvs) ? data.androidTvs : []), ...(Array.isArray(data.zidoos) ? data.zidoos : []),
+      ...(Array.isArray(data.lgtvs) ? data.lgtvs : [])];
   } catch (e) {
     return [];
   }
@@ -142,6 +144,24 @@ const EVERSOLO_COMMANDS = [
   ['Key.Repeat', 'web_evs_repeat'], ['Key.Info', 'web_evs_info'], ['Key.Reboot', 'web_evs_reboot']
 ];
 
+// An LG TV's own buttons (1.5.2), beyond the Android names every TV takes: sent as they are to the
+// remote.lgtv_… of an LG TV added in Astrion, offered here with what they do.
+const LG_COMMANDS = [
+  ['INPUT_HUB', 'web_lg_input_hub'], ['QMENU', 'web_lg_qmenu'], ['MENU', 'web_lg_menu'], ['EXIT', 'web_lg_exit'],
+  ['GUIDE', 'web_lg_guide'], ['LIST', 'web_lg_list'], ['INFO', 'web_lg_info'], ['RECENT', 'web_lg_recent'],
+  ['MYAPPS', 'web_lg_myapps'], ['CHANNELUP', 'web_lg_channel_up'], ['CHANNELDOWN', 'web_lg_channel_down'],
+  ['CC', 'web_lg_cc'], ['SAP', 'web_lg_sap'], ['AD', 'web_lg_ad'], ['ASPECT_RATIO', 'web_lg_aspect'],
+  ['TELETEXT', 'web_lg_teletext'], ['RECORD', 'web_lg_record'], ['SCREEN_REMOTE', 'web_lg_screen_remote'],
+  ['LIVE_ZOOM', 'web_lg_live_zoom'], ['MAGNIFIER_ZOOM', 'web_lg_magnifier'], ['ASTERISK', 'web_lg_asterisk'],
+  ['DASH', 'web_lg_dash'], ['NETFLIX', 'web_lg_netflix'], ['AMAZON', 'web_lg_amazon']
+];
+
+/** The LG buttons as <option>s (value: the button, label: what it does); '' for any other entity. */
+function lgTvCommandOptions(entityId) {
+  if (entityId && !/lgtv/i.test(entityId)) return '';
+  return LG_COMMANDS.map(([key, label]) => `<option value="${key}" label="${escapeAttr('LG · ' + I18N.t(label))}"></option>`).join('');
+}
+
 /** The Eversolo commands as <option>s (value: the key, label: what it does); '' for any other entity. */
 function eversoloCommandOptions(entityId) {
   if (entityId && !/zidoo|eversolo/i.test(entityId)) return '';
@@ -158,12 +178,16 @@ function onHkAndroidTvKindChange() {
   const tv = (document.getElementById('hkAndroidTv') || {}).value || '';
   const attrs = (typeof haStates !== 'undefined' && haStates && haStates[tv] && haStates[tv].attributes) || {};
   const own = Array.isArray(attrs.source_list) ? attrs.source_list.map(s => [String(s), String(s)]) : [];
-  const apps = /^media_player\.zidoo_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
+  const apps = /^media_player\.(zidoo|lgtv)_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
   list.innerHTML = kind === 'app'
     ? apps.map(([n, p]) => `<option value="${escapeAttr(p)}">${escapeAttr(n)}</option>`).join('')
-    : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(tv) ? eversoloCommandOptions(tv) : '');
+    : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(tv) ? eversoloCommandOptions(tv) : '') +
+      (/lgtv/i.test(tv) ? lgTvCommandOptions(tv) : '');
   input.placeholder = kind === 'app' ? 'com.canal.android.canal' : 'CHANNEL_UP';
-  document.getElementById('hkAndroidTvHint').textContent = I18N.t(kind === 'app' ? 'web_hotkey_adtv_app_hint' : 'web_hotkey_adtv_key_hint');
+  // An LG TV (1.5.2) takes its own button names too, and an input as well as an app.
+  const lg = /lgtv_/.test(tv);
+  document.getElementById('hkAndroidTvHint').textContent =
+    I18N.t(kind === 'app' ? (lg ? 'web_hotkey_lgtv_app_hint' : 'web_hotkey_adtv_app_hint') : (lg ? 'web_hotkey_lgtv_key_hint' : 'web_hotkey_adtv_key_hint'));
 }
 
 /** Populates the Apple TV picker for the hotkey form with every paired Apple TV, selecting [selectedEntityId] if given. */
@@ -205,7 +229,8 @@ function refreshRemoteCommandDatalist() {
   if (!dl) return;
   const entityId = document.getElementById('hkEntityId') ? document.getElementById('hkEntityId').value.trim() : '';
   const suggestions = remoteCommandSuggestions(entityId) || [];
-  dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(entityId) ? eversoloCommandOptions(entityId) : '');
+  dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(entityId) ? eversoloCommandOptions(entityId) : '') +
+    (/lgtv/i.test(entityId) ? lgTvCommandOptions(entityId) : '');
 }
 
 // Selecting "Settings" or "Active Activities" here is a shortcut, not a
@@ -238,6 +263,9 @@ function populateHkPageSelect() {
 function updateHotkeyActionInputs(preselect) {
   const action = document.getElementById('hkAction').value;
   const container = document.getElementById('dynamicHotkeyInputs');
+  // 1.5.2: one "Device" action, the device first (Apple TV, LG / Android TV / Zidoo / Eversolo,
+  // IR, Harmony), then its keys or apps — the old per-kind actions fill the same fields.
+  if (action === 'device') return renderHkDevicePicker(container, preselect && preselect.target);
   if (action === 'page') {
     container.innerHTML = `<label>${I18N.t('web_hotkey_target_page_label')}</label><select id="hkPage"></select>
       <label class="inline-check"><input type="checkbox" id="hkPagePopup"> ${I18N.t('web_hotkey_page_popup')}</label>
@@ -370,6 +398,94 @@ async function onHkIrDeviceChange() {
   datalist.innerHTML = entries.map(([id, label]) => `<option value="${escapeAttr(id)}">${escapeAttr(label)}</option>`).join('');
 }
 
+// ---- "Device" action (1.5.2): the device first, then what it takes ---------------------------
+
+/** The old actions a picked device stands for, by the prefix of its value. */
+const HK_DEVICE_ACTIONS = { atv: 'appleTvCommand', tv: 'androidTvCommand', ir: 'irCommand', harmony: 'harmonyCommand' };
+
+/** The action the form saves: the device's for "Device", else the one picked. */
+function hkEffectiveAction() {
+  const action = document.getElementById('hkAction').value;
+  if (action !== 'device') return action;
+  const target = (document.getElementById('hkTarget') || {}).value || '';
+  return HK_DEVICE_ACTIONS[target.split(':')[0]] || '';
+}
+
+/** "TV LG", "Android TV", "Zidoo", "Eversolo": the kind of a TV / player added in Astrion. */
+function hkTvKind(entityId) {
+  if (/^media_player\.lgtv_/.test(entityId)) return I18N.t('web_hotkey_kind_lgtv');
+  if (/^media_player\.androidtv_/.test(entityId)) return 'Android TV';
+  const a = (typeof haStates !== 'undefined' && haStates && haStates[entityId] && haStates[entityId].attributes) || {};
+  return a.manufacturer === 'Eversolo' ? 'Eversolo' : 'Zidoo';
+}
+
+/** The device list, grouped: TVs and players added in Astrion, IR devices, Harmony. [preselect]: a value to select. */
+async function renderHkDevicePicker(container, preselect) {
+  container.innerHTML = `
+    <label>${I18N.t('web_hotkey_device_label')}</label>
+    <select id="hkTarget" onchange="onHkTargetChange()"><option value="">${I18N.t('media_loading')}</option></select>
+    <div id="hkTargetForm"></div>`;
+  const [atvs, tvs] = await Promise.all([loadNativeAppleTvs(), loadNativeAndroidTvs()]);
+  const select = document.getElementById('hkTarget');
+  if (!select) return;
+  const opt = (value, label) => `<option value="${escapeAttr(value)}">${escapeAttr(label)}</option>`;
+  const group = (label, items) => items.length ? `<optgroup label="${escapeAttr(label)}">${items.join('')}</optgroup>` : '';
+  const direct = atvs.map(t => opt('atv:' + t.entityId, `${t.name} · Apple TV`))
+    .concat(tvs.map(t => opt('tv:' + t.entityId, `${t.name} · ${hkTvKind(t.entityId)}`)));
+  const ir = (dashboardData.irDevices || []).map(d => opt('ir:' + d.id, `${d.name || d.id} · ${I18N.t('web_hotkey_kind_ir')}`));
+  select.innerHTML = `<option value="">${I18N.t('web_hotkey_device_pick')}</option>` +
+    group(I18N.t('web_hotkey_group_direct'), direct) +
+    group(I18N.t('web_hotkey_group_ir'), ir) +
+    group('Harmony', [opt('harmony', I18N.t('web_hotkey_harmony_hub_device'))]);
+  if (preselect) {
+    if (![...select.options].some(o => o.value === preselect)) select.insertAdjacentHTML('beforeend', opt(preselect, preselect.replace(/^\w+:/, '')));
+    select.value = preselect;
+  }
+  await onHkTargetChange();
+}
+
+/** The picked device's own fields (the same ids the per-kind actions always had, the device fixed). */
+async function onHkTargetChange() {
+  const value = (document.getElementById('hkTarget') || {}).value || '';
+  const box = document.getElementById('hkTargetForm');
+  if (!box) return;
+  const kind = value.split(':')[0];
+  const id = value.slice(kind.length + 1);
+  const fixed = selectId => `<select id="${selectId}" hidden><option value="${escapeAttr(id)}" selected></option></select>`;
+  if (kind === 'atv') {
+    box.innerHTML = fixed('hkAppleTv') + `
+      <label>${I18N.t('web_hotkey_command_label')}</label>
+      <select id="hkAppleTvCommand">${ATV_ALL_COMMANDS.map(c => `<option value="${c.id}">${I18N.t(c.labelKey)}</option>`).join('')}</select>`;
+  } else if (kind === 'tv') {
+    box.innerHTML = fixed('hkAndroidTv') + `
+      <label>${I18N.t('web_hotkey_adtv_kind')}</label>
+      <select id="hkAndroidTvKind" onchange="onHkAndroidTvKindChange()">
+        <option value="key">${I18N.t('web_hotkey_adtv_kind_key')}</option>
+        <option value="app">${I18N.t(/lgtv_/.test(id) ? 'web_hotkey_kind_app_or_input' : 'web_hotkey_adtv_kind_app')}</option>
+      </select>
+      <input type="text" id="hkAndroidTvValue" list="hkAndroidTvValues" style="margin-top:6px" autocomplete="off">
+      <datalist id="hkAndroidTvValues"></datalist>
+      <div class="hint" id="hkAndroidTvHint"></div>`;
+    onHkAndroidTvKindChange();
+  } else if (kind === 'ir') {
+    box.innerHTML = fixed('hkIrDevice') + `
+      <label>${I18N.t('web_hotkey_ir_command_label')}</label>
+      <input type="text" id="hkIrCommand" list="hkIrCommandHints" placeholder="${I18N.t('web_hotkey_ir_command_ph')}">
+      <datalist id="hkIrCommandHints"></datalist>`;
+    await onHkIrDeviceChange();
+  } else if (kind === 'harmony') {
+    if (harmonyAvailable) {
+      renderHarmonyHubSelect(box, 'command', 'hk');
+    } else {
+      box.innerHTML = `
+        <label>${I18N.t('web_hotkey_harmony_device_label')}</label><input type="text" id="hkDevice" placeholder="${I18N.t('web_hotkey_harmony_device_ph')}">
+        <label>${I18N.t('web_hotkey_harmony_command_label')}</label><input type="text" id="hkCommand" placeholder="${I18N.t('web_hotkey_harmony_command_ph')}">`;
+    }
+  } else {
+    box.innerHTML = '';
+  }
+}
+
 function describeHotkey(h) {
   if (h.page) return I18N.t(h.pageMode === 'popup' ? 'web_hotkey_desc_page_popup' : 'web_hotkey_desc_page', h.page);
   if (h.openOverlay) return I18N.t(h.openOverlay === 'activities' ? 'web_hotkey_desc_overlay_activities' : 'web_hotkey_desc_overlay_settings');
@@ -495,8 +611,11 @@ async function editHotkey(scope, listType, i) {
   document.getElementById('hkKey').value = hwKeyCanonical(h.key) || 'BACK';
   const adtv = androidTvHotkeyParts(h);
   const action = h.page ? 'page' : h.openOverlay ? 'openOverlay' : h.openCurrentActivityRoom ? 'openCurrentActivity' : h.stopActivity ? 'stopActivity' : h.activity ? 'startActivity' : h.event ? 'haEvent' : adtv ? 'androidTvCommand' : h.service === 'remote.send_command' ? 'remoteCommand' : h.service === 'astrion_appletv.send_command' ? 'appleTvCommand' : h.service ? 'service' : h.harmonyCommand ? 'harmonyCommand' : h.irDevice ? 'irCommand' : 'harmonyActivity';
-  document.getElementById('hkAction').value = action;
-  updateHotkeyActionInputs(action === 'appleTvCommand' ? { appleTvEntityId: h.entityId || '' } : adtv ? { androidTv: adtv.tv } : undefined);
+  // The four device actions open in the "Device" action (1.5.2), their device picked.
+  const device = action === 'appleTvCommand' ? 'atv:' + (h.entityId || '') : action === 'androidTvCommand' ? 'tv:' + adtv.tv
+    : action === 'irCommand' ? 'ir:' + (h.irDevice || '') : action === 'harmonyCommand' ? 'harmony' : null;
+  document.getElementById('hkAction').value = device ? 'device' : action;
+  await updateHotkeyActionInputs(device ? { target: device } : undefined);
 
   if (action === 'page') {
     document.getElementById('hkPage').value = h.page || '';
@@ -527,8 +646,6 @@ async function editHotkey(scope, listType, i) {
     onHkAndroidTvKindChange();
     document.getElementById('hkAndroidTvValue').value = adtv.value;
   } else if (action === 'irCommand') {
-    document.getElementById('hkIrDevice').value = h.irDevice || '';
-    onHkIrDeviceChange();
     document.getElementById('hkIrCommand').value = h.irCommand || '';
   } else if (action === 'harmonyCommand') {
     if (harmonyAvailable) {
@@ -576,7 +693,8 @@ function addHotkey() {
   const scope = document.getElementById('hkScope').value;
   const hkType = document.getElementById('hkType').value;
   const key = document.getElementById('hkKey').value;
-  const action = document.getElementById('hkAction').value;
+  const action = hkEffectiveAction();
+  if (!action) { alert(I18N.t('web_hotkey_err_device')); return; }
 
   let hkObj = { key };
   if (action === 'page') {

@@ -102,6 +102,7 @@ import org.json.JSONObject
  *  GET  /appletv-artwork/<localId>  the current artwork for a paired Apple TV, if MRP has fetched
  *                        one; this is what a device's `entity_picture` attribute points at
  *  POST /zidoo-check    a Zidoo player's model and MAC address (host), see ZidooRoutes (1.4.6)
+ *  POST /lgtv-pair      pairs an LG TV (host): its prompt, then {model, mac}, see LgTvRoutes (1.5.2)
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -122,6 +123,7 @@ import org.json.JSONObject
  *                        carries `X-Astrion-Version-Id`, the history version
  *                        it created (see /history)
  *  POST /icons          upload a PNG into /sdcard/astrion/icons/
+ *  POST /icons-import-direct  each direct device's app icons into its own folder (1.5.2), see DirectIconImport
  *  GET  /icons-list       list every uploaded icon's filename, as JSON — feeds
  *                        the dashboard editor's icon picker
  *  DELETE /icons/<file>  delete an uploaded icon (Devices page → Icons)
@@ -245,6 +247,10 @@ class ConfigServer(
     /** Zidoo players (1.4.6): added by IP, no pairing. */
     private val zidooRoutes = ZidooRoutes(context)
 
+    /** LG TVs (1.5.2): paired once, the TV's prompt; their apps' icons. */
+    var lgTvRegistry: com.custom.astrion.lgtv.LgTvRegistry? = null
+    private val lgTvRoutes = LgTvRoutes(context) { lgTvRegistry }
+
     /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
     @Volatile
     var onBackupRestored: () -> Unit = {}
@@ -297,7 +303,7 @@ class ConfigServer(
         val method = session.method
         val uri = session.uri
         webAuth.check(session) ?: backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session)
-            ?: zidooRoutes.serve(uri, session) ?: when (uri) {
+            ?: zidooRoutes.serve(uri, session) ?: lgTvRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -323,6 +329,13 @@ class ConfigServer(
             "/check-update" -> if (method == Method.GET) handleCheckUpdate() else methodNotAllowed()
             "/save-connection" -> if (method == Method.POST) handleSaveConnection(session) else methodNotAllowed()
             "/icons" -> if (method == Method.POST) handleIconUpload(session) else methodNotAllowed()
+            "/icons-import-direct" ->
+                if (method == Method.POST) {
+                    val report = DirectIconImport(iconsDir, lgTvRegistry, appleTvRegistry).run()
+                    jsonResponse(Response.Status.OK, JSONObject().put("devices", report))
+                } else {
+                    methodNotAllowed()
+                }
             "/ir-database" ->
                 when (method) {
                     Method.GET -> serveIrDatabaseList()
@@ -418,7 +431,11 @@ class ConfigServer(
             )
         }
         val content =
-            runCatching { zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))) }
+            runCatching {
+                lgTvRoutes.reconcileHaDevices(
+                    zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())))
+                )
+            }
                 .getOrElse { file.readText() }
         return newFixedLengthResponse(Response.Status.OK, "application/json", content)
     }
@@ -596,6 +613,7 @@ class ConfigServer(
                 put("appleTvs", appleTvsJson())
                 put("androidTvs", androidTvRoutes.configJson())
                 put("zidoos", zidooRoutes.configJson())
+                put("lgtvs", lgTvRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1130,7 +1148,7 @@ class ConfigServer(
      * `?refresh=1` (1.4.0, the builder on opening and its "Reload from Home Assistant") re-reads
      * them all from Home Assistant first, so entities renamed or added there show up even while
      * the remote sleeps (screen off, only a few entities live), and — since the remote only
-     * receives the dashboard's own entities (1.5.1) — so every other one can be picked too.
+     * receives the dashboard's own entities (1.5.2) — so every other one can be picked too.
      */
     private fun serveHaStates(session: IHTTPSession): Response {
         if (session.parameters["refresh"]?.firstOrNull() == "1") runBlocking { haClient.refreshStates() }
@@ -1188,6 +1206,7 @@ class ConfigServer(
         }
         androidTvRoutes.saveRows(params)
         zidooRoutes.saveRows(params)
+        lgTvRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
@@ -1756,13 +1775,8 @@ class ConfigServer(
      * thumbnails instead of making the person type a path by hand.
      */
     private fun serveIconsList(): Response {
-        val names =
-            iconsDir
-                .listFiles()
-                ?.filter { it.isFile }
-                ?.map { it.name }
-                ?.sorted() ?: emptyList()
-        val json = JSONArray(names).toString()
+        // 1.5.2: a direct device's imported icons are in its own folder, listed as "folder/file".
+        val json = JSONArray(IconFolders.list(iconsDir)).toString()
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
     }
 
@@ -1774,14 +1788,18 @@ class ConfigServer(
      * that dashboard.json still references.
      */
     private fun deleteIcon(uri: String): Response {
-        val name = sanitize(uri.removePrefix("/icons/"))
-        val file = File(iconsDir, name)
+        val name = uri.removePrefix("/icons/")
+        val file = IconFolders.resolve(iconsDir, name)
         return when {
-            name.isBlank() || !file.isFile ->
+            file == null || !file.isFile ->
                 jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "No icon named $name"))
             !file.delete() ->
                 jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", "Could not delete $name"))
-            else -> jsonResponse(Response.Status.OK, JSONObject().put("status", "ok").put("deleted", name))
+            else -> {
+                // A device's folder goes with its last icon.
+                file.parentFile?.takeIf { it != iconsDir && it.listFiles().isNullOrEmpty() }?.delete()
+                jsonResponse(Response.Status.OK, JSONObject().put("status", "ok").put("deleted", name))
+            }
         }
     }
 
@@ -1795,9 +1813,9 @@ class ConfigServer(
      * `/icons/../../whatever` can't escape [iconsDir].
      */
     private fun serveIcon(uri: String): Response {
-        val name = sanitize(uri.removePrefix("/icons/"))
-        val file = File(iconsDir, name)
-        if (name.isBlank() || !file.isFile) {
+        val name = uri.removePrefix("/icons/")
+        val file = IconFolders.resolve(iconsDir, name)
+        if (file == null || !file.isFile) {
             return newFixedLengthResponse(
                 Response.Status.NOT_FOUND,
                 "text/plain",

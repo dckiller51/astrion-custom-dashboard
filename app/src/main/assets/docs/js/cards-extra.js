@@ -292,7 +292,9 @@ const TV_COMMAND_KEYS = [
 function tvRemoteFormHtml() {
   // An Eversolo's own commands follow (1.5.0: input, output, screen), with what they do.
   const cmdList = (typeof ANDROID_TV_COMMANDS !== 'undefined' ? ANDROID_TV_COMMANDS : [])
-    .map(c => `<option value="${cxEsc(c)}">`).join('') + (typeof eversoloCommandOptions === 'function' ? eversoloCommandOptions('') : '');
+    .map(c => `<option value="${cxEsc(c)}">`).join('') + (typeof eversoloCommandOptions === 'function' ? eversoloCommandOptions('') : '') +
+    // An LG TV's own buttons too (1.5.2): inputs, quick settings, guide…
+    (typeof lgTvCommandOptions === 'function' ? lgTvCommandOptions('') : '');
   return `
     <label>${I18N.t('web_card_name')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_tv_name')}">
     <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" list="tvRemoteEntities" placeholder="${I18N.t('web_card_ph_remote')}" onchange="onTvEntityChange()">

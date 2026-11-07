@@ -60,6 +60,9 @@ import com.custom.astrion.ui.tapCombinedClickable
  * Each button can also have its own colors (1.4.4), over the theme's: "color"
  * (background) and "text_color" (label), hex like scene_grid's "color".
  *
+ * "page" (1.5.2) opens a dashboard page, like a scene tile's ("pageMode": "popup" floats it
+ * over the current one), after the button's other actions.
+ *
  * "closePopup": true dismisses whichever popup is currently open, fired
  * after every other action on that button — e.g. a small TV/Projector
  * popup (opened via a scene_grid/title tile's own "pageMode": "popup")
@@ -169,6 +172,10 @@ class ButtonGridCard : CardRenderer {
         (b["stopActivity"] as? String)?.let(ctx.stopActivity)
         ctx.sendIrAction(b)
         if (b["closePopup"] == true) ctx.closePopup()
+        // "page" (1.5.2), like a scene tile's: after the rest, so a popup it opens isn't the one closed.
+        (b["page"] as? String)?.takeIf { it.isNotBlank() }?.let { page ->
+            if (b["pageMode"] == "popup") ctx.openPagePopup(page) else ctx.navigateToPage(page)
+        }
     }
 
     /** True when this button's optional `"state_entity"`/`"state_value"`

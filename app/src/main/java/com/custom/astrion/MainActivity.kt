@@ -62,6 +62,8 @@ import com.custom.astrion.harmony.HarmonyHubRegistry
 import com.custom.astrion.input.DialogKeys
 import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
+import com.custom.astrion.lgtv.LgTvRegistry
+import com.custom.astrion.lgtv.installLgTv
 import com.custom.astrion.ui.ChargingScreen
 import com.custom.astrion.ui.Dashboard
 import com.custom.astrion.ui.DashboardActivityCallbacks
@@ -148,7 +150,7 @@ class MainActivity : ComponentActivity() {
         val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
 
         // remote.* entities the remote answers itself (see serviceRepeatMs()).
-        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_")
+        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_", "remote.lgtv_")
 
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
@@ -437,6 +439,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var appleTvRegistry: AppleTvRegistry // Apple TV, direct — no Home Assistant
     private lateinit var androidTvRegistry: AndroidTvRegistry // Android TV, direct (1.3.6)
     private lateinit var zidooRegistry: ZidooRegistry // Zidoo players, direct (1.4.6)
+    private lateinit var lgTvRegistry: LgTvRegistry // LG TVs, direct (1.5.2)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -554,6 +557,7 @@ class MainActivity : ComponentActivity() {
                 if (::androidTvRegistry.isInitialized) androidTvRegistry.setQuiet(quiet)
                 if (::appleTvRegistry.isInitialized) appleTvRegistry.setQuiet(quiet)
                 if (::zidooRegistry.isInitialized) zidooRegistry.setQuiet(quiet)
+                if (::lgTvRegistry.isInitialized) lgTvRegistry.setQuiet(quiet)
             }
         )
     }
@@ -702,6 +706,9 @@ class MainActivity : ComponentActivity() {
         androidTvRegistry = installAndroidTv(this, client, configServer, log = { Log.i("AndroidTv", it) })
         // After the Android TV one, chained the same way.
         zidooRegistry = installZidoo(this, client, log = { Log.i("Zidoo", it) })
+        // After the Zidoo one, chained the same way (1.5.2).
+        lgTvRegistry = installLgTv(this, client, log = { Log.i("LgTv", it) })
+        configServer.lgTvRegistry = lgTvRegistry
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
         // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
@@ -717,6 +724,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        lgTvRegistry.stop()
         zidooRegistry.stop()
         androidTvRegistry.stop()
         appleTvRegistry.stop()
@@ -1690,6 +1698,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        lgTvRegistry.stop()
         zidooRegistry.stop()
         androidTvRegistry.stop()
         appleTvRegistry.stop()

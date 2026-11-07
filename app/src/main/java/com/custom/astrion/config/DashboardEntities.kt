@@ -11,7 +11,7 @@ import kotlinx.serialization.json.intOrNull
 /**
  * The Home Assistant entities a dashboard.json uses, so [com.custom.astrion.ha.HaClient] only
  * receives those (`subscribe_entities` with `entity_ids`) instead of every state change in the
- * house (1.5.1).
+ * house (1.5.2).
  *
  * Rather than knowing every card's options, it takes every string in the file that is a valid
  * entity id: cards, hotkeys, `openWhenEntity`, Activities, `screen_off_entities`, the dock… A

@@ -319,6 +319,7 @@ function updateCardFormInputs() {
           <label>${I18N.t('web_card_service_domain_service_optional_or_combine')}</label><input type="text" id="giService" placeholder="${I18N.t('web_card_ph_service')}">
           <label>${I18N.t('web_card_entity_id_optional')}</label><input type="text" id="giEntityId" placeholder="${I18N.t('web_card_ph_media_tv')}">
           <label>${I18N.t('web_card_grid_data_label')}</label><input type="text" id="giData" placeholder='{"media_content_type":"app"}'>
+          ${giPageFieldsHtml(I18N.t('web_card_grid_button_page'))}
           <div class="divider" style="margin:12px 0"></div>
           <label>${I18N.t('web_card_harmony_action_optional_or_and_combine')}</label>
           <select id="giHarmonyMode" onchange="onGiHarmonyModeChange()">
@@ -350,11 +351,7 @@ function updateCardFormInputs() {
           <div class="hint">${I18N.t('web_card_visually_highlights_this_button_while_state')}</div>
         ` : `
           <label>${I18N.t('web_card_grid_scene_entity')}</label><input type="text" id="giEntityId" placeholder="${I18N.t('web_card_ph_scene_entity')}">
-          <label>${I18N.t('web_card_grid_page')}</label><input type="text" id="giPage" placeholder="${I18N.t('web_card_ph_page')}">
-          <select id="giPageMode">
-            <option value="page">${I18N.t('web_card_as_a_full_page_default')}</option>
-            <option value="popup">${I18N.t('web_card_as_a_popup_over_the_current')}</option>
-          </select>
+          ${giPageFieldsHtml(I18N.t('web_card_grid_page'))}
           <div class="hint">${I18N.t('web_card_popup_size_position_come_from_that')}</div>
           <label class="inline-check"><input type="checkbox" id="giClosePopup"> ${I18N.t('web_card_close_the_open_popup_after_this_2')}</label>
           <div class="hint">${I18N.t('web_card_for_a_tile_placed_inside_a')}</div>
@@ -650,7 +647,7 @@ let editingGridItem = null; // index of the button/scene being edited within _pe
 let gridEditSnapshot = null; // the form's text fields as the edited item filled them (see confirmPendingGridItems)
 
 /** The grid item form's text fields (selects are left out: some are filled later, asynchronously). */
-const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand',
+const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giIrDevice', 'giIrCommand',
   'giIrDelay', 'giActivityId', 'giHarmonyDevice', 'giHarmonyCommand', 'giStateEntity', 'giStateValue', 'giLongPress',
   'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder',
   // 1.5.0: the colours too. A tile whose only change was its colour wasn't seen as changed, so
@@ -658,7 +655,36 @@ const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'g
   'giColorHex', 'giTextColorHex', 'giActiveColorHex'];
 // A select always holds a value: counted only when comparing an edited item with itself (1.5.0:
 // a changed Activity, page mode or Harmony action was dropped the same way).
-const GRID_ITEM_SELECTS = ['giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice'];
+const GRID_ITEM_SELECTS = ['giPage', 'giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice'];
+/**
+ * The page a grid item opens (1.5.2): a list of the dashboard's pages instead of a name typed by
+ * hand (a typo opened nothing), then full page or popup. A page no longer in the dashboard is kept.
+ */
+function giPageFieldsHtml(label) {
+  const pages = (dashboardData.pages || []).map(p => p && p.name).filter(Boolean);
+  return `
+    <label>${label}</label>
+    <select id="giPage">
+      <option value="">${I18N.t('web_card_grid_page_none')}</option>
+      ${pages.map(n => `<option value="${escapeAttr(n)}">${escapeAttr(n)}</option>`).join('')}
+    </select>
+    <select id="giPageMode">
+      <option value="page">${I18N.t('web_card_as_a_full_page_default')}</option>
+      <option value="popup">${I18N.t('web_card_as_a_popup_over_the_current')}</option>
+    </select>`;
+}
+
+function setGiPage(item) {
+  const sel = document.getElementById('giPage');
+  if (!sel) return;
+  const page = item.page || '';
+  if (page && ![...sel.options].some(o => o.value === page)) {
+    sel.insertAdjacentHTML('beforeend', `<option value="${escapeAttr(page)}">${escapeAttr(page)} ⚠</option>`);
+  }
+  sel.value = page;
+  document.getElementById('giPageMode').value = item.pageMode === 'popup' ? 'popup' : 'page';
+}
+
 function gridItemTextSnapshot(withSelects) {
   const fields = withSelects ? GRID_ITEM_TEXT_FIELDS.concat(GRID_ITEM_SELECTS) : GRID_ITEM_TEXT_FIELDS;
   return fields.map(id => {
@@ -1068,6 +1094,7 @@ function fillGridItemForm(type, item) {
     document.getElementById('giService').value = item.service || '';
     document.getElementById('giEntityId').value = item.entity_id || '';
     document.getElementById('giData').value = item.data ? JSON.stringify(item.data) : '';
+    setGiPage(item);
     document.getElementById('giIrDevice').value = item.irDevice || '';
     fillGiIrCommands(item);
     document.getElementById('giClosePopup').checked = item.closePopup === true;
@@ -1081,8 +1108,7 @@ function fillGridItemForm(type, item) {
     document.getElementById('giActiveBorder').checked = item.active_border === true || typeof item.active_border === 'string';
   } else {
     document.getElementById('giEntityId').value = item.entity_id || '';
-    document.getElementById('giPage').value = item.page || '';
-    document.getElementById('giPageMode').value = item.pageMode === 'popup' ? 'popup' : 'page';
+    setGiPage(item);
     document.getElementById('giClosePopup').checked = item.closePopup === true;
     if (item.irDevice) {
       document.getElementById('giIrDevice').value = item.irDevice;
@@ -1258,6 +1284,10 @@ function addGridItem(type) {
       if (activeColor) item.active_color = activeColor;
       if (activeBorder) item.active_border = true;
     }
+    // 1.5.2: a button can open a page too, like a scene tile.
+    const btnPage = (document.getElementById('giPage')?.value || '').trim();
+    if (btnPage) item.page = btnPage;
+    if (btnPage && document.getElementById('giPageMode')?.value === 'popup') item.pageMode = 'popup';
     const btnColor = colorFieldValue('giColor');
     const btnTextColor = colorFieldValue('giTextColor');
     if (btnColor) item.color = btnColor;
@@ -2064,8 +2094,10 @@ function removeCard(idx) {
 // — e.g. briefly, before the initial /dashboard.json load finishes.
 function iconUrl(path) {
   if (!path) return null;
-  const name = String(path).split(/[\\/]/).pop();
-  return name ? `/icons/${encodeURIComponent(name)}` : null;
+  // 1.5.2: an icon in a device's folder keeps it ("LG OLED 65B8/Netflix.png").
+  const p = String(path).replace(/\\/g, '/');
+  const rel = p.includes('astrion/icons/') ? p.split('astrion/icons/').pop() : p.split('/').pop();
+  return rel ? '/icons/' + rel.split('/').map(encodeURIComponent).join('/') : null;
 }
 
 // Mirrors SceneGridCard.kt's parseHexColor: "#RRGGBB" is treated as opaque,
@@ -2180,12 +2212,18 @@ async function openIconPicker(targetId) {
     return;
   }
 
-  grid.innerHTML = names.map(name => `
+  // 1.5.2: a direct device's imported icons under a heading with its folder's name.
+  let folder = null;
+  grid.innerHTML = names.map(name => {
+    const dir = name.includes('/') ? name.split('/')[0] : '';
+    const head = dir !== folder && dir ? `<div class="icon-picker-folder" style="grid-column:1/-1;margin-top:8px;font-weight:600">📁 ${dir}</div>` : '';
+    folder = dir;
+    return head + `
     <div class="icon-picker-item" onclick="selectIcon('${name.replace(/'/g, "\\'")}')">
       <img src="${iconUrl(name)}" alt="" loading="lazy">
-      <span>${name}</span>
-    </div>
-  `).join('');
+      <span>${dir ? name.slice(dir.length + 1) : name}</span>
+    </div>`;
+  }).join('');
 }
 
 function selectIcon(name) {

@@ -107,6 +107,22 @@ data class ZidooConfig(
 )
 
 /**
+ * One LG webOS TV added on the web page (1.5.2), paired once (the TV's prompt). Published as
+ * [entityId] (`media_player.lgtv_…`) plus the matching `remote.lgtv_…`. [clientKey] and [pin]
+ * (the TV's certificate fingerprint) never leave the remote: the web page only learns it's paired.
+ */
+data class LgTvConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    /** The TV's MAC address, for Wake-on-LAN. Blank when the TV didn't give one. */
+    val mac: String = "",
+    val clientKey: String = "",
+    val pin: String = ""
+)
+
+/**
  * A single Harmony Hub the app can talk to directly, bypassing Home
  * Assistant. [localId] is a stable app-generated key (independent of the
  * hub's own numeric [hubId]) used to reference this hub from dashboard.json
@@ -144,6 +160,7 @@ object RemoteSettings {
     private const val KEY_ANDROID_TVS = "android_tvs" // JSON array, see AndroidTvConfig
     private const val KEY_ANDROID_TV_IDENTITY = "android_tv_identity" // key:cert, see AndroidTvIdentity
     private const val KEY_ZIDOOS = "zidoos" // JSON array, see ZidooConfig
+    private const val KEY_LGTVS = "lgtvs" // JSON array, see LgTvConfig
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -405,6 +422,40 @@ object RemoteSettings {
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    /** All LG TVs, in the order they were added (1.5.2). */
+    fun lgTvs(context: Context): List<LgTvConfig> {
+        val raw = prefs(context).getString(KEY_LGTVS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                LgTvConfig(localId, str("name").ifBlank { "LG TV" }, entityId, str("host"), str("mac"), str("clientKey"), str("pin"))
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveLgTvs(context: Context, tvs: List<LgTvConfig>) {
+        val array =
+            buildJsonArray {
+                tvs.forEach { t ->
+                    addJsonObject {
+                        put("localId", t.localId)
+                        put("name", t.name)
+                        put("entityId", t.entityId)
+                        put("host", t.host)
+                        put("mac", t.mac)
+                        put("clientKey", t.clientKey)
+                        put("pin", t.pin)
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_LGTVS, array.toString()) }
     }
 
     fun saveZidoos(context: Context, zidoos: List<ZidooConfig>) {
