@@ -99,13 +99,14 @@ import kotlinx.serialization.json.put
  * Sized for the HA100 panel (480x800, portrait). Each page scrolls vertically
  * on its own; the pager stays light for the 1GB / MT6580 hardware.
  */
-/** [HaClient] plus the two [State] flows it drives — bundled together since
+/** [HaClient] plus the entity map and connection [State] it drives — bundled together since
  * all three are part of "the live connection to Home Assistant", and
  * bundling is what got [Dashboard]'s parameter count under detekt's
  * LongParameterList threshold. */
 data class DashboardConnection(
     val client: HaClient,
-    val entitiesState: State<EntityMap>,
+    /** The live map from [collectAsLiveEntityMap]: one instance, observed entity by entity. */
+    val entities: EntityMap,
     val connectionState: State<ConnectionState>
 )
 
@@ -555,7 +556,7 @@ fun Dashboard(
     // bundles existed) doesn't need touching at all — only the signature
     // needed to shrink for detekt's LongParameterList threshold.
     val client = connection.client
-    val entitiesState = connection.entitiesState
+    val entities = connection.entities
     val connectionState = connection.connectionState
     val harmonyRegistry = registries.harmonyRegistry
     val extenderRegistry = registries.extenderRegistry
@@ -574,7 +575,6 @@ fun Dashboard(
     val onStartActivityReady = activityCallbacks.onStartActivityReady
     val onStopActivityReady = activityCallbacks.onStopActivityReady
 
-    val entities by entitiesState
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         HaLabels.init(context)
@@ -927,7 +927,10 @@ private fun DashboardEntityPageEffect(
     params: EntityPageEffectParams
 ) {
     var autoOpenedFor by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(entities, pagerState.currentPage) {
+    // Keyed on the pages and their watched entities' states, not the map (the same instance for
+    // good): another entity's update neither restarts this nor recomposes it.
+    val watchedStates = pages.map { page -> page.openWhenEntity?.let { entities[it]?.state } }
+    LaunchedEffect(pages, watchedStates, pagerState.currentPage) {
         val currentName = pages.getOrNull(pagerState.currentPage)?.name
         pages.forEachIndexed { index, page ->
             val entityId = page.openWhenEntity ?: return@forEachIndexed

@@ -81,6 +81,7 @@ import com.custom.astrion.ui.IrTransmit
 import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.RingFoundOverlay
 import com.custom.astrion.ui.VolumeHotkeyTrigger
+import com.custom.astrion.ui.collectAsLiveEntityMap
 import com.custom.astrion.ui.toColors
 import com.custom.astrion.weather.LocalWeather
 import com.custom.astrion.web.ConfigServer
@@ -774,7 +775,7 @@ class MainActivity : ComponentActivity() {
      */
     private fun composeContent() {
         setContent {
-            val entities = client.entities.collectAsState()
+            val entities = client.entities.collectAsLiveEntityMap()
             val connection = client.connection.collectAsState()
             val isDocked = chargeDockMonitor.state.isDocked
             val ringing by FindMyRemote.ringing.collectAsState()
@@ -791,7 +792,7 @@ class MainActivity : ComponentActivity() {
                     if (clearFocusTrigger != 0L) focusManager.clearFocus(force = true)
                 }
                 Dashboard(
-                    connection = DashboardConnection(client = client, entitiesState = entities, connectionState = connection),
+                    connection = DashboardConnection(client = client, entities = entities, connectionState = connection),
                     registries = DashboardRegistries(harmonyRegistry = harmonyRegistry, extenderRegistry = extenderRegistry),
                     config = dashboard.config,
                     navigation =
@@ -847,7 +848,7 @@ class MainActivity : ComponentActivity() {
                         onStopActivityReady = { fn -> stopActivityFn = fn }
                     )
                 )
-                ScreenOverlays(dockOverlay, dock, entities.value, ringing)
+                ScreenOverlays(dockOverlay, dock, entities, ringing)
             }
         }
     }
