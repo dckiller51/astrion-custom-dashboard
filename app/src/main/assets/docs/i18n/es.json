@@ -1728,5 +1728,15 @@
   "web_dev_icons_import_line_missing": "%1$s: %2$s iconos (%3$s no encontrados)",
   "web_dev_icons_import_failed": "Importación fallida: %1$s",
   "web_card_grid_page_none": "— Ninguna página —",
-  "web_card_grid_button_page": "Página que abrir (opcional)"
+  "web_card_grid_button_page": "Página que abrir (opcional)",
+  "web_form_section_visibility": "Mostrar solo si",
+  "web_card_vis_entity": "Mostrar solo si esta entidad (opcional)",
+  "web_card_vis_is": "está",
+  "web_card_vis_is_not": "no está",
+  "web_card_vis_values_ph": "Estado(s), separados por comas: unlocked, open",
+  "web_card_vis_hint": "Oculto en el mando el resto del tiempo, y lo que sigue sube. La misma regla que la visibilidad de Home Assistant: varias condiciones, numeric_state, and / or se escriben en el JSON.",
+  "web_card_vis_kept": "Una regla avanzada del JSON se conserva tal cual. Rellena los campos de arriba para sustituirla.",
+  "web_card_vis_remove": "Quitarla",
+  "web_card_vis_err_values": "Indica el estado o los estados para «Mostrar solo si», o vacía su entidad.",
+  "web_card_vis_badge": "Se muestra solo cuando se cumplen sus reglas (visibility)"
 }

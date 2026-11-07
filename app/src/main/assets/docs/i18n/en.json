@@ -1728,5 +1728,15 @@
   "web_dev_icons_import_line_missing": "%1$s: %2$s icons (%3$s not found)",
   "web_dev_icons_import_failed": "Import failed: %1$s",
   "web_card_grid_page_none": "— No page —",
-  "web_card_grid_button_page": "Page to open (optional)"
+  "web_card_grid_button_page": "Page to open (optional)",
+  "web_form_section_visibility": "Show only when",
+  "web_card_vis_entity": "Show only when this entity (optional)",
+  "web_card_vis_is": "is",
+  "web_card_vis_is_not": "is not",
+  "web_card_vis_values_ph": "State(s), comma-separated: unlocked, open",
+  "web_card_vis_hint": "Hidden on the remote the rest of the time, and what follows moves up. Same rule as Home Assistant's visibility: several conditions, numeric_state, and / or are written in the JSON.",
+  "web_card_vis_kept": "An advanced rule from the JSON is kept as written. Fill in the fields above to replace it.",
+  "web_card_vis_remove": "Remove it",
+  "web_card_vis_err_values": "Give the state(s) for “Show only when”, or clear its entity.",
+  "web_card_vis_badge": "Shown only when its rules hold (visibility)"
 }

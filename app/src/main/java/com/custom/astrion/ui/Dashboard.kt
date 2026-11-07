@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +63,7 @@ import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRegistry
 import com.custom.astrion.cards.DeviceSettingsState
+import com.custom.astrion.cards.Visibility
 import com.custom.astrion.config.ActivityConfig
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.AppConfig
@@ -1474,8 +1476,10 @@ private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, ctx: CardContext) {
 
 @Composable
 private fun PageContent(page: PageConfig, ctx: CardContext) {
-    val pinned = page.cards.filter { it.options["pin"] == "bottom" }
-    val scrolling = page.cards.filter { it.options["pin"] != "bottom" }
+    // A card whose `visibility` rules don't hold right now leaves the page (see Visibility).
+    val cards = page.cards.filter { Visibility.isVisible(it.options["visibility"], ctx.entities) }
+    val pinned = cards.filter { it.options["pin"] == "bottom" }
+    val scrolling = cards.filter { it.options["pin"] != "bottom" }
 
     Column(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
@@ -1497,7 +1501,7 @@ private fun PageContent(page: PageConfig, ctx: CardContext) {
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                pinned.forEach { RenderCard(it, ctx) }
+                pinned.forEach { key(it.hashCode()) { RenderCard(it, ctx) } }
             }
         }
     }

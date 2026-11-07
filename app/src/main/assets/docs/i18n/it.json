@@ -1728,5 +1728,15 @@
   "web_dev_icons_import_line_missing": "%1$s: %2$s icone (%3$s non trovate)",
   "web_dev_icons_import_failed": "Importazione non riuscita: %1$s",
   "web_card_grid_page_none": "— Nessuna pagina —",
-  "web_card_grid_button_page": "Pagina da aprire (facoltativo)"
+  "web_card_grid_button_page": "Pagina da aprire (facoltativo)",
+  "web_form_section_visibility": "Mostra solo se",
+  "web_card_vis_entity": "Mostra solo se questa entità (facoltativo)",
+  "web_card_vis_is": "è",
+  "web_card_vis_is_not": "non è",
+  "web_card_vis_values_ph": "Stato/i, separati da virgole: unlocked, open",
+  "web_card_vis_hint": "Nascosto sul telecomando il resto del tempo, e ciò che segue risale. Stessa regola della visibilità di Home Assistant: più condizioni, numeric_state, and / or si scrivono nel JSON.",
+  "web_card_vis_kept": "Una regola avanzata del JSON viene mantenuta così com'è. Compila i campi qui sopra per sostituirla.",
+  "web_card_vis_remove": "Rimuoverla",
+  "web_card_vis_err_values": "Indica lo stato o gli stati per «Mostra solo se», oppure svuota la sua entità.",
+  "web_card_vis_badge": "Mostrato solo quando le sue regole sono soddisfatte (visibility)"
 }

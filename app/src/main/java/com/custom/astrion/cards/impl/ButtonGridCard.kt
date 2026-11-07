@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.cards.Visibility
 import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.ServiceCall
@@ -77,6 +78,10 @@ import com.custom.astrion.ui.tapCombinedClickable
  * action fields as a button, see GridLongPress.kt. Without it, a hold is
  * just a tap.
  *
+ * "visibility": [ ... ] shows the button only while those Home Assistant rules hold (see
+ * Visibility), e.g. `[{ "condition": "state", "entity": "lock.front_door", "state_not": "locked" }]`;
+ * the buttons after it move up to close the gap.
+ *
  * Config shape:
  *   { "type": "button_grid", "options": {
  *       "columns": 3,
@@ -106,7 +111,11 @@ class ButtonGridCard : CardRenderer {
     @Composable
     override fun Render(config: CardConfig, ctx: CardContext) {
         val columns = config.int("columns", 3).coerceAtLeast(1)
-        val buttons = (config.options["buttons"] as? List<Map<String, Any?>>) ?: emptyList()
+        // A button whose `visibility` rules don't hold is left out, so the others close the gap.
+        val buttons =
+            (config.options["buttons"] as? List<Map<String, Any?>>)
+                .orEmpty()
+                .filter { Visibility.isVisible(it["visibility"], ctx.entities) }
         // Card-wide — every button in the grid shares one layout, same idea as
         // "columns". Unrecognized/missing values fall back to "top", the
         // original (and only, before this) behavior.

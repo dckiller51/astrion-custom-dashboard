@@ -1728,5 +1728,15 @@
   "web_dev_icons_import_line_missing": "%1$s: %2$s Symbole (%3$s nicht gefunden)",
   "web_dev_icons_import_failed": "Import fehlgeschlagen: %1$s",
   "web_card_grid_page_none": "— Keine Seite —",
-  "web_card_grid_button_page": "Zu öffnende Seite (optional)"
+  "web_card_grid_button_page": "Zu öffnende Seite (optional)",
+  "web_form_section_visibility": "Nur anzeigen, wenn",
+  "web_card_vis_entity": "Nur anzeigen, wenn diese Entität (optional)",
+  "web_card_vis_is": "ist",
+  "web_card_vis_is_not": "ist nicht",
+  "web_card_vis_values_ph": "Zustand/Zustände, kommagetrennt: unlocked, open",
+  "web_card_vis_hint": "Sonst auf der Fernbedienung ausgeblendet, und was folgt, rückt nach. Dieselbe Regel wie die Sichtbarkeit in Home Assistant: mehrere Bedingungen, numeric_state, and / or werden im JSON geschrieben.",
+  "web_card_vis_kept": "Eine erweiterte Regel aus dem JSON bleibt unverändert erhalten. Fülle die Felder oben aus, um sie zu ersetzen.",
+  "web_card_vis_remove": "Entfernen",
+  "web_card_vis_err_values": "Gib den oder die Zustände für „Nur anzeigen, wenn“ an oder leere die Entität.",
+  "web_card_vis_badge": "Nur sichtbar, wenn seine Regeln erfüllt sind (visibility)"
 }

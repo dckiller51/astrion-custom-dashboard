@@ -628,6 +628,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
   .preview-button-tile.no-icon { background: var(--control); color: var(--text); }
   .preview-button-tile.has-icon { background: var(--control); color: var(--text); }
   .preview-button-tile.no-icon .bt-label { font-size: 15px; }
+  .preview-scene-tile[data-vis], .preview-button-tile[data-vis] { outline: 1px dashed var(--accent); outline-offset: -3px; }
 
   /* cover card — mirrors CoverCard.kt's 3 layouts (default / horizontal / vertical)[cite: 1] */
   .preview-cover { border-radius: 18px; background: var(--card); padding: 12px 14px; box-sizing: border-box; }

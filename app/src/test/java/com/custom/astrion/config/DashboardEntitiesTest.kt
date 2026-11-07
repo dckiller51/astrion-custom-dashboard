@@ -36,6 +36,23 @@ class DashboardEntitiesTest {
     }
 
     @Test
+    fun `entities in visibility rules, on a card or on one grid button, nested or not`() {
+        val got =
+            ids(
+                """
+                { "pages": [ { "name": "Home", "cards": [
+                    { "type": "title", "options": { "visibility": [
+                        { "condition": "numeric_state", "entity": "sensor.outdoor_temp", "above": 20 } ] } },
+                    { "type": "button_grid", "options": { "buttons": [ { "name": "Lock", "visibility": [
+                        { "condition": "or", "conditions": [
+                            { "condition": "state", "entity": "lock.front_door", "state_not": "locked" } ] } ] } ] } } ] } ] }
+                """
+            )!!
+        assertTrue("sensor.outdoor_temp" in got)
+        assertTrue("lock.front_door" in got)
+    }
+
+    @Test
     fun `strings Home Assistant would refuse as entity ids are left out`() {
         val got =
             ids(
