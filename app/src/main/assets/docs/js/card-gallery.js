@@ -30,6 +30,7 @@ const GALLERY_TYPES = {
   camera: { cat: 'media', icon: 'camera' },
   plex: { cat: 'media', icon: 'film' },
   xbox: { cat: 'media', icon: 'game' },
+  zidoo: { cat: 'media', icon: 'player' },
   button_grid: { cat: 'grids', icon: 'apps' },
   scene_grid: { cat: 'grids', icon: 'spark' },
   title: { cat: 'layout', icon: 'text' },
@@ -267,7 +268,9 @@ function gallerySuggestionsFor(d) {
     if (/^zidoo_/.test(obj)) {
       const apps = galleryDeviceApps(e);
       return [
-        { type: 'media_player', recommended: true, opts: apps ? { ...full, apps } : full },
+        // 1.5.1: its own card first, what plays decides its buttons.
+        { type: 'zidoo', recommended: true, opts: { name, entity: e } },
+        { type: 'media_player', opts: apps ? { ...full, apps } : full },
         { type: 'tv_remote', opts: remote },
         { type: 'source_select', opts: source }
       ];

@@ -196,6 +196,34 @@ class ZidooClient(private val host: () -> String) {
     /** Plays a video file of the poster wall (its `aggregationId`, not the film's id: that one answers 804). */
     fun playVideo(fileId: Long): Boolean = ZidooParse.ok(get("ZidooPoster/PlayVideo?id=$fileId&type=-1"))
 
+    // The Zidoo / Eversolo card's own calls (1.5.1), see ZidooControls.
+
+    fun subtitles(): List<ZidooTrack> = ZidooControls.tracks(get(ZidooControls.SUBTITLES_PATH))
+
+    fun setSubtitle(index: Int): Boolean = ZidooParse.ok(get(ZidooControls.setSubtitlePath(index)))
+
+    fun audioTracks(): List<ZidooTrack> = ZidooControls.tracks(get(ZidooControls.AUDIO_TRACKS_PATH))
+
+    fun setAudio(index: Int): Boolean = ZidooParse.ok(get(ZidooControls.setAudioPath(index)))
+
+    /** The video player's current subtitle and audio track indexes (`getPlayStatus`). */
+    fun currentTracks(): Pair<Int?, Int?> {
+        val o = get("ZidooVideoPlay/getPlayStatus")
+        return ZidooControls.currentTrack(o, "subtitle")?.first to ZidooControls.currentTrack(o, "audio")?.first
+    }
+
+    fun chapter(next: Boolean): Boolean = ZidooParse.ok(get(ZidooControls.chapterPath(next)))
+
+    fun playQueue(): List<ZidooQueueItem> = ZidooControls.queue(getAny(ZidooControls.QUEUE_PATH, slow = true))
+
+    fun playQueueItem(item: ZidooQueueItem, index: Int): Boolean = get(ZidooControls.playQueuePath(item, index)) != null
+
+    fun queueArtUrl(item: ZidooQueueItem): String? = item.artUrl ?: if (item.local) musicArtUrl(item.id, item.type) else null
+
+    fun outputs(): ZidooOutputs = ZidooControls.outputs(get(ZidooControls.OUTPUTS_PATH, slow = true))
+
+    fun setOutput(tag: String): Boolean = ZidooParse.ok(get(ZidooControls.setOutputPath(tag)))
+
     /**
      * Whether [url] answers with an image (1.4.9): an episode often has no backdrop of its own, so
      * the registry tries the series', then the season's, and keeps the first one that is there.

@@ -26,6 +26,7 @@ import com.custom.astrion.cards.impl.TitleCard
 import com.custom.astrion.cards.impl.TvRemoteCard
 import com.custom.astrion.cards.impl.VacuumCard
 import com.custom.astrion.cards.impl.XboxCard
+import com.custom.astrion.cards.impl.ZidooCard
 import com.custom.astrion.config.ActiveActivityStore
 import com.custom.astrion.config.DeviceStateStore
 import com.custom.astrion.ha.HaLabels
@@ -77,7 +78,8 @@ class AstrionApp : Application() {
             TitleCard(),
             TvRemoteCard(),
             XboxCard(),
-            VacuumCard()
+            VacuumCard(),
+            ZidooCard()
             // ← Register your own card types here
         )
     }

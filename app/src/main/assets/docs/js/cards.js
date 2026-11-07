@@ -533,6 +533,8 @@ function updateCardFormInputs() {
     `;
     window._pendingMonitorRows = window._pendingMonitorRows || [];
     renderMonitorRows();
+  } else if (type === 'zidoo') {
+    container.innerHTML = zidooCardFormHtml();
   } else if (type === 'plex') {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">
@@ -1671,6 +1673,8 @@ function fillCardForm(card) {
     // Any other option set by hand in dashboard.json survives an edit through this form.
     window._monitorExtraOptions = Object.fromEntries(Object.entries(o).filter(([k]) => !['title', 'layout', 'marquee', 'entities'].includes(k)));
     renderMonitorRows();
+  } else if (type === 'zidoo') {
+    fillZidooCardForm(o);
   } else if (type === 'plex') {
     document.getElementById('optPlexHost').value = o.host || '';
     document.getElementById('optPlexToken').value = o.token || '';
@@ -1983,6 +1987,8 @@ function addCardToPage() {
     });
     window._pendingMonitorRows = [];
     window._monitorExtraOptions = {};
+  } else if (type === 'zidoo') {
+    if (!collectZidooCardForm(newCard.options)) return;
   } else if (type === 'plex') {
     const plexHost = document.getElementById('optPlexHost').value.trim();
     const plexToken = document.getElementById('optPlexToken').value.trim();

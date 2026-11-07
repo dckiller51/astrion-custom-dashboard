@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.1-beta] - 2026-11-07
+
+### Added
+
+- **Zidoo / Eversolo card** (`zidoo`): one card for a player added in Astrion, whose buttons follow what plays. Everything comes from the player itself, no Home Assistant.
+  - **A film**: its backdrop, title and episode, a seekable bar, −10 s / +10 s, and **Subtitles**, **Audio** and **Chapters** buttons that show the current track. They open a pop-up with a tab each: a tap changes the subtitle or audio track on the Zidoo and the list stays open; **Chapters** goes to the previous or next chapter.
+  - **Music**: the cover, artist and album, what plays as an audiophile reads it, **Repeat**, and the **Queue**: the tracks to come, with their cover and length. A tap plays the track on the Eversolo's own player and on Eversolo's Apple Music; Apple's own Apple Music only shows its queue (it doesn't take a track chosen from elsewhere).
+  - **An Eversolo**: **Input** (internal player, Bluetooth, USB-C, coaxial, optical, the active one shown) and **Output** (the outputs it lists, else its output keys; a second tap confirms, as a wrong output cuts the sound). The header says which app or stream plays (*Apple Music*, *AirPlay*).
+  - **Header**: the player's name and state, **Browse** (its library), **every app and input** in a pop-up (`show_sources`), the **0–9 keypad** (`show_keypad`, a Zidoo's: its number keys) and power. Below, the player's apps (its utilities left out), or the card's own `apps`.
+  - **Builder**: a *Zidoo / Eversolo* card in the gallery, first for a Zidoo or an Eversolo of the *For a device* tab. Its form: the player, then which buttons may show (film tracks, queue, input / output, ±10 s, repeat, volume, audio quality, apps).
+
 ## [1.5.0] - 2026-11-06
 
 Everything since 1.4.0, from the 1.4.1 to 1.4.9 betas and 1.5.0.

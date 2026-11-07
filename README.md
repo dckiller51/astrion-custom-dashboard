@@ -63,6 +63,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | [`monitor`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Monitor) | Read-only sensor values (vertical / scrolling for long text) | ✅ | | | | |
 | [`plex`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex) | On Deck / recently added browser, search | ✅ | | | | |
 | [`xbox`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Xbox) | Game being played, gamerscore, achievements (Xbox integration or TrueAchievements) | ✅ | | | | |
+| [`zidoo`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Zidoo) | A Zidoo or an Eversolo added in Astrion: subtitles, audio, chapters, queue, input / output, following what plays | | | | | |
 | [`picture_elements`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-PictureElements) | Interactive floor plan, mmWave radar | ✅ | | | | |
 | [`title`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Title) | Section header, optionally tappable | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [`row`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Row) | Puts several cards side by side | ✅ | ✅ | ✅ | ✅ | ✅ |

@@ -1105,6 +1105,8 @@ function renderPreview() {
           </div>
           <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'camera.entity')} · ${canFetch ? I18N.t('web_preview_camera_live_frame') : I18N.t('web_preview_camera_placeholder')} · ${I18N.t('web_preview_on_remote', mode === 'stream' ? I18N.t('web_preview_camera_stream') : I18N.t('web_preview_camera_snapshot'))}</div>
         </div>`;
+    } else if (card.type === 'zidoo') {
+      cardEl.innerHTML = zidooCardPreviewHtml(card, idx);
     } else if (card.type === 'plex') {
       const o = card.options || {};
       const rows = [];
