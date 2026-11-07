@@ -409,28 +409,25 @@ class HaClient(
      * decoded at full size. [cache] keeps it (now-playing art): only for a path whose picture
      * never changes, never a camera's.
      */
-    suspend fun fetchBitmap(
-        path: String,
-        targetPx: Int = screenLongEdgePx(),
-        cache: Boolean = false
-    ): ImageBitmap? = withContext(Dispatchers.IO) {
-        if (cache) artCache.get(path)?.let { return@withContext it }
-        try {
-            val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
-            val reqBuilder = Request.Builder().url(url)
-            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
-            val req = reqBuilder.build()
-            imageHttp.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext null
-                val bytes = resp.body?.bytes() ?: return@withContext null
-                decodeByteArraySampled(bytes, targetPx)?.also { if (cache) artCache.put(path, it) }
+    suspend fun fetchBitmap(path: String, targetPx: Int = screenLongEdgePx(), cache: Boolean = false): ImageBitmap? =
+        withContext(Dispatchers.IO) {
+            if (cache) artCache.get(path)?.let { return@withContext it }
+            try {
+                val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
+                val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+                val reqBuilder = Request.Builder().url(url)
+                if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+                val req = reqBuilder.build()
+                imageHttp.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext null
+                    val bytes = resp.body?.bytes() ?: return@withContext null
+                    decodeByteArraySampled(bytes, targetPx)?.also { if (cache) artCache.put(path, it) }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchBitmap failed for $path", e)
+                null
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchBitmap failed for $path", e)
-            null
         }
-    }
 
     private fun screenLongEdgePx(): Int = Resources.getSystem().displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
 
