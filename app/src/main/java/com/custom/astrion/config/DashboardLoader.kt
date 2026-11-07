@@ -116,7 +116,7 @@ object DashboardLoader {
         is JsonArray ->
             AppConfig(
                 pages = listOf(PageConfig("Main", root.map { parseCard(it.jsonObject) }))
-            )
+            ).let { it.copy(haEntities = DashboardEntities.of(root, it)) }
         is JsonObject -> {
             val pagesArr = root["pages"]?.jsonArray ?: error("missing \"pages\" array")
             val pages =
@@ -190,7 +190,7 @@ object DashboardLoader {
                 weather,
                 keepOn,
                 swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true
-            )
+            ).let { it.copy(haEntities = DashboardEntities.of(root, it)) }
         }
         else -> error("top level must be an object or array")
     }
@@ -425,7 +425,8 @@ object DashboardLoader {
                 ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> c.isNotBlank() } }
                 .orEmpty(),
             dockDebounceSeconds = int("dock_debounce_seconds")?.coerceIn(0, MAX_DOCK_DEBOUNCE_S) ?: defaults.dockDebounceSeconds,
-            screenTimeoutSeconds = int("screen_timeout_seconds")?.takeIf { it > 0 }
+            screenTimeoutSeconds = int("screen_timeout_seconds")?.takeIf { it > 0 },
+            allEntities = (obj["ha_entities"] as? JsonPrimitive)?.contentOrNull == "all"
         )
     }
 

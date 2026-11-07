@@ -87,6 +87,8 @@ function onPowerInput() {
   if (!isNaN(debounce) && debounce !== POWER_DEFAULTS.dock_debounce_seconds) power.dock_debounce_seconds = Math.min(60, Math.max(0, debounce));
   const timeout = parseInt(document.getElementById('powerTimeout').value, 10);
   if (timeout > 0) power.screen_timeout_seconds = timeout;
+  // Not in the form (1.5.1): "all" makes the remote receive every Home Assistant entity, not only the dashboard's.
+  if (prev.ha_entities) power.ha_entities = prev.ha_entities;
   if (Object.keys(power).length) dashboardData.power = power; else delete dashboardData.power;
   updateJsonOutput();
 }

@@ -666,6 +666,7 @@ class MainActivity : ComponentActivity() {
     private fun initClientsAndServer() {
         client = HaClient(baseUrl = RemoteSettings.haUrl(this), token = RemoteSettings.haToken(this))
         client.remoteIdentity = { RemoteIdentity.json(this) }
+        client.setEntityFilter(dashboard.config.haEntities)
         harmonyRegistry =
             HarmonyHubRegistry(
                 hubs = RemoteSettings.harmonyHubs(this),
@@ -947,9 +948,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /** Hands dashboard.json's `power` block to the standby policy and the dock detector,
-     * and its `weather` block to the built-in weather. */
+     * its `weather` block to the built-in weather, and the entities it uses to Home Assistant. */
     private fun applyPowerConfig() {
         localWeather.config = dashboard.config.weather
+        client.setEntityFilter(dashboard.config.haEntities)
         val power = dashboard.config.power
         standby.config = power
         chargeDockMonitor.dockDebounceMs = TimeUnit.SECONDS.toMillis(power.dockDebounceSeconds.toLong())
