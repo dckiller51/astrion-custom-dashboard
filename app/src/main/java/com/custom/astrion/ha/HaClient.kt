@@ -1,9 +1,10 @@
 package com.custom.astrion.ha
 
-import android.graphics.BitmapFactory
+import android.content.res.Resources
 import android.util.Log
+import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import com.custom.astrion.ui.decodeByteArraySampled
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -96,6 +97,10 @@ class HaClient(
         // exactly these large folders, while Home Assistant's own frontend
         // (with no client-side timeout of its own) just waited it out.
         private val MEDIA_BROWSE_TIMEOUT = 25.seconds
+
+        // 1/32 of the app's heap for [artCache]; ARGB_8888.
+        private const val ART_CACHE_SHARE = 32
+        private const val BYTES_PER_PIXEL = 4
     }
 
     private val json =
@@ -119,6 +124,13 @@ class HaClient(
             .Builder()
             .callTimeout(10, TimeUnit.SECONDS)
             .build()
+
+    // Now-playing art (fetchBitmap's `cache`), by path: the media player card, its pop-up and the
+    // dock clock show the same picture, and a card scrolled back into view asks for it again.
+    private val artCache =
+        object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / ART_CACHE_SHARE).toInt()) {
+            override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * BYTES_PER_PIXEL
+        }
 
     // Client for long-lived streaming GETs (MJPEG camera_proxy_stream): no call
     // or read timeout so the never-ending multipart response isn't torn down,
@@ -356,8 +368,18 @@ class HaClient(
      * external hosts reject requests carrying an unexpected Authorization
      * header, and there's no reason to hand an HA credential to a
      * third-party server that never asked for it either way.
+     *
+     * Decoded no larger than needed (1.5.1): its longer edge brought down towards [targetPx] —
+     * by default the screen's longer edge — so a 1080p camera snapshot or a 3000 px cover isn't
+     * decoded at full size. [cache] keeps it (now-playing art): only for a path whose picture
+     * never changes, never a camera's.
      */
-    suspend fun fetchBitmap(path: String): ImageBitmap? = withContext(Dispatchers.IO) {
+    suspend fun fetchBitmap(
+        path: String,
+        targetPx: Int = screenLongEdgePx(),
+        cache: Boolean = false
+    ): ImageBitmap? = withContext(Dispatchers.IO) {
+        if (cache) artCache.get(path)?.let { return@withContext it }
         try {
             val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
             val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
@@ -367,13 +389,15 @@ class HaClient(
             imageHttp.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return@withContext null
                 val bytes = resp.body?.bytes() ?: return@withContext null
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                decodeByteArraySampled(bytes, targetPx)?.also { if (cache) artCache.put(path, it) }
             }
         } catch (e: Exception) {
             Log.w(TAG, "fetchBitmap failed for $path", e)
             null
         }
     }
+
+    private fun screenLongEdgePx(): Int = Resources.getSystem().displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
 
     /**
      * Fetch a URL/HA-relative path as raw bytes, with the bearer token attached.

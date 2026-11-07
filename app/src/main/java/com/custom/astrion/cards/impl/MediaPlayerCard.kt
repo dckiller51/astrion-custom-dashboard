@@ -132,7 +132,7 @@ class MediaPlayerCard : CardRenderer {
         // before.
         val artPath = e?.attrString("entity_picture_local") ?: e?.attrString("entity_picture")
         var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
-        LaunchedEffect(artPath) { art = artPath?.let { ctx.client.fetchBitmap(it) } }
+        LaunchedEffect(artPath) { art = artPath?.let { ctx.client.fetchBitmap(it, cache = true) } }
 
         val actions = remember(entityId, ctx.client) { MediaActions(entityId, ctx.client) }
 

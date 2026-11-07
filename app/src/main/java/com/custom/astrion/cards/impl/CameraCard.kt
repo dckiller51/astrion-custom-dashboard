@@ -157,7 +157,7 @@ class CameraCard : CardRenderer {
                     if (frame == null) error = true
                     return
                 }
-                val bmp = ctx.client.fetchBitmap(pic)
+                val bmp = ctx.client.fetchBitmap(pic, targetPx)
                 if (bmp != null) {
                     frame = bmp
                     error = false
