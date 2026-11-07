@@ -90,6 +90,9 @@ class AppleTvDevice(
     @Volatile private var artworkFetchedFor: String? = null
 
     val entityId: String get() = spec.entityId
+
+    /** Its name, as added on the web page (1.5.2: the folder of its imported app icons). */
+    val name: String get() = spec.name
     val current: AppleTvEntityData get() = AppleTvEntityMapper.map(spec, snapshot)
 
     /** The current item's artwork bytes, if MRP has fetched one — what a `/appletv-artwork/...` request serves. */

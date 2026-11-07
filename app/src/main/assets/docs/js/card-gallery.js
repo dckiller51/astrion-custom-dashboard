@@ -203,7 +203,7 @@ function galleryDeviceIcon(d) {
       return /eversolo/i.test(a.manufacturer || '') || /^DMP/i.test(a.model || '') ? 'audio' : 'player';
     }
     if (/^appletv_/.test(obj)) return 'box';
-    if (/^androidtv_/.test(obj)) return 'tv';
+    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj)) return 'tv';
     return 'play';
   }
   return { light: 'bulb', switch: 'power', cover: 'blind', fan: 'fan', climate: 'thermo', camera: 'camera', vacuum: 'vacuum',
@@ -253,7 +253,7 @@ function pickGallerySuggestion(i) {
 /** The device's own apps as the remote publishes them (a Zidoo / Eversolo added in Astrion). */
 function galleryDeviceApps(entityId) {
   const a = haStates && haStates[entityId] && haStates[entityId].attributes;
-  return a && Array.isArray(a.astrion_apps) ? a.astrion_apps.filter(x => x && x.app).map(x => ({ name: x.name || x.app, app: x.app })) : null;
+  return a && Array.isArray(a.astrion_apps) ? a.astrion_apps.filter(x => x && x.app).map(x => (x.icon ? { name: x.name || x.app, app: x.app, icon: x.icon } : { name: x.name || x.app, app: x.app })) : null;
 }
 
 /** The cards that suit [d], best first, each with the options to fill its form with. */
@@ -272,6 +272,15 @@ function gallerySuggestionsFor(d) {
         { type: 'zidoo', recommended: true, opts: { name, entity: e } },
         { type: 'media_player', opts: apps ? { ...full, apps } : full },
         { type: 'tv_remote', opts: remote },
+        { type: 'source_select', opts: source }
+      ];
+    }
+    if (/^lgtv_/.test(obj)) {
+      // An LG TV added in Astrion (1.5.2): its remote first, its apps already in.
+      const apps = galleryDeviceApps(e);
+      return [
+        { type: 'tv_remote', recommended: true, opts: apps ? { ...remote, apps } : remote },
+        { type: 'media_player', opts: full },
         { type: 'source_select', opts: source }
       ];
     }

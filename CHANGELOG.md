@@ -3,6 +3,32 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.2-beta] - 2026-11-07
+
+### Added
+
+- **LG TVs paired directly** (webOS, 2014 onwards): Devices › Direct devices › TV & box › **+ Add LG TV**, its IP address, then accept the remote on the TV. No Home Assistant.
+  - Each TV becomes `media_player.lgtv_<name>` (on / off, the input or app in front, volume, mute, its inputs and apps as sources) and `remote.lgtv_<name>`, which takes LG's button names (`UP`, `ENTER`, `HOME`, `MENU`, `RED`, `CHANNELUP`…) and the Android names the TV remote card sends (`DPAD_UP`, `BACK`…). So the TV remote card, the media player and source cards, buttons, hotkeys and Activities work with it.
+  - **Power**: off over the network; on with Wake-on-LAN (the TV's *Turn on via Wi-Fi* / *Mobile TV On* setting); a TV with only its screen off gets it back.
+  - **Sources**: inputs (HDMI 1, PS5…) first, then the apps; a tap switches the input or opens the app. App buttons open them by name or id (`netflix`, `youtube.leanback.v4`).
+  - **Icons**: the TV's own icons for its apps and inputs (Canal+, Plex, Netflix…) in the Sources pop-up and on the TV remote card's app buttons; the media player shows the icon of the app in front. webOS gives no cover of what an app plays.
+  - **Volume** set, up / down and mute as asked; **play / pause / stop**; previous / next change the channel on Live TV, else rewind / fast-forward.
+  - The TV pushes its changes, nothing is polled; the connection closes with Home Assistant's quiet mode and opens again when the screen comes on.
+  - The key the TV gives and its certificate stay on the remote (the web page only knows it's paired); a later connection to another certificate is refused.
+  - **Activities**: the wizard has an *LG TV (network)* section: the TV turns on when the Activity starts (Wake-on-LAN), off when it ends, and switches to the input or app chosen.
+  - The builder's *For a device* tab offers its TV remote card (its apps already in), and the hotkeys' *Device* action lists it. The hotkeys, the remote commands and the TV remote card's commands suggest LG's own buttons with what they do: inputs, quick settings, guide, channel list, subtitles, audio track, picture format…
+  - Protocol details from the aiowebostv library (Apache-2.0), the one Home Assistant uses.
+
+- **Button grid: a button can open a page** (`page`, `pageMode: "popup"`), like a scene tile: e.g. an *LG OLED* button on a *Devices* page opening the *TV LG* page.
+- **Builder: the page a scene tile or a button opens is picked in a list** of the dashboard's pages instead of typed (a typo opened nothing); a page no longer in the dashboard is kept and marked ⚠.
+- **Web page › Icons: import your direct devices' app icons**, each device into its own folder (an LG TV's apps and inputs, from the TV; an Apple TV's apps, from the App Store). Folders show in the icon list and the builder's icon picker; the Sources pop-up finds the icons by the app's name.
+
+### Changed
+
+- **Hotkeys: the device first.** One **Device: a key or an app** action instead of four (Apple TV, Android TV / Zidoo / Eversolo, IR, Harmony): pick the device in one list — the TVs and players added in the remote (Apple TV, LG, Android TV, Zidoo, Eversolo), your IR devices, Harmony — then its command, key or app, with its own suggestions. Hotkeys already made open there as they are; nothing changes in dashboard.json.
+- **The remote receives only the dashboard's Home Assistant entities** (`subscribe_entities`): Home Assistant sends the states of the entities the dashboard uses, then only their changes, instead of every state change in the house. Less to download at every wake-up, and the page no longer repaints for entities no card shows. `power.ha_entities: "all"` in the JSON brings back every entity; so does a dock clock with no `media_entities`, or a Home Assistant too old for it. The builder's pickers still list every entity. By tfalkenhagen (#129).
+- **Pictures are decoded at the screen's size**: camera snapshots, covers and the vacuum map no longer become multi-megabyte bitmaps on the remote's 1 GB (a 1600 × 1200 snapshot: about 1.8 MB instead of 7.3 at each refresh). The cover of what plays is kept in memory: the media player card, its pop-up and the dock clock no longer download it each again. By tfalkenhagen (#130).
+
 ## [1.5.1-beta] - 2026-11-07
 
 ### Added

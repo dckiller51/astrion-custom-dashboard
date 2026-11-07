@@ -51,7 +51,7 @@ data class AppConfig(
      * buttons, tiles, hotkeys and the page dots only. */
     val swipePages: Boolean = true,
     /** The Home Assistant entities this dashboard uses — the only ones the remote receives
-     * (1.5.1, see [DashboardEntities]). Null = every entity, as before. */
+     * (1.5.2, see [DashboardEntities]). Null = every entity, as before. */
     val haEntities: Set<String>? = null
 )
 
@@ -92,7 +92,7 @@ data class PowerConfig(
     val dockDebounceSeconds: Int = 5,
     /** System screen timeout to enforce (needs WRITE_SETTINGS, granted once over adb); null = leave alone. */
     val screenTimeoutSeconds: Int? = null,
-    /** `ha_entities: "all"` (1.5.1): receive every Home Assistant entity, not only the dashboard's own. */
+    /** `ha_entities: "all"` (1.5.2): receive every Home Assistant entity, not only the dashboard's own. */
     val allEntities: Boolean = false
 )
 

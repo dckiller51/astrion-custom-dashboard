@@ -119,8 +119,14 @@ function isNetworkAndroidTv(entityId) {
   return /^media_player\.androidtv_/.test(entityId || '');
 }
 
+/** An LG TV paired in Astrion (1.5.2, media_player.lgtv_…): turn_on = Wake-on-LAN, turn_off =
+ * off, select_source = an input (HDMI 1…) or an app by name. */
+function isNetworkLgTv(entityId) {
+  return /^media_player\.lgtv_/.test(entityId || '');
+}
+
 function isNetworkTv(entityId) {
-  return isNetworkAppleTv(entityId) || isNetworkAndroidTv(entityId);
+  return isNetworkAppleTv(entityId) || isNetworkAndroidTv(entityId) || isNetworkLgTv(entityId);
 }
 
 /** [{entityId, name, domain}] — the Devices catalog first, then every live
@@ -157,6 +163,7 @@ function deviceRefLabel(ref) {
   if (ref.source === 'harmony') return `${ref.deviceLabel || ref.deviceId} (Harmony)`;
   if (isNetworkAppleTv(ref.deviceId)) return I18N.t('web_activity_ref_atv', haEntityName(ref.deviceId));
   if (isNetworkAndroidTv(ref.deviceId)) return I18N.t('web_activity_ref_adtv', haEntityName(ref.deviceId));
+  if (isNetworkLgTv(ref.deviceId)) return I18N.t('web_activity_ref_lgtv', haEntityName(ref.deviceId));
   return `${haEntityName(ref.deviceId)} (HA — ${ref.deviceId})`;
 }
 
@@ -355,6 +362,7 @@ function renderWizardDevices() {
   const allHa = haEntityChoices();
   const appleTvs = allHa.filter(c => isNetworkAppleTv(c.entityId));
   const androidTvs = allHa.filter(c => isNetworkAndroidTv(c.entityId));
+  const lgTvs = allHa.filter(c => isNetworkLgTv(c.entityId));
   const haChoices = allHa.filter(c => !isNetworkTv(c.entityId));
   return `
     <div class="hint">${I18N.t('web_activity_devices_hint')}</div>
@@ -388,6 +396,15 @@ function renderWizardDevices() {
           ${c.name}
         </label>
       `).join('') + `<div class="hint">${I18N.t('web_activity_adtv_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_lgtv_heading')}</h3>
+    ${lgTvs.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_lgtv')}</div>` :
+      lgTvs.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_lgtv_hint')}</div>`}
 
     <h3 style="margin-top:14px">${I18N.t('web_activity_ha_heading')}</h3>
     <select id="wizHaEntitySelect">

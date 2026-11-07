@@ -161,7 +161,7 @@ class HaClient(
 
     @Volatile private var triggerSubscriptionId: Int? = null
 
-    // ---- entity filter (1.5.1) ----------------------------------------------------
+    // ---- entity filter (1.5.2) ----------------------------------------------------
     // The dashboard's entities ([setEntityFilter]); null = every entity (get_states + state_changed).
     @Volatile private var entityFilter: Set<String>? = null
 
@@ -287,7 +287,7 @@ class HaClient(
     }
 
     /**
-     * Receive only [entityIds] (1.5.1): the entities the dashboard uses (see
+     * Receive only [entityIds] (1.5.2): the entities the dashboard uses (see
      * [com.custom.astrion.config.DashboardEntities]), instead of every state change in Home
      * Assistant — on a big house most of what arrives is for entities no card shows, and each one
      * repaints the page. Null (or empty) = every entity, as before. A new list re-subscribes at
@@ -404,33 +404,30 @@ class HaClient(
      * header, and there's no reason to hand an HA credential to a
      * third-party server that never asked for it either way.
      *
-     * Decoded no larger than needed (1.5.1): its longer edge brought down towards [targetPx] —
+     * Decoded no larger than needed (1.5.2): its longer edge brought down towards [targetPx] —
      * by default the screen's longer edge — so a 1080p camera snapshot or a 3000 px cover isn't
      * decoded at full size. [cache] keeps it (now-playing art): only for a path whose picture
      * never changes, never a camera's.
      */
-    suspend fun fetchBitmap(
-        path: String,
-        targetPx: Int = screenLongEdgePx(),
-        cache: Boolean = false
-    ): ImageBitmap? = withContext(Dispatchers.IO) {
-        if (cache) artCache.get(path)?.let { return@withContext it }
-        try {
-            val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
-            val reqBuilder = Request.Builder().url(url)
-            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
-            val req = reqBuilder.build()
-            imageHttp.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext null
-                val bytes = resp.body?.bytes() ?: return@withContext null
-                decodeByteArraySampled(bytes, targetPx)?.also { if (cache) artCache.put(path, it) }
+    suspend fun fetchBitmap(path: String, targetPx: Int = screenLongEdgePx(), cache: Boolean = false): ImageBitmap? =
+        withContext(Dispatchers.IO) {
+            if (cache) artCache.get(path)?.let { return@withContext it }
+            try {
+                val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
+                val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+                val reqBuilder = Request.Builder().url(url)
+                if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+                val req = reqBuilder.build()
+                imageHttp.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext null
+                    val bytes = resp.body?.bytes() ?: return@withContext null
+                    decodeByteArraySampled(bytes, targetPx)?.also { if (cache) artCache.put(path, it) }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchBitmap failed for $path", e)
+                null
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchBitmap failed for $path", e)
-            null
         }
-    }
 
     private fun screenLongEdgePx(): Int = Resources.getSystem().displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
 
