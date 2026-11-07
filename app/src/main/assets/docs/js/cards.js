@@ -350,6 +350,10 @@ function updateCardFormInputs() {
         <option value="label">${I18N.t('web_card_display_label')}</option>
         <option value="icons">${I18N.t('web_card_display_icon')}</option>
       </select>
+      <label><input type="checkbox" id="optClimateShowPower" checked> ${I18N.t('web_card_climate_show_power')}</label>
+      <label><input type="checkbox" id="optClimateShowHvac" checked> ${I18N.t('web_card_climate_show_hvac_modes')}</label>
+      <label><input type="checkbox" id="optClimateShowFan" checked> ${I18N.t('web_card_climate_show_fan_modes')}</label>
+      <label><input type="checkbox" id="optClimateShowSwing" checked> ${I18N.t('web_card_climate_show_swing_modes')}</label>
       <div class="hint">${I18N.t('web_card_climate_hint')}</div>
       <label><input type="checkbox" id="optShowCaptions" checked> ${I18N.t('web_card_climate_show_captions')}</label>
     `;
@@ -1728,6 +1732,10 @@ function fillCardForm(card) {
     document.getElementById('optSwingModes').value = (o.swing_modes || []).join(',');
     document.getElementById('optSwingModeStyle').value = o.swing_mode_style === 'icons' ? 'icons' : 'label';
     document.getElementById('optShowCaptions').checked = o.show_captions !== false;
+    document.getElementById('optClimateShowPower').checked = o.show_power !== false;
+    document.getElementById('optClimateShowHvac').checked = o.show_hvac_modes !== false;
+    document.getElementById('optClimateShowFan').checked = o.show_fan_modes !== false;
+    document.getElementById('optClimateShowSwing').checked = o.show_swing_modes !== false;
   } else if (type === 'button_grid' || type === 'scene_grid') {
     document.getElementById('optColumns').value = o.columns || 2;
     document.getElementById('optIconPosition').value = ['top', 'bottom', 'left', 'right'].includes(o.iconPosition) ? o.iconPosition : 'top';
@@ -1998,6 +2006,10 @@ function addCardToPage() {
     if (swingModes) newCard.options.swing_modes = swingModes.split(',').map(s => s.trim()).filter(Boolean);
     if (document.getElementById('optSwingModeStyle').value === 'icons') newCard.options.swing_mode_style = 'icons';
     if (!document.getElementById('optShowCaptions').checked) newCard.options.show_captions = false;
+    if (!document.getElementById('optClimateShowPower').checked) newCard.options.show_power = false;
+    if (!document.getElementById('optClimateShowHvac').checked) newCard.options.show_hvac_modes = false;
+    if (!document.getElementById('optClimateShowFan').checked) newCard.options.show_fan_modes = false;
+    if (!document.getElementById('optClimateShowSwing').checked) newCard.options.show_swing_modes = false;
   } else if (type === 'button_grid') {
     newCard.options.columns = parseInt(document.getElementById('optColumns').value, 10) || 2;
     const iconPosition = document.getElementById('optIconPosition').value;

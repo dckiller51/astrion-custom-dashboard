@@ -69,15 +69,20 @@ import com.custom.astrion.ui.tapClickable
  * follow whatever order the integration reports. Set one in the dashboard
  * config to reorder or restrict which chips show (in the order given), or as
  * a last-resort fallback if an integration doesn't report the attribute at
- * all. `"off"` is always excluded from the hvac chips regardless of source —
+ * all. `"off"` is excluded from the hvac chips while the power button shows —
  * see below.
  *
  * `hvac_mode_style`/`fan_mode_style`/`swing_mode_style` (default `"icons"`
  * for hvac, `"label"` for fan/swing) switch that row's chips to icons, same
  * as HA's tile card. The icon glyphs come from [MdiIcons] (hand-built from
- * MDI path data — see that file for why). The `"off"` hvac mode is never
- * shown as a chip — the header's power button already covers it, so a
- * separate "off" chip would just be a duplicate control.
+ * MDI path data — see that file for why).
+ *
+ * `show_power`/`show_hvac_modes`/`show_fan_modes`/`show_swing_modes` (all
+ * default `true`) hide the header's power button or that chip row, e.g. for
+ * a compact card that's just the setpoint and its steppers. The `"off"` hvac
+ * mode only shows as a chip when `show_power` is false (otherwise it would
+ * duplicate the power button). Without hvac chips the card can't turn the
+ * unit back on.
  */
 @Suppress("SpellCheckingInspection")
 class ClimateCard : CardRenderer {
@@ -104,17 +109,16 @@ class ClimateCard : CardRenderer {
         // heat_cool mode uses a temp range (target_temp_low..target_temp_high)
         // instead of a single setpoint — temperature is null in that mode.
         val isRange = target == null && targetHigh != null && targetLow != null
-        // "off" is deliberately excluded — the header's dedicated power
-        // button already turns the unit off, so a chip for it would just
-        // duplicate that control.
+        val showPower = config.bool("show_power", true)
         // Prefer the config override (order respected as given) → the
-        // entity's real hvac_modes → nothing. "off" is deliberately excluded
-        // in all cases — see comment above.
+        // entity's real hvac_modes → nothing. "off" is left out while the
+        // header's power button shows, since that button already turns the
+        // unit off; with show_power false it comes back as a chip.
         val modes =
             config
                 .stringList("hvac_modes")
                 .ifEmpty { e?.attrStringList("hvac_modes").orEmpty() }
-                .filter { it != "off" }
+                .filter { it != "off" || !showPower }
         val name = config.string("name") ?: e?.friendlyName ?: entityId
         val fanMode = e?.attrString("fan_mode")
         val swingMode = e?.attrString("swing_mode")
@@ -134,6 +138,9 @@ class ClimateCard : CardRenderer {
         val fanModeIcons = config.string("fan_mode_style") == "icons"
         val swingModeIcons = config.string("swing_mode_style") == "icons"
         val showCaptions = config.options["show_captions"] as? Boolean ?: true
+        val showHvacModes = config.bool("show_hvac_modes", true)
+        val showFanModes = config.bool("show_fan_modes", true)
+        val showSwingModes = config.bool("show_swing_modes", true)
 
         fun setTemp(t: Double) {
             val clamped = t.coerceIn(minT ?: t, maxT ?: t)
@@ -199,21 +206,8 @@ class ClimateCard : CardRenderer {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(name, color = ctx.theme.primaryText, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                Box(
-                    modifier =
-                    Modifier
-                        .size(36.dp)
-                        .clip(CircleShape)
-                        .background(if (isOff) ctx.theme.danger.copy(alpha = 0.25f) else ctx.theme.controlBackground)
-                        .tapClickable(focusShape = CircleShape) { turnOff() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Filled.PowerSettingsNew,
-                        contentDescription = "Off",
-                        tint = if (isOff) ctx.theme.danger else ctx.theme.iconTint,
-                        modifier = Modifier.size(20.dp)
-                    )
+                if (showPower) {
+                    PowerButton(isOff, ctx.theme) { turnOff() }
                 }
             }
 
@@ -250,8 +244,8 @@ class ClimateCard : CardRenderer {
                 }
             }
 
-            // HVAC mode chips (icons by default, matching HA's tile card; "off" excluded, see above).
-            if (modes.isNotEmpty()) {
+            // HVAC mode chips (icons by default, matching HA's tile card; "off" only without the power button).
+            if (showHvacModes && modes.isNotEmpty()) {
                 ModeSection(caption = if (showCaptions) stringResource(R.string.climate_hvac_caption) else null, theme = ctx.theme) {
                     balancedRows(modes, maxPerRow = if (hvacModeIcons) 5 else 3).forEach { row ->
                         Row(
@@ -273,7 +267,7 @@ class ClimateCard : CardRenderer {
             }
 
             // Fan mode chips
-            if (fanModes.isNotEmpty()) {
+            if (showFanModes && fanModes.isNotEmpty()) {
                 ModeSection(caption = if (showCaptions) stringResource(R.string.climate_fan_caption) else null, theme = ctx.theme) {
                     balancedRows(fanModes, maxPerRow = if (fanModeIcons) 5 else 3).forEach { row ->
                         Row(
@@ -295,7 +289,7 @@ class ClimateCard : CardRenderer {
             }
 
             // Swing mode chips
-            if (swingModes.isNotEmpty()) {
+            if (showSwingModes && swingModes.isNotEmpty()) {
                 ModeSection(caption = if (showCaptions) stringResource(R.string.climate_swing_caption) else null, theme = ctx.theme) {
                     balancedRows(swingModes, maxPerRow = if (swingModeIcons) 5 else 3).forEach { row ->
                         Row(
@@ -380,6 +374,26 @@ class ClimateCard : CardRenderer {
             contentAlignment = Alignment.Center
         ) {
             Icon(icon, contentDescription = null, tint = theme.iconTint)
+        }
+    }
+
+    @Composable
+    private fun PowerButton(isOff: Boolean, theme: ThemeColors, onClick: () -> Unit) {
+        Box(
+            modifier =
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(if (isOff) theme.danger.copy(alpha = 0.25f) else theme.controlBackground)
+                .tapClickable(focusShape = CircleShape, onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Filled.PowerSettingsNew,
+                contentDescription = "Off",
+                tint = if (isOff) theme.danger else theme.iconTint,
+                modifier = Modifier.size(20.dp)
+            )
         }
     }
 

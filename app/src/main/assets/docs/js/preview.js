@@ -613,9 +613,11 @@ function renderPreview() {
     } else if (card.type === 'climate') {
       const o = card.options || {};
       const mock = liveMock(o.entity_id, CLIMATE_MOCK);
-      const hvacModes = (o.hvac_modes && o.hvac_modes.length ? o.hvac_modes : (mock.hvac_modes || [])).filter(m => m !== 'off');
-      const fanModes = (o.fan_modes && o.fan_modes.length ? o.fan_modes : (mock.fan_modes || []));
-      const swingModes = (o.swing_modes && o.swing_modes.length ? o.swing_modes : (mock.swing_modes || []));
+      // show_* opt-outs mirror ClimateCard.kt ("off" becomes a chip when the power button is hidden).
+      const showPower = o.show_power !== false;
+      const hvacModes = o.show_hvac_modes === false ? [] : (o.hvac_modes && o.hvac_modes.length ? o.hvac_modes : (mock.hvac_modes || [])).filter(m => m !== 'off' || !showPower);
+      const fanModes = o.show_fan_modes === false ? [] : (o.fan_modes && o.fan_modes.length ? o.fan_modes : (mock.fan_modes || []));
+      const swingModes = o.show_swing_modes === false ? [] : (o.swing_modes && o.swing_modes.length ? o.swing_modes : (mock.swing_modes || []));
       const hvacStyle = o.hvac_mode_style === 'label' ? 'label' : 'icons';
       const fanStyle = o.fan_mode_style === 'icons' ? 'icons' : 'label';
       const swingStyle = o.swing_mode_style === 'icons' ? 'icons' : 'label';
@@ -638,7 +640,7 @@ function renderPreview() {
           <div class="preview-climate">
             <div class="cc-header">
               <span class="cc-name">${o.name || haFriendlyName(o.entity_id) || I18N.t('web_preview_climate_name')}</span>
-              <div class="cc-power ${mock.state === 'off' ? 'is-off' : ''}">${mdiSvg(MDI.power)}</div>
+              ${showPower ? `<div class="cc-power ${mock.state === 'off' ? 'is-off' : ''}">${mdiSvg(MDI.power)}</div>` : ''}
             </div>
             <div class="cc-temp-row">
               <div class="cc-stepper">−</div>
