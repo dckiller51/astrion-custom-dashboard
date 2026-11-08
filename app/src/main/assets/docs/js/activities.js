@@ -131,6 +131,12 @@ function isNetworkSky(entityId) {
   return /^media_player\.sky_/.test(entityId || '');
 }
 
+/** A Denon / Marantz receiver added in Astrion (1.5.4, media_player.denon_…): on (PWON), standby
+ * (PWSTANDBY) and an input by name. */
+function isNetworkDenon(entityId) {
+  return /^media_player\.denon_/.test(entityId || '');
+}
+
 /** A Samsung TV added in Astrion (1.5.3, media_player.samsung_…): turned on (its power key, or
  * Wake-on-LAN), off, and an app by name — the same as an LG TV for the wizard. */
 function isNetworkSamsung(entityId) {
@@ -177,6 +183,7 @@ function deviceRefLabel(ref) {
   if (isNetworkAndroidTv(ref.deviceId)) return I18N.t('web_activity_ref_adtv', haEntityName(ref.deviceId));
   if (isNetworkLgTv(ref.deviceId)) return I18N.t('web_activity_ref_lgtv', haEntityName(ref.deviceId));
   if (isNetworkSamsung(ref.deviceId)) return I18N.t('web_activity_ref_samsung', haEntityName(ref.deviceId));
+  if (isNetworkDenon(ref.deviceId)) return I18N.t('web_activity_ref_denon', haEntityName(ref.deviceId));
   if (isNetworkSky(ref.deviceId)) return I18N.t('web_activity_ref_sky', haEntityName(ref.deviceId));
   return `${haEntityName(ref.deviceId)} (HA — ${ref.deviceId})`;
 }
@@ -379,7 +386,8 @@ function renderWizardDevices() {
   const lgTvs = allHa.filter(c => isNetworkLgTv(c.entityId));
   const skys = allHa.filter(c => isNetworkSky(c.entityId));
   const samsungs = allHa.filter(c => isNetworkSamsung(c.entityId));
-  const haChoices = allHa.filter(c => !isNetworkTv(c.entityId) && !isNetworkSky(c.entityId));
+  const denons = allHa.filter(c => isNetworkDenon(c.entityId));
+  const haChoices = allHa.filter(c => !isNetworkTv(c.entityId) && !isNetworkSky(c.entityId) && !isNetworkDenon(c.entityId));
   return `
     <div class="hint">${I18N.t('web_activity_devices_hint')}</div>
 
@@ -430,6 +438,15 @@ function renderWizardDevices() {
           ${c.name}
         </label>
       `).join('') + `<div class="hint">${I18N.t('web_activity_samsung_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_denon_heading')}</h3>
+    ${denons.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_denon')}</div>` :
+      denons.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_denon_hint')}</div>`}
 
     <h3 style="margin-top:14px">${I18N.t('web_activity_sky_heading')}</h3>
     ${skys.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_sky')}</div>` :

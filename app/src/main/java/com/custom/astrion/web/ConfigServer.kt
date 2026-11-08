@@ -105,6 +105,7 @@ import org.json.JSONObject
  *  POST /lgtv-pair      pairs an LG TV (host): its prompt, then {model, mac}, see LgTvRoutes (1.5.2)
  *  POST /sky-check      a Sky box's kind (Sky Q / Sky+ HD) and model (host), see SkyRoutes (1.5.3)
  *  POST /samsung-pair   allows the remote on a Samsung TV (host): its prompt, then {model, mac}, see SamsungRoutes (1.5.3)
+ *  POST /denon-check    a Denon / Marantz receiver's model and port (host), see DenonRoutes (1.5.4)
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -261,11 +262,21 @@ class ConfigServer(
     var samsungRegistry: com.custom.astrion.samsung.SamsungRegistry? = null
     private val samsungRoutes = SamsungRoutes(context) { samsungRegistry }
 
+    /** Denon / Marantz receivers (1.5.4): added by IP, no pairing. */
+    var denonRegistry: com.custom.astrion.denon.DenonRegistry? = null
+    private val denonRoutes = DenonRoutes(context)
+
     /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
     @Volatile
     var onBackupRestored: () -> Unit = {}
 
     private val backupRoutes = BackupRoutes(context) { onBackupRestored() }
+
+    /** Takes a screenshot of the app (1.5.4, POST /screenshot): PNG, or null when it can't. */
+    @Volatile
+    var onScreenshot: () -> ByteArray? = { null }
+
+    private val screenshotRoutes = ScreenshotRoutes(context) { onScreenshot() }
 
     /** Called after POST /remote-name — the activity refreshes what shows the name. */
     @Volatile
@@ -315,7 +326,9 @@ class ConfigServer(
         webAuth.check(session) ?: backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session)
             ?: zidooRoutes.serve(uri, session) ?: lgTvRoutes.serve(uri, session)
             ?: skyRoutes.serve(uri, session)
-            ?: samsungRoutes.serve(uri, session) ?: when (uri) {
+            ?: samsungRoutes.serve(uri, session)
+            ?: denonRoutes.serve(uri, session)
+            ?: screenshotRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -444,10 +457,14 @@ class ConfigServer(
         }
         val content =
             runCatching {
-                samsungRoutes.reconcileHaDevices(
-                    skyRoutes.reconcileHaDevices(
-                        lgTvRoutes.reconcileHaDevices(
-                            zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText())))
+                denonRoutes.reconcileHaDevices(
+                    samsungRoutes.reconcileHaDevices(
+                        skyRoutes.reconcileHaDevices(
+                            lgTvRoutes.reconcileHaDevices(
+                                zidooRoutes.reconcileHaDevices(
+                                    androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))
+                                )
+                            )
                         )
                     )
                 )
@@ -632,6 +649,7 @@ class ConfigServer(
                 put("lgtvs", lgTvRoutes.configJson())
                 put("skys", skyRoutes.configJson())
                 put("samsungs", samsungRoutes.configJson())
+                put("denons", denonRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1227,6 +1245,7 @@ class ConfigServer(
         lgTvRoutes.saveRows(params)
         skyRoutes.saveRows(params)
         samsungRoutes.saveRows(params)
+        denonRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }

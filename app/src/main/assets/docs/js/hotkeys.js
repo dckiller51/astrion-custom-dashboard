@@ -91,10 +91,10 @@ const ATV_ALL_COMMANDS = [
 function androidTvHotkeyParts(h) {
   // A Zidoo / Eversolo added in Astrion too (1.4.9): its remote.zidoo_… / media_player.zidoo_…
   // take the same Android key names and its apps by name.
-  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo|lgtv|sky|samsung)_/.test(h.entityId || '')) {
+  if (h.service === 'remote.send_command' && /^remote\.(androidtv|zidoo|lgtv|sky|samsung|denon)_/.test(h.entityId || '')) {
     return { tv: h.entityId.replace(/^remote\./, 'media_player.'), kind: 'key', value: (h.data && h.data.command) || '' };
   }
-  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo|lgtv|sky|samsung)_/.test(h.entityId || '')) {
+  if (h.service === 'media_player.select_source' && /^media_player\.(androidtv|zidoo|lgtv|sky|samsung|denon)_/.test(h.entityId || '')) {
     return { tv: h.entityId, kind: 'app', value: (h.data && h.data.source) || '' };
   }
   return null;
@@ -106,11 +106,12 @@ async function loadNativeAndroidTvs() {
     const data = await res.json();
     // The Zidoos / Eversolos added in Astrion (1.4.9) answer the same keys and apps.
     // And the LG TVs (1.5.2): the same Android key names, their apps and inputs by name.
+    // And the Denon / Marantz receivers (1.5.4): their own commands (MVUP, MSMOVIE…), an input by name.
     // And the Samsung TVs (1.5.3): the same Android key names and Samsung's KEY_… codes, their apps by name.
     // And the Sky boxes (1.5.3): the same Android key names and Sky's own, a channel by name or number.
     return [...(Array.isArray(data.androidTvs) ? data.androidTvs : []), ...(Array.isArray(data.zidoos) ? data.zidoos : []),
       ...(Array.isArray(data.lgtvs) ? data.lgtvs : []), ...(Array.isArray(data.skys) ? data.skys : []),
-      ...(Array.isArray(data.samsungs) ? data.samsungs : [])];
+      ...(Array.isArray(data.samsungs) ? data.samsungs : []), ...(Array.isArray(data.denons) ? data.denons : [])];
   } catch (e) {
     return [];
   }
@@ -174,6 +175,23 @@ function skyCommandOptions(entityId) {
   return SKY_COMMANDS.map(([key, label]) => `<option value="${key}" label="${escapeAttr('Sky · ' + I18N.t(label))}"></option>`).join('');
 }
 
+// A Denon / Marantz receiver's own commands (1.5.4), sent as they are to the remote.denon_… of a
+// receiver added in Astrion (any of its commands works), offered here with what they do.
+const DENON_COMMANDS = [
+  ['ZMON', 'web_denon_pwon'], ['ZMOFF', 'web_denon_pwstandby'], ['PWON', 'web_denon_pw_all_on'], ['PWSTANDBY', 'web_denon_pw_all_off'], ['MVUP', 'web_denon_mvup'], ['MVDOWN', 'web_denon_mvdown'],
+  ['MUON', 'web_denon_muon'], ['MUOFF', 'web_denon_muoff'], ['MSMOVIE', 'web_denon_msmovie'], ['MSMUSIC', 'web_denon_msmusic'],
+  ['MSGAME', 'web_denon_msgame'], ['MSDIRECT', 'web_denon_msdirect'], ['MSPURE DIRECT', 'web_denon_mspure'], ['MSSTEREO', 'web_denon_msstereo'],
+  ['MSAUTO', 'web_denon_msauto'], ['PSDYNEQ ON', 'web_denon_dyneq_on'], ['PSDYNEQ OFF', 'web_denon_dyneq_off'],
+  ['PSDIL ON', 'web_denon_dialog_on'], ['PSDIL OFF', 'web_denon_dialog_off'], ['MNMEN ON', 'web_denon_menu'], ['MNOPT', 'web_denon_option'],
+  ['MNINF', 'web_denon_info'], ['SIGAME', 'web_denon_sigame'], ['SITV', 'web_denon_sitv'], ['SIBD', 'web_denon_sibd'], ['SIBT', 'web_denon_sibt']
+];
+
+/** The receiver's commands as <option>s (value: the command, label: what it does); '' for any other entity. */
+function denonCommandOptions(entityId) {
+  if (entityId && !/\.denon_/i.test(entityId)) return '';
+  return DENON_COMMANDS.map(([cmd, label]) => `<option value="${escapeAttr(cmd)}" label="${escapeAttr('Denon · ' + I18N.t(label))}"></option>`).join('');
+}
+
 // A Samsung TV's sources and the apps it opens by name (1.5.3), for the hotkeys' app field when the
 // page doesn't know its list: as SamsungEntityMapper.SOURCES and SamsungProtocol.KNOWN_APPS.
 const SAMSUNG_SOURCES = ['TV', 'HDMI', 'Netflix', 'YouTube', 'Prime Video', 'Disney+', 'Apple TV', 'Max', 'Paramount+', 'Plex',
@@ -223,19 +241,21 @@ function onHkAndroidTvKindChange() {
   if (/\.samsung_/.test(tv) && own.length <= 2) {
     own = [...new Set([...own.map(([n]) => n), ...SAMSUNG_SOURCES])].map(n => [n, n]);
   }
-  const apps = /^media_player\.(zidoo|lgtv|sky|samsung)_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
+  const apps = /^media_player\.(zidoo|lgtv|sky|samsung|denon)_/.test(tv) ? own : [...own, ...known.filter(([n]) => !own.some(([o]) => o === n))];
   list.innerHTML = kind === 'app'
     ? apps.map(([n, p]) => `<option value="${escapeAttr(p)}">${escapeAttr(n)}</option>`).join('')
     : ANDROID_TV_COMMANDS.map(c => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(tv) ? eversoloCommandOptions(tv) : '') +
       (/lgtv/i.test(tv) ? lgTvCommandOptions(tv) : '') + (/\.sky_/.test(tv) ? skyCommandOptions(tv) : '') +
-      (/\.samsung_/.test(tv) ? samsungCommandOptions(tv) : '');
+      (/\.samsung_/.test(tv) ? samsungCommandOptions(tv) : '') + (/\.denon_/.test(tv) ? denonCommandOptions(tv) : '');
   // A Sky box (1.5.3): a channel, by its number or name, instead of an app.
   const sky = /\.sky_/.test(tv);
-  input.placeholder = kind === 'app' ? (sky ? '101' : /\.(samsung|lgtv)_/.test(tv) ? 'Netflix' : 'com.canal.android.canal') : 'CHANNEL_UP';
+  const denon = /\.denon_/.test(tv);
+  input.placeholder = kind === 'app' ? (sky ? '101' : denon ? 'GAME' : /\.(samsung|lgtv)_/.test(tv) ? 'Netflix' : 'com.canal.android.canal') : (denon ? 'MVUP' : 'CHANNEL_UP');
   // An LG TV (1.5.2) takes its own button names too, and an input as well as an app.
   const lg = /lgtv_/.test(tv);
   const samsung = /\.samsung_/.test(tv);
-  const hint = sky ? (kind === 'app' ? 'web_hotkey_sky_app_hint' : 'web_hotkey_sky_key_hint')
+  const hint = denon ? (kind === 'app' ? 'web_hotkey_denon_app_hint' : 'web_hotkey_denon_key_hint')
+    : sky ? (kind === 'app' ? 'web_hotkey_sky_app_hint' : 'web_hotkey_sky_key_hint')
     : samsung ? (kind === 'app' ? 'web_hotkey_samsung_app_hint' : 'web_hotkey_samsung_key_hint')
     : kind === 'app' ? (lg ? 'web_hotkey_lgtv_app_hint' : 'web_hotkey_adtv_app_hint') : (lg ? 'web_hotkey_lgtv_key_hint' : 'web_hotkey_adtv_key_hint');
   document.getElementById('hkAndroidTvHint').textContent = I18N.t(hint);
@@ -282,7 +302,7 @@ function refreshRemoteCommandDatalist() {
   const suggestions = remoteCommandSuggestions(entityId) || [];
   dl.innerHTML = suggestions.map((c) => `<option value="${c}">`).join('') + (/zidoo|eversolo/i.test(entityId) ? eversoloCommandOptions(entityId) : '') +
     (/lgtv/i.test(entityId) ? lgTvCommandOptions(entityId) : '') + (/\.sky_/.test(entityId) ? skyCommandOptions(entityId) : '') +
-    (/\.samsung_/.test(entityId) ? samsungCommandOptions(entityId) : '');
+    (/\.samsung_/.test(entityId) ? samsungCommandOptions(entityId) : '') + (/\.denon_/.test(entityId) ? denonCommandOptions(entityId) : '');
 }
 
 // Selecting "Settings" or "Active Activities" here is a shortcut, not a
@@ -468,6 +488,7 @@ function hkTvKind(entityId) {
   if (/^media_player\.lgtv_/.test(entityId)) return I18N.t('web_hotkey_kind_lgtv');
   if (/^media_player\.sky_/.test(entityId)) return 'Sky';
   if (/^media_player\.samsung_/.test(entityId)) return I18N.t('web_hotkey_kind_samsung');
+  if (/^media_player\.denon_/.test(entityId)) return 'Denon / Marantz';
   if (/^media_player\.androidtv_/.test(entityId)) return 'Android TV';
   const a = (typeof haStates !== 'undefined' && haStates && haStates[entityId] && haStates[entityId].attributes) || {};
   return a.manufacturer === 'Eversolo' ? 'Eversolo' : 'Zidoo';
@@ -515,7 +536,7 @@ async function onHkTargetChange() {
       <label>${I18N.t('web_hotkey_adtv_kind')}</label>
       <select id="hkAndroidTvKind" onchange="onHkAndroidTvKindChange()">
         <option value="key">${I18N.t('web_hotkey_adtv_kind_key')}</option>
-        <option value="app">${I18N.t(/lgtv_/.test(id) ? 'web_hotkey_kind_app_or_input' : /\.sky_/.test(id) ? 'web_hotkey_kind_channel' : 'web_hotkey_adtv_kind_app')}</option>
+        <option value="app">${I18N.t(/lgtv_/.test(id) ? 'web_hotkey_kind_app_or_input' : /\.sky_/.test(id) ? 'web_hotkey_kind_channel' : /\.denon_/.test(id) ? 'web_hotkey_kind_input' : 'web_hotkey_adtv_kind_app')}</option>
       </select>
       <input type="text" id="hkAndroidTvValue" list="hkAndroidTvValues" style="margin-top:6px" autocomplete="off">
       <datalist id="hkAndroidTvValues"></datalist>
