@@ -284,6 +284,13 @@ function gallerySuggestionsFor(d) {
         { type: 'source_select', opts: source }
       ];
     }
+    if (/^denon_/.test(obj)) {
+      // A Denon / Marantz receiver added in Astrion (1.5.4): power, volume, input and sound mode.
+      return [
+        { type: 'media_player', recommended: true, opts: { name, entity_id: e } },
+        { type: 'source_select', opts: source }
+      ];
+    }
     if (/^sky_/.test(obj)) {
       // A Sky box added in Astrion (1.5.3): its remote first; a Sky Q's favourite channels are its sources.
       return [

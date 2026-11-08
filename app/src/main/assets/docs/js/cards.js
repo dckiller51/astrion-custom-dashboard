@@ -646,13 +646,13 @@ function updateCardFormInputs() {
   // + HA connected); otherwise the inputs stay plain text fields. optEntityId
   // itself is excluded — it's now a strict <select> over the Devices catalog
   // (see haEntityFieldHtml above), not a free-text field to autocomplete.
-  ['optRemoteEntity', 'optMediaEntity', 'optMuteEntity',
+  ['optRemoteEntity', 'optMediaEntity', 'optMuteEntity', 'optSgMaster',
     'optCalendarEntity', 'optMapImage', 'giEntityId',
     'optPlexMediaEntity', 'optPlexPlayEntity', 'optVisEntity', 'giVisEntity'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const dom = id === 'optRemoteEntity' ? 'remote'
-      : id === 'optMediaEntity' ? 'media_player'
+      : id === 'optMediaEntity' || id === 'optSgMaster' ? 'media_player'
       : id === 'optMuteEntity' ? 'remote'
       : id === 'optCalendarEntity' ? 'calendar'
       : id === 'optMapImage' ? 'image'

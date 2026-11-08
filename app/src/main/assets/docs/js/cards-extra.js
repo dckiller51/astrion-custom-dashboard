@@ -58,7 +58,8 @@ function cxWithout(o, keys) {
 function speakerGroupFormHtml() {
   return `
     <label>${I18N.t('web_card_sg_name')}</label><input type="text" id="optSgName" placeholder="${I18N.t('web_card_ph_name_room')}">
-    ${haEntityFieldHtml('media_player', 'optSgMaster', I18N.t('web_card_sg_master'))}
+    <label>${I18N.t('web_card_sg_master')}</label>
+    <input type="text" id="optSgMaster" placeholder="media_player.sonos_salon">
     <div class="hint">${I18N.t('web_card_sg_hint')}</div>
     <label>${I18N.t('web_card_sg_speakers')}</label>
     <div id="sgSpeakersList"></div>
@@ -96,7 +97,7 @@ function moveSgSpeaker(i, d) { syncSgSpeakers(); if (cxSwap(window._pendingSpeak
 
 function fillSpeakerGroupForm(o) {
   document.getElementById('optSgName').value = o.name || '';
-  setEntitySelectValue('optSgMaster', o.master);
+  document.getElementById('optSgMaster').value = o.master || '';
   window._pendingSpeakers = (Array.isArray(o.speakers) ? o.speakers : []).map(s => ({ ...s }));
   window._sgExtra = cxWithout(o, ['name', 'master', 'speakers']);
   renderSgSpeakers();
@@ -296,7 +297,8 @@ function tvRemoteFormHtml() {
     // An LG TV's own buttons too (1.5.2): inputs, quick settings, guide…
     (typeof lgTvCommandOptions === 'function' ? lgTvCommandOptions('') : '') +
     (typeof skyCommandOptions === 'function' ? skyCommandOptions('') : '') +
-    (typeof samsungCommandOptions === 'function' ? samsungCommandOptions('') : '');
+    (typeof samsungCommandOptions === 'function' ? samsungCommandOptions('') : '') +
+    (typeof denonCommandOptions === 'function' ? denonCommandOptions('') : '');
   return `
     <label>${I18N.t('web_card_name')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_tv_name')}">
     <label>${I18N.t('web_card_remote_entity_id')}</label><input type="text" id="optRemoteEntity" list="tvRemoteEntities" placeholder="${I18N.t('web_card_ph_remote')}" onchange="onTvEntityChange()">
@@ -420,8 +422,14 @@ function refreshTvAppSuggestions() {
     TV_KNOWN_APPS.filter(([, p]) => !seen.has(p)).map(([n, p]) => `<option value="${cxEsc(p)}">${cxEsc(n)}</option>`).join('');
 }
 
-function useTvDeviceApps() {
-  const own = tvDeviceApps();
+async function useTvDeviceApps() {
+  let own = tvDeviceApps();
+  // A device added since the builder opened (a receiver from the Devices page) isn't in its
+  // snapshot yet: read the states again before saying there is nothing.
+  if (!own.length && typeof loadHaStates === 'function') {
+    await loadHaStates(true);
+    own = tvDeviceApps();
+  }
   if (!own.length) { alert(I18N.t('web_card_tv_no_device_apps')); return; }
   window._pendingTvApps = own.map(a => ({ ...a }));
   renderTvApps();

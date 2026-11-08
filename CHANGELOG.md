@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.4-beta] - 2026-11-08
+
+### Added
+
+- **Denon and Marantz AV receivers controlled directly**: Devices › Direct devices › **Audio** › **+ Add Denon / Marantz receiver**, its IP address. No pairing, no Home Assistant.
+  - Each receiver becomes `media_player.denon_<name>`: the **main zone**'s power (zones 2 and 3 are left as they are), volume (level, up / down, set), mute, its **inputs with the names you gave them** (the hidden ones left out), and its **sound modes** (movie, music, game, direct, pure direct, stereo, auto, Dolby, DTS…).
+  - And `remote.denon_<name>`, which takes the receiver's own commands (`MVUP`, `MSMOVIE`, `PSDYNEQ ON`, `SIGAME`…) and Android names (`VOLUME_UP`, `DPAD_UP`… for its on-screen menu).
+  - Over the receiver's web API (port 8080 on AVR-X models from 2016, else 80; recent models such as the AVC-X4800H, whose status page is closed, through its AppCommand interface), not telnet: it works next to Home Assistant's Denon integration, which may hold the receiver's single telnet connection. Polled every 3 s when on, 15 s in standby, not at all with Home Assistant's quiet mode.
+  - **HEOS** (receivers with HEOS built in): on a HEOS input, the media player shows what plays (title, artist, album, cover, progress), with play / pause / stop / next / previous, shuffle and repeat; the **HEOS favorites** join the inputs as sources, a tap plays one. Over the HEOS CLI (port 1255), which pushes the changes; reconnected after a drop, closed in quiet mode.
+  - **Inputs renamed or hidden in Astrion** (⇄ on the receiver's card): for receivers that don't say the names given on them (the AVC-X4800H's AppCommand interface answers empty), and to hide the inputs nobody uses. A blank name keeps the receiver's.
+  - The media player card is the suggested card; hotkeys suggest its commands with what they do, and an input by name; Activities have a *Denon / Marantz receiver (network)* section (on, standby, input).
+  - URLs and sound modes from the denonavr library (MIT), the one Home Assistant's Denon AVR integration uses; HEOS commands from Denon's HEOS CLI specification, as Home Assistant's HEOS integration uses them.
+- **Show a card or a button only when…** (`visibility`): a card, a button grid button or a scene grid tile can carry Home Assistant's own visibility rules (state, numeric_state, and / or); what's hidden leaves its room to the others. The builder has a *Show only when* block in every card and item form; the preview marks them. By tfalkenhagen (#134).
+- **Climate card: hide the power button or a row of modes** (`show_power`, `show_hvac_modes`, `show_fan_modes`, `show_swing_modes`), e.g. for a compact thermostat; with the power button hidden, *off* comes back as a mode. By tfalkenhagen (#133).
+- **Screenshots of the remote** from the web page: home page › **Screenshots**. *Take a screenshot* captures what the remote shows now; the ones taken are listed with a preview, each downloadable or deletable, and *Delete all*. The remote keeps the last 50, in its own storage (not in backups). The app's own screen only: a pop-up opened over it (Sources, a confirmation) isn't in the picture.
+
+### Changed
+
+- **Only the cards that read a changed entity are redrawn**, instead of the whole page at every Home Assistant update: smoother and lighter on the remote. By tfalkenhagen (#135).
+- **Speaker group card: the main speaker can be any media player**, typed with suggestions like the other speakers, instead of only one from the Devices catalog.
+
 ## [1.5.3-beta] - 2026-11-07
 
 ### Added

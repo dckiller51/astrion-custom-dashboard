@@ -54,6 +54,8 @@ import com.custom.astrion.config.IrStepConfig
 import com.custom.astrion.config.IrTarget
 import com.custom.astrion.config.JsonPlain
 import com.custom.astrion.config.RemoteSettings
+import com.custom.astrion.denon.DenonRegistry
+import com.custom.astrion.denon.installDenon
 import com.custom.astrion.extender.ExtenderRegistry
 import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
@@ -155,7 +157,8 @@ class MainActivity : ComponentActivity() {
         val VOLUME_POPUP_KEYS = setOf("VOLUME_UP", "VOLUME_DOWN", "MUTE")
 
         // remote.* entities the remote answers itself (see serviceRepeatMs()).
-        val DIRECT_REMOTE_PREFIXES = listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_", "remote.lgtv_", "remote.samsung_")
+        val DIRECT_REMOTE_PREFIXES =
+            listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_", "remote.lgtv_", "remote.samsung_", "remote.denon_")
 
         // The four D-pad keys that move Compose focus when unmapped — see
         // clearFocusTrigger's own doc, dispatchKeyEvent().
@@ -447,6 +450,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var lgTvRegistry: LgTvRegistry // LG TVs, direct (1.5.2)
     private lateinit var skyRegistry: SkyRegistry // Sky boxes, direct (1.5.3)
     private lateinit var samsungRegistry: SamsungRegistry // Samsung TVs, direct (1.5.3)
+    private lateinit var denonRegistry: DenonRegistry // Denon / Marantz receivers, direct (1.5.4)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -567,6 +571,7 @@ class MainActivity : ComponentActivity() {
                 if (::lgTvRegistry.isInitialized) lgTvRegistry.setQuiet(quiet)
                 if (::skyRegistry.isInitialized) skyRegistry.setQuiet(quiet)
                 if (::samsungRegistry.isInitialized) samsungRegistry.setQuiet(quiet)
+                if (::denonRegistry.isInitialized) denonRegistry.setQuiet(quiet)
             }
         )
     }
@@ -724,10 +729,15 @@ class MainActivity : ComponentActivity() {
         // After the Sky one, chained the same way (1.5.3).
         samsungRegistry = installSamsung(this, client, log = { Log.i("Samsung", it) })
         configServer.samsungRegistry = samsungRegistry
+        // After the Samsung one, chained the same way (1.5.4).
+        denonRegistry = installDenon(this, client, log = { Log.i("Denon", it) })
+        configServer.denonRegistry = denonRegistry
         localWeather.attach(client)
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
         // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
         configServer.onBackupRestored = { Handler(Looper.getMainLooper()).postDelayed({ AppLanguage.restart(this) }, RESTORE_RESTART_MS) }
+        // The web page's screenshots (1.5.4): this activity's window, on the server's thread.
+        configServer.onScreenshot = { ScreenCapture.png(this) }
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -739,6 +749,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()
         lgTvRegistry.stop()
@@ -1715,6 +1726,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()
         lgTvRegistry.stop()
