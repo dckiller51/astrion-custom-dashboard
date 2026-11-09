@@ -32,3 +32,4 @@ dashboard.json
 # Local output recordings / media files
 recordings/
 push-beta.ps1
+push-test.ps1

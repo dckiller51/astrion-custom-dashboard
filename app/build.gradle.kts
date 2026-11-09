@@ -21,6 +21,15 @@ android {
         versionName = "1.5.5"
     }
 
+    signingConfigs {
+        getByName("debug") {
+            // The beta built by GitHub (.github/workflows/beta-release.yml) is signed with the
+            // usual debug keystore, given here: with another key it couldn't update an
+            // installed beta. Unset locally: Android's own ~/.android/debug.keystore.
+            System.getenv("DEBUG_KEYSTORE")?.takeIf { it.isNotBlank() }?.let { storeFile = file(it) }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
