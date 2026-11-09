@@ -1,0 +1,81 @@
+name: Beta release
+
+# Publishes the beta once a release lands on dev: the debug APK replaces the
+# one on the rolling `dev-latest` pre-release (only stable versions get their
+# own tag). A release PR updates CHANGELOG.md, a contributor's PR doesn't, so
+# only the former publishes; Run workflow (Actions tab) publishes by hand.
+#
+# Needs the repository secret DEBUG_KEYSTORE_BASE64: the debug keystore the
+# betas have always been signed with, base64. Signed with another key, the
+# APK couldn't update a beta already installed.
+
+on:
+  push:
+    branches: [dev]
+    paths: [CHANGELOG.md]
+  workflow_dispatch:
+
+concurrency:
+  group: beta-release
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # creates / updates the dev-latest release
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Debug keystore
+        env:
+          KEYSTORE: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::Secret DEBUG_KEYSTORE_BASE64 missing: the beta must be signed with the usual debug keystore"
+            exit 1
+          fi
+          mkdir -p ~/.android
+          echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+
+      - name: Set up JDK
+        uses: actions/setup-java@v5
+        with:
+          distribution: jetbrains
+          java-version: '21'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Version and notes
+        id: meta
+        run: |
+          version=$(sed -n 's/.*versionName *= *"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
+          changelog=$(sed -n 's/^## \[\([^]]*\)\].*/\1/p' CHANGELOG.md | head -n 1)
+          if [ "${changelog%-beta}" != "$version" ]; then
+            echo "::warning::versionName $version, CHANGELOG $changelog"
+          fi
+          # The CHANGELOG's latest section, as the release notes.
+          awk 'f && /^## \[/ {exit} /^## \[/ {f=1} f' CHANGELOG.md > notes.md
+          printf '\n\nBuild %s (%s)\n' "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%d)" >> notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish dev-latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=app/build/outputs/apk/debug/app-debug.apk
+          title="Dev build ${{ steps.meta.outputs.version }}"
+          if gh release view dev-latest > /dev/null 2>&1; then
+            gh release upload dev-latest "$apk" --clobber
+            gh release edit dev-latest --title "$title" --notes-file notes.md --prerelease
+          else
+            gh release create dev-latest "$apk" --title "$title" --notes-file notes.md --prerelease --target dev
+          fi
+          echo "Beta published: $title"
