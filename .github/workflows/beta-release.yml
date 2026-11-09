@@ -7,7 +7,9 @@ name: Beta release
 #
 # Needs the repository secret DEBUG_KEYSTORE_BASE64: the debug keystore the
 # betas have always been signed with, base64. Signed with another key, the
-# APK couldn't update a beta already installed.
+# APK couldn't update a beta already installed. Optional repository variable
+# DEBUG_CERT_SHA256: that key's SHA-256 fingerprint; the build stops before
+# publishing when the APK's doesn't match.
 
 on:
   push:
@@ -36,8 +38,12 @@ jobs:
             echo "::error::Secret DEBUG_KEYSTORE_BASE64 missing: the beta must be signed with the usual debug keystore"
             exit 1
           fi
-          mkdir -p ~/.android
-          echo "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          # Given to Gradle explicitly (app/build.gradle.kts): the default ~/.android one was
+          # not the one used, the first beta came out signed with a key made on the runner.
+          echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/debug.keystore"
+          keytool -list -keystore "$RUNNER_TEMP/debug.keystore" -storepass android -alias androiddebugkey > /dev/null \
+            || { echo "::error::DEBUG_KEYSTORE_BASE64 isn't a debug keystore (password android, alias androiddebugkey)"; exit 1; }
+          echo "DEBUG_KEYSTORE=$RUNNER_TEMP/debug.keystore" >> "$GITHUB_ENV"
 
       - name: Set up JDK
         uses: actions/setup-java@v5
@@ -52,6 +58,19 @@ jobs:
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+
+      - name: Check the signature
+        env:
+          EXPECTED: ${{ vars.DEBUG_CERT_SHA256 }}
+        run: |
+          apksigner=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
+          actual=$("$apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk \
+            | sed -n 's/.*certificate SHA-256 digest: //p' | head -n 1 | tr -d ':' | tr 'a-f' 'A-F')
+          echo "APK signed with SHA-256 $actual"
+          if [ -n "$EXPECTED" ] && [ "$actual" != "$(echo "$EXPECTED" | tr -d ': ' | tr 'a-f' 'A-F')" ]; then
+            echo "::error::Signed with another key than DEBUG_CERT_SHA256: not published"
+            exit 1
+          fi
 
       - name: Version and notes
         id: meta
