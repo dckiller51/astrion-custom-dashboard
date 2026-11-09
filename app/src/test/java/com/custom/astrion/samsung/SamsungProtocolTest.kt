@@ -107,6 +107,9 @@ class SamsungProtocolTest {
         assertEquals(listOf(SamsungStep.Key("KEY_HDMI")), SamsungServices.media("select_source", mapOf("source" to "hdmi"), on))
         assertEquals(listOf(SamsungStep.Launch(netflix)), SamsungServices.media("select_source", mapOf("source" to "Netflix"), on))
         assertEquals(listOf(SamsungStep.Key("KEY_CHUP")), SamsungServices.media("media_next_track", emptyMap(), on))
+        // An Activity's "app" can be a key: HOME brings the home screen up.
+        assertEquals(listOf(SamsungStep.Key("KEY_HOME")), SamsungServices.media("select_source", mapOf("source" to "HOME"), on))
+        assertEquals(listOf(SamsungStep.Key("KEY_SOURCE")), SamsungServices.media("select_source", mapOf("source" to "KEY_SOURCE"), on))
         // Not listed by the TV: a known app by its name, any other by its id, both over REST.
         assertEquals(
             listOf(SamsungStep.Launch(SamsungProtocol.App("111299001912", "YouTube", SamsungProtocol.REST_APP, null))),

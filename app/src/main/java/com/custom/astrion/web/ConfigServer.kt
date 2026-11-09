@@ -138,11 +138,14 @@ import org.json.JSONObject
  *                        device (/builder/)
  *  GET  /check-update     check this project's GitHub Releases for a newer build
  *  POST /install-update   download the newer APK and open the system installer
+ *                        (`force=1`: the official one even when installed)
  *  POST /install-beta-update  same as /install-update but against the rolling
  *                        dev-latest pre-release instead — always installs
  *                        whatever the tag currently points to, no separate
  *                        check step (used by the beta toggle in the builder,
  *                        docs/js/hotkeys.js's installBetaUpdate())
+ *  POST /install-test-update  a test build: the pre-release tagged `tag`
+ *                        (test-latest…), installed whatever the version
  *  GET  /pages            list this device's dashboard pages (id + name), in
  *                        pager order — lets a remote controller (e.g. the
  *                        Home Assistant "astrion" integration) discover what
@@ -367,8 +370,9 @@ class ConfigServer(
                     Method.POST -> handleIrDatabaseUpload(session)
                     else -> methodNotAllowed()
                 }
-            "/install-update" -> if (method == Method.POST) handleInstallUpdate() else methodNotAllowed()
+            "/install-update" -> if (method == Method.POST) handleInstallUpdate(session) else methodNotAllowed()
             "/install-beta-update" -> if (method == Method.POST) handleInstallBetaUpdate() else methodNotAllowed()
+            "/install-test-update" -> if (method == Method.POST) handleInstallTestUpdate(session) else methodNotAllowed()
             "/pages" -> if (method == Method.GET) servePages() else methodNotAllowed()
             "/current-page" -> if (method == Method.GET) serveCurrentPage() else methodNotAllowed()
             "/version" -> if (method == Method.GET) serveVersion() else methodNotAllowed()
@@ -1903,11 +1907,17 @@ class ConfigServer(
         return redirectHome(message)
     }
 
-    private fun handleInstallUpdate(): Response {
+    private fun handleInstallUpdate(session: IHTTPSession): Response {
+        // `force=1` (1.5.5, the builder's Reinstall): the official release even when it's the one installed.
+        val force = session.parameters["force"]?.firstOrNull() == "1"
         val result =
-            lastResult ?: run {
-                val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
-                if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
+            if (force) {
+                UpdateChecker.checkForUpdate(force = true)
+            } else {
+                lastResult ?: run {
+                    val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
+                    if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
+                }
             }
         val info =
             (result as? UpdateChecker.CheckResult.Available)?.info
@@ -1965,8 +1975,20 @@ class ConfigServer(
      * meta-refresh HTML, which `fetch()` doesn't act on anyway and which
      * always reports 200 OK even for a failure.
      */
-    private fun handleInstallBetaUpdate(): Response {
-        val result = UpdateChecker.checkBetaUpdate()
+    private fun handleInstallBetaUpdate(): Response = installPlain(UpdateChecker.checkBetaUpdate(), "No beta build available")
+
+    /**
+     * POST /install-test-update (1.5.5): a test build, the pre-release tagged `tag` (`test-latest`
+     * by default, see [UpdateChecker.checkTestBuild]) — installed whatever the version.
+     */
+    private fun handleInstallTestUpdate(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        val tag = session.parameters["tag"]?.firstOrNull()?.trim()?.lowercase().orEmpty().ifEmpty { "test-latest" }
+        return installPlain(UpdateChecker.checkTestBuild(tag), "No test build tagged $tag")
+    }
+
+    /** Downloads [result]'s APK and opens the installer; plain status + text, for `fetch()`. */
+    private fun installPlain(result: UpdateChecker.CheckResult, none: String): Response {
         val info =
             (result as? UpdateChecker.CheckResult.Available)?.info
                 ?: return newFixedLengthResponse(
@@ -1974,7 +1996,7 @@ class ConfigServer(
                     "text/plain",
                     when (result) {
                         is UpdateChecker.CheckResult.Failed -> result.reason
-                        else -> "No beta build available"
+                        else -> none
                     }
                 )
 
@@ -2007,7 +2029,7 @@ class ConfigServer(
             UpdateChecker.promptInstall(context, file)
             newFixedLengthResponse(Response.Status.OK, "text/plain", "Installing ${info.version}")
         } catch (e: Exception) {
-            Log.e("ConfigServer", "beta install prompt failed", e)
+            Log.e("ConfigServer", "install prompt failed", e)
             newFixedLengthResponse(
                 Response.Status.INTERNAL_ERROR,
                 "text/plain",

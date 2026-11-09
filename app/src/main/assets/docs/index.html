@@ -29,13 +29,8 @@
 
 <div class="release-info-row" style="display:flex;align-items:center;gap:16px;margin-top:6px;flex-wrap:wrap;">
     <span id="installedBadge"></span>
-    <span id="stableBadge"></span>
-    <label class="beta-switch">
-        <input type="checkbox" id="betaToggle" onchange="toggleBetaBadge()">
-        <span class="beta-slider"></span>
-    </label>
-    <span id="betaToggleLabel" data-i18n="web_release_also_beta">Also the beta (dev)</span>
-    <span id="betaBadge" style="display:none"></span>
+    <span id="updateNotice" style="display:none"></span>
+    <a href="/#updates" data-i18n="web_updates_heading">Updates</a>
 </div>
 
 <div class="layout">
@@ -503,6 +498,7 @@
 <script src="js/deeplink.js"></script>
 <script src="js/harmony.js"></script>
 <script src="js/hotkeys.js"></script>
+<script src="js/updates.js"></script>
 <script src="js/activities.js"></script>
 <script src="js/theme.js"></script>
 <script src="js/dock.js"></script>

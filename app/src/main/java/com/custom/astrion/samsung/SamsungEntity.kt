@@ -194,7 +194,10 @@ object SamsungServices {
         else -> null
     }
 
-    /** "TV" or "HDMI", else an app by its name or id ("Netflix", "3201907018807"). */
+    /**
+     * "TV" or "HDMI", else an app by its name or id ("Netflix", "3201907018807"), else a key
+     * ("HOME", "KEY_HOME": an Activity's input can bring the TV's home screen up).
+     */
     fun sourceOf(value: Any?, state: SamsungState): List<SamsungStep>? {
         val v = (value as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         SamsungEntityMapper.SOURCES.entries.firstOrNull { it.key.equals(v, true) }?.let { return key(it.value) }
@@ -203,6 +206,7 @@ object SamsungServices {
                 ?: SamsungProtocol.KNOWN_APPS.firstOrNull { it.first.equals(v, true) }?.let { (name, ids) ->
                     SamsungProtocol.App(ids.first(), name, SamsungProtocol.REST_APP, null)
                 }
+                ?: SamsungKeys.of(v)?.let { return key(it) }
                 ?: SamsungProtocol.App(v, v, SamsungProtocol.REST_APP, null)
         return listOf(SamsungStep.Launch(app))
     }

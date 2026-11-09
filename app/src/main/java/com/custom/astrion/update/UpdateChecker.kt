@@ -52,17 +52,35 @@ object UpdateChecker {
 
     private val http = OkHttpClient()
 
-    /** Blocking network call — invoke off the main thread. */
-    fun checkForUpdate(): CheckResult {
+    /** Blocking network call — invoke off the main thread. [force]: offered even when not newer (reinstall). */
+    fun checkForUpdate(force: Boolean = false): CheckResult {
         val release =
             when (val fetch = fetchRelease(API_URL)) {
                 is FetchResult.Err -> return fetch.failed
                 is FetchResult.Ok -> fetch.release
             }
         val tag = release.tag.removePrefix("v")
-        if (!isNewer(tag)) return CheckResult.UpToDate
+        if (!force && !isNewer(tag)) return CheckResult.UpToDate
         return releaseToResult(release, tag)
     }
+
+    /**
+     * A test build (1.5.5): the pre-release tagged [tag] (`test-latest`, `test-samsung`…), which
+     * neither the official nor the beta check ever looks at — only the testers given its name get
+     * it. Always offered, whatever the version: a test build is reinstalled as often as needed.
+     */
+    fun checkTestBuild(tag: String): CheckResult {
+        if (!TEST_TAG.matches(tag)) return CheckResult.Failed("Not a test build's tag: $tag")
+        val release =
+            when (val fetch = fetchRelease("https://api.github.com/repos/$REPO/releases/tags/$tag")) {
+                is FetchResult.Err -> return fetch.failed
+                is FetchResult.Ok -> fetch.release
+            }
+        return releaseToResult(release, release.name.ifBlank { release.tag })
+    }
+
+    /** `test`, `test-latest`, `test-samsung`…: the tags a test build may have. */
+    val TEST_TAG = Regex("^test(-[a-z0-9]+)*$")
 
     /**
      * Same idea as [checkForUpdate], but against the rolling `dev-latest`
