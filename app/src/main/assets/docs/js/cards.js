@@ -274,6 +274,7 @@ function updateCardFormInputs() {
             <select id="optMediaArtworkRatio">
               <option value="square">${I18N.t('web_card_square_ish_default')}</option>
               <option value="portrait">${I18N.t('web_card_portrait_2_3_movie_posters')}</option>
+              <option value="wide">${I18N.t('web_card_wide_16_9_tv_episodes')}</option>
             </select>
           </div>
         </div>
@@ -1693,7 +1694,7 @@ function fillCardForm(card) {
     document.getElementById('optMediaVolSet').checked = vCtrls.includes('set');
     document.getElementById('optMediaTopButtons').value = JSON.stringify(o.top_buttons || [], null, 2);
     document.getElementById('optMediaArtworkFit').value = o.artwork_fit === 'contain' ? 'contain' : 'cover';
-    document.getElementById('optMediaArtworkRatio').value = o.artwork_ratio === 'portrait' ? 'portrait' : 'square';
+    document.getElementById('optMediaArtworkRatio').value = ['portrait', 'wide'].includes(o.artwork_ratio) ? o.artwork_ratio : 'square';
     updateMediaTopButtonsVisibility();
     document.getElementById('optMediaMusicSearch').checked = o.music_search === true;
     document.getElementById('optMediaQueue').checked = o.show_queue !== false;
@@ -1972,7 +1973,8 @@ function addCardToPage() {
         return;
       }
       if (document.getElementById('optMediaArtworkFit').value === 'contain') newCard.options.artwork_fit = 'contain';
-      if (document.getElementById('optMediaArtworkRatio').value === 'portrait') newCard.options.artwork_ratio = 'portrait';
+      const artworkRatio = document.getElementById('optMediaArtworkRatio').value;
+      if (artworkRatio !== 'square') newCard.options.artwork_ratio = artworkRatio;
     }
   } else if (type === 'camera') {
     const camName = document.getElementById('optName').value.trim();
