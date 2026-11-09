@@ -54,6 +54,23 @@ class SamsungRegistry(
 
         /** Refused on the TV: not tried again until it's paired again. */
         @Volatile var denied = false
+
+        /**
+         * Keys sent while the TV was off or starting (an Activity's HOME right after turning it
+         * on): sent once it's on and connected, if not older than [PENDING_KEY_MS]. Executor only.
+         */
+        val pendingKeys = ArrayList<Pair<String, Long>>()
+
+        var flushScheduled = false
+
+        /**
+         * Whether the apps came from the TV's own list (all of them, Canal+ included) rather than
+         * the known ones looked for: a TV in standby doesn't answer that list, so it's asked again
+         * once it's on. Executor only.
+         */
+        var appsFromTv = false
+
+        var appsAskedAt = 0L
     }
 
     private val devices = LinkedHashMap<String, Device>() // by media entity id
@@ -149,6 +166,8 @@ class SamsungRegistry(
             update(device) { it.copy(reachable = true, powerOn = info.powerOn, model = info.model ?: it.model, frame = info.frame) }
             if (device.conn == null && !device.denied) connect(device)
             if (device.state.on) readOn(device)
+            askAppsWhenOn(device)
+            scheduleFlush(device)
         }
         if (!quiet) schedule(device, if (device.state.on) ON_POLL_MS else OFF_POLL_MS)
     }
@@ -183,7 +202,14 @@ class SamsungRegistry(
         }
 
         override fun onApps(apps: List<SamsungProtocol.App>) {
-            if (apps.isNotEmpty()) runCatching { device.executor.execute { update(device) { it.copy(apps = apps) } } }
+            if (apps.isNotEmpty()) {
+                runCatching {
+                    device.executor.execute {
+                        device.appsFromTv = true
+                        update(device) { it.copy(apps = apps) }
+                    }
+                }
+            }
         }
 
         override fun onClosed(reason: String) {
@@ -199,6 +225,7 @@ class SamsungRegistry(
         if (newToken != null || newPin != null) saveKeys(device.cfg.localId, newToken, newPin)
         log("[${device.spec.name}] connected")
         update(device) { it.copy(connected = true) }
+        scheduleFlush(device)
         if (device.state.apps.isEmpty()) {
             device.conn?.requestApps()
             // Recent TVs (2022 onwards) don't answer: the known apps are then looked for one by one.
@@ -210,6 +237,15 @@ class SamsungRegistry(
                 )
             }
         }
+    }
+
+    /** The TV's own list of apps, asked again while it's on and only the known ones were found. */
+    private fun askAppsWhenOn(device: Device) {
+        val now = System.currentTimeMillis()
+        val ready = device.state.on && device.state.connected
+        if (device.appsFromTv || !ready || now - device.appsAskedAt < APPS_ASK_MS) return
+        device.appsAskedAt = now
+        device.conn?.requestApps()
     }
 
     /** The known apps the TV has (see [SamsungProtocol.KNOWN_APPS]), asked over REST. */
@@ -283,15 +319,50 @@ class SamsungRegistry(
     private fun run(device: Device, step: SamsungStep) {
         val c = device.conn
         when (step) {
-            is SamsungStep.Key -> {
-                if (c?.key(step.code) != true) log("[${device.spec.name}] not connected: ${step.code} not sent")
-                if (step.code == "KEY_PLAY" || step.code == "KEY_PAUSE") update(device) { it.copy(paused = step.code == "KEY_PAUSE") }
-            }
+            is SamsungStep.Key -> key(device, step.code)
             is SamsungStep.Hold -> c?.hold(step.code, step.ms)
             is SamsungStep.Launch -> launch(device, step.app)
             is SamsungStep.Volume -> if (device.rest.setVolume(step.level)) update(device) { it.copy(volume = step.level) }
             is SamsungStep.Mute -> if (device.rest.setMute(step.muted)) update(device) { it.copy(muted = step.muted) }
             SamsungStep.Wake -> wake(device)
+        }
+    }
+
+    private fun key(device: Device, code: String) {
+        val c = device.conn
+        val ready = device.state.on && device.state.connected
+        if (ready && c?.key(code) == true) {
+            if (code == "KEY_PLAY" || code == "KEY_PAUSE") update(device) { it.copy(paused = code == "KEY_PAUSE") }
+            return
+        }
+        if (code in POWER_KEYS) {
+            if (c?.key(code) != true) log("[${device.spec.name}] not connected: $code not sent")
+            return
+        }
+        // Off or starting: kept until it's on (an Activity's HOME right after the power-on).
+        if (device.pendingKeys.size < MAX_PENDING_KEYS) device.pendingKeys += code to System.currentTimeMillis()
+        log("[${device.spec.name}] $code waits for the TV to be on")
+        schedule(device, AFTER_WAKE_MS)
+    }
+
+    /** Once on and connected, the keys kept send after [SETTLE_MS] (the TV's home screen loads first). */
+    private fun scheduleFlush(device: Device) {
+        val ready = device.state.on && device.state.connected
+        if (device.pendingKeys.isEmpty() || device.flushScheduled || !ready) return
+        device.flushScheduled = true
+        runCatching { device.executor.schedule({ flushKeys(device) }, SETTLE_MS, TimeUnit.MILLISECONDS) }
+            .onFailure { device.flushScheduled = false }
+    }
+
+    private fun flushKeys(device: Device) {
+        device.flushScheduled = false
+        val now = System.currentTimeMillis()
+        val keys = device.pendingKeys.filter { now - it.second < PENDING_KEY_MS }.map { it.first }
+        device.pendingKeys.clear()
+        val c = device.conn ?: return
+        keys.forEachIndexed { i, code ->
+            if (i > 0) Thread.sleep(KEY_GAP_MS)
+            if (!c.key(code)) log("[${device.spec.name}] not connected: $code not sent")
         }
     }
 
@@ -331,6 +402,11 @@ class SamsungRegistry(
         const val KEY_GAP_MS = 80L
         const val WAKE_PACKETS = 3
         const val APPS_WAIT_MS = 5_000L
+        const val PENDING_KEY_MS = 30_000L
+        const val APPS_ASK_MS = 60_000L
+        const val SETTLE_MS = 2_000L
+        const val MAX_PENDING_KEYS = 10
+        val POWER_KEYS = setOf("KEY_POWER", "KEY_POWEROFF", "KEY_POWERON")
     }
 }
 

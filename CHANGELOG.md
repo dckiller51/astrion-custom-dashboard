@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.5-beta] - 2026-11-09
+
+### Added
+
+- **Updates on the home page**: home page › **Updates** shows the version installed, the official release and the beta (with Install / Reinstall), and test builds; a newer version is pointed out under the title (*⬆️ 1.5.6 available*), on the builder's header too, which keeps only the version installed and a link.
+- **Media player card: wide artwork** (`artwork_ratio: "wide"`, *Artwork shape › Wide 16:9* in the builder): TV stills and streaming art aren't cropped, and the card is about 110 px shorter on a 480 px screen. By tfalkenhagen (#138).
+- **Test builds**: *🔬 Test build…* in the Updates view installs a build published for a few testers (a pre-release tagged `test-latest`, `test-samsung`…), which the official and beta updates never offer; it installs whatever the version, as often as needed, and the next beta replaces it.
+- **Reinstall**: the version installed shows *Reinstall*, as the remote's own update screen allows (a new beta with the same version number could not be installed from the web page).
+- **Samsung TV: a key as an Activity's app**: type `HOME` (or any key, `KEY_SOURCE`…) as the app to launch, and the TV shows its home screen once it's on, without Home Assistant or IR. The wizard suggests `HOME`.
+
+### Fixed
+
+- **Samsung TV: keys sent while it's starting are kept**: a key that arrives while the TV is off or still starting (an Activity's `HOME` right after turning it on) is sent once it's on and connected, 2 s later, instead of being lost.
+- **Samsung TV: every installed app** (Canal+, Hue Sync…): a TV in standby doesn't give its list of apps, so only the known ones were found; the list is now asked again once the TV is on.
+
 ## [1.5.4-beta] - 2026-11-08
 
 ### Added

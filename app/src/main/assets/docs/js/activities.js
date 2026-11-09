@@ -525,7 +525,7 @@ function renderWizardConfigure() {
     ${ref.source === 'ha' ? `
       <label>${isNetworkTv(ref.deviceId) ? 'App to launch (optional — e.g. Netflix)' : 'Source (optional, passed to media_player.select_source)'}</label>
       <input type="text" id="wizInputText" value="${cfg.inputCommand || ''}" list="wizInputTextHints" placeholder="${isNetworkTv(ref.deviceId) ? 'e.g. Netflix' : 'e.g. Apple TV'}">
-      <datalist id="wizInputTextHints">${haSourceEntries(ref.deviceId).map(([v]) => `<option value="${v}"></option>`).join('')}</datalist>
+      <datalist id="wizInputTextHints">${(isNetworkSamsung(ref.deviceId) ? [['HOME']] : []).concat(haSourceEntries(ref.deviceId)).map(([v]) => `<option value="${v}"></option>`).join('')}</datalist>
     ` : `
       <div id="wizProfileHint"></div>
       ${commandFieldHtml('wizPowerOn', 'Power-on command (optional)', ref)}

@@ -66,7 +66,8 @@ async function loadDashboardFromDevice() {
   updateDeviceModeUi();
   if (deviceModeAvailable) loadRemoteName();
   if (typeof openFromHash === 'function') openFromHash(); // deep links: #history, #page=…, #activity=…, #hotkeys
-  if (typeof loadInstalledVersion === 'function') loadInstalledVersion(); // js/hotkeys.js
+  if (typeof loadInstalledVersion === 'function') loadInstalledVersion(); // js/updates.js
+  if (typeof loadUpdateNotice === 'function') loadUpdateNotice('updateNotice'); // a newer version, linked to the home page's Updates
   if (loaded) {
     await loadHaStates(true); // best-effort: lets the preview render with live HA data instead of the static mocks
     renderPreview();

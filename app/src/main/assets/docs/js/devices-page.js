@@ -289,6 +289,7 @@ function showView(id) {
   });
   if (id !== 'viewHome') closeDeviceForms();
   if (id === 'viewScreenshots' && typeof loadScreenshots === 'function') loadScreenshots();
+  if (id === 'viewUpdates' && typeof loadInstalledVersion === 'function') loadInstalledVersion();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -2074,4 +2075,8 @@ I18N.ready.then(() => {
   loadIconsList();
   loadIrDatabaseFiles();
   loadAll();
+  // 1.5.5: a newer version is pointed out on the home page; /#updates opens the Updates view.
+  if (typeof loadUpdateNotice === 'function') loadUpdateNotice('updateNotice');
+  if (location.hash === '#updates') showView('viewUpdates');
 });
+window.addEventListener('hashchange', () => { if (location.hash === '#updates') showView('viewUpdates'); });

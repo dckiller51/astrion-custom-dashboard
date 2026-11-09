@@ -30,6 +30,7 @@
                     <span data-i18n="web_dev_this_remote">This remote:</span> <b id="remoteNameLabel"></b>
                     <button type="button" class="secondary" style="margin:0 0 0 6px;padding:2px 10px" onclick="renameRemote()" data-i18n="web_dev_rename">Rename</button>
                 </div>
+                <div class="subtitle" id="updateNotice" style="margin-top:6px;display:none"></div>
             </div>
 
             <div class="tile-grid">
@@ -66,6 +67,7 @@
             </div>
 
             <div class="utility-row">
+                <button type="button" class="link-btn" onclick="showView('viewUpdates')" data-i18n="web_updates_heading">Updates</button>
                 <button type="button" class="link-btn" onclick="showView('viewBackup')" data-i18n="web_dev_backup_and_restore">Backup &amp; restore</button>
                 <a href="/builder/#history" data-i18n="web_history_title">Version history</a>
                 <button type="button" class="link-btn" onclick="showView('viewIrDatabase')" data-i18n="web_dev_ir_database">IR database</button>
@@ -717,6 +719,32 @@
             <div id="iconsList" style="margin-top:12px"></div>
         </div>
 
+        <div id="viewUpdates" class="category-view">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 style="margin-top:0" data-i18n="web_updates_heading">Updates</h2>
+            <div class="hint" data-i18n="web_updates_hint">The version this remote runs, the official release and the beta. Install downloads it on the remote, which then asks you to confirm.</div>
+            <div class="release-info-row" style="display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap;">
+                <span id="installedBadge"></span>
+                <span id="stableBadge"></span>
+            </div>
+            <div class="release-info-row" style="display:flex;align-items:center;gap:16px;margin-top:12px;flex-wrap:wrap;">
+                <label class="beta-switch">
+                    <input type="checkbox" id="betaToggle" onchange="toggleBetaBadge()">
+                    <span class="beta-slider"></span>
+                </label>
+                <span id="betaToggleLabel" data-i18n="web_release_also_beta">Also the beta (dev)</span>
+                <span id="betaBadge" style="display:none"></span>
+            </div>
+            <h3 class="subsection-title" data-i18n="web_updates_test_heading">Test build</h3>
+            <div class="hint" data-i18n="web_updates_test_hint">Only if you were asked to try one: a build published for a few testers, which the updates above never offer. The next beta replaces it.</div>
+            <div class="btn-row" style="margin-top:8px">
+                <button type="button" class="secondary" id="testBuildBtn" onclick="installTestBuild(this)" data-i18n="web_release_test_button">🔬 Test build…</button>
+            </div>
+            <div class="utility-row" style="margin-top:16px">
+                <a href="/builder/#history" data-i18n="web_history_title">Version history</a>
+            </div>
+        </div>
+
         <div id="viewScreenshots" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
             <h2 style="margin-top:0" data-i18n="web_shots_heading">Screenshots</h2>
@@ -766,5 +794,6 @@
 <script src="js/denon.js"></script>
 <script src="js/devices-page.js"></script>
 <script src="js/screenshots.js"></script>
+<script src="js/updates.js"></script>
 </body>
 </html>
