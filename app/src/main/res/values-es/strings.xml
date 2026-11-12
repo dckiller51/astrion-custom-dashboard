@@ -176,6 +176,7 @@
     <string name="zidoo_card_queue_count">%1$d pistas</string>
     <string name="zidoo_card_queue_empty">La cola está vacía.</string>
     <string name="zidoo_card_queue_read_only">La cola de esta app solo se muestra: no acepta una pista elegida desde aquí.</string>
+    <string name="zidoo_card_queue_skips">La cola de esta app no se elige directamente: un toque salta las pistas una a una hasta esta.</string>
     <string name="zidoo_card_io">Entrada y salida</string>
     <string name="zidoo_card_output_confirm">Toque de nuevo %1$s para cambiar: una salida equivocada corta el sonido.</string>
     <string name="zidoo_music_title">Música</string>

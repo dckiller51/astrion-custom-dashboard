@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.custom.astrion.R
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.ha.ServiceCall
@@ -249,6 +250,7 @@ private fun KeypadKey(label: String, theme: ThemeColors, onClick: () -> Unit) {
 @Composable
 internal fun PickerFrame(theme: ThemeColors, title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onClose) {
+        ScreenCapture.TrackForScreenshots()
         // The remote's buttons keep working while the pop-up is open (1.4.9).
         ForwardHotkeys()
         Column(

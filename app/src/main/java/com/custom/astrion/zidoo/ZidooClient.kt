@@ -218,6 +218,19 @@ class ZidooClient(private val host: () -> String) {
 
     fun playQueueItem(item: ZidooQueueItem, index: Int): Boolean = get(ZidooControls.playQueuePath(item, index)) != null
 
+    /**
+     * Moves [by] tracks through the queue (1.5.6): next or previous that many times, for an app
+     * whose queue can't be picked from (Apple's Apple Music). Going back starts from the track's
+     * beginning, or the first "previous" would only restart it.
+     */
+    fun skipTracks(by: Int) {
+        if (by < 0) get("MusicControl/v2/seekTo?time=0")
+        repeat(kotlin.math.abs(by)) { i ->
+            if (i > 0 || by < 0) Thread.sleep(SKIP_GAP_MS)
+            get(if (by > 0) "MusicControl/v2/playNext" else "MusicControl/v2/playLast")
+        }
+    }
+
     fun queueArtUrl(item: ZidooQueueItem): String? = item.artUrl ?: if (item.local) musicArtUrl(item.id, item.type) else null
 
     fun outputs(): ZidooOutputs = ZidooControls.outputs(get(ZidooControls.OUTPUTS_PATH, slow = true))
@@ -245,6 +258,7 @@ class ZidooClient(private val host: () -> String) {
 
     companion object {
         const val PORT = 9529
+        private const val SKIP_GAP_MS = 400L
         private const val TIMEOUT_S = 3L
         private const val SLOW_TIMEOUT_S = 12L
         private const val MUSIC_LIST_MAX = 500

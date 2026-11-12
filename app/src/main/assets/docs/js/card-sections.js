@@ -69,8 +69,16 @@ const CARD_SECTIONS = {
   },
   zidoo: {
     essential: ['optName', 'optZidooEntity'],
-    display: ['optZidooQuality', 'optZidooApps'],
-    controls: ['optZidooSources', 'optZidooKeypad', 'optZidooTracks', 'optZidooQueue', 'optZidooIo', 'optZidooSkip', 'optZidooRepeat', 'optZidooVolume']
+    display: ['optZidooQuality'],
+    controls: ['optZidooSources', 'optZidooKeypad', 'optZidooTracks', 'optZidooQueue', 'optZidooIo', 'optZidooSkip', 'optZidooRepeat', 'optZidooVolume'],
+    apps: ['optZidooApps', 'zidooAppsField']
+  },
+  media_remote: {
+    essential: ['optName', 'optMrPlayer', 'optMrRemote', 'optMrVolumeEntity', 'optMrKind'],
+    display: ['optMrPower', 'optMrSkip', 'optMrQuality'],
+    controls: ['optMrDpad', 'optMrVolume', 'optMrChannels', 'optMrKeypad'],
+    apps: ['optMrSources', 'optMrBrowse', 'optTvAppsStyle', 'optTvShowApps', 'tvAppPackages', 'tvAppsList'],
+    library: ['optMrTracks', 'optMrQueue', 'optMrIo']
   },
   plex: {
     essential: ['optPlexHost', 'optPlexToken'],

@@ -83,18 +83,20 @@ object SamsungProtocol {
      * Apps known by their Samsung ids, looked for one by one when the TV doesn't list its apps
      * (`ed.installedApp.get` answers nothing on recent models, 2022 onwards): name → its ids (they
      * change with the year and the region; the first one the TV knows wins). Ids as collected by
-     * the community (rs.ltd, Home Assistant's forum); any other app opens by its id.
+     * the community (rs.ltd, Home Assistant's forum, samsung-tv-ws-api's list); 1.5.6: the ids of a
+     * 2025 S90F (Canal+, Hue Sync, Netflix, Disney+, Plex), checked by Xavier, first. Any other app
+     * opens by its id.
      */
     val KNOWN_APPS: List<Pair<String, List<String>>> =
         listOf(
-            "Netflix" to listOf("3201907018807", "11101200001"),
+            "Netflix" to listOf("org.tizen.netflix-app", "3201907018807", "11101200001"),
             "YouTube" to listOf("111299001912", "9Ur5IzDKqV.TizenYouTube"),
             "Prime Video" to listOf("3201910019365", "3201512006785"),
-            "Disney+" to listOf("3201901017640", "3202009021709", "3202204027038"),
+            "Disney+" to listOf("MCmYXNxgcu.DisneyPlus", "3201901017640", "3202009021709", "3202204027038"),
             "Apple TV" to listOf("3201807016597"),
             "Max" to listOf("3202301029760"),
             "Paramount+" to listOf("3201710014981", "3202110025305"),
-            "Plex" to listOf("3201512006963", "hKfNDgSKZ3.tizenplex"),
+            "Plex" to listOf("kIciSQlYEM.plex", "3201512006963", "hKfNDgSKZ3.tizenplex"),
             "Spotify" to listOf("3201606009684"),
             "Deezer" to listOf("3201608010191"),
             "Apple Music" to listOf("3201908019041"),
@@ -108,6 +110,12 @@ object SamsungProtocol {
             "Xbox" to listOf("3202203026799"),
             "GeForce NOW" to listOf("3202102023078"),
             "Steam Link" to listOf("zHBvQ6qEu8.steamlink"),
+            "Canal+" to listOf("QmpwflxWdt.CanalPlusLauncher", "3201606009910"),
+            "Hue Sync" to listOf("kupCeIdDkX.HueSync"),
+            "france.tv" to listOf("3202103023232"),
+            "ARTE" to listOf("3202011022316"),
+            "Molotov" to listOf("3201611011210"),
+            "OQEE by Free" to listOf("3202103023185"),
             "Internet" to listOf("org.tizen.browser", "3201907018784", "3202010022079")
         )
 

@@ -176,6 +176,7 @@
     <string name="zidoo_card_queue_count">%1$d tracks</string>
     <string name="zidoo_card_queue_empty">The queue is empty.</string>
     <string name="zidoo_card_queue_read_only">This app\'s queue can only be shown: it doesn\'t take a track chosen from here.</string>
+    <string name="zidoo_card_queue_skips">This app\'s queue can\'t be picked from: a tap skips to the track, one at a time.</string>
     <string name="zidoo_card_io">Input and output</string>
     <string name="zidoo_card_output_confirm">Tap %1$s again to switch: a wrong output cuts the sound.</string>
     <string name="zidoo_music_title">Music</string>

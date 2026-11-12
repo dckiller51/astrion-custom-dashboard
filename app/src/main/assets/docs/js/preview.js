@@ -1111,6 +1111,12 @@ function renderPreview() {
         </div>`;
     } else if (card.type === 'zidoo') {
       cardEl.innerHTML = zidooCardPreviewHtml(card, idx);
+    } else if (card.type === 'media_remote') {
+      cardEl.innerHTML = mediaRemotePreviewHtml(card, idx);
+    } else if (card.type === 'info') {
+      cardEl.className = 'card';
+      cardEl.innerHTML = infoPreviewHtml(card, idx);
+      infoResolvePreview(cardEl);
     } else if (card.type === 'plex') {
       const o = card.options || {};
       const rows = [];

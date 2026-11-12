@@ -129,12 +129,12 @@ class SkyClient(private val host: () -> String, private val skyQ: Boolean) {
 
     // ---- Sky's guide ------------------------------------------------------------------------------
 
-    /** What channel [sid] shows at [nowS], from Sky's guide (read once a day per channel). */
-    fun onNow(sid: String, country: String?, nowS: Long): SkyProtocol.Programme? {
+    /** What channel [sid] shows at [nowS] and after it, from Sky's guide (read once a day per channel). */
+    fun onNowAndNext(sid: String, country: String?, nowS: Long): Pair<SkyProtocol.Programme?, SkyProtocol.Programme?> {
         val day = SkyProtocol.today(nowS)
         val key = "$sid/$day"
         val list = synchronized(guide) { guide[key] } ?: schedule(sid, country, day).also { synchronized(guide) { guide[key] = it } }
-        return SkyProtocol.onNow(list, nowS)
+        return SkyProtocol.onNow(list, nowS) to SkyProtocol.onNext(list, nowS)
     }
 
     private fun schedule(sid: String, country: String?, day: LocalDate): List<SkyProtocol.Programme> {

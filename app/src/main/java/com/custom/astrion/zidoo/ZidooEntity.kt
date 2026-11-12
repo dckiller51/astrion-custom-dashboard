@@ -189,6 +189,7 @@ object ZidooEntityMapper {
         val sources = inputs + s.apps.keys.sortedWith(String.CASE_INSENSITIVE_ORDER)
         if (sources.isNotEmpty()) a["source_list"] = sources
         mediaApps(s.apps).takeIf { it.isNotEmpty() }?.let { a["astrion_apps"] = it }
+        settingsApp(s.apps)?.let { a["astrion_settings_app"] = it }
         if (playing) addNowPlaying(a, s)
         if (s.reachable) addEversoloState(a, s, eversolo, playing)
         return ZidooEntityData(spec.entityId, stateOf(s), a)
@@ -237,6 +238,14 @@ object ZidooEntityMapper {
         .filter { (_, pkg) -> pkg !in UTILITY_APPS }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.key })
         .map { (label, pkg) -> mapOf("name" to label, "app" to pkg) }
+
+    /**
+     * The player's own settings app (1.5.6), for the media remote's menu key, which does nothing on
+     * a Zidoo: the first of [SETTINGS_APPS] the player lists.
+     */
+    fun settingsApp(apps: Map<String, String>): String? = SETTINGS_APPS.firstOrNull { it in apps.values }
+
+    private val SETTINGS_APPS = listOf("com.eversolo.setting", "com.android.settings", "com.zidoo.settings", "com.android.quick.settings")
 
     private val UTILITY_APPS =
         setOf(

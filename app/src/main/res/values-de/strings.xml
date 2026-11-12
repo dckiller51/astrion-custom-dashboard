@@ -176,6 +176,7 @@
     <string name="zidoo_card_queue_count">%1$d Titel</string>
     <string name="zidoo_card_queue_empty">Die Warteschlange ist leer.</string>
     <string name="zidoo_card_queue_read_only">Die Warteschlange dieser App wird nur angezeigt: Sie nimmt keinen hier gewählten Titel an.</string>
+    <string name="zidoo_card_queue_skips">Die Warteschlange dieser App lässt sich nicht direkt wählen: Ein Tippen springt Titel für Titel bis zu diesem.</string>
     <string name="zidoo_card_io">Eingang und Ausgang</string>
     <string name="zidoo_card_output_confirm">Tippen Sie erneut auf %1$s zum Wechseln: ein falscher Ausgang schaltet den Ton ab.</string>
     <string name="zidoo_music_title">Musik</string>

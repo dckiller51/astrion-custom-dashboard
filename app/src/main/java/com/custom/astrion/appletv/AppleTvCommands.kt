@@ -181,10 +181,18 @@ internal object AppleTvCommands {
         }
     }
 
-    fun playMediaAction(data: Map<String, Any?>): ((CompanionClient) -> Unit)? {
+    /**
+     * `play_media`: a URL as it is; an app by its bundle id or, as the builder's shortcuts give it
+     * (1.5.6), by its name: resolved as [selectSourceAction] does — a card's app shortcut sent the
+     * name as a bundle id and nothing opened.
+     */
+    fun playMediaAction(data: Map<String, Any?>, knownApps: () -> Map<String, String>): ((CompanionClient) -> Unit)? {
         val type = (data["media_content_type"] as? String)?.lowercase()
         val id = (data["media_content_id"] as? String)?.takeIf { it.isNotBlank() } ?: return null
-        if (type != "app" && type != "url") return null
-        return { c -> c.launch(id) }
+        return when (type) {
+            "url" -> { c -> c.launch(id) }
+            "app" -> selectSourceAction(mapOf("source" to id), knownApps)
+            else -> null
+        }
     }
 }

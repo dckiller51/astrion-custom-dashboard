@@ -3,7 +3,8 @@
 // The Zidoo / Eversolo card: a player added in Astrion (Devices › Players), and which of its
 // buttons to show. The card itself picks them by what plays — a film's subtitles, audio and
 // chapters, music's queue, an Eversolo's input and output — so the form only says which ones may
-// show. The player's apps come from the player; apps written by hand in the JSON are kept.
+// show. The player's apps come from the player, unless the card lists its own (1.5.6: the same
+// app editor as the TV and media player cards; empty = the player's, in its order).
 //
 // Uses: I18N, dashboardData, haStates, cxEsc (cards-extra.js).
 
@@ -36,8 +37,8 @@ function zidooCardFormHtml() {
     return `<label class="inline-check"><input type="checkbox" id="${id}"${def ? ' checked' : ''}> ${I18N.t('web_card_zidoo_' + key)}</label>`;
   };
   const picker = players.length
-    ? `<select id="optZidooEntity">${players.map(p => `<option value="${cxEsc(p.entityId)}">${cxEsc(p.name)} — ${cxEsc(p.entityId)}</option>`).join('')}</select>`
-    : `<input type="text" id="optZidooEntity" placeholder="media_player.zidoo_…">
+    ? `<select id="optZidooEntity" onchange="onTvEntityChange()">${players.map(p => `<option value="${cxEsc(p.entityId)}">${cxEsc(p.name)} — ${cxEsc(p.entityId)}</option>`).join('')}</select>`
+    : `<input type="text" id="optZidooEntity" placeholder="media_player.zidoo_…" onchange="onTvEntityChange()">
        <div class="hint">${I18N.t('web_card_zidoo_no_player')}</div>`;
   return `
     <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_zidoo_name_ph')}">
@@ -53,6 +54,11 @@ function zidooCardFormHtml() {
     ${check('optZidooVolume', 'show_volume')}
     ${check('optZidooQuality', 'show_quality')}
     ${check('optZidooApps', 'show_apps')}
+    <div id="zidooAppsField">
+      <h4 style="margin:12px 0 0">${I18N.t('web_card_tv_apps')}</h4>
+      <div class="hint">${I18N.t('web_card_zidoo_apps_hint')}</div>
+      ${tvAppsSectionHtml(false)}
+    </div>
   `;
 }
 
@@ -66,9 +72,10 @@ function fillZidooCardForm(o) {
   }
   if (entity || field.tagName !== 'SELECT') field.value = entity;
   ZIDOO_SWITCHES.forEach(([id, key, def]) => { document.getElementById(id).checked = o[key] === undefined ? def : o[key] !== false; });
-  // What the form doesn't show (apps written by hand, apps_style…) is kept as it is.
+  fillMediaApps(o); // the card's own apps and their style (cards-extra.js)
+  // What the form doesn't show is kept as it is.
   window._zidooExtra = Object.fromEntries(Object.entries(o).filter(([k]) =>
-    k !== 'name' && k !== 'entity' && !ZIDOO_SWITCHES.some(s => s[1] === k)));
+    !['name', 'entity', 'apps', 'apps_style'].includes(k) && !ZIDOO_SWITCHES.some(s => s[1] === k)));
 }
 
 /** Writes the form into [out]; false (with a message) when no player is chosen. */
@@ -79,6 +86,7 @@ function collectZidooCardForm(out) {
     return false;
   }
   Object.assign(out, window._zidooExtra || {});
+  collectMediaApps(out); // none listed: the player's own apps
   const name = document.getElementById('optName').value.trim();
   if (name) out.name = name;
   out.entity = entity;

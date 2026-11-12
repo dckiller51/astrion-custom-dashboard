@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.custom.astrion.R
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
 import com.custom.astrion.zidoo.MusicAlbum
@@ -159,6 +160,7 @@ internal fun ZidooLibraryDialog(zidoo: ZidooClient, theme: ThemeColors, onClose:
     }
 
     Dialog(onDismissRequest = back, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
+        ScreenCapture.TrackForScreenshots()
         Column(
             modifier =
             Modifier
@@ -710,6 +712,7 @@ internal fun ZidooMusicDialog(zidoo: ZidooClient, theme: ThemeColors, onClose: (
     }
 
     Dialog(onDismissRequest = back, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
+        ScreenCapture.TrackForScreenshots()
         Column(
             modifier =
             Modifier
