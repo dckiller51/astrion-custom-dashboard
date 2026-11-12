@@ -11,8 +11,10 @@ import com.custom.astrion.cards.impl.ClimateCard
 import com.custom.astrion.cards.impl.ClockWeatherCard
 import com.custom.astrion.cards.impl.CoverCard
 import com.custom.astrion.cards.impl.FanCard
+import com.custom.astrion.cards.impl.InfoCard
 import com.custom.astrion.cards.impl.LightCard
 import com.custom.astrion.cards.impl.MediaPlayerCard
+import com.custom.astrion.cards.impl.MediaRemoteCard
 import com.custom.astrion.cards.impl.MonitorCard
 import com.custom.astrion.cards.impl.PictureElementsCard
 import com.custom.astrion.cards.impl.PlexCard
@@ -79,7 +81,9 @@ class AstrionApp : Application() {
             TvRemoteCard(),
             XboxCard(),
             VacuumCard(),
-            ZidooCard()
+            ZidooCard(),
+            MediaRemoteCard(),
+            InfoCard()
             // ← Register your own card types here
         )
     }

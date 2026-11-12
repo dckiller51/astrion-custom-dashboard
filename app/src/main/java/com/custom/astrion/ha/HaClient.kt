@@ -188,6 +188,9 @@ class HaClient(
     private val _connection = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connection: StateFlow<ConnectionState> = _connection.asStateFlow()
 
+    /** Templates rendered by Home Assistant (1.5.6, info card). */
+    val templates = HaTemplates({ send(it) }, { idCounter.getAndIncrement() }, { _connection.value == ConnectionState.CONNECTED })
+
     private val _entities = MutableStateFlow<EntityMap>(emptyMap())
 
     /** Live map of every entity's current state. Cards observe this. */
@@ -631,13 +634,18 @@ class HaClient(
                             val waiter = id?.let { pending.remove(it) }
                             when {
                                 waiter != null -> waiter.complete(obj)
+                                templates.onMessage(id, obj) -> Unit
                                 id != null && id == entitiesSubscriptionId -> onEntitiesSubscribed(obj)
                                 else -> onResult(obj)
                             }
                         }
                         "event" -> {
                             val id = obj["id"]?.jsonPrimitive?.intOrNull
-                            if (id != null && id == entitiesSubscriptionId) onEntitiesEvent(obj) else onEvent(obj)
+                            when {
+                                id != null && id == entitiesSubscriptionId -> onEntitiesEvent(obj)
+                                templates.onMessage(id, obj) -> Unit
+                                else -> onEvent(obj)
+                            }
                         }
                         "pong" -> { /* heartbeat ok */ }
                     }
@@ -679,6 +687,7 @@ class HaClient(
         // subscription's first event, and the subscription is dropped again after it while quiet.
         if (quiet && activeFilter() == null) requestStates() else subscribeStates()
         if (quiet) subscribeQuietEntities()
+        templates.resubscribe()
     }
 
     private fun activeFilter(): Set<String>? = if (entityFilterRefused) null else entityFilter

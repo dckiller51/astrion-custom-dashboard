@@ -22,6 +22,7 @@ const GALLERY_TYPES = {
   vacuum: { cat: 'home', icon: 'vacuum' },
   clock_weather: { cat: 'home', icon: 'sun' },
   monitor: { cat: 'home', icon: 'chart' },
+  info: { cat: 'layout', icon: 'image' },
   media_player: { cat: 'media', icon: 'play' },
   tv_remote: { cat: 'media', icon: 'remote' },
   apple_tv_remote: { cat: 'media', icon: 'box' },
@@ -31,6 +32,7 @@ const GALLERY_TYPES = {
   plex: { cat: 'media', icon: 'film' },
   xbox: { cat: 'media', icon: 'game' },
   zidoo: { cat: 'media', icon: 'player' },
+  media_remote: { cat: 'media', icon: 'remote' },
   button_grid: { cat: 'grids', icon: 'apps' },
   scene_grid: { cat: 'grids', icon: 'spark' },
   title: { cat: 'layout', icon: 'text' },
@@ -256,8 +258,19 @@ function galleryDeviceApps(entityId) {
   return a && Array.isArray(a.astrion_apps) ? a.astrion_apps.filter(x => x && x.app).map(x => (x.icon ? { name: x.name || x.app, app: x.app, icon: x.icon } : { name: x.name || x.app, app: x.app })) : null;
 }
 
-/** The cards that suit [d], best first, each with the options to fill its form with. */
+/** The cards that suit [d], best first: the device's own, then the media remote for a player (1.5.6). */
 function gallerySuggestionsFor(d) {
+  const list = gallerySuggestionsBase(d);
+  const obj = d.entityId.split('.')[1] || '';
+  if (d.domain === 'media_player' && /^(zidoo|lgtv|samsung|sky|appletv|androidtv)_/.test(obj)) {
+    const apps = galleryDeviceApps(d.entityId);
+    const mr = { name: d.name || d.entityId, player_entity: d.entityId, remote_entity: 'remote.' + obj };
+    list.splice(1, 0, { type: 'media_remote', opts: apps ? { ...mr, apps } : mr });
+  }
+  return list;
+}
+
+function gallerySuggestionsBase(d) {
   const e = d.entityId;
   const name = d.name || e;
   const obj = e.split('.')[1] || '';

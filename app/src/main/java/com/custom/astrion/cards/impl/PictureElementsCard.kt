@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
@@ -194,6 +195,7 @@ class PictureElementsCard : CardRenderer {
 
             if (showVacuumDialog && vacuumOpts != null) {
                 Dialog(onDismissRequest = { showVacuumDialog = false }) {
+                    ScreenCapture.TrackForScreenshots()
                     Column(
                         modifier =
                         Modifier

@@ -3,6 +3,27 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.6-beta] - 2026-11-12
+
+### Added
+
+- **Media remote card** (`media_remote`, step 1): one remote for any player (Zidoo, Eversolo, Android / Google TV, Apple TV, Samsung, LG…), laid out like a physical remote. What's playing on top (tap it or the progress bar for the player's details), the library even when nothing plays, then Back · number pad, D-pad, volume · channels with mute below, and Apps · Home · Menu. ±10 s seeks in the video (or the player's own rewind / fast forward keys), never skips a track. The power button turns the player on or off. The keys are named for Android or Apple TV (`kind`, auto by default), the volume can go to another entity (`volume_entity`), and each block can be hidden in the builder. Its apps are edited like the TV remote's; left empty, a Zidoo or Eversolo shows its own. The gallery suggests it for a player. By Xavier (xavi69), tested on his remote. Since his first tests: `apps_rows` (1, 2, 3 rows of app shortcuts, or all), the menu key opens a Zidoo / Eversolo's settings, Apps · Home · Menu lined up over the pad's side keys, more room between Back and volume + (and the keypad and channel +), the Queue button's label on two lines instead of one cut word, the card's name as its title (`show_name`).
+- **Eversolo queue with Apple's Apple Music**: a track tapped in the queue is now reached by skipping to it (that app ignores the direct call); it was only shown before.
+- **Info card** (`info`, images and text): a list of blocks, each image URL and each text a Home Assistant template (`{{ state_attr('sensor.kodi_movie_info', 'overview') }}`), rendered by Home Assistant itself and updated live when the entities it reads change: a film's poster, title and synopsis from a TMDB sensor, a TV guide, a printer's progress… Images as a poster, 16:9 or square; text as a title, subtitle, body or small, with a maximum of lines or scrolling; blocks one under the other, or the first image on the left. The builder's preview shows what Home Assistant renders (and a template's error). Text without `{{ }}` is shown as it is. Simple templates (only `states()` and `state_attr()`) are filled by the remote itself, so the card also works with direct devices and without Home Assistant.
+- **Sky (direct)**: the box's media player now carries the guide for the info card: `programme_synopsis`, `programme_start`, `programme_end`, and what comes next (`next_title`, `next_start`, `next_synopsis`).
+
+### Fixed
+
+- **Player pop-up**: an album's square cover is shown whole; its top and bottom were cut.
+- **Media remote card's preview in the builder** drawn like the card: power, what plays, transport, Library / Queue / Input / Output, Apps · Home · Menu, the app rows (`apps_rows`), the pad with Back, keypad, volume and channels at its corners, mute.
+- **Apple TV app shortcuts** on a card (media remote, TV remote, media player) open the app again: they send the app's name, which the Apple TV took for a bundle id.
+- **Player pop-up's volume**: − · mute · + centred (they sat on the left without a slider).
+- **Samsung TVs that don't list their apps** (2022 onwards) now find Canal+, Hue Sync, france.tv, ARTE, Molotov and OQEE, and the newer ids of Netflix, Disney+ and Plex (checked on a 2025 S90F by Xavier).
+- **App icons shown whole**: a player's own icon that isn't square (the automatic ones) was cut to fill its tile, in the Apps pop-up and the shortcuts; only a nearly square icon fills it now.
+- **Screenshots** from the web page now include the pop-up that's open (the page behind it was taken alone).
+- **A button's extra data with nested JSON reaches Home Assistant** (#142): an object or a list inside it (e.g. `"variables": {"text": "a"}` for `script.turn_on`) was sent as its text, and Home Assistant refused the call. Button grid and media player buttons, and every other service call built the same way; hotkeys and long presses already sent it right.
+- **Zidoo / Eversolo card: its apps can be edited in the builder**: the card form had no app list, so the order and names could only be changed in the JSON. It now has the same editor as the TV remote and media player cards: *This device's apps* fills it with the player's apps, to reorder, rename, remove or give an icon; text buttons or icons. Left empty, the card shows the player's own apps, as before.
+
 ## [1.5.5-beta] - 2026-11-09
 
 ### Added

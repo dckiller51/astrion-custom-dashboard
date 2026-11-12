@@ -382,7 +382,7 @@ function collectMediaApps(out) {
 function tvAppsMediaEntity() {
   const val = id => ((document.getElementById(id) || {}).value || '').trim();
   const remote = val('optRemoteEntity');
-  return val('optMediaEntity') || (remote.includes('.') ? 'media_player.' + remote.split('.')[1] : '') || val('optEntityId');
+  return val('optMediaEntity') || val('optMrPlayer') || (remote.includes('.') ? 'media_player.' + remote.split('.')[1] : '') || val('optEntityId') || val('optZidooEntity');
 }
 
 function tvAppLabel(pkg) {

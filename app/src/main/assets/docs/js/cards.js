@@ -604,6 +604,17 @@ function updateCardFormInputs() {
     renderMonitorRows();
   } else if (type === 'zidoo') {
     container.innerHTML = zidooCardFormHtml();
+    fillMediaApps({});
+  } else if (type === 'info') {
+    container.innerHTML = infoFormHtml();
+    window._pendingInfoBlocks = [];
+    window._infoExtra = {};
+    renderInfoBlocks();
+  } else if (type === 'media_remote') {
+    container.innerHTML = mediaRemoteFormHtml();
+    window._pendingTvApps = [];
+    window._mediaRemoteExtra = {};
+    renderTvApps();
   } else if (type === 'plex') {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">
@@ -1789,6 +1800,10 @@ function fillCardForm(card) {
     renderMonitorRows();
   } else if (type === 'zidoo') {
     fillZidooCardForm(o);
+  } else if (type === 'media_remote') {
+    fillMediaRemoteForm(o);
+  } else if (type === 'info') {
+    fillInfoForm(o);
   } else if (type === 'plex') {
     document.getElementById('optPlexHost').value = o.host || '';
     document.getElementById('optPlexToken').value = o.token || '';
@@ -2112,6 +2127,10 @@ function addCardToPage() {
     window._monitorExtraOptions = {};
   } else if (type === 'zidoo') {
     if (!collectZidooCardForm(newCard.options)) return;
+  } else if (type === 'media_remote') {
+    if (!collectMediaRemoteForm(newCard.options)) return;
+  } else if (type === 'info') {
+    if (!collectInfoForm(newCard.options)) return;
   } else if (type === 'plex') {
     const plexHost = document.getElementById('optPlexHost').value.trim();
     const plexToken = document.getElementById('optPlexToken').value.trim();

@@ -204,6 +204,9 @@ object SkyProtocol {
     /** The programme on at [nowS] (UTC seconds). */
     fun onNow(programmes: List<Programme>, nowS: Long): Programme? = programmes.firstOrNull { nowS >= it.startS && nowS < it.endS }
 
+    /** The programme after the one on at [nowS] (1.5.6); null after the day's last one. */
+    fun onNext(programmes: List<Programme>, nowS: Long): Programme? = programmes.filter { it.startS > nowS }.minByOrNull { it.startS }
+
     /** The guide's day (UTC) at [nowS]. */
     fun today(nowS: Long): LocalDate = LocalDate.ofEpochDay(nowS / SECONDS_PER_DAY)
 

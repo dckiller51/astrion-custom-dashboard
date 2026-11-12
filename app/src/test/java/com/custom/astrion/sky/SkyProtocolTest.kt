@@ -67,6 +67,8 @@ class SkyProtocolTest {
             )
         assertEquals("EastEnders", SkyProtocol.onNow(schedule, 3000)!!.title)
         assertNull(SkyProtocol.onNow(schedule, 9000))
+        assertEquals("EastEnders", SkyProtocol.onNext(schedule, 1500)!!.title)
+        assertNull(SkyProtocol.onNext(schedule, 3000))
         assertEquals("http://atlantis.epgsky.com/as/schedule/19700101/2076", SkyProtocol.scheduleUrl("2076", SkyProtocol.today(3000)))
         assertEquals(
             "https://imageservice.sky.com/logo/skychb_2076bbcone/600/600?territory=GB&provider=SKY&proposition=SKYQ",
@@ -97,6 +99,17 @@ class SkyProtocolTest {
         assertEquals(listOf("401 Sky Sports"), m.attributes["source_list"]) // the favourites
         assertTrue((m.attributes["entity_picture"] as String).contains("pd-image/abc-1"))
         assertEquals("off", SkyEntityMapper.media(q, playing.copy(standby = true)).state)
+        val guide =
+            SkyEntityMapper.media(
+                q,
+                playing.copy(
+                    programme = SkyProtocol.Programme("EastEnders", 0, 1800, synopsis = "Drama in the Square.", uuid = "abc-1"),
+                    next = SkyProtocol.Programme("News", 1800, 1800)
+                )
+            ).attributes
+        assertEquals("Drama in the Square.", guide["programme_synopsis"])
+        assertEquals("News", guide["next_title"])
+        assertTrue((guide["programme_end"] as String).matches(Regex("\\d\\d:30")))
         assertEquals("on", SkyEntityMapper.media(q.copy(skyQ = false), SkyState(reachable = true)).state)
     }
 

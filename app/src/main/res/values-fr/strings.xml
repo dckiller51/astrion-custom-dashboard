@@ -176,6 +176,7 @@
     <string name="zidoo_card_queue_count">%1$d morceaux</string>
     <string name="zidoo_card_queue_empty">La file d\'attente est vide.</string>
     <string name="zidoo_card_queue_read_only">La file de cette appli est seulement affichée : elle ne prend pas un morceau choisi d\'ici.</string>
+    <string name="zidoo_card_queue_skips">La file de cette appli ne se choisit pas directement : un appui passe les morceaux un par un jusqu\'à celui-ci.</string>
     <string name="zidoo_card_io">Entrée et sortie</string>
     <string name="zidoo_card_output_confirm">Touchez encore %1$s pour changer : une mauvaise sortie coupe le son.</string>
     <string name="zidoo_music_title">Musique</string>

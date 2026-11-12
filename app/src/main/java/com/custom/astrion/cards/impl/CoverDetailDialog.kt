@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
@@ -78,6 +79,7 @@ fun CoverDetailDialog(
     }
 
     Dialog(onDismissRequest = onClose) {
+        ScreenCapture.TrackForScreenshots()
         Column(
             modifier =
             Modifier

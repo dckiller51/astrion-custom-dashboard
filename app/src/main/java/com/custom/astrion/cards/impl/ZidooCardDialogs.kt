@@ -161,8 +161,9 @@ private fun TracksDialog(client: ZidooClient, theme: ThemeColors, first: ZidooDi
 }
 
 /**
- * The play queue: the Eversolo's own player and Eversolo's own Apple Music play the track tapped;
- * Apple's Apple Music only shows it (it doesn't obey the call).
+ * The play queue: the Eversolo's own player and Eversolo's own Apple Music play the track tapped.
+ * Apple's Apple Music doesn't obey that call: the track is reached by skipping to it (1.5.6), when
+ * the one playing is found in the queue; else its queue is only shown.
  */
 @Composable
 private fun QueueDialog(ctx: CardContext, client: ZidooClient, e: EntityState?, onClose: () -> Unit) {
@@ -184,18 +185,22 @@ private fun QueueDialog(ctx: CardContext, client: ZidooClient, e: EntityState?, 
             list == null -> Hint(stringResource(R.string.zidoo_card_loading), theme)
             list.isEmpty() -> Hint(stringResource(R.string.zidoo_card_queue_empty), theme)
             else -> {
-                val readOnly = list.none { it.playable }
+                val skips = playing >= 0
+                val readOnly = list.none { it.playable } && !skips
                 LazyColumn(Modifier.heightIn(max = ZIDOO_LIST_MAX.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     itemsIndexed(list) { i, item ->
-                        QueueRow(ctx, client, item, i, i == playing, readOnly) {
+                        QueueRow(ctx, client, item, i, i == playing, readOnly || (!item.playable && i == playing)) {
                             scope.launch(Dispatchers.IO) {
-                                client.playQueueItem(item, i)
+                                if (item.playable) client.playQueueItem(item, i) else client.skipTracks(i - playing)
                                 reload++
                             }
                         }
                     }
                 }
-                if (readOnly) Hint(stringResource(R.string.zidoo_card_queue_read_only), theme)
+                when {
+                    readOnly -> Hint(stringResource(R.string.zidoo_card_queue_read_only), theme)
+                    list.none { it.playable } -> Hint(stringResource(R.string.zidoo_card_queue_skips), theme)
+                }
             }
         }
     }

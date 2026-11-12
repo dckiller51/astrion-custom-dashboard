@@ -638,7 +638,7 @@ class AppleTvDevice(
         mapOf(
             "volume_set" to AppleTvCommands::volumeSetAction,
             "select_source" to { data: Map<String, Any?> -> AppleTvCommands.selectSourceAction(data) { snapshot.apps } },
-            "play_media" to AppleTvCommands::playMediaAction,
+            "play_media" to { data: Map<String, Any?> -> AppleTvCommands.playMediaAction(data) { snapshot.apps } },
             "media_seek" to ::seekAction
         )
 

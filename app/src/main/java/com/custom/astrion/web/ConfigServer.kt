@@ -280,6 +280,7 @@ class ConfigServer(
     var onScreenshot: () -> ByteArray? = { null }
 
     private val screenshotRoutes = ScreenshotRoutes(context) { onScreenshot() }
+    private val templateRoutes = TemplateRoutes(haClient)
 
     /** Called after POST /remote-name — the activity refreshes what shows the name. */
     @Volatile
@@ -331,7 +332,8 @@ class ConfigServer(
             ?: skyRoutes.serve(uri, session)
             ?: samsungRoutes.serve(uri, session)
             ?: denonRoutes.serve(uri, session)
-            ?: screenshotRoutes.serve(uri, session) ?: when (uri) {
+            ?: screenshotRoutes.serve(uri, session)
+            ?: templateRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {

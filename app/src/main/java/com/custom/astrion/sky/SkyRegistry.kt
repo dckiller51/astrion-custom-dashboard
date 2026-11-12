@@ -131,8 +131,8 @@ class SkyRegistry(configs: List<SkyConfig>, private val log: (String) -> Unit = 
         if (standby) return s.idle()
         val media = c.media()
         val sid = (media as? SkyProtocol.Media.Live)?.sid
-        val programme = sid?.let { runCatching { c.onNow(it, s.country, now / MS_PER_S) }.getOrNull() }
-        return s.copy(transport = c.transport(), media = media, programme = programme)
+        val (programme, next) = sid?.let { runCatching { c.onNowAndNext(it, s.country, now / MS_PER_S) }.getOrNull() } ?: (null to null)
+        return s.copy(transport = c.transport(), media = media, programme = programme, next = next)
     }
 
     private fun publish(device: Device) {

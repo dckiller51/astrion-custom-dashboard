@@ -1,5 +1,9 @@
 package com.custom.astrion.sky
 
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+
 /** One Sky box added on the web page (1.5.3). [skyQ] false: a Sky+ HD, keys only. */
 data class SkySpec(
     val localId: String,
@@ -22,7 +26,9 @@ data class SkyState(
     val media: SkyProtocol.Media = SkyProtocol.Media.None,
     val channels: List<SkyProtocol.Channel> = emptyList(),
     val favourites: List<String> = emptyList(),
-    val programme: SkyProtocol.Programme? = null
+    val programme: SkyProtocol.Programme? = null,
+    /** What comes after [programme] (1.5.6, for the info card). */
+    val next: SkyProtocol.Programme? = null
 ) {
     val on: Boolean get() = reachable && !standby
 
@@ -30,7 +36,7 @@ data class SkyState(
         get() = (media as? SkyProtocol.Media.Live)?.let { live -> channels.firstOrNull { it.sid == live.sid } }
 
     /** Nothing playing (standby, or not answering). */
-    fun idle(): SkyState = copy(transport = null, media = SkyProtocol.Media.None, programme = null)
+    fun idle(): SkyState = copy(transport = null, media = SkyProtocol.Media.None, programme = null, next = null)
 
     /** The channels the Sources pop-up lists: the favourites, else the first [MAX_SOURCES]. */
     val sourceChannels: List<SkyProtocol.Channel>
@@ -103,6 +109,7 @@ object SkyEntityMapper {
                 it.episode?.let { n -> a["media_episode"] = n }
                 a["media_position"] = (System.currentTimeMillis() / MS_PER_S - it.startS).coerceAtLeast(0)
                 a["media_duration"] = it.durationS
+                addGuide(a, it, s.next)
             }
             a["entity_picture"] = p?.uuid?.let {
                 SkyProtocol.programmeImageUrl(it, s.country)
@@ -112,6 +119,25 @@ object SkyEntityMapper {
             a["source"] = "Recordings"
         }
     }
+
+    /**
+     * The guide, for the info card (1.5.6): the programme's synopsis and times, and what comes next.
+     * Times as the remote's local "HH:mm", ready to show.
+     */
+    private fun addGuide(a: MutableMap<String, Any?>, p: SkyProtocol.Programme, next: SkyProtocol.Programme?) {
+        p.synopsis?.let { a["programme_synopsis"] = it }
+        a["programme_start"] = clock(p.startS)
+        a["programme_end"] = clock(p.endS)
+        next?.let {
+            a["next_title"] = it.title
+            a["next_start"] = clock(it.startS)
+            it.synopsis?.let { s -> a["next_synopsis"] = s }
+        }
+    }
+
+    private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
+
+    private fun clock(epochS: Long): String = Instant.ofEpochSecond(epochS).atZone(ZoneId.systemDefault()).format(CLOCK)
 
     fun remote(spec: SkySpec, s: SkyState): SkyEntityData {
         val a = linkedMapOf<String, Any?>("friendly_name" to spec.name)

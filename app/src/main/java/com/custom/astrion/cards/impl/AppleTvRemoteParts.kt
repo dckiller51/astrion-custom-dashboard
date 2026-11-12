@@ -391,7 +391,11 @@ internal fun AtvAppTile(ctx: CardContext, app: AtvApp, index: Int, size: Dp, lab
             contentAlignment = Alignment.Center
         ) {
             if (icon != null) {
-                Image(icon, contentDescription = app.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                // Cropped to the tile only when nearly square; a wide or tall icon (a player's own,
+                // 1.5.6) is shown whole rather than cut.
+                val ratio = icon.width.toFloat() / icon.height.coerceAtLeast(1)
+                val scale = if (ratio in SQUARE_ENOUGH) ContentScale.Crop else ContentScale.Fit
+                Image(icon, contentDescription = app.label, contentScale = scale, modifier = Modifier.fillMaxSize())
             } else {
                 Text(initialsOf(app.label), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
@@ -437,3 +441,6 @@ internal fun cardInnerWidthDp(cardPadding: Int): Int = LocalConfiguration.curren
 /** Remembers a local play/pause guess for a target that reports no state of its own (Harmony). */
 @Composable
 internal fun rememberLocalPlaying(key: Any?) = remember(key) { mutableStateOf(true) }
+
+/** An icon this close to square fills its tile; any other is fitted whole. */
+private val SQUARE_ENOUGH = 0.85f..1.18f

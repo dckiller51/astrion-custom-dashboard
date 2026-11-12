@@ -451,7 +451,7 @@ private fun subtitleOf(e: EntityState): String? {
 
 /** The player's own apps (its utilities left out), as the TV remote card's `apps` take them. */
 @Suppress("UNCHECKED_CAST")
-private fun playerApps(e: EntityState?): List<Map<String, Any?>> {
+internal fun playerApps(e: EntityState?): List<Map<String, Any?>> {
     val list = e?.attr("astrion_apps") as? kotlinx.serialization.json.JsonArray ?: return emptyList()
     return list.mapNotNull { el ->
         val o = el as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
