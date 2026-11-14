@@ -106,6 +106,28 @@ object DenonProtocol {
         Regex("<list>(.*?)</list>", RegexOption.DOT_MATCHES_ALL).findAll(tag(block, wrapper).orEmpty()).map { it.groupValues[1] }.toList()
     const val DEVICE_INFO = "/goform/Deviceinfo.xml"
 
+    /** Zone 2 or 3's status page (1.5.7). */
+    fun zoneStatusPath(zone: Int) = "/goform/formZone${zone}_Zone${zone}XmlStatusLite.xml"
+
+    /** A zone's power, input, volume and mute (1.5.7): what its Lite status page says; null when it says nothing. */
+    data class ZoneStatus(val on: Boolean, val input: String?, val volumeDb: Double?, val muted: Boolean)
+
+    fun zoneStatus(xml: String): ZoneStatus? {
+        val power = value(xml, "Power") ?: return null
+        return ZoneStatus(
+            on = power.uppercase(Locale.ROOT) == "ON",
+            input = value(xml, "InputFuncSelect"),
+            volumeDb = value(xml, "MasterVolume")?.toDoubleOrNull(),
+            muted = value(xml, "Mute")?.lowercase(Locale.ROOT) == "on"
+        )
+    }
+
+    /** A 0–1 level as a zone's volume command: `Z2` + 00–98 (zones take whole steps). */
+    fun zoneVolumeCommand(zone: Int, level: Double): String {
+        val v = (level.coerceIn(0.0, MAX_LEVEL) * PERCENT).toInt()
+        return "Z$zone" + String.format(Locale.ROOT, "%02d", v)
+    }
+
     fun url(host: String, port: Int, path: String) = "http://$host:$port$path"
 
     /** A command as the receiver takes it on its web API (a space as %20). */

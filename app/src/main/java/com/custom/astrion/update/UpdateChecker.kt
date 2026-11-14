@@ -1,7 +1,10 @@
 package com.custom.astrion.update
 
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInstaller
+import android.os.Build
 import androidx.core.content.FileProvider
 import com.custom.astrion.BuildConfig
 import java.io.File
@@ -285,7 +288,40 @@ object UpdateChecker {
     private const val STALE_AFTER_MS = 10 * 60 * 1000L
 
     /**
-     * Launches the system installer UI for the given APK file.
+     * Installs the given APK (1.5.7): through a [PackageInstaller] session, the system's own way,
+     * whose answer comes to [InstallResultReceiver] (the user's confirmation, or why it failed).
+     * Opening the APK with ACTION_VIEW, as before, sometimes showed an installer that closed by
+     * itself (a test build needed two taps); it stays the fallback when a session can't be made.
+     */
+    fun promptInstall(context: Context, apkFile: File) {
+        val viaSession = runCatching { installWithSession(context, apkFile) }
+        if (viaSession.isFailure) {
+            android.util.Log.w("Update", "installer session failed, opening the APK instead", viaSession.exceptionOrNull())
+            openApk(context, apkFile)
+        }
+    }
+
+    private fun installWithSession(context: Context, apkFile: File) {
+        val installer = context.packageManager.packageInstaller
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        params.setAppPackageName(context.packageName)
+        val id = installer.createSession(params)
+        installer.openSession(id).use { session ->
+            session.openWrite("update.apk", 0, apkFile.length()).use { out ->
+                apkFile.inputStream().use { it.copyTo(out) }
+                session.fsync(out)
+            }
+            // Mutable from Android 12: the system adds the outcome to it.
+            val mutable = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0
+            val flags = PendingIntent.FLAG_UPDATE_CURRENT or mutable
+            val result = PendingIntent.getBroadcast(context, id, Intent(context, InstallResultReceiver::class.java), flags)
+            android.util.Log.i("Update", "installer session $id: ${apkFile.length()} bytes committed")
+            session.commit(result.intentSender)
+        }
+    }
+
+    /**
+     * Launches the system installer UI for the given APK file (before 1.5.7; now the fallback).
      *
      * Deliberately synchronous, on the calling thread — so that if the OS
      * refuses (e.g. "install unknown apps" not granted for this app), the
@@ -293,7 +329,7 @@ object UpdateChecker {
      * surfacing later, uncaught, on the main thread (which would crash the
      * whole app — and with it, the local web server used to trigger this).
      */
-    fun promptInstall(context: Context, apkFile: File) {
+    private fun openApk(context: Context, apkFile: File) {
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
         val intent =
             Intent(Intent.ACTION_VIEW).apply {

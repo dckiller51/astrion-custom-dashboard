@@ -11,4 +11,10 @@
     <string name="adb_title">Para permitirlos, ejecuta una vez desde un ordenador (antes adb connect &lt;este televisor&gt;:5555):</string>
     <string name="open_settings">Abrir el acceso a notificaciones</string>
     <string name="settings_unavailable">Este televisor no tiene esa pantalla: usa el comando ADB</string>
+    <string name="keep_awake_on">Accesible en reposo: activado</string>
+    <string name="keep_awake_off">Accesible en reposo: desactivado</string>
+    <string name="keep_awake_enable">Seguir accesible en reposo</string>
+    <string name="keep_awake_disable">Dejar de estar accesible en reposo</string>
+    <string name="keep_awake_hint">Para los box que el mando no consigue despertar (Xiaomi Mi Box S…): la pantalla se apaga igual, pero el box mantiene la red para que el mando lo vuelva a encender. Consume algo más en reposo.</string>
+    <string name="keep_awake_notification">Astrion: accesible en reposo</string>
 </resources>

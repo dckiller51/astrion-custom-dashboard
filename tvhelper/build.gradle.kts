@@ -18,8 +18,8 @@ android {
         applicationId = "com.custom.astrion.tvhelper"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 4
+        versionName = "1.1.2"
     }
 
     buildTypes {

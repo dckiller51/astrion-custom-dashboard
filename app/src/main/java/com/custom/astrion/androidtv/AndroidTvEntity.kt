@@ -201,13 +201,21 @@ object AndroidTvEntityMapper {
  * to open. Pure, so the mapping is unit-tested; the registry sends the result.
  */
 object AndroidTvServices {
-    /** [seekMs]: a position to jump to, through the Astrion TV Helper (the protocol has no seek). */
+    /**
+     * [seekMs]: a position to jump to, through the Astrion TV Helper (the protocol has no seek).
+     * [wake]: the Astrion TV Helper turns the screen on first (1.5.7), for boxes whose deep
+     * sleep the protocol's keys can't end (Xiaomi Mi Box S): see AndroidTvRegistry.wakeScreen.
+     */
     data class Action(
         val keys: List<Int> = emptyList(),
         val launch: String? = null,
         val longPress: Boolean = false,
-        val seekMs: Long? = null
+        val seekMs: Long? = null,
+        val wake: Wake = Wake.NONE
     )
+
+    /** [ON]: turn on whatever the state (turn_on, WAKEUP); [TOGGLE]: only when the screen is off (POWER, toggle). */
+    enum class Wake { NONE, ON, TOGGLE }
 
     private fun key(name: String) = listOfNotNull(AndroidTvKeys.code(name))
 
@@ -227,9 +235,9 @@ object AndroidTvServices {
 
     /** Home Assistant `media_player.*`; null when the service isn't supported. */
     fun media(service: String, data: Map<String, Any?>, state: AndroidTvState): Action? {
-        keyServices[service]?.let { return Action(key(it)) }
+        keyServices[service]?.let { return Action(key(it), wake = if (service == "toggle") Wake.TOGGLE else Wake.NONE) }
         return when (service) {
-            "turn_on" -> Action(turnOnKeys(state))
+            "turn_on" -> Action(turnOnKeys(state), wake = Wake.ON)
             // Like Home Assistant's integration: POWER is a toggle, only pressed when it changes something.
             "turn_off" -> Action(if (state.isOn == true) key("POWER") else emptyList())
             "volume_mute" -> {
@@ -270,7 +278,14 @@ object AndroidTvServices {
             val repeats = ((data["num_repeats"] as? Number)?.toInt() ?: 1).coerceIn(1, MAX_REPEATS)
             val hold = ((data["hold_secs"] as? Number)?.toDouble() ?: 0.0) > 0.0
             val keys = names.mapNotNull(AndroidTvKeys::code)
-            Action(keys = List(repeats) { keys }.flatten(), longPress = hold)
+            // The TV remote card's power key (1.5.7): the helper may have to wake the box first.
+            val wake =
+                when {
+                    names.any { it.equals("WAKEUP", ignoreCase = true) } -> Wake.ON
+                    names.any { it.equals("POWER", ignoreCase = true) } -> Wake.TOGGLE
+                    else -> Wake.NONE
+                }
+            Action(keys = List(repeats) { keys }.flatten(), longPress = hold, wake = wake)
         }
         "turn_on", "turn_off", "toggle" -> media(service, data, state)
         else -> null

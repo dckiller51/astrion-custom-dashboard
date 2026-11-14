@@ -144,7 +144,10 @@ data class DashboardNavigation(
      * so simply observing it again on every repeat press is enough to
      * restart the popup's own auto-dismiss timer — there's nothing for
      * MainActivity to reset in between. */
-    val volumeHotkeyTrigger: VolumeHotkeyTrigger? = null
+    val volumeHotkeyTrigger: VolumeHotkeyTrigger? = null,
+    /** The entity the bound VOLUME_UP/DOWN/MUTE hotkeys drive right now (global, or the page's own,
+     * so an Activity's volume device on its page): the popup stays up while it's muted (1.5.7). */
+    val volumeEntityId: String? = null
 )
 
 /** See [DashboardNavigation.volumeHotkeyTrigger]. [nonce] only exists so two
@@ -573,6 +576,7 @@ fun Dashboard(
     val onPopupHandled = navigation.onPopupHandled
     val onPageChanged = navigation.onPageChanged
     val volumeHotkeyTrigger = navigation.volumeHotkeyTrigger
+    val volumeEntityId = navigation.volumeEntityId
     val onActivityRuntimeReady = activityCallbacks.onActivityRuntimeReady
     val onStartActivityReady = activityCallbacks.onStartActivityReady
     val onStopActivityReady = activityCallbacks.onStopActivityReady
@@ -684,7 +688,8 @@ fun Dashboard(
                             targetPage = target,
                             widthFraction = target.popupWidthFraction,
                             heightFraction = target.popupHeightFraction,
-                            position = target.popupPosition
+                            position = target.popupPosition,
+                            hideTitle = target.popupHideTitle
                         )
                 }
             }
@@ -743,7 +748,8 @@ fun Dashboard(
                                 targetPage = page,
                                 widthFraction = page.popupWidthFraction,
                                 heightFraction = page.popupHeightFraction,
-                                position = page.popupPosition
+                                position = page.popupPosition,
+                                hideTitle = page.popupHideTitle
                             )
                     },
                     onClosePopup = {
@@ -781,6 +787,7 @@ fun Dashboard(
                     linkedJump = linkedJump,
                     onLinkedJumpChange = { linkedJump = it },
                     volumeHotkeyTrigger = volumeHotkeyTrigger,
+                    volumeEntityId = volumeEntityId,
                     linkedPopupPage = linkedPopupPage,
                     hiddenPageContent = runtime.hiddenPageContent,
                     onLinkedPopupPageChange = { page, entityId ->
@@ -815,6 +822,7 @@ private data class DashboardContentInputs(
     val linkedJump: Pair<String, String>?,
     val onLinkedJumpChange: (Pair<String, String>?) -> Unit,
     val volumeHotkeyTrigger: VolumeHotkeyTrigger?,
+    val volumeEntityId: String?,
     val linkedPopupPage: LinkedPagePopupState?,
     /** Sets (or clears, when both args are null) the shared popup slot —
      * second arg is the entity responsible, null for a manual swipe-up
@@ -1089,7 +1097,8 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                                     targetPage = linkedPageConfig,
                                     widthFraction = current.popupWidthFraction,
                                     heightFraction = current.popupHeightFraction,
-                                    position = current.popupPosition
+                                    position = current.popupPosition,
+                                    hideTitle = current.popupHideTitle
                                 ),
                                 null
                             )
@@ -1116,7 +1125,11 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
         linkedPopupPage?.let { popup ->
             LinkedPagePopup(state = popup, ctx = ctx, onClose = { onLinkedPopupPageChange(null, null) })
         }
-        VolumePopupHost(trigger = volumeHotkeyTrigger, ctx = ctx)
+        VolumePopupHost(
+            trigger = volumeHotkeyTrigger,
+            target = volumeTargetOf(config, activeActivityIds, inputs.volumeEntityId, ctx),
+            ctx = ctx
+        )
     }
 }
 
@@ -1318,7 +1331,9 @@ private data class LinkedPagePopupState(
     val targetPage: PageConfig,
     val widthFraction: Float,
     val heightFraction: Float,
-    val position: String
+    val position: String,
+    /** 1.5.7: the source page's [PageConfig.popupHideTitle]. */
+    val hideTitle: Boolean = false
 )
 
 /**
@@ -1365,17 +1380,20 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
                 .tapClickable(onClick = {})
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
+                // Without its title (1.5.7, popupHideTitle) the row keeps only the ✕, on the right.
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (state.hideTitle) 2.dp else 8.dp),
+                    horizontalArrangement = if (state.hideTitle) Arrangement.End else Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        state.targetPage.name,
-                        color = LocalTheme.current.primaryText,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    if (!state.hideTitle) {
+                        Text(
+                            state.targetPage.name,
+                            color = LocalTheme.current.primaryText,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                     Text(
                         "✕",
                         color = LocalTheme.current.mutedText,
@@ -1409,19 +1427,31 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
  * attribute this could read a real dB value from.
  */
 @Composable
-private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, ctx: CardContext) {
-    var visible by remember { mutableStateOf<VolumeHotkeyTrigger?>(null) }
+private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, target: String?, ctx: CardContext) {
+    var visible by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(trigger) {
         if (trigger == null) return@LaunchedEffect
-        visible = trigger
-        delay(2200)
-        // Nothing else can have changed `visible` out from under us: a
-        // newer trigger would have cancelled/relaunched this very
-        // coroutine (LaunchedEffect(trigger)) before this delay finished.
+        visible = trigger.entityId
+        delay(VOLUME_POPUP_MS)
         visible = null
     }
-    val shown = visible ?: return
-    val e = ctx.entities[shown.entityId] ?: return
+    // 1.5.7: the popup stays up while the volume target is muted, whoever muted it (a hotkey,
+    // Home Assistant, another remote…): no sound and nothing on screen to say why was confusing.
+    // Unmuted elsewhere, it shows the volume a moment, then goes. A target without a readable
+    // mute state (IR, Harmony) never has `is_volume_muted`: unchanged.
+    val targetMuted = target?.let { ctx.entities[it]?.attrBoolean("is_volume_muted") } == true
+    var wasMuted by remember(target) { mutableStateOf(targetMuted) }
+    LaunchedEffect(target, targetMuted) {
+        val unmuted = wasMuted && !targetMuted
+        wasMuted = targetMuted
+        if (unmuted) {
+            visible = target
+            delay(VOLUME_POPUP_MS)
+            visible = null
+        }
+    }
+    val shownId = if (targetMuted) target else visible
+    val e = shownId?.let { ctx.entities[it] } ?: return
     val level = e.attrDouble("volume_level")?.toFloat()?.coerceIn(0f, 1f)
     val muted = e.attrBoolean("is_volume_muted") == true
 
@@ -1473,6 +1503,17 @@ private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, ctx: CardContext) {
         }
     }
 }
+
+private const val VOLUME_POPUP_MS = 2200L
+
+/**
+ * The entity whose mute state keeps the volume popup up (1.5.7): the volume device of an active
+ * Activity when it's an entity here (an IR amp isn't), else the one the bound volume hotkeys drive
+ * ([hotkeyEntityId]).
+ */
+private fun volumeTargetOf(config: AppConfig, active: Set<String>, hotkeyEntityId: String?, ctx: CardContext): String? =
+    config.activities.firstNotNullOfOrNull { a -> a.volumeDeviceId?.takeIf { a.id in active && ctx.entities[it] != null } }
+        ?: hotkeyEntityId
 
 @Composable
 private fun PageContent(page: PageConfig, ctx: CardContext) {

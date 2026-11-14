@@ -601,10 +601,12 @@ private const val APPS_LABELLED_H = 62
  * holds other cards it simply scrolls, as before.
  */
 @Composable
-internal fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = null): Int {
+internal fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = null, share: Float = 1f): Int {
     val screen = LocalConfiguration.current.screenHeightDp
-    val used = DASHBOARD_CHROME_H + CARD_PADDING * 2 + blocks.sum() + GAP * blocks.size
-    val raw = screen - used
+    // [share] (1.5.7, the media remote's size): the card takes that part of the screen below the chrome.
+    val room = (screen - DASHBOARD_CHROME_H) * share
+    val used = CARD_PADDING * 2 + blocks.sum() + GAP * blocks.size
+    val raw = (room - used).toInt()
     val correction = fit?.errors?.get(blocks) ?: 0f
     val pad = (raw + correction).toInt().coerceIn(min, max)
     if (fit != null) {

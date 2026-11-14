@@ -15,6 +15,15 @@ interface HelperDevice {
 
     /** Sends [action] to the app playing; false when no app has a media session. */
     fun media(action: String, positionMs: Long?): Boolean
+
+    /** Whether "Stay reachable in standby" is on (1.1.0). */
+    val keepAwake: Boolean
+
+    /** Whether the screen is on (1.1.0): the remote's POWER turns it off then, it wakes it otherwise. */
+    val screenOn: Boolean
+
+    /** Turns the screen on (1.1.0); whether it's on afterwards. */
+    fun wake(): Boolean
 }
 
 /**
@@ -25,6 +34,7 @@ interface HelperDevice {
  *  GET  /art                           the cover (JPEG), 404 when none
  *  POST /launch?package=P              opens an app
  *  POST /media?action=A[&position=MS]  play, pause, play_pause, stop, next, previous, seek
+ *  POST /wake                          turns the screen on (1.1.0), {"ok":true,"screenOn":…}
  *
  * Everything but /status needs the helper's code (shown on its screen on the TV), in an
  * `X-Astrion-Code` header or a `code` parameter, so only a remote it was linked to drives the TV.
@@ -38,6 +48,7 @@ class HelperRoutes(private val code: String, private val store: NowPlayingStore,
             "/art" -> get(req) { art() }
             "/launch" -> post(req) { launch(req) }
             "/media" -> post(req) { media(req) }
+            "/wake" -> post(req) { HttpResponse.json(Json.obj("ok" to true, "screenOn" to device.wake())) }
             else -> HttpResponse.error(NOT_FOUND, "unknown path")
         }
     }
@@ -60,7 +71,9 @@ class HelperRoutes(private val code: String, private val store: NowPlayingStore,
             "api" to API_VERSION,
             "version" to BuildInfo.VERSION,
             "mediaAccess" to device.mediaAccess,
-            "canOpenApps" to device.canOpenApps
+            "canOpenApps" to device.canOpenApps,
+            "keepAwake" to device.keepAwake,
+            "screenOn" to device.screenOn
         )
     )
 
@@ -95,7 +108,7 @@ class HelperRoutes(private val code: String, private val store: NowPlayingStore,
     companion object {
         const val PORT = 6470
         const val APP_ID = "astrion-tv-helper"
-        const val API_VERSION = 1
+        const val API_VERSION = 2
         private const val MAX_WAIT_S = 30L
         private const val MS_PER_S = 1000L
         private const val OK = 200

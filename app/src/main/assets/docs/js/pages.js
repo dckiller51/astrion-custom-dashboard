@@ -104,7 +104,7 @@ function resetAll() {
 // so an imported popup page came back as a full page and lost it on save.
 const PAGE_FIELDS_NORMALIZED = new Set([
   'name', 'cards', 'hotkeys', 'longHotkeys', 'parent', 'parentKey', 'linkedPage', 'linkedPageMode',
-  'popupWidth', 'popupHeight', 'popupPosition', 'hiddenUnlessActivity',
+  'popupWidth', 'popupHeight', 'popupPosition', 'popupHideTitle', 'hiddenUnlessActivity',
   'openWhenEntity', 'openWhenState', 'closeWhenState', 'openMode'
 ]);
 
@@ -129,6 +129,7 @@ function normalizePageFromJson(p) {
     ...(p.popupWidth != null ? { popupWidth: p.popupWidth } : {}),
     ...(p.popupHeight != null ? { popupHeight: p.popupHeight } : {}),
     ...(p.popupPosition && p.popupPosition !== 'center' ? { popupPosition: p.popupPosition } : {}),
+    ...(p.popupHideTitle ? { popupHideTitle: true } : {}),
     ...(p.hiddenUnlessActivity ? { hiddenUnlessActivity: p.hiddenUnlessActivity } : {}),
     ...(p.openWhenEntity ? { openWhenEntity: p.openWhenEntity } : {}),
     ...(p.openWhenEntity && p.openWhenState && p.openWhenState !== 'on' ? { openWhenState: p.openWhenState } : {}),
@@ -240,6 +241,7 @@ function openPageDialog(index) {
   document.getElementById('pageDialogPopupWidth').value = isNew ? 70 : Math.round((dashboardData.pages[index].popupWidth ?? 0.7) * 100);
   document.getElementById('pageDialogPopupHeight').value = isNew ? 50 : Math.round((dashboardData.pages[index].popupHeight ?? 0.5) * 100);
   document.getElementById('pageDialogPopupPosition').value = isNew ? 'center' : (dashboardData.pages[index].popupPosition || 'center');
+  document.getElementById('pageDialogPopupHideTitle').checked = !isNew && !!dashboardData.pages[index].popupHideTitle;
   // Not itself a stored field — inferred from there being saved popup
   // geometry with neither other trigger set to popup, i.e. it can only be
   // there because some tile elsewhere opens this page as a popup (or the
@@ -415,6 +417,7 @@ function savePageDialog() {
   const popupWidth = (document.getElementById('pageDialogPopupWidth').value || 70) / 100;
   const popupHeight = (document.getElementById('pageDialogPopupHeight').value || 50) / 100;
   const popupPosition = document.getElementById('pageDialogPopupPosition').value;
+  const popupHideTitle = document.getElementById('pageDialogPopupHideTitle').checked;
   const tilePopup = document.getElementById('pageDialogTilePopup').checked;
   const hiddenUnlessActivity = document.getElementById('pageDialogHiddenUnlessActivity').value || undefined;
   const hideFull = !!hiddenUnlessActivity && document.getElementById('pageDialogHideFull').checked;
@@ -448,6 +451,7 @@ function savePageDialog() {
       page.popupWidth = popupWidth;
       page.popupHeight = popupHeight;
       if (popupPosition !== 'center') page.popupPosition = popupPosition;
+      if (popupHideTitle) page.popupHideTitle = true;
     }
     dashboardData.pages.push(page);
     currentActivePage = dashboardData.pages.length - 1;
@@ -488,10 +492,12 @@ function savePageDialog() {
       page.popupWidth = popupWidth;
       page.popupHeight = popupHeight;
       if (popupPosition !== 'center') page.popupPosition = popupPosition; else delete page.popupPosition;
+      if (popupHideTitle) page.popupHideTitle = true; else delete page.popupHideTitle;
     } else {
       delete page.popupWidth;
       delete page.popupHeight;
       delete page.popupPosition;
+      delete page.popupHideTitle;
     }
     if (makeStart) dashboardData.startPage = editingPage;
     else if (dashboardData.startPage === editingPage) dashboardData.startPage = 0;

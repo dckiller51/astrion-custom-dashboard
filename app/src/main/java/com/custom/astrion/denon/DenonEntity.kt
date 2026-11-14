@@ -8,9 +8,14 @@ data class DenonSpec(
     val name: String,
     /** The inputs' names given in Astrion, by code; see [DenonProtocol.customInputs]. */
     val inputNames: Map<String, String> = emptyMap(),
-    val hiddenInputs: Set<String> = emptySet()
+    val hiddenInputs: Set<String> = emptySet(),
+    /** 1.5.7: 1 the main zone only, 2 with zone 2, 3 with zones 2 and 3. */
+    val zones: Int = 1
 ) {
     val remoteEntityId: String get() = "remote." + entityId.substringAfter('.')
+
+    /** Zone 2 or 3's `media_player` (1.5.7): the receiver's id + `_zone2`. */
+    fun zoneEntityId(zone: Int) = entityId + "_zone$zone"
 }
 
 /** What the receiver last said. [reachable] false: it doesn't answer (off the network). */
@@ -27,7 +32,9 @@ data class DenonState(
     /** The inputs as the receiver names them, for the web page's input editor. */
     val receiverInputs: List<DenonProtocol.Input> = emptyList(),
     /** Its HEOS streaming (recent models), when the CLI answers. */
-    val heos: HeosState = HeosState()
+    val heos: HeosState = HeosState(),
+    /** Zones 2 and 3 as they last answered (1.5.7), when published. */
+    val zones: Map<Int, DenonProtocol.ZoneStatus> = emptyMap()
 ) {
     val isOn: Boolean get() = reachable && on
 
@@ -128,6 +135,29 @@ object DenonEntityMapper {
         h.repeat?.let { r -> REPEATS[r]?.let { a["repeat"] = it } }
     }
 
+    /** Zone 2 or 3 (1.5.7): power, volume, mute and input of its own, the receiver's inputs to pick from. */
+    fun zone(spec: DenonSpec, s: DenonState, zone: Int): DenonEntityData {
+        val z = s.zones[zone]
+        val a =
+            linkedMapOf<String, Any?>(
+                "friendly_name" to "${spec.name} Zone $zone",
+                "device_class" to "receiver",
+                "supported_features" to ZONE_FEATURES
+            )
+        a["manufacturer"] = "Denon / Marantz"
+        s.model?.let { a["model"] = it }
+        if (s.inputs.isNotEmpty()) a["source_list"] = s.inputs.map { it.name }
+        val on = s.reachable && z?.on == true
+        if (on) {
+            z.input?.let { code -> a["source"] = s.inputs.firstOrNull { it.code.equals(code, true) }?.name ?: code }
+            z.volumeDb?.let { a["volume_level"] = DenonProtocol.level(it) }
+            a["is_volume_muted"] = z.muted
+        }
+        return DenonEntityData(spec.zoneEntityId(zone), if (on) "on" else "off", a)
+    }
+
+    private const val ZONE_FEATURES = VOLUME_SET or VOLUME_MUTE or TURN_ON or TURN_OFF or VOLUME_STEP or SELECT_SOURCE
+
     fun remote(spec: DenonSpec, s: DenonState): DenonEntityData {
         val a = linkedMapOf<String, Any?>("friendly_name" to spec.name)
         if (s.isOn) s.inputName?.let { a["current_activity"] = it }
@@ -152,6 +182,29 @@ object DenonServices {
             "select_sound_mode" -> soundModeCommand(data["sound_mode"])
             else -> null
         }
+
+    /** Zone 2 or 3's `media_player` services (1.5.7): `Z2ON`, `Z2UP`, `Z2MUON`, `Z250`, `Z2SAT/CBL`… */
+    fun zone(service: String, data: Map<String, Any?>, s: DenonState, zone: Int): List<String>? {
+        val z = "Z$zone"
+        val on = s.zones[zone]?.on == true
+        return when (service) {
+            "turn_on" -> listOf("${z}ON")
+            "turn_off" -> listOf("${z}OFF")
+            "toggle" -> listOf(if (on) "${z}OFF" else "${z}ON")
+            "volume_up" -> listOf("${z}UP")
+            "volume_down" -> listOf("${z}DOWN")
+            "volume_mute" -> listOf(zoneMute(data, s, zone))
+            "volume_set" -> (data["volume_level"] as? Number)?.let { listOf(DenonProtocol.zoneVolumeCommand(zone, it.toDouble())) }
+            "select_source", "play_media" -> inputCommand(data["source"] ?: data["media_content_id"], s)?.map { z + it.removePrefix("SI") }
+            else -> null
+        }
+    }
+
+    /** `Z2MUON` / `Z2MUOFF`: as asked, else the other way from now. */
+    private fun zoneMute(data: Map<String, Any?>, s: DenonState, zone: Int): String {
+        val mute = data["is_volume_muted"] as? Boolean ?: (s.zones[zone]?.muted != true)
+        return "Z$zone" + if (mute) "MUON" else "MUOFF"
+    }
 
     private fun mute(data: Map<String, Any?>, s: DenonState): List<String> =
         listOf(if (data["is_volume_muted"] as? Boolean ?: !s.muted) "MUON" else "MUOFF")

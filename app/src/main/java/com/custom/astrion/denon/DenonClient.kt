@@ -85,6 +85,9 @@ class DenonClient(private val host: String, @Volatile var port: Int) {
     /** Sends one command; false when the receiver didn't take it. */
     fun send(command: String): Boolean = get(DenonProtocol.commandPath(command)) != null
 
+    /** Zone 2 or 3's status (1.5.7); null when the receiver has no such zone or doesn't answer. */
+    fun zoneStatus(zone: Int): DenonProtocol.ZoneStatus? = get(DenonProtocol.zoneStatusPath(zone))?.let(DenonProtocol::zoneStatus)
+
     private fun get(path: String): String? = call(Request.Builder().url(DenonProtocol.url(host, port, path)).build())
 
     private fun post(commands: List<String>): String? = call(

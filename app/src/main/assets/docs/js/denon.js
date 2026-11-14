@@ -139,8 +139,15 @@ function editDenonInputs(localId) {
         <input type="text" id="denonIn${n}Name" maxlength="40" style="flex:1" placeholder="${atvEsc(i.name)}" value="${atvEsc(names[i.code] || '')}" data-code="${atvEsc(i.code)}">
         <code style="flex:0 0 auto;opacity:.6">${atvEsc(i.code)}</code>
       </div>`).join('') : `<div class="hint">${I18N.t('web_denon_inputs_none')}</div>`}
+    <label style="margin-top:12px">${atvEsc(I18N.t('web_denon_zones'))}</label>
+    <select id="denonZones">
+      <option value="1"${(b.zones || 1) === 1 ? ' selected' : ''}>${atvEsc(I18N.t('web_denon_zones_1'))}</option>
+      <option value="2"${b.zones === 2 ? ' selected' : ''}>${atvEsc(I18N.t('web_denon_zones_2'))}</option>
+      <option value="3"${b.zones === 3 ? ' selected' : ''}>${atvEsc(I18N.t('web_denon_zones_3'))}</option>
+    </select>
+    <div class="hint">${atvEsc(I18N.t('web_denon_zones_hint')).replace('{id}', '<code>' + atvEsc(b.entityId) + '_zone2</code>')}</div>
     <div class="btn-row" style="margin-top:10px">
-      ${inputs.length ? `<button type="button" onclick="saveDenonInputs(${inputs.length})">${atvEsc(I18N.t('web_denon_inputs_save'))}</button>` : ''}
+      <button type="button" onclick="saveDenonInputs(${inputs.length})">${atvEsc(I18N.t('web_denon_inputs_save'))}</button>
       <button type="button" class="secondary" onclick="document.getElementById('denonInputsEditor').style.display='none'">${atvEsc(I18N.t('web_denon_inputs_close'))}</button>
     </div>`;
   box.style.display = '';
@@ -162,6 +169,7 @@ async function saveDenonInputs(count) {
   }
   b.inputNames = names;
   b.hiddenInputs = hidden;
+  b.zones = Number(document.getElementById('denonZones').value) || 1;
   await persistHaAndHubs();
   box.style.display = 'none';
   showToast(I18N.t('web_denon_inputs_saved'));

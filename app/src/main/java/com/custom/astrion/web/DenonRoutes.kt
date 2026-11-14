@@ -59,6 +59,7 @@ class DenonRoutes(private val context: Context) {
                     .put("port", b.port)
                     .put("inputNames", JSONObject(b.inputNames))
                     .put("hiddenInputs", JSONArray(b.hiddenInputs.toList()))
+                    .put("zones", b.zones)
             )
         }
     }
@@ -93,7 +94,8 @@ class DenonRoutes(private val context: Context) {
                     host = host,
                     port = ports.getOrNull(i)?.toIntOrNull() ?: DEFAULT_PORT,
                     inputNames = inputNames(inputs.getOrNull(i)),
-                    hiddenInputs = hiddenInputs(inputs.getOrNull(i))
+                    hiddenInputs = hiddenInputs(inputs.getOrNull(i)),
+                    zones = inputsJson(inputs.getOrNull(i))?.optInt("zones", 1)?.coerceIn(1, 3) ?: 1
                 )
             }
         RemoteSettings.saveDenons(context, receivers)
@@ -130,15 +132,12 @@ class DenonRoutes(private val context: Context) {
         }
         var changed = false
         for (b in receivers) {
-            val id = "denon_${b.localId}"
-            val existing = byId[id]
-            if (existing == null) {
-                haDevices.put(JSONObject().put("id", id).put("domain", "media_player").put("entityId", b.entityId).put("name", b.name))
-                changed = true
-            } else if (existing.optString("entityId") != b.entityId || existing.optString("name") != b.name) {
-                existing.put("entityId", b.entityId).put("name", b.name)
-                changed = true
-            }
+            // The main zone, then zones 2 and 3 (1.5.7) when the receiver has them, as players of their own.
+            val wanted = listOf(Triple("denon_${b.localId}", b.entityId, b.name)) +
+                (2..b.zones).map { z -> Triple("denon_${b.localId}_zone$z", "${b.entityId}_zone$z", "${b.name} Zone $z") }
+            for ((id, entityId, name) in wanted) changed = upsert(haDevices, byId[id], id, entityId, name) || changed
+            // Zones no longer kept: out of the pickers.
+            for (z in b.zones + 1..MAX_ZONES) changed = removeEntry(haDevices, byId["denon_${b.localId}_zone$z"]) || changed
         }
         if (!changed) return rawJson
         root.put("haDevices", haDevices)
@@ -147,8 +146,28 @@ class DenonRoutes(private val context: Context) {
         return result
     }
 
+    /** Adds or updates one picker entry; whether it changed. */
+    private fun upsert(haDevices: JSONArray, existing: JSONObject?, id: String, entityId: String, name: String): Boolean {
+        if (existing == null) {
+            haDevices.put(JSONObject().put("id", id).put("domain", "media_player").put("entityId", entityId).put("name", name))
+            return true
+        }
+        if (existing.optString("entityId") == entityId && existing.optString("name") == name) return false
+        existing.put("entityId", entityId).put("name", name)
+        return true
+    }
+
+    /** Takes [entry] out of [haDevices]; whether it was there. */
+    private fun removeEntry(haDevices: JSONArray, entry: JSONObject?): Boolean {
+        if (entry == null) return false
+        val index = (0 until haDevices.length()).firstOrNull { haDevices.optJSONObject(it) === entry } ?: return false
+        haDevices.remove(index)
+        return true
+    }
+
     companion object {
         private const val DEFAULT_PORT = 8080
+        private const val MAX_ZONES = 3
         private const val MAX_NAME = 40
         private val HOST = Regex("^[A-Za-z0-9.:-]{1,253}$")
         private val ENTITY = Regex("^media_player\\.[a-z0-9_]+$")

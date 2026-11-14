@@ -129,6 +129,7 @@
             <div class="btn-row">
                 <button data-i18n="web_ui_copy_json" onclick="copyJson()">Copy JSON</button>
                 <button class="secondary" data-i18n="web_ui_download_json" onclick="downloadJson()">Download dashboard.json</button>
+                <button class="secondary" data-i18n="web_ai_button" onclick="openAiHelp()">Ask an AI for help</button>
             </div>
             <h3 class="subsection-title" data-i18n="web_ui_load_heading">Load an existing dashboard.json (optional)</h3>
             <div class="section-box">
@@ -439,6 +440,7 @@
                     <option value="left" data-i18n="web_hwkey_left">Left</option>
                     <option value="right" data-i18n="web_hwkey_right">Right</option>
                 </select>
+                <label class="inline-check" style="margin-top:8px"><input type="checkbox" id="pageDialogPopupHideTitle"> <span data-i18n="web_ui_popup_hide_title">Hide the popup's title (the page's name)</span></label>
                 <div class="hint" style="margin-top:4px" data-i18n="web_ui_shared_by_linked_page_auto_open">Shared by "Linked page", "Auto-open", and "Opened as a popup from a tile elsewhere" above, whichever of the three is set to popup/checked — a page's popup shape is one setting, however it gets opened.</div>
             </div>
             <div class="btn-row" style="margin-top:12px">
@@ -498,6 +500,8 @@
 <script src="js/cards-zidoo.js"></script>
 <script src="js/cards-media-remote.js"></script>
 <script src="js/cards-info.js"></script>
+<script src="js/help-links.js"></script>
+<script src="js/ai-help.js"></script>
 <script src="js/history.js"></script>
 <script src="js/deeplink.js"></script>
 <script src="js/harmony.js"></script>

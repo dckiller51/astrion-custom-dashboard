@@ -54,6 +54,7 @@ class AstrionApp : Application() {
     override fun onCreate() {
         super.onCreate()
         HaLabels.init(this)
+        AppLogs.rememberRun(this)
         installDeviceStateStore()
         // Off the main thread: a cache listing is cheap, but startup is not
         // the place for any disk I/O that can wait.

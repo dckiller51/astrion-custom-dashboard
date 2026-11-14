@@ -42,6 +42,12 @@ class AndroidTvEntityTest {
         // Unknown state: turning on sends WAKEUP (can't turn it off), turning off sends nothing (POWER could turn it on).
         val unknown = on.copy(isOn = null)
         assertEquals(listOf(224), AndroidTvServices.media("turn_on", emptyMap(), unknown)!!.keys)
+        assertEquals(AndroidTvServices.Wake.ON, AndroidTvServices.media("turn_on", emptyMap(), on)!!.wake)
+        assertEquals(AndroidTvServices.Wake.TOGGLE, AndroidTvServices.media("toggle", emptyMap(), on)!!.wake)
+        assertEquals(AndroidTvServices.Wake.NONE, AndroidTvServices.media("turn_off", emptyMap(), on)!!.wake)
+        assertEquals(AndroidTvServices.Wake.TOGGLE, AndroidTvServices.remote("send_command", mapOf("command" to "POWER"), on)!!.wake)
+        assertEquals(AndroidTvServices.Wake.ON, AndroidTvServices.remote("send_command", mapOf("command" to listOf("WAKEUP")), on)!!.wake)
+        assertEquals(AndroidTvServices.Wake.NONE, AndroidTvServices.remote("send_command", mapOf("command" to "HOME"), on)!!.wake)
         assertEquals(emptyList<Int>(), AndroidTvServices.media("turn_off", emptyMap(), unknown)!!.keys)
     }
 

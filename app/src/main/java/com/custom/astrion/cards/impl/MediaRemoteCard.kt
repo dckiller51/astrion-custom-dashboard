@@ -1,10 +1,14 @@
 package com.custom.astrion.cards.impl
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -27,17 +31,23 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SettingsRemote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,12 +55,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,12 +78,13 @@ import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.icons.MdiIcons
 import com.custom.astrion.ui.tapClickable
+import kotlin.math.abs
 /**
  * One remote for every player (1.5.6, `media_remote`, step 1: the main view; by Xavier with
  * Claude, tested on his remote): the same layout for an Apple TV, an Android TV, a Zidoo, an
  * Eversolo, a TV…
  *   - no scrolling: the card fills the screen and the D-pad is sized to what is left
- *     (trackpadFor / measureFit, as TvRemoteCard's "full" layout and the Apple TV card do);
+ *     (measured, 1.5.7: FillState; the card ends at the page dots, room to spare around the D-pad);
  *   - each player keeps its own channel: key names go through [KeyMap] per player kind
  *     (Apple TV's names, Android-style names for Android TV / Samsung / Zidoo…), and volume
  *     goes to `volume_entity` like the other cards' `muteEntity`;
@@ -104,46 +120,112 @@ class MediaRemoteCard : CardRenderer {
     @Composable
     override fun Render(config: CardConfig, ctx: CardContext) {
         val playerId = config.string("player_entity") ?: return
-        val remoteId = config.string("remote_entity") ?: "remote.${playerId.substringAfter('.')}"
+        val remoteId = remoteOf(config, playerId)
         val popup = remember { mutableStateOf<Popup?>(null) }
         val deviceDialog = remember { mutableStateOf<ZidooDialog?>(null) }
-        var playerOpen by remember { mutableStateOf(false) }
-        val r = Parts(ctx, config, playerId, remoteId, popup, deviceDialog) { playerOpen = true }
+        // 1.5.7: the player view (big cover) in the card itself, instead of the remote.
+        var playerView by remember { mutableStateOf(false) }
+        var detailsOpen by remember { mutableStateOf(false) }
+        val r = Parts(ctx, config, playerId, remoteId, popup, deviceDialog) { playerView = true }
         val player = ctx.entities[playerId]
         val active = player != null && player.state in ACTIVE_STATES
-        // A tap on what plays opens the media player view; it closes once nothing plays.
-        LaunchedEffect(active) { if (!active) playerOpen = false }
-        val fit = remember(config) { AtvFit() }
+        // `auto_player`: to the player view when something starts, back to the remote when it stops.
+        val auto = config.bool("auto_player", false)
+        LaunchedEffect(active) { playerView = active && (auto || playerView) }
+        // The remote's own Back key leaves the player view.
+        BackHandler(enabled = playerView && active) { playerView = false }
         val density = LocalDensity.current
+        val share = sizeShare(config.string("size"))
 
-        // Heights (dp) of everything except the D-pad, so trackpadFor can size the D-pad to the screen.
         val showDpad = config.bool("show_dpad", true)
-        val blocks = blockHeights(r, player, active, showDpad)
-        val pad = if (showDpad) trackpadFor(blocks, min = MIN_PAD, max = MAX_PAD, fit = fit) else 0
-        fit.usedPad = pad
+        val inPlayer = playerView && active
+        val pad = basePad(r, player, inPlayer, active, showDpad, share)
+
+        // 1.5.7: the card ends at the page dots (or at its share of the screen), measured rather
+        // than guessed: room to spare goes around the D-pad (or into the cover); too little room
+        // shrinks the cover, then puts app rows away in the Apps pop-up (Xavier's screenshots:
+        // cards stopping short, or cut off below the D-pad).
+        val room = remember(config) { mutableFloatStateOf(0f) }
+        val fill = remember(config, inPlayer, active) { FillState(room) }
+        r.appsDrop = fill.appsDrop
+        val limits = fillLimits(config, inPlayer, pad, cardInnerWidthDp(PADDING))
+        val target = fill.room * share
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .onGloballyPositioned { measureFit(fit, it, density) }
+                .then(if (target > 0f) Modifier.heightIn(min = target.dp) else Modifier)
                 .clip(RoundedCornerShape(20.dp))
                 .background(ctx.theme.cardSurface)
-                .padding(PADDING.dp),
-            verticalArrangement = Arrangement.spacedBy(GAP.dp)
+                .padding(PADDING.dp)
         ) {
-            r.Header()
-            if (active) {
-                r.NowPlaying(player!!)
-                r.Transport(player)
+            Column(
+                Modifier.fillMaxWidth().onGloballyPositioned { fill.measure(it, density, share, limits, r.appsRowCount(), inPlayer) },
+                verticalArrangement = Arrangement.spacedBy(GAP.dp)
+            ) {
+                r.Header()
+                if (inPlayer) {
+                    r.PlayerView(player!!, pad + fill.extra.toInt(), onRemote = { playerView = false }, onDetails = { detailsOpen = true })
+                } else {
+                    r.RemoteBlocks(player, active, showDpad, pad, fill.extra.toInt())
+                }
             }
-            // The library (and the player's own buttons) show even when nothing plays.
-            r.DeviceButtons(player, active)
-            r.NavRow()
-            r.AppsRow()
-            if (showDpad) r.Pad(pad)
+            Spacer(Modifier.weight(1f))
         }
         r.Dialogs()
-        if (playerOpen && active) PlayerView(ctx, config, player, remoteId) { playerOpen = false }
+        if (detailsOpen && active) Details(ctx, config, player!!, remoteId) { detailsOpen = false }
+    }
+
+    /** A first guess at the D-pad's (or the cover's) size, from the other blocks' heights; FillState corrects it. */
+    @Composable
+    private fun basePad(r: Parts, player: EntityState?, inPlayer: Boolean, active: Boolean, showDpad: Boolean, share: Float): Int {
+        if (!inPlayer && !showDpad) return 0
+        val blocks = if (inPlayer && player != null) r.playerBlocks(player) else blockHeights(r, player, active, showDpad)
+        return trackpadFor(blocks, MIN_PAD, if (inPlayer) MAX_COVER else MAX_PAD, null, share)
+    }
+
+    /** How far FillState may move: the cover between its minimum and the card's width; the D-pad's gap from 0 up. */
+    private fun fillLimits(config: CardConfig, inPlayer: Boolean, pad: Int, innerWidth: Int): ClosedFloatingPointRange<Float> {
+        if (!inPlayer) return 0f..MAX_EXTRA
+        val ratio = if (config.string("cover_ratio") == "wide") WIDE else 1f
+        return (MIN_COVER - pad).toFloat()..(innerWidth / ratio - pad).coerceAtLeast((MIN_COVER - pad).toFloat())
+    }
+
+    private fun remoteOf(config: CardConfig, playerId: String) = config.string("remote_entity") ?: "remote.${playerId.substringAfter('.')}"
+
+    /**
+     * How the card fits the page (1.5.7), from its content as laid out: [room] from the card's top
+     * to the page dots; [extra] dp around the D-pad, or added to (taken from) the cover; app rows
+     * put away ([appsDrop]) when even that isn't enough. Each layout corrects the last, so it
+     * settles in a frame or two; nothing changes once it fits.
+     */
+    private class FillState(private val roomState: MutableFloatState) {
+        var room by roomState
+        var extra by mutableFloatStateOf(0f)
+        var appsDrop by mutableIntStateOf(0)
+
+        fun measure(
+            content: LayoutCoordinates,
+            density: Density,
+            share: Float,
+            limits: ClosedFloatingPointRange<Float>,
+            appRows: Int,
+            inPlayer: Boolean
+        ) {
+            val px = density.density
+            val top = content.positionInWindow().y / px - PADDING
+            val limit = content.findRootCoordinates().size.height / px - PAGE_BOTTOM_CHROME
+            (limit - top).takeIf { abs(it - room) > 1f }?.let { room = it }
+            val target = room * share
+            if (target <= 0f) return
+            val diff = target - (content.size.height / px + 2 * PADDING)
+            if (abs(diff) <= 1f) return
+            val wanted = (extra + diff).coerceIn(limits)
+            when {
+                abs(wanted - extra) > 0.5f -> extra = wanted
+                diff < 0 && !inPlayer && appsDrop < appRows -> appsDrop++
+            }
+        }
     }
 
     /** Heights (dp) of every block but the D-pad, in the order they are drawn. */
@@ -159,9 +241,9 @@ class MediaRemoteCard : CardRenderer {
         if (showDpad && r.hasLowerRow()) add(BLOCK_LOWER)
     }
 
-    /** The media player view of what plays, opened by a tap on its cover, title or bar. */
+    /** All the player's details (volume slider, casting…), from the player view's ⋯ key. */
     @Composable
-    private fun PlayerView(ctx: CardContext, config: CardConfig, player: EntityState, remoteId: String, onClose: () -> Unit) {
+    private fun Details(ctx: CardContext, config: CardConfig, player: EntityState, remoteId: String, onClose: () -> Unit) {
         MediaPlayerDetailDialog(
             entityId = player.entityId,
             name = player.attrString("friendly_name") ?: player.entityId,
@@ -195,6 +277,34 @@ class MediaRemoteCard : CardRenderer {
         const val MIN_PAD = 140
         const val MAX_PAD = 260
         val ACTIVE_STATES = setOf("playing", "paused", "buffering")
+        const val MAX_COVER = 420
+        const val MIN_COVER = 100
+        const val SMALL_CHIPS = 4
+        const val MAX_EXTRA = 600f
+        const val PAGE_BOTTOM_CHROME = 42 // the page dots under the card
+        const val WIDE = 16f / 9f
+        const val COVER_FILL = 0.2f
+        const val RECT_CORNER = 0.28f
+
+        // Player view heights (to tune on the device): title lines, progress, transport, the row of keys.
+        const val BLOCK_TITLE = 64
+        const val BLOCK_KEYS = 56
+
+        /** The blocks in `order` (1.5.7); any left out follow in the default order, unknown names ignored. */
+        val DEFAULT_ORDER = listOf("playing", "device", "nav", "apps", "pad")
+
+        fun orderOf(config: CardConfig): List<String> {
+            val asked = (config.options["order"] as? List<*>).orEmpty().mapNotNull { it as? String }
+                .filter { it in DEFAULT_ORDER }.distinct()
+            return asked + DEFAULT_ORDER.filter { it !in asked }
+        }
+
+        /** `size` (1.5.7): the part of the screen the card takes. */
+        fun sizeShare(size: String?): Float = when (size) {
+            "two_thirds" -> 2f / 3f
+            "half" -> 0.5f
+            else -> 1f
+        }
     }
 
     private enum class Popup { SOURCES, KEYPAD, BROWSE, SEARCH, DEVICE }
@@ -246,6 +356,7 @@ class MediaRemoteCard : CardRenderer {
 
         // The card's apps, else the player's own (a Zidoo's, an Eversolo's), as the Zidoo card does.
         val apps = AppShortcuts.appsOf(config.options) ?: playerApps(ctx.entities[playerId])
+        private val rectKeys = config.string("key_shape") == "rect"
         val shortcuts = AppShortcuts(ctx, apps, playerId)
         private var popup by popupState
         private var deviceDialog by deviceState
@@ -309,6 +420,24 @@ class MediaRemoteCard : CardRenderer {
             }
         }
 
+        /** The remote's blocks, in `order` (1.5.7). */
+        @Composable
+        fun RemoteBlocks(player: EntityState?, active: Boolean, showDpad: Boolean, pad: Int, extra: Int = 0) {
+            orderOf(config).forEach { block ->
+                when (block) {
+                    "playing" -> if (active && player != null) {
+                        NowPlaying(player)
+                        Transport(player)
+                    }
+                    // The library (and the player's own buttons) show even when nothing plays.
+                    "device" -> DeviceButtons(player, active)
+                    "nav" -> NavRow()
+                    "apps" -> AppsRow()
+                    "pad" -> if (showDpad) Pad(pad, extra)
+                }
+            }
+        }
+
         @Composable
         fun NowPlaying(e: EntityState) {
             val np = AtvNowPlaying.of(e)
@@ -346,6 +475,82 @@ class MediaRemoteCard : CardRenderer {
             }
         }
 
+        /** Heights (dp) of the player view's blocks but the cover, for trackpadFor to size the cover. */
+        fun playerBlocks(e: EntityState): List<Int> = buildList {
+            add(BLOCK_POWER)
+            add(BLOCK_TITLE)
+            add(BLOCK_PROGRESS)
+            add(BLOCK_TRANSPORT)
+            add(BLOCK_KEYS)
+            if (hasDeviceButtons(e)) add(BLOCK_DEVICE)
+        }
+
+        /**
+         * The player view (1.5.7): a big cover (`cover_ratio`: square, or "wide" for 16:9 film art),
+         * the title, the bar, the transport, volume, and the way back to the remote (its key, or the
+         * remote's own Back key); ⋯ opens all the player's details.
+         */
+        @Composable
+        fun PlayerView(e: EntityState, coverHeight: Int, onRemote: () -> Unit, onDetails: () -> Unit) {
+            val ratio = if (config.string("cover_ratio") == "wide") WIDE else 1f
+            val h = minOf(coverHeight.toFloat(), cardInnerWidthDp(PADDING) / ratio)
+            Box(Modifier.fillMaxWidth().tapClickable(onClick = onDetails), contentAlignment = Alignment.Center) {
+                Cover(e, (h * ratio).dp, h.dp, ratio)
+            }
+            val np = AtvNowPlaying.of(e)
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    np.title,
+                    color = theme.primaryText,
+                    fontSize = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center
+                )
+                np.subtitle?.let {
+                    Text(
+                        it,
+                        color = theme.mutedText,
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+            val seek: ((Double) -> Unit)? = if (e.supports(Feature.SEEK)) { s -> mp("media_seek", "seek_position" to s) } else null
+            AtvProgress(e, theme, thick = true, onSeek = seek)
+            Transport(e)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Key(Icons.Filled.SettingsRemote, "Remote") { onRemote() }
+                if (hasVolume()) {
+                    Key(Icons.AutoMirrored.Filled.VolumeDown, "Vol −") { press("volume_down", volumeId) }
+                    if (keys.of("mute") != null) Key(Icons.AutoMirrored.Filled.VolumeOff, "Mute") { press("mute", volumeId) }
+                    Key(Icons.AutoMirrored.Filled.VolumeUp, "Vol +") { press("volume_up", volumeId) }
+                }
+                Key(Icons.Filled.MoreHoriz, "Details") { onDetails() }
+            }
+            DeviceButtons(e, active = true)
+        }
+
+        /** The cover in a [w]×[h] frame: filling it when its shape is close, else whole (a square album in a 16:9 frame). */
+        @Composable
+        private fun Cover(e: EntityState, w: Dp, h: Dp, ratio: Float) {
+            val path = e.attrString("entity_picture_local") ?: e.attrString("entity_picture")
+            val px = with(LocalDensity.current) { w.toPx() }.toInt()
+            val art = rememberImage(ctx, path, px)
+            Box(Modifier.size(w, h).clip(RoundedCornerShape(16.dp)).background(theme.insetSurface), contentAlignment = Alignment.Center) {
+                if (art != null) {
+                    val own = art.width.toFloat() / art.height.coerceAtLeast(1)
+                    val fills = kotlin.math.abs(own - ratio) / ratio < COVER_FILL
+                    Image(art, null, contentScale = if (fills) ContentScale.Crop else ContentScale.Fit, modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Filled.MusicNote, null, tint = theme.mutedText, modifier = Modifier.size(h * 0.3f))
+                }
+            }
+        }
+
         @Composable
         fun Transport(e: EntityState) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
@@ -362,7 +567,11 @@ class MediaRemoteCard : CardRenderer {
         }
 
         fun hasDeviceButtons(e: EntityState?): Boolean =
-            (e != null && deviceChips(e).isNotEmpty()) || (config.bool("show_browse", true) && hasLibrary(playerId, remoteId))
+            (e != null && deviceChips(e).isNotEmpty()) || (config.bool("show_browse", true) && hasLibrary(playerId, remoteId)) || searches()
+
+        /** `music_search` (1.5.7, as the media player card): Home Assistant's media search, on `search_player`. */
+        private fun searches() = config.bool("music_search", false)
+        private val searchPlayer get() = config.string("search_player") ?: playerId
 
         private fun deviceChips(e: EntityState): List<Triple<Int, String?, ZidooDialog>> {
             // Only a Zidoo / Eversolo answers these pop-ups (they ask the player itself).
@@ -391,11 +600,22 @@ class MediaRemoteCard : CardRenderer {
         fun DeviceButtons(e: EntityState?, active: Boolean) {
             val chips = if (e != null) deviceChips(e) else emptyList()
             val browse = config.bool("show_browse", true) && hasLibrary(playerId, remoteId)
-            if (chips.isEmpty() && !browse) return
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (browse) Chip(stringResource(R.string.zidoo_library_title), null, Modifier.weight(1f)) { popup = Popup.BROWSE }
-                chips.take(3).forEach { (label, value, dialog) ->
-                    Chip(stringResource(label), value, Modifier.weight(1f)) {
+            if (chips.isEmpty() && !browse && !searches()) return
+            val shown = chips.take(if (searches()) 2 else 3)
+            // Four chips (a Zidoo: library, subtitles, audio, chapters): smaller text, so no word is cut in two (1.5.7).
+            val small = listOf(browse, searches()).count { it } + shown.size >= SMALL_CHIPS
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp)) {
+                if (browse) Chip(stringResource(R.string.zidoo_library_title), null, Modifier.weight(1f), small) { popup = Popup.BROWSE }
+                if (searches()) {
+                    Chip(
+                        stringResource(R.string.zidoo_library_search),
+                        null,
+                        Modifier.weight(1f),
+                        small
+                    ) { popup = Popup.SEARCH }
+                }
+                shown.forEach { (label, value, dialog) ->
+                    Chip(stringResource(label), value, Modifier.weight(1f), small) {
                         deviceDialog = dialog
                         popup = Popup.DEVICE
                     }
@@ -405,10 +625,10 @@ class MediaRemoteCard : CardRenderer {
         }
 
         @Composable
-        private fun Chip(label: String, value: String?, modifier: Modifier, onClick: () -> Unit) {
+        private fun Chip(label: String, value: String?, modifier: Modifier, small: Boolean = false, onClick: () -> Unit) {
             Column(
                 modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(12.dp)).background(theme.controlBackground)
-                    .tapClickable(onClick = onClick).padding(horizontal = 8.dp),
+                    .tapClickable(onClick = onClick).padding(horizontal = if (small) 3.dp else 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -416,8 +636,8 @@ class MediaRemoteCard : CardRenderer {
                 Text(
                     label,
                     color = theme.primaryText,
-                    fontSize = 13.sp,
-                    lineHeight = 15.sp,
+                    fontSize = if (small) 11.sp else 13.sp,
+                    lineHeight = if (small) 13.sp else 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -456,22 +676,40 @@ class MediaRemoteCard : CardRenderer {
         private fun showApps() = apps.isNotEmpty() && config.bool("show_apps", true)
         private fun iconsStyle() = config.string("apps_style") == "icons"
 
-        /** At most this many rows of apps (`apps_rows`, 1.5.6; 0: all); the others stay in the Apps pop-up. */
-        private fun appsRows() = config.int("apps_rows", 0).coerceAtLeast(0)
+        /** App rows put away because the card didn't fit (1.5.7, see FillState). */
+        var appsDrop = 0
+
+        /**
+         * At most this many rows of apps (`apps_rows`, 1.5.6; 0: all); the others stay in the Apps
+         * pop-up. A card on half or two thirds of the screen (`size`, 1.5.7) keeps one; any card
+         * fewer when the page is too short for them ([appsDrop]).
+         */
+        private fun appsRows(): Int {
+            val asked = config.int("apps_rows", 0).coerceAtLeast(0)
+            val sized = if (sizeShare(config.string("size")) < 1f) (if (asked == 0) 1 else minOf(asked, 1)) else asked
+            val shown = if (sized > 0) minOf(sized, allAppRows()) else allAppRows()
+            return (shown - appsDrop).coerceAtLeast(0)
+        }
+
+        private fun allAppRows(): Int {
+            val perRow = if (iconsStyle()) AppShortcuts.ICONS_PER_ROW else 2
+            return (apps.size + perRow - 1) / perRow
+        }
+
+        /** How many app rows show before any is put away, for FillState. */
+        fun appsRowCount(): Int = if (showApps()) appsRows() + appsDrop else 0
 
         /** Heights of the app rows, for the D-pad's size (icons: 5 a row; buttons: 2 a row). */
         fun appsBlocks(): List<Int> {
             if (!showApps()) return emptyList()
-            val perRow = if (iconsStyle()) AppShortcuts.ICONS_PER_ROW else 2
-            val rows = (apps.size + perRow - 1) / perRow
-            val shown = if (appsRows() > 0) minOf(rows, appsRows()) else rows
-            return List(shown) { if (iconsStyle()) BLOCK_APPS else KEY }
+            return List(appsRows()) { if (iconsStyle()) BLOCK_APPS else KEY }
         }
 
         /** The apps, as the TV remote card shows them (`apps_style`, `show_apps`), `apps_rows` at most. */
         @Composable
         fun AppsRow() {
-            if (showApps()) shortcuts.Rows(iconsStyle = iconsStyle(), cardPadding = PADDING, maxRows = appsRows())
+            val rows = appsRows()
+            if (showApps() && rows > 0) shortcuts.Rows(iconsStyle = iconsStyle(), cardPadding = PADDING, maxRows = rows)
         }
 
         private fun hasVolume() = config.bool("show_volume", true)
@@ -486,13 +724,14 @@ class MediaRemoteCard : CardRenderer {
          * right; mute centred under it.
          */
         @Composable
-        fun Pad(pad: Int) {
+        fun Pad(pad: Int, extra: Int = 0) {
             // Round, and narrow enough to leave room for the side keys.
             val d = minOf(pad, cardInnerWidthDp(PADDING) - 2 * (SIDE_KEY + 8)).coerceAtLeast(120)
             val arrow = (d * 0.24f).coerceIn(36f, 56f).dp
             val ok = (d * 0.32f).dp
             val side = SIDE_KEY.dp
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // The room the page has to spare (1.5.7, FillState), half above the D-pad, half below.
+            Column(Modifier.fillMaxWidth().padding(vertical = (extra / 2).dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Tall enough to keep Back apart from volume +, and the keypad from channel + (1.5.6).
                 Box(Modifier.fillMaxWidth().height(maxOf(d, SIDE_COLUMN).dp)) {
                     Box(
@@ -555,7 +794,7 @@ class MediaRemoteCard : CardRenderer {
                     onClose = close
                 )
                 Popup.BROWSE -> BrowseDialog(playerId, ctx.client, theme, also = remoteId, onClose = close)
-                Popup.SEARCH -> MusicSearchDialog(ctx.client, playerId, theme, close)
+                Popup.SEARCH -> MusicSearchDialog(ctx.client, searchPlayer, theme, close)
                 Popup.DEVICE -> deviceDialog?.let { ZidooCardDialog(ctx, config, playerId, ctx.entities[playerId], it, close) }
                 Popup.KEYPAD -> KeypadTarget.from(config, remoteId, keys.of("center") ?: "DPAD_CENTER")?.let { target ->
                     KeypadDialog(theme, target.hasOk, onKey = { target.send(ctx, it) }, onClose = close)
@@ -583,7 +822,8 @@ class MediaRemoteCard : CardRenderer {
             tint: androidx.compose.ui.graphics.Color = theme.iconTint,
             onClick: () -> Unit
         ) {
-            val shape = androidx.compose.foundation.shape.CircleShape
+            // `key_shape` (1.5.7): "rect" for rounded rectangles, as a physical remote's keys.
+            val shape = if (rectKeys) RoundedCornerShape(size * RECT_CORNER) else androidx.compose.foundation.shape.CircleShape
             Box(
                 Modifier.size(size).clip(shape).background(theme.controlBackground).tapClickable(focusShape = shape, onClick = onClick),
                 contentAlignment = Alignment.Center
