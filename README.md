@@ -15,7 +15,7 @@
 
 A standalone Android app that turns the **Sanytron Astrion HA100** remote into a dedicated smart-home and AV remote. It replaces the stock HaRemote launcher with a swipeable, full-screen dashboard, built with Kotlin and Jetpack Compose.
 
-The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven by one `dashboard.json` file that you build in your browser, and it can talk to Home Assistant, a Harmony Hub, its own IR blaster, and an Apple TV, Android TV or Zidoo player directly.
+The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven by one `dashboard.json` file that you build in your browser, and it can talk to Home Assistant, a Harmony Hub, its own IR blaster, and many devices directly: Apple TV, Android / Google TV, LG and Samsung TVs, Denon / Marantz receivers, Sky boxes, Zidoo and Eversolo players.
 
 📖 **Documentation lives in the [Wiki](https://github.com/dckiller51/astrion-custom-dashboard/wiki)**. This page is the overview.
 
@@ -25,6 +25,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 
 - **Swipeable pages of cards**: lights, covers, climate, media, cameras, vacuums, Plex, Xbox, scenes, remotes… ([card reference](https://github.com/dckiller51/astrion-custom-dashboard/wiki)).
 - **Browser-based builder** at `http://<remote-ip>:8080/builder/`. You edit visually with a live preview of the remote, and no hand-written JSON is needed. Available in English, French, German, Italian and Spanish.
+- **Help where you need it**: every card form and device page in the builder links to its wiki page, and *Ask an AI for help* prepares a ready-to-paste question (your card, its options, the entities) for the AI assistant of your choice.
 - **Undo and version history**: undo / redo in the builder (Ctrl+Z / Ctrl+Y), and the remote keeps every saved version of its dashboard. Open, restore, pin or annotate any of them ([details](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Builder#undo-and-version-history)).
 - **Physical keys**: every hardware key, short or long press, can be bound to a page, a popup, a Home Assistant service or event, a Harmony or IR command, an Apple TV command, an Android TV key or app, or an Activity. Bindings can be global or per page.
 - **Activities**: "Watch Apple TV", "Listen to music"… One tap powers on the right devices, switches inputs, binds the volume keys and opens the right page. Activities are tracked per room, and the "Off" button works like Harmony's.
@@ -33,11 +34,11 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
   - Harmony Hub, local network, no cloud;
   - the remote's own **IR blaster**, with a built-in IR database ([ir-sniffer](https://dckiller51.github.io/astrion-ir-sniffer/)), or network IR blasters ([astrion-ir-extender](https://github.com/dckiller51/astrion-ir-extender)) to reach a closed cabinet or another room;
   - **Apple TV paired directly**: remote, now playing and app launching, without Home Assistant;
-  - **Android TV / Google TV paired directly** (NVIDIA SHIELD, Chromecast with Google TV, Sony, Philips…): remote, power, app launching, volume, without Home Assistant or ADB. With the small **Astrion TV Helper** app installed on the TV: title, cover and progress of what's playing, and any app opens ([Android TV](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Android-TV)).
+  - **Android TV / Google TV paired directly** (NVIDIA SHIELD, Chromecast with Google TV, Xiaomi Mi Box, Sony, Philips…): remote, power, app launching, volume, without Home Assistant or ADB. With the small **Astrion TV Helper** app installed on the TV: title, cover and progress of what's playing, any app opens, and boxes that sleep too deeply for their remote's network (Xiaomi Mi Box S) are woken and their picture turned on, through Wake-on-LAN and the helper ([Android TV](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Android-TV)).
   - **LG TVs (webOS) paired directly**: remote, power (Wake-on-LAN), inputs, apps, volume, without Home Assistant ([LG TV](https://github.com/dckiller51/astrion-custom-dashboard/wiki/LG-TV));
-  - **Denon and Marantz AV receivers** added by IP: power, volume, inputs, sound modes, without Home Assistant ([Denon / Marantz](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Denon-Marantz));
+  - **Denon and Marantz AV receivers** added by IP: power, volume, inputs, sound modes, HEOS playback, and zones 2 and 3 as players of their own, without Home Assistant ([Denon / Marantz](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Denon-Marantz));
   - **Samsung TVs (Tizen) allowed once on the TV**: remote, power (Wake-on-LAN), apps, volume, without Home Assistant ([Samsung TV](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Samsung-TV));
-  - **Sky Q and Sky+ HD boxes** added by IP: remote keys, and for a Sky Q its standby, channel and programme on now, without Home Assistant ([Sky](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Sky));
+  - **Sky Q and Sky+ HD boxes** added by IP: remote keys, and for a Sky Q its standby, channel, programme on now and next (with its synopsis, picture and channel logo, for the info card), without Home Assistant ([Sky](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Sky));
   - **Zidoo media players and Eversolo streamers added by IP** (Z9X, Z10, Z20, UHD…, DMP-A6, DMP-A8…): remote keys, apps, power (Wake-on-LAN), what its own video or music player plays and its library, without Home Assistant ([Zidoo & Eversolo](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Zidoo-and-Eversolo)).
 - **Dock screen**: while charging, show the battery, a dim night-friendly clock (time, weather, what's playing in the room) or the dimmed dashboard.
 - **Weather without Home Assistant**: the remote fetches its own forecast from Open-Meteo (free, no key, Météo-France models available) for the clock & weather card and the dock clock.
@@ -46,7 +47,7 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 - **Home Assistant integration**: [ha-astrion-custom-dashboard](https://github.com/dckiller51/ha-astrion-custom-dashboard) adds each remote as a device in Home Assistant (battery, last seen, button events, "Find my remote").
 - **Managing several remotes from Home Assistant**: the community add-on [Astrion Config Manager](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Astrion-Config-Manager) by [@dvbit](https://github.com/dvbit) lists all your remotes in the Home Assistant sidebar, checks entities before sending, copies pages between remotes and has a live simulator.
 - **Find my remote**: rings the remote from its web page or from Home Assistant.
-- **Self-updating**: the remote's web page checks GitHub Releases and installs updates. No adb needed after the first install.
+- **Self-updating**: the remote's web page checks GitHub Releases and installs the official release, the beta or a test build in one tap. No adb needed after the first install.
 
 ## Cards
 
@@ -74,6 +75,8 @@ The dashboard doesn't depend on Lovelace or the Home Assistant app. It is driven
 | [`button_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-ButtonGrid) | Grid of action buttons | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [`scene_grid`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-SceneGrid) | Grid of scenes, shortcuts and Activities | ✅ | ✅ | ✅ | ✅ | ✅ |
 | [`tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | TV / box remote: D-pad, apps, now playing (classic or full) | ✅ | | | | ✅ |
+| [`media_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-MediaRemote) | One remote for any player (Zidoo, Eversolo, Android / Google TV, Apple TV, Samsung, LG, Denon…), laid out like a physical remote, with a player view (big cover, transport, volume) and music search | ✅ | | | ✅ | ✅ |
+| [`info`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Info) | Images and text from any entity, as live templates: a film's poster, cast and synopsis, the TV guide, a printer's progress… | ✅ | | | ✅ | ✅ |
 | [`apple_tv_remote`](https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Remote) | Apple TV remote: classic, compact or full | | ✅ | | ✅ | |
 
 ## Related projects
@@ -107,7 +110,8 @@ The app ships with **no credentials built in**: every install starts unconfigure
 
 ### Updates and beta
 
-- **Updates**: the remote's web page checks [GitHub Releases](https://github.com/dckiller51/astrion-custom-dashboard/releases) and installs a new version in two taps. Android asks once to allow "install unknown apps" for Astrion Custom.
+- **Updates**: home page › **Updates** on the remote's web page checks [GitHub Releases](https://github.com/dckiller51/astrion-custom-dashboard/releases) and installs a new version in one tap. Android asks once to allow "install unknown apps" for Astrion Custom.
+- **Test builds**: *🔬 Test build…* in the same view installs a build published for a few testers, which the official and beta updates never offer.
 - **Beta**: every push to `dev` is published as the rolling pre-release `dev-latest`. It installs **alongside** the official app (`com.custom.astrion.debug`, configured separately), and its "Also the beta" switch on the web page offers beta updates.
 
 ### Uninstall
