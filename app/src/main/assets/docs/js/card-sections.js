@@ -75,10 +75,10 @@ const CARD_SECTIONS = {
   },
   media_remote: {
     essential: ['optName', 'optMrPlayer', 'optMrRemote', 'optMrVolumeEntity', 'optMrKind'],
-    display: ['optMrPower', 'optMrSkip', 'optMrQuality'],
+    display: ['optMrName', 'optMrPower', 'optMrSkip', 'optMrQuality', 'optMrAutoPlayer', 'optMrSize', 'optMrKeyShape', 'optMrCover', 'mrOrderList'],
     controls: ['optMrDpad', 'optMrVolume', 'optMrChannels', 'optMrKeypad'],
     apps: ['optMrSources', 'optMrBrowse', 'optTvAppsStyle', 'optTvShowApps', 'tvAppPackages', 'tvAppsList'],
-    library: ['optMrTracks', 'optMrQueue', 'optMrIo']
+    library: ['optMrTracks', 'optMrQueue', 'optMrIo', 'optMrSearch', 'optMrSearchPlayer']
   },
   plex: {
     essential: ['optPlexHost', 'optPlexToken'],

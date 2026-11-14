@@ -615,6 +615,8 @@ function updateCardFormInputs() {
     window._pendingTvApps = [];
     window._mediaRemoteExtra = {};
     renderTvApps();
+    window._mrOrder = MEDIA_REMOTE_ORDER.slice();
+    renderMediaRemoteOrder();
   } else if (type === 'plex') {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">

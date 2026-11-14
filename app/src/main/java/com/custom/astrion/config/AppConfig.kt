@@ -228,6 +228,8 @@ data class PageConfig(
      * "bottom", "left", or "right". Only consulted when [linkedPageMode] is
      * `"popup"`. Unrecognized value falls back to "center". */
     val popupPosition: String = "center",
+    /** 1.5.7: the popup without its title row (the page's name), only a small ✕ in its corner. */
+    val popupHideTitle: Boolean = false,
     /** Optional Activity id — an [ActivityRuntime.TrackedActivity.id], which
      * covers BOTH a composed [ActivityConfig.id] (same id space as a
      * scene_grid item's `"activity"` field) AND any `"track": true`

@@ -21,6 +21,12 @@ class HelperRoutesTest {
         override fun launch(packageName: String) = (packageName != "com.missing.app").also { if (it) launched += packageName }
 
         override fun media(action: String, positionMs: Long?) = playing.also { if (it) actions += "$action:$positionMs" }
+
+        override val keepAwake = true
+        override val screenOn = false
+        var woken = 0
+
+        override fun wake() = true.also { woken++ }
     }
 
     private val store = NowPlayingStore()
@@ -114,6 +120,19 @@ class HelperRoutesTest {
         assertEquals(400, call("POST", "/media?action=explode").first)
         device.playing = false
         assertEquals(409, call("POST", "/media?action=pause").first)
+    }
+
+    @Test
+    fun `wake turns the screen on, with the code, by POST`() {
+        val (status, body) = call("POST", "/wake")
+        assertEquals(200, status)
+        assertTrue(body.contains("\"screenOn\":true"))
+        assertEquals(1, device.woken)
+        assertEquals(401, call("POST", "/wake", code = null).first)
+        assertEquals(405, call("GET", "/wake").first)
+        assertEquals(1, device.woken)
+        assertTrue(call("GET", "/status", code = null).second.contains("\"keepAwake\":true"))
+        assertTrue(call("GET", "/status", code = null).second.contains("\"screenOn\":false"))
     }
 
     @Test

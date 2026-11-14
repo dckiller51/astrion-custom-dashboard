@@ -101,6 +101,9 @@ object SkyEntityMapper {
             a["media_channel"] = channel.name
             a["media_content_type"] = "channel"
             a["media_content_id"] = channel.sid
+            // The channel's logo on its own (1.5.7): entity_picture is the programme's picture when
+            // there is one, so an info card can show both without Home Assistant.
+            a["channel_logo"] = SkyProtocol.channelLogoUrl(channel.sid, channel.name, s.country)
             val p = s.programme
             a["media_title"] = p?.title ?: channel.name
             p?.let {

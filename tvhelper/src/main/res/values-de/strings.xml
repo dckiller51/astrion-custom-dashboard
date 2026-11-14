@@ -11,4 +11,10 @@
     <string name="adb_title">Zum Erlauben einmal am Computer ausführen (zuerst adb connect &lt;dieser Fernseher&gt;:5555):</string>
     <string name="open_settings">Benachrichtigungszugriff öffnen</string>
     <string name="settings_unavailable">Dieser Fernseher hat diesen Bildschirm nicht: nutze den ADB-Befehl</string>
+    <string name="keep_awake_on">Im Standby erreichbar: an</string>
+    <string name="keep_awake_off">Im Standby erreichbar: aus</string>
+    <string name="keep_awake_enable">Im Standby erreichbar bleiben</string>
+    <string name="keep_awake_disable">Im Standby nicht mehr erreichbar bleiben</string>
+    <string name="keep_awake_hint">Für Boxen, die die Fernbedienung nicht aufwecken kann (Xiaomi Mi Box S…): Der Bildschirm geht weiterhin aus, aber die Box hält ihr Netzwerk aktiv, damit die Fernbedienung sie wieder einschalten kann. Braucht im Standby etwas mehr Strom.</string>
+    <string name="keep_awake_notification">Astrion: im Standby erreichbar</string>
 </resources>

@@ -44,6 +44,11 @@ class DenonRegistry(configs: List<DenonConfig>, private val log: (String) -> Uni
     private val devices = LinkedHashMap<String, Device>() // by media entity id
     private val byRemoteEntity = HashMap<String, Device>()
 
+    /** Zone 2 / 3 entities (1.5.7): the receiver and the zone. */
+    private val byZoneEntity = HashMap<String, Pair<Device, Int>>()
+
+    private fun zonesOf(spec: DenonSpec) = (2..spec.zones).toList()
+
     /** Commands waiting: a held volume key mustn't pile up behind a slow answer. */
     private val pending = AtomicInteger()
     private var client: HaClient? = null
@@ -58,11 +63,12 @@ class DenonRegistry(configs: List<DenonConfig>, private val log: (String) -> Uni
         previousHandler = haClient.localServiceHandler
         haClient.localServiceHandler = { call -> handle(call) || previousHandler?.invoke(call) == true }
         for (cfg in configs) {
-            val spec = DenonSpec(cfg.localId, cfg.entityId, cfg.name, cfg.inputNames, cfg.hiddenInputs)
+            val spec = DenonSpec(cfg.localId, cfg.entityId, cfg.name, cfg.inputNames, cfg.hiddenInputs, cfg.zones)
             val executor = Executors.newSingleThreadScheduledExecutor { r -> Thread(r, "Denon-${cfg.localId}").apply { isDaemon = true } }
             val device = Device(spec, DenonClient(cfg.host, cfg.port), executor)
             devices[spec.entityId] = device
             byRemoteEntity[spec.remoteEntityId] = device
+            zonesOf(spec).forEach { z -> byZoneEntity[spec.zoneEntityId(z)] = device to z }
             device.heos =
                 HeosConnection(cfg.host, onChange = { h ->
                     runCatching {
@@ -140,7 +146,8 @@ class DenonRegistry(configs: List<DenonConfig>, private val log: (String) -> Uni
                         DenonProtocol.customInputs(it, device.spec.inputNames, device.spec.hiddenInputs)
                     } ?: before.inputs,
                     receiverInputs = status.inputs.ifEmpty { before.receiverInputs },
-                    heos = before.heos
+                    heos = before.heos,
+                    zones = zonesOf(device.spec).mapNotNull { z -> device.client.zoneStatus(z)?.let { z to it } }.toMap()
                 )
             }
         if (next.reachable != before.reachable || next.on != before.on) {
@@ -148,7 +155,8 @@ class DenonRegistry(configs: List<DenonConfig>, private val log: (String) -> Uni
         }
         device.state = next
         publish(device)
-        if (!quiet) schedule(device, if (next.isOn) ON_POLL_MS else OFF_POLL_MS)
+        val anyOn = next.isOn || next.zones.values.any { it.on }
+        if (!quiet) schedule(device, if (anyOn) ON_POLL_MS else OFF_POLL_MS)
     }
 
     private fun publish(device: Device) {
@@ -156,6 +164,7 @@ class DenonRegistry(configs: List<DenonConfig>, private val log: (String) -> Uni
         if (stopped) return
         c.setLocalEntity(toEntityState(DenonEntityMapper.media(device.spec, device.state)))
         c.setLocalEntity(toEntityState(DenonEntityMapper.remote(device.spec, device.state)))
+        zonesOf(device.spec).forEach { z -> c.setLocalEntity(toEntityState(DenonEntityMapper.zone(device.spec, device.state, z))) }
     }
 
     private fun handle(call: ServiceCall): Boolean {
@@ -163,7 +172,9 @@ class DenonRegistry(configs: List<DenonConfig>, private val log: (String) -> Uni
         val data = call.data.mapValues { plainOf(it.value) }
         val (device, commands) =
             when (call.domain) {
-                "media_player" -> devices[entityId]?.let { it to DenonServices.media(call.service, data, it.state) }
+                "media_player" ->
+                    devices[entityId]?.let { it to DenonServices.media(call.service, data, it.state) }
+                        ?: byZoneEntity[entityId]?.let { (d, z) -> d to DenonServices.zone(call.service, data, d.state, z) }
                 "remote" -> byRemoteEntity[entityId]?.let { it to DenonServices.remote(call.service, data, it.state) }
                 else -> null
             } ?: return false

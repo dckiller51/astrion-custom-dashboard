@@ -189,7 +189,8 @@ object SamsungServices {
         "volume_mute" -> {
             val want = data["is_volume_muted"] as? Boolean ?: (state.muted != true)
             // Over UPnP when the TV answers it (it says the mute), else the mute key, a toggle.
-            if (state.muted != null) listOf(SamsungStep.Mute(want)) else if (want != state.muted) key("KEY_MUTE") else emptyList()
+            // Unknown mute (no UPnP): the key, a toggle.
+            if (state.muted != null) listOf(SamsungStep.Mute(want)) else key("KEY_MUTE")
         }
         else -> null
     }

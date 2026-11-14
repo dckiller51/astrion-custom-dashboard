@@ -84,4 +84,12 @@ class AndroidTvHelperTest {
         assertEquals(90_500L, AndroidTvServices.media("media_seek", mapOf("seek_position" to 90.5), plexInFront)!!.seekMs)
         assertNull(AndroidTvServices.media("media_seek", emptyMap(), plexInFront))
     }
+
+    @Test
+    fun `screenOn is read from the helper's answers`() {
+        assertEquals(true, AndroidTvHelperClient.screenOnOf("""{"ok":true,"screenOn":true}"""))
+        assertEquals(false, AndroidTvHelperClient.screenOnOf("""{"app":"astrion-tv-helper","screenOn":false}"""))
+        assertEquals(null, AndroidTvHelperClient.screenOnOf("""{"app":"astrion-tv-helper"}"""))
+        assertEquals(null, AndroidTvHelperClient.screenOnOf("not json"))
+    }
 }

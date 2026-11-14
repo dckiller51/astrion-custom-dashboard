@@ -2019,15 +2019,18 @@ class ConfigServer(
         }
 
         if (UpdateChecker.isDownloading) return updateAlreadyDownloading()
+        // Logged step by step (1.5.7): a test build sometimes needs two taps to install.
+        Log.i("Update", "install ${info.version}: downloading ${info.apkUrl}")
         val file =
             UpdateChecker.download(context, info.apkUrl)
                 ?: return newFixedLengthResponse(
                     Response.Status.INTERNAL_ERROR,
                     "text/plain",
                     "Download failed"
-                )
+                ).also { Log.w("Update", "install ${info.version}: download failed") }
 
         return try {
+            Log.i("Update", "install ${info.version}: downloaded ${file.length()} bytes, opening the installer")
             UpdateChecker.promptInstall(context, file)
             newFixedLengthResponse(Response.Status.OK, "text/plain", "Installing ${info.version}")
         } catch (e: Exception) {

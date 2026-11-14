@@ -507,6 +507,9 @@ class MainActivity : ComponentActivity() {
      * fires against a real HA entity, in runHotkey() below. */
     private var volumeHotkeyTrigger by mutableStateOf<VolumeHotkeyTrigger?>(null)
 
+    /** See DashboardNavigation.volumeEntityId: set by [bindHotkeys]. */
+    private var volumeEntityId by mutableStateOf<String?>(null)
+
     /** Bumped (nanoTime, never meaningfully "cleared" — only ever compared
      * for change, same one-shot-nonce pattern as [volumeHotkeyTrigger])
      * every time a directional D-pad key (UP/DOWN/LEFT/RIGHT) is consumed
@@ -818,7 +821,8 @@ class MainActivity : ComponentActivity() {
                             currentPageIndex = pageIndex
                             rebindHotkeysForCurrentPage()
                         },
-                        volumeHotkeyTrigger = volumeHotkeyTrigger
+                        volumeHotkeyTrigger = volumeHotkeyTrigger,
+                        volumeEntityId = volumeEntityId
                     ),
                     uiState =
                     DashboardUiState(
@@ -1043,6 +1047,10 @@ class MainActivity : ComponentActivity() {
 
     private fun bindHotkeys(short: List<HotkeyConfig>, long: List<HotkeyConfig>) {
         keyRouter.clear()
+        // The entity MUTE (else VOLUME_UP / DOWN) drives through Home Assistant or a direct device:
+        // the volume popup stays up while it's muted (1.5.7).
+        val volume = short.filter { it.service != null && it.entityId != null && it.key.uppercase() in VOLUME_POPUP_KEYS }
+        volumeEntityId = (volume.firstOrNull { it.key.equals("MUTE", ignoreCase = true) } ?: volume.firstOrNull())?.entityId
         short.forEach { hk ->
             val key = buttonOf(hk) ?: return@forEach
             keyRouter.on(key, repeatIntervalFor(hk)) { runHotkey(hk) }
@@ -1352,6 +1360,16 @@ class MainActivity : ComponentActivity() {
         else -> false
     }
 
+    /**
+     * A part of the screen that takes Back itself (the media remote's player view, 1.5.7) gets it
+     * before any hotkey: otherwise Back also went to the TV, stopping what was playing.
+     */
+    private fun backTakenByScreen(event: KeyEvent, code: Int): Boolean {
+        if (code != KeyEvent.KEYCODE_BACK || !onBackPressedDispatcher.hasEnabledCallbacks()) return false
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) onBackPressedDispatcher.onBackPressed()
+        return true
+    }
+
     @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         // While "Find my remote" rings, any button just stops it (and does nothing else).
@@ -1360,6 +1378,7 @@ class MainActivity : ComponentActivity() {
             return true
         }
         val code = event.keyCode
+        if (backTakenByScreen(event, code)) return true
         logKeyEventDown(event)
         val lostPress = noteKey(event)
         val shortH = keyRouter.shortHandler(code)

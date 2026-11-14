@@ -660,7 +660,7 @@ async function persistHaAndHubs() {
       body.append('denon_entityid[]', r.entityId || '');
       body.append('denon_host[]', r.host || '');
       body.append('denon_port[]', String(r.port || 8080));
-      body.append('denon_inputs[]', JSON.stringify({ names: r.inputNames || {}, hidden: r.hiddenInputs || [] }));
+      body.append('denon_inputs[]', JSON.stringify({ names: r.inputNames || {}, hidden: r.hiddenInputs || [], zones: r.zones || 1 }));
     });
     const res = await fetch('/save-connection', {
       method: 'POST',

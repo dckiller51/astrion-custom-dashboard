@@ -138,7 +138,9 @@ data class DenonConfig(
     /** The inputs' names given in Astrion, by input code: for receivers that don't say theirs. */
     val inputNames: Map<String, String> = emptyMap(),
     /** The input codes hidden in Astrion. */
-    val hiddenInputs: Set<String> = emptySet()
+    val hiddenInputs: Set<String> = emptySet(),
+    /** 1.5.7: its zones published too: 1 the main zone only, 2 with zone 2, 3 with zones 2 and 3. */
+    val zones: Int = 1
 )
 
 /**
@@ -532,7 +534,8 @@ object RemoteSettings {
                     (obj["inputNames"] as? JsonObject)?.mapNotNull { (k, v) ->
                         (v as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }?.let { k to it }
                     }?.toMap().orEmpty(),
-                    hiddenInputs = (obj["hiddenInputs"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty()
+                    hiddenInputs = (obj["hiddenInputs"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty(),
+                    zones = str("zones").toIntOrNull()?.coerceIn(1, 3) ?: 1
                 )
             }
         } catch (_: Exception) {
@@ -552,6 +555,7 @@ object RemoteSettings {
                         put("port", r.port.toString())
                         put("inputNames", buildJsonObject { r.inputNames.forEach { (k, v) -> put(k, v) } })
                         put("hiddenInputs", buildJsonArray { r.hiddenInputs.forEach { add(it) } })
+                        put("zones", r.zones.toString())
                     }
                 }
             }

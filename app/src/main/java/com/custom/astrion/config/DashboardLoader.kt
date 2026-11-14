@@ -154,6 +154,7 @@ object DashboardLoader {
                         popupWidthFraction = popupWidthFraction,
                         popupHeightFraction = popupHeightFraction,
                         popupPosition = popupPosition,
+                        popupHideTitle = obj["popupHideTitle"]?.jsonPrimitive?.booleanOrNull == true,
                         hiddenUnlessActivity = hiddenUnlessActivity,
                         hideMode = hideMode,
                         openWhenEntity = openWhenEntity,
@@ -526,6 +527,7 @@ object DashboardLoader {
                                 put("popupWidth", page.popupWidthFraction)
                                 put("popupHeight", page.popupHeightFraction)
                                 if (page.popupPosition != "center") put("popupPosition", page.popupPosition)
+                                if (page.popupHideTitle) put("popupHideTitle", true)
                             }
                             put(
                                 "cards",

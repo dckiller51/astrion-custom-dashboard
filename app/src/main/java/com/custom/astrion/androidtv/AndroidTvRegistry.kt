@@ -8,6 +8,7 @@ import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.web.ConfigServer
+import com.custom.astrion.zidoo.ZidooClient
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
@@ -30,7 +31,13 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
     private val discovery = AndroidTvDiscovery(context)
     private val configs = configs.filter { it.certSha256.isNotBlank() }
 
-    private class Device(val spec: AndroidTvSpec, val connection: AndroidTvConnection, val helper: AndroidTvHelperClient?) {
+    private class Device(
+        val spec: AndroidTvSpec,
+        val connection: AndroidTvConnection,
+        val helper: AndroidTvHelperClient?,
+        /** For Wake-on-LAN (1.5.7), from the TV's certificate. */
+        val mac: String = ""
+    ) {
         @Volatile var helperState = AndroidTvHelperState()
 
         @Volatile var artwork: ByteArray? = null
@@ -83,7 +90,7 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
                         log = { log("[${cfg.name}] $it") }
                     )
                 }
-            device = Device(spec, connection, helper)
+            device = Device(spec, connection, helper, cfg.mac)
             devices[spec.entityId] = device
             byRemoteEntity[spec.remoteEntityId] = device
             publish(device)
@@ -110,7 +117,7 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
     fun stop() {
         devices.values.forEach {
             it.connection.stop()
-            it.helper?.stop()
+            it.helper?.shutdown()
         }
         client?.let { c ->
             devices.values.forEach {
@@ -167,7 +174,9 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
 
     private fun perform(device: Device, action: AndroidTvServices.Action, data: Map<String, Any?>) {
         val connection = device.connection
-        action.keys.forEachIndexed { i, key ->
+        // Woken by the helper: POWER would turn it straight back off, WAKEUP is useless.
+        val keys = if (wakeScreen(device, action.wake)) action.keys.filterNot { it in POWER_KEYS } else action.keys
+        keys.forEachIndexed { i, key ->
             if (i > 0) Thread.sleep(KEY_GAP_MS)
             if (action.longPress) {
                 val holdMs = (((data["hold_secs"] as? Number)?.toDouble() ?: 0.0) * MS_PER_SECOND).toLong()
@@ -185,6 +194,64 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         }
         action.seekMs?.let { ms ->
             if (device.helper?.media("seek", ms) != true) log("[${device.spec.name}] seeking needs the Astrion TV Helper")
+        }
+    }
+
+    /**
+     * Turns the screen on through the Astrion TV Helper (1.5.7), before the keys. Some boxes (Xiaomi
+     * Mi Box S) sleep so deeply that the protocol's POWER only lights their LED: their own remote is
+     * a real Bluetooth key, ours isn't taken as one. Wake-on-LAN brings the box up for a few
+     * seconds, the helper answers again, and turns the screen on as a user would. A POWER while the
+     * screen is on is left alone (it turns the TV off). True when the screen is on thanks to it.
+     */
+    private fun wakeScreen(device: Device, wake: AndroidTvServices.Wake): Boolean {
+        val helper = device.helper ?: return false
+        if (wake == AndroidTvServices.Wake.NONE) return false
+        if (wake == AndroidTvServices.Wake.TOGGLE && helper.screenOn() == true) return false
+        // One Wake-on-LAN packet keeps a Mi Box S up for about a second, too short for the helper:
+        // packets every WOL_EVERY_MS keep it up until the helper has turned the screen on.
+        val burst = device.mac.takeIf { it.isNotBlank() }?.let { WolBurst(it).apply { start() } }
+        if (burst != null) {
+            log("[${device.spec.name}] Wake-on-LAN to ${device.mac}, every $WOL_EVERY_MS ms")
+        } else {
+            log("[${device.spec.name}] no MAC for Wake-on-LAN (web page › Android TV › Wake-on-LAN)")
+        }
+        try {
+            val deadline = System.currentTimeMillis() + WAKE_WINDOW_MS
+            // The wake channel first (helper 1.1.2): the only way that fits a one-second wake.
+            helper.wakeViaChannel(CHANNEL_WAIT_MS)?.let { on ->
+                log("[${device.spec.name}] helper wake (channel): screen ${if (on) "on" else "still off"}")
+                return on
+            }
+            while (true) {
+                helper.wake()?.let { on ->
+                    log("[${device.spec.name}] helper wake: screen ${if (on) "on" else "still off"}")
+                    return on
+                }
+                if (System.currentTimeMillis() >= deadline) {
+                    log("[${device.spec.name}] helper wake: no answer (asleep, Wake-on-LAN off, or no helper 1.1.0)")
+                    return false
+                }
+                Thread.sleep(WAKE_RETRY_MS)
+            }
+        } finally {
+            burst?.running = false
+        }
+    }
+
+    /** Wake-on-LAN packets for [mac] every [WOL_EVERY_MS] until [running] is cleared. */
+    private class WolBurst(private val mac: String) : Thread("AndroidTv-wol") {
+        @Volatile var running = true
+
+        init {
+            isDaemon = true
+        }
+
+        override fun run() {
+            while (running) {
+                ZidooClient.wake(mac)
+                runCatching { Thread.sleep(WOL_EVERY_MS) }.onFailure { return }
+            }
         }
     }
 
@@ -230,6 +297,11 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         private const val PAIRING_TTL_MS = 3 * 60_000L
         private const val REFIND_EVERY = 3
         private const val KEY_GAP_MS = 60L
+        private const val WOL_EVERY_MS = 250L
+        private const val WAKE_WINDOW_MS = 12_000L
+        private const val CHANNEL_WAIT_MS = 8_000
+        private const val WAKE_RETRY_MS = 200L
+        private val POWER_KEYS = listOfNotNull(AndroidTvKeys.code("POWER"), AndroidTvKeys.code("WAKEUP"))
         private const val MS_PER_SECOND = 1000
         private const val MIN_HOLD_MS = 300L
         private const val MAX_HOLD_MS = 10_000L

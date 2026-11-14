@@ -3,7 +3,30 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.5.6-beta] - 2026-11-12
+## [1.5.7-beta] - 2026-11-14
+
+### Added
+
+- **Help links to the wiki in the builder**: each card form links to its card's wiki page, and the page's sections (Hotkeys, Activities, Theme, Dock screen, Standby & battery, Import / export JSON in your language) to theirs. Nothing is copied into the app: always up to date. By Xavier (xavi69). The remote's home page has them too: each section and device kind links to its page, and a row of links (documentation, installation, builder, recipes, FAQ) sits under the title.
+- **Ask an AI for help** (builder, *Import / export JSON*): a text ready to paste into the AI assistant you choose (ChatGPT, Claude, Gemini, Le Chat…), with the wiki's JSON guide, your entities and your dashboard.json (tokens and passwords left out); paste its answer into *Load*, check the preview, undo if needed. No AI in the app, nothing sent anywhere by it.
+- **Media remote card, step 2**: a **player view** in the card (big cover, square or 16:9 with `cover_ratio`; title, bar, transport, volume, the player's buttons), opened by a tap on what plays, or by itself when something starts (`auto_player`); the remote's own Back key (or its remote key) goes back, and it closes when playback stops. The blocks can be reordered (`order`), the card can take the whole screen, two thirds or half of it (`size`), the keys can be rectangular (`key_shape`), and a **Search** button opens Home Assistant's media search (`music_search`, `search_player`).
+- **Denon / Marantz: zones 2 and 3**: in the receiver's inputs editor (⇄), *Zones* publishes each zone as its own media player (`media_player.denon_…_zone2`, `_zone3`) with power, volume, mute and input, so cards, buttons and Activities drive it like the main zone, without Home Assistant.
+- **Info card**: a **row of pictures** from a list (`list` block: a film's cast with photo, name and role, from a TMDB credits sensor); a text with a missing value (`None`, unknown) is hidden (`hide_missing`, on by default: no more "Next at None" after Sky's last programme); the card itself is hidden when no block has anything to show (`hide_when_empty`, on by default) or when `visible_if` gives false / off / idle (nothing playing).
+
+- **Sky (direct): `channel_logo`**: the channel's logo on its own, beside `entity_picture` (the programme's picture), so an info card shows the current programme with its picture, the channel's logo, title, times and synopsis, without Home Assistant. Asked by dvbit.
+- **Android TV boxes that won't wake (Xiaomi Mi Box S)**: the Astrion TV Helper 1.1.2 has a *Stay reachable in standby* option: the screen turns off but the box keeps its processor and Wi-Fi up, and turning it on goes through the helper: Wake-on-LAN when the box doesn't answer, then the helper turns the screen on as its own remote would (`/wake`); the MAC address can be typed on the web page (*Wake-on-LAN* next to the TV), the TV's certificate not always giving it; the protocol's POWER alone only lit the Mi Box S's LED. A Mi Box S woken by Wake-on-LAN stays up only about a second, too short for a new connection: the remote keeps a **wake channel** open to the helper (1.1.2, port 6471) while the box is awake, and through its sleep; Power sends one line on it, which the box reads as soon as Wake-on-LAN (in a burst, every 250 ms) brings it up. Works from `turn_on`, Activities and the TV remote card's power key (which still turns the TV off when its screen is on). Starts again with the box.
+- **Popup without its title**: a page opened as a popup (linked page swiped up, tile, key) can leave out its name above it, only a small ✕ in its corner (*Hide the popup's title* in the page's popup settings, `popupHideTitle`). Asked by MR RIZKOP.
+- **The volume popup stays up while muted**: as long as the volume device is muted, whoever muted it (the remote's key, Home Assistant, another remote), the popup stays on screen with *Muted*, and goes when sound comes back. It follows the active Activity's volume device, else the one the volume keys drive. A device whose mute state can't be read (IR, Harmony) is unchanged.
+
+### Fixed
+
+- **Media remote card, player view**: the remote's physical Back key now only leaves the player view; it also went to the TV, stopping what was playing (Apple TV, Zidoo, Mi Box). From Xavier's tests.
+- **Media remote card, half / two thirds**: a card with more than one row of app shortcuts kept its full height; on those sizes it now shows one row, the others in the Apps pop-up.
+- **Media remote card, height**: the card now ends at the page dots, measured on the screen rather than estimated: on a narrow remote it stopped short (Apple TV, TV) or was cut off under the D-pad (Zidoo, Eversolo, Mi Box, an amplifier with many inputs). Room to spare goes around the D-pad, or into the player view's cover; too little room shrinks the cover, then puts app rows away in the Apps pop-up. Four buttons under the player (Zidoo: library, subtitles, audio, chapters) use smaller text instead of cutting words in two.
+- **Denon zones 2 and 3** weren't in the builder's player pickers: `media_player.…_zone2` / `_zone3` are now listed with the receiver (and taken out when the zone is unticked).
+- **Updates installed from the web page** (official, beta, test) go through the system's package installer session: a test build sometimes needed two taps, its installer closing by itself. The installer's answer is now logged, the reason too when it fails, and `/logs` keeps the app's previous runs (what happened before the restart).
+
+## [1.5.6-beta] - 2026-11-11
 
 ### Added
 

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.provider.Settings
 
 /** [HelperDevice] on the real TV: opening apps, and media control through [MediaListener]. */
@@ -24,4 +25,11 @@ class AndroidHelperDevice(context: Context) : HelperDevice {
     }
 
     override fun media(action: String, positionMs: Long?): Boolean = MediaListener.control(action, positionMs)
+
+    override val keepAwake: Boolean get() = KeepAwake.enabled(appContext)
+
+    override val screenOn: Boolean
+        get() = (appContext.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+
+    override fun wake(): Boolean = KeepAwake.wakeScreen(appContext)
 }
