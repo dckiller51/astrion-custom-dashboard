@@ -49,7 +49,7 @@ class WakeChannel(private val code: String, private val wake: () -> Boolean, pri
         try {
             client.use { s ->
                 s.tcpNoDelay = true
-                converse(s.getInputStream().bufferedReader(), s.getOutputStream(), code, wake)
+                converse(s.getInputStream().bufferedReader(), s.getOutputStream(), code, wake) { Log.i(TAG, it) }
             }
         } catch (e: IOException) {
             Log.d(TAG, "wake channel closed: ${e.message}")
@@ -63,8 +63,8 @@ class WakeChannel(private val code: String, private val wake: () -> Boolean, pri
         private const val TAG = "AstrionHelper"
         private const val MAX_CLIENTS = 4
 
-        /** One remote's channel, until it closes; the protocol in the class's description. */
-        fun converse(input: BufferedReader, output: OutputStream, code: String, wake: () -> Boolean) {
+        /** One remote's channel, until it closes; the protocol in the class's description. [log]: Android's log, none in tests. */
+        fun converse(input: BufferedReader, output: OutputStream, code: String, wake: () -> Boolean, log: (String) -> Unit = {}) {
             fun reply(line: String) {
                 output.write("$line\n".toByteArray())
                 output.flush()
@@ -78,7 +78,7 @@ class WakeChannel(private val code: String, private val wake: () -> Boolean, pri
                 when (input.readLine()?.trim() ?: return) {
                     "WAKE" -> {
                         val on = wake()
-                        Log.i(TAG, "wake channel: screen ${if (on) "on" else "still off"}")
+                        log("wake channel: screen ${if (on) "on" else "still off"}")
                         reply(if (on) "ON" else "OFF")
                     }
                     "PING" -> reply("PONG")
