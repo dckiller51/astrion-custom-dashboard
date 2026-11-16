@@ -643,6 +643,7 @@ function updateCardFormInputs() {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">
       <label>${I18N.t('web_card_plex_token')}</label><input type="text" id="optPlexToken" placeholder="${I18N.t('web_card_ph_plex_token')}">
+      <div class="hint">${I18N.t('web_card_plex_device_hint')}</div>
       <div class="hint">${I18N.t('web_card_plex_token_hint')} <a href="https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex#finding-your-token" target="_blank" rel="noopener">${I18N.t('web_card_plex_token_help')}</a></div>
       <label>${I18N.t('web_card_plex_media_entity')}</label><input type="text" id="optPlexMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
       <label>${I18N.t('web_card_plex_source')}</label><input type="text" id="optPlexSource" value="Plex" placeholder="${I18N.t('web_card_plex')}">
@@ -653,6 +654,19 @@ function updateCardFormInputs() {
         <option value="url">${I18N.t('web_card_plex_type_url')}</option>
       </select>
       <div class="hint">${I18N.t('web_card_plex_client_hint')}</div>
+      <label>${I18N.t('web_card_plex_play_with')}</label>
+      <select id="optPlexPlayWith" onchange="plexPlayWithChanged()">
+        <option value="plex">${I18N.t('web_card_plex_play_with_plex')}</option>
+        <option value="rivulet">${I18N.t('web_card_plex_play_with_rivulet')}</option>
+        <option value="mrmc">${I18N.t('web_card_plex_play_with_mrmc')}</option>
+      </select>
+      <div class="hint" id="optPlexRivuletHint" style="display:none">${I18N.t('web_card_plex_rivulet_hint')}</div>
+      <div id="optPlexMrmc" style="display:none">
+        <label>${I18N.t('web_card_plex_mrmc_host')}</label><input type="text" id="optPlexMrmcHost" placeholder="192.168.1.30">
+        <label>${I18N.t('web_card_plex_mrmc_port')}</label><input type="number" id="optPlexMrmcPort" min="1" max="65535" placeholder="8080">
+        <label>${I18N.t('web_card_plex_mrmc_app')}</label><input type="text" id="optPlexMrmcApp" placeholder="MrMC">
+        <div class="hint">${I18N.t('web_card_plex_mrmc_hint')}</div>
+      </div>
       <label>${I18N.t('web_card_plex_rows')}</label>
       <div class="hint-row">
         <label class="inline-check"><input type="checkbox" id="optPlexShowOnDeck" checked> ${I18N.t('web_card_plex_row_on_deck')}</label>
@@ -1846,6 +1860,11 @@ function fillCardForm(card) {
     document.getElementById('optPlexShowShows').checked = o.show_recently_added_shows !== false;
     document.getElementById('optPlexItemsPerRow').value = o.items_per_row ?? 12;
     document.getElementById('optPlexShowSearch').checked = o.show_search !== false;
+    document.getElementById('optPlexPlayWith').value = ['mrmc', 'rivulet'].includes(o.play_with) ? o.play_with : 'plex';
+    document.getElementById('optPlexMrmcHost').value = o.mrmc_host || '';
+    document.getElementById('optPlexMrmcPort').value = o.mrmc_port ?? '';
+    document.getElementById('optPlexMrmcApp').value = o.mrmc_app || '';
+    plexPlayWithChanged();
   } else {
     const customField = document.getElementById('optCustomType');
     if (customField) customField.value = type;
@@ -2171,12 +2190,13 @@ function addCardToPage() {
     const plexHost = document.getElementById('optPlexHost').value.trim();
     const plexToken = document.getElementById('optPlexToken').value.trim();
     const plexMediaEntity = document.getElementById('optPlexMediaEntity').value.trim();
-    if (!plexHost || !plexToken || !plexMediaEntity) {
+    // 1.5.9: host and token may stay empty: the remote's Plex server (Devices › Plex server) is used.
+    if (!plexMediaEntity || (!plexHost) !== (!plexToken)) {
       alert(I18N.t('web_card_alert_plex_fields'));
       return;
     }
-    newCard.options.host = plexHost;
-    newCard.options.token = plexToken;
+    if (plexHost) newCard.options.host = plexHost; else delete newCard.options.host;
+    if (plexToken) newCard.options.token = plexToken; else delete newCard.options.token;
     newCard.options.media_entity = plexMediaEntity;
     const plexSource = document.getElementById('optPlexSource').value.trim();
     if (plexSource && plexSource !== 'Plex') newCard.options.source = plexSource;
@@ -2195,6 +2215,22 @@ function addCardToPage() {
     const plexItemsPerRow = parseInt(document.getElementById('optPlexItemsPerRow').value, 10);
     if (!isNaN(plexItemsPerRow) && plexItemsPerRow !== 12) newCard.options.items_per_row = plexItemsPerRow;
     if (!document.getElementById('optPlexShowSearch').checked) newCard.options.show_search = false;
+    // 1.5.9: Rivulet or MrMC on the Apple TV plays the film (Plex for Apple TV ignores the item in its links).
+    ['play_with', 'mrmc_host', 'mrmc_port', 'mrmc_app'].forEach(k => delete newCard.options[k]);
+    if (document.getElementById('optPlexPlayWith').value === 'rivulet') newCard.options.play_with = 'rivulet';
+    if (document.getElementById('optPlexPlayWith').value === 'mrmc') {
+      const mrmcHost = document.getElementById('optPlexMrmcHost').value.trim();
+      if (!mrmcHost) {
+        alert(I18N.t('web_card_alert_plex_mrmc_host'));
+        return;
+      }
+      newCard.options.play_with = 'mrmc';
+      newCard.options.mrmc_host = mrmcHost;
+      const mrmcPort = parseInt(document.getElementById('optPlexMrmcPort').value, 10);
+      if (!isNaN(mrmcPort) && mrmcPort !== 8080) newCard.options.mrmc_port = mrmcPort;
+      const mrmcApp = document.getElementById('optPlexMrmcApp').value.trim();
+      if (mrmcApp && mrmcApp !== 'MrMC') newCard.options.mrmc_app = mrmcApp;
+    }
   } else {
     if (type === 'custom') newCard.type = document.getElementById('optCustomType').value.trim() || 'custom';
     try {
@@ -2503,4 +2539,13 @@ function editLightSwatch(i, value) {
 function resetLightSwatches() {
   document.getElementById('optLightColors').value = '';
   renderLightSwatches();
+}
+
+/** The Plex card's MrMC fields, shown when it plays with MrMC (1.5.9). */
+function plexPlayWithChanged() {
+  const box = document.getElementById('optPlexMrmc');
+  const sel = document.getElementById('optPlexPlayWith');
+  if (box && sel) box.style.display = sel.value === 'mrmc' ? '' : 'none';
+  const riv = document.getElementById('optPlexRivuletHint');
+  if (riv && sel) riv.style.display = sel.value === 'rivulet' ? '' : 'none';
 }

@@ -224,7 +224,7 @@ private fun EntityState.hasTitle(): Boolean = !attrString("media_title").isNullO
 
 @Composable
 private fun NowPlaying(e: EntityState, client: HaClient, palette: ClockPalette) {
-    val artPath = e.attrString("entity_picture_local") ?: e.attrString("entity_picture")
+    val artPath = e.mediaPicture
     val art by produceState<ImageBitmap?>(initialValue = null, artPath) {
         value = artPath?.let { runCatching { client.fetchBitmap(it, cache = true) }.getOrNull() }
     }

@@ -808,6 +808,10 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .tile.tile-extender .tile-icon { background: rgba(179,157,255,0.14); color: #B39DFF; }
 .tile.tile-weather { border-color: #2a3550; } .tile.tile-weather:hover, .tile.tile-weather:focus-visible { border-color: #8AB4FF; }
 .tile.tile-weather .tile-icon { background: rgba(138,180,255,0.14); color: #8AB4FF; }
+.tile.tile-tmdb { border-color: #1d3f4a; } .tile.tile-tmdb:hover, .tile.tile-tmdb:focus-visible { border-color: #01B4E4; }
+.tile.tile-plex { border-color: #4a3d14; } .tile.tile-plex:hover, .tile.tile-plex:focus-visible { border-color: #E5A00D; }
+.tile.tile-plex .tile-icon { background: rgba(229,160,13,0.14); color: #E5A00D; }
+.tile.tile-tmdb .tile-icon { background: rgba(1,180,228,0.14); color: #01B4E4; }
 .weather-place { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .weather-place button { margin-left: auto; }
 .weather-result { display: block; width: 100%; text-align: left; margin-top: 6px; }

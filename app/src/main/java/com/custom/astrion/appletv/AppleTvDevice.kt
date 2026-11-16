@@ -85,9 +85,14 @@ class AppleTvDevice(
 
     @Volatile private var lastMrpEndpoint: AppleTvEndpoint? = spec.mrp?.let { AppleTvEndpoint(it.host, it.port) }
 
-    // The item currently fetched into snapshot.artworkJpeg, so a repeated SetStateMessage for the
-    // same item (position ticks) doesn't re-fetch its artwork every time.
+    // The item playing (identifier + title), the one whose artwork is in snapshot.artworkJpeg, and
+    // the one whose artwork was last asked for, so a repeated SetStateMessage for the same item
+    // (position ticks) doesn't re-fetch its artwork every time.
     @Volatile private var artworkFetchedFor: String? = null
+
+    @Volatile private var artworkGot: String? = null
+
+    @Volatile private var artworkTried: String? = null
 
     val entityId: String get() = spec.entityId
 
@@ -324,6 +329,9 @@ class AppleTvDevice(
                 }
                 log("[${spec.name}] MRP connected to ${endpoint.host}:${endpoint.port}")
                 update { it.copy(mrpConnected = true, playing = c.playing) }
+                // What played while connecting couldn't fetch its artwork yet (no client): now it can.
+                artworkTried = null
+                refreshArtwork(c.playing)
                 return true
             } catch (e: Exception) {
                 log("[${spec.name}] MRP connect to ${endpoint.host}:${endpoint.port} failed: ${e.message}")
@@ -340,14 +348,37 @@ class AppleTvDevice(
                 "artworkAvailable=${playing?.nowPlaying?.artworkAvailable}"
         )
         update { it.copy(playing = playing) }
-        val identifier = playing?.itemIdentifier
-        val artworkAvailable = playing?.nowPlaying?.artworkAvailable == true
-        if (!artworkAvailable || identifier == null || identifier == artworkFetchedFor) return
-        artworkFetchedFor = identifier
+        refreshArtwork(playing)
+    }
+
+    /**
+     * The artwork of what [playing] plays. An item is its identifier and its title: a live channel
+     * keeps one identifier from a programme to the next. A new item drops the last one's artwork
+     * straight away (1.5.9: an Apple TV waking up showed the programme it played before going to
+     * sleep). The pushes with no title yet (waking up, reconnecting) leave it be.
+     */
+    private fun refreshArtwork(playing: MrpPlaying?) {
+        val title = playing?.nowPlaying?.title ?: return
+        val item = "${playing.itemIdentifier}|$title"
+        if (item != artworkFetchedFor) {
+            artworkFetchedFor = item
+            update { it.copy(artworkJpeg = null, artworkVersion = it.artworkVersion + 1) }
+        }
+        if (item == artworkGot || item == artworkTried || playing.nowPlaying?.artworkAvailable != true) return
+        artworkTried = item
         val location = playing.location
         commands.execute {
-            val jpeg = runCatching { mrpClient?.takeIf { it.isConnected }?.fetchArtwork(location) }.getOrNull()
-            if (jpeg != null) {
+            // The first push often comes while the MRP link is still connecting: tried again once connected.
+            val client = mrpClient?.takeIf { it.isConnected }
+            if (client == null) {
+                if (artworkTried == item) artworkTried = null
+                return@execute
+            }
+            val jpeg = runCatching { client.fetchArtwork(location) }.getOrNull()
+            log("[${spec.name}] artwork for \"$title\": ${jpeg?.let { "${it.size} bytes" } ?: "none"}")
+            // Still the same item: a slow fetch doesn't put an older programme's picture back.
+            if (jpeg != null && artworkFetchedFor == item) {
+                artworkGot = item
                 update { it.copy(artworkJpeg = jpeg, artworkVersion = it.artworkVersion + 1) }
             }
         }

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -1066,6 +1068,7 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .then(rememberPageReachLimit(config.pages, pagerState, activeActivityIds))
             ) { pageIndex ->
                 PageContent(config.pages[inputs.hiddenPageContent.contentIndex(pageIndex)], ctx)
             }
@@ -1371,11 +1374,15 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
             .tapClickable(onClick = onClose),
         contentAlignment = alignment
     ) {
+        // Height "auto" (1.5.9, heightFraction 0): as tall as the page's cards, up to almost the
+        // screen (MR RIZK sized his by hand to fit them).
+        val auto = state.heightFraction <= 0f
+        val maxAuto = (LocalConfiguration.current.screenHeightDp * POPUP_AUTO_MAX).dp
         Box(
             modifier =
             Modifier
                 .fillMaxWidth(state.widthFraction)
-                .fillMaxHeight(state.heightFraction)
+                .then(if (auto) Modifier.heightIn(max = maxAuto) else Modifier.fillMaxHeight(state.heightFraction))
                 .padding(16.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(LocalTheme.current.cardSurface)
@@ -1384,15 +1391,15 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
         ) {
             if (state.hideTitle) {
                 // Without its title (1.5.7, popupHideTitle) the page starts at the top and the ✕
-                // floats in its corner (1.5.8): no row kept just for it (MR RIZKOP).
-                Box(Modifier.fillMaxSize()) {
-                    PageContent(state.targetPage, ctx)
-                    PopupClose(onClose, Modifier.align(Alignment.TopEnd).padding(4.dp))
+                // floats in its corner (1.5.8): no row kept just for it (MR RIZK).
+                Box(if (auto) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
+                    PageContent(state.targetPage, ctx, wrapHeight = auto)
+                    PopupClose(onClose, Modifier.align(Alignment.TopEnd))
                 }
             } else {
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = if (auto) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -1404,27 +1411,39 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
                         )
                         PopupClose(onClose)
                     }
-                    PageContent(state.targetPage, ctx)
+                    PageContent(state.targetPage, ctx, wrapHeight = auto)
                 }
             }
         }
     }
 }
 
-/** The popup's ✕: a small, round, tappable mark. */
+/**
+ * The popup's ✕: a small mark, in a 44 dp tap area (1.5.9: the small chip alone took a precise
+ * tap, MR RIZK).
+ */
 @Composable
 private fun PopupClose(onClose: () -> Unit, modifier: Modifier = Modifier) {
-    Text(
-        "✕",
-        color = LocalTheme.current.mutedText,
-        fontSize = 15.sp,
-        modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
-            .background(LocalTheme.current.cardSurface.copy(alpha = 0.85f))
-            .tapClickable { onClose() }
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    )
+    Box(
+        modifier = modifier.size(POPUP_CLOSE_TAP.dp).clip(RoundedCornerShape(12.dp)).tapClickable { onClose() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            "✕",
+            color = LocalTheme.current.mutedText,
+            fontSize = 15.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(LocalTheme.current.cardSurface.copy(alpha = 0.85f))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
 }
+
+private const val POPUP_CLOSE_TAP = 44
+
+/** A popup with its height on "auto" stops at this share of the screen (then its page scrolls). */
+private const val POPUP_AUTO_MAX = 0.92f
 
 /**
  * Temporary volume readout popped up by a VOLUME_UP/VOLUME_DOWN/MUTE hotkey
@@ -1543,19 +1562,20 @@ private fun volumeTargetOf(config: AppConfig, active: Set<String>, hotkeyEntityI
         ?: hotkeyEntityId
 
 @Composable
-private fun PageContent(page: PageConfig, ctx: CardContext) {
+private fun PageContent(page: PageConfig, ctx: CardContext, wrapHeight: Boolean = false) {
     // A card whose `visibility` rules don't hold right now leaves the page (see Visibility).
     val cards = page.cards.filter { Visibility.isVisible(it.options["visibility"], ctx.entities) }
     val pinned = cards.filter { it.options["pin"] == "bottom" }
     val scrolling = cards.filter { it.options["pin"] != "bottom" }
 
     val bounds = remember { PageBounds() }
-    Column(modifier = Modifier.fillMaxSize()) {
+    // wrapHeight (1.5.9, a popup with its height on "auto"): as tall as the cards, up to the room given.
+    Column(modifier = if (wrapHeight) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalPageBounds provides bounds) {
             LazyColumn(
                 modifier =
                 Modifier
-                    .weight(1f)
+                    .weight(1f, fill = !wrapHeight)
                     .fillMaxWidth()
                     .padding(horizontal = 10.dp, vertical = 8.dp)
                     // 1.5.8: how far down the cards may go (PageBounds), inside the padding.
@@ -1722,6 +1742,9 @@ private fun PageIndicator(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 5.dp, horizontal = 10.dp)
+            // 1.5.9: always as tall as the "‹ back" chevron's 44 dp tap area, so the dots and the
+            // page name don't move up or down between a page with a parent and one without (MR RIZK).
+            .defaultMinSize(minHeight = 44.dp)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = { dragAccumulated = 0f },

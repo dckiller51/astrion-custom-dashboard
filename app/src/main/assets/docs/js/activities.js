@@ -212,7 +212,7 @@ function startActivityWizard(editId) {
     icon: existing?.icon || '',
     // deviceRefs: [{source, deviceId, hub?, deviceLabel?}] — selection only, no commands yet
     deviceRefs: existing ? existing.devices.map(d => ({ source: d.source, deviceId: d.deviceId, hub: d.hub })) : [],
-    // deviceConfig[i] matches deviceRefs[i]: {powerOnCommand, powerOffCommand, inputCommand, powerOnFirst, powerOffOnExit, delayAfterMs}
+    // deviceConfig[i] matches deviceRefs[i]: {powerOnCommand, powerOffCommand, inputCommand, powerOnFirst, powerOffOnExit, delayAfterMs, inputAgainAfterMs}
     deviceConfig: existing ? existing.devices.map(d => ({
       powerOnCommand: d.powerOnCommand || null,
       powerOffCommand: d.powerOffCommand || null,
@@ -220,6 +220,7 @@ function startActivityWizard(editId) {
       powerOnFirst: d.powerOnFirst !== false,
       powerOffOnExit: d.powerOffOnExit !== false,
       delayAfterMs: d.delayAfterMs || 0,
+      inputAgainAfterMs: d.inputAgainAfterMs || 0,
     })) : [],
     configureIndex: 0,
     // Device ids kept on between Activities (dashboardData.keepOnDevices) — a setting of the device,
@@ -322,6 +323,8 @@ function saveCurrentDeviceConfig() {
     powerOnFirst: document.getElementById('wizPowerOnFirst')?.checked !== false,
     powerOffOnExit: document.getElementById('wizPowerOffOnExit')?.checked !== false,
     delayAfterMs: parseInt(document.getElementById('wizDelay')?.value, 10) || 0,
+    // 1.5.9: seconds in the form, milliseconds in dashboard.json (at most 60 s).
+    inputAgainAfterMs: Math.min(60000, Math.max(0, Math.round((parseFloat(document.getElementById('wizInputAgain')?.value) || 0) * 1000))),
   };
   const keepOnBox = document.getElementById('wizKeepOn');
   if (keepOnBox) {
@@ -539,6 +542,9 @@ function renderWizardConfigure() {
     <div class="hint">${I18N.t('web_activity_keep_on_hint')}</div>
     <label>${I18N.t('web_activity_delay_label')}</label>
     <input type="number" id="wizDelay" value="${cfg.delayAfterMs || 0}" min="0">
+    <label>${I18N.t('web_activity_input_again_label')}</label>
+    <input type="number" id="wizInputAgain" value="${(cfg.inputAgainAfterMs || 0) / 1000}" min="0" max="60" step="0.5">
+    <div class="hint">${I18N.t('web_activity_input_again_hint')}</div>
   `;
 }
 
@@ -821,6 +827,7 @@ function saveActivityWizard() {
       ...(cfg.powerOnFirst === false ? { powerOnFirst: false } : {}),
       ...(cfg.powerOffOnExit === false ? { powerOffOnExit: false } : {}),
       ...(cfg.delayAfterMs ? { delayAfterMs: cfg.delayAfterMs } : {}),
+      ...(cfg.inputAgainAfterMs ? { inputAgainAfterMs: cfg.inputAgainAfterMs } : {}),
     };
   });
   const volRef = volumeDeviceRef();

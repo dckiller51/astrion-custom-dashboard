@@ -70,6 +70,8 @@ import com.custom.astrion.samsung.SamsungRegistry
 import com.custom.astrion.samsung.installSamsung
 import com.custom.astrion.sky.SkyRegistry
 import com.custom.astrion.sky.installSky
+import com.custom.astrion.tmdb.TmdbRegistry
+import com.custom.astrion.tmdb.installTmdb
 import com.custom.astrion.ui.ChargingScreen
 import com.custom.astrion.ui.Dashboard
 import com.custom.astrion.ui.DashboardActivityCallbacks
@@ -450,6 +452,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var zidooRegistry: ZidooRegistry // Zidoo players, direct (1.4.6)
     private lateinit var lgTvRegistry: LgTvRegistry // LG TVs, direct (1.5.2)
     private lateinit var skyRegistry: SkyRegistry // Sky boxes, direct (1.5.3)
+    private var tmdbRegistry: TmdbRegistry? = null // TMDB, when a token is set (1.5.9)
     private lateinit var samsungRegistry: SamsungRegistry // Samsung TVs, direct (1.5.3)
     private lateinit var denonRegistry: DenonRegistry // Denon / Marantz receivers, direct (1.5.4)
 
@@ -737,6 +740,15 @@ class MainActivity : ComponentActivity() {
         denonRegistry = installDenon(this, client, log = { Log.i("Denon", it) })
         configServer.denonRegistry = denonRegistry
         localWeather.attach(client)
+        // What media players play (1.5.9), from the Plex server and/or TMDB, for every card;
+        // started again when their settings change.
+        tmdbRegistry = installTmdb(this, client, log = { Log.i("Tmdb", it) })
+        configServer.onTmdbChanged = {
+            runOnUiThread {
+                tmdbRegistry?.stop()
+                tmdbRegistry = installTmdb(this, client, log = { Log.i("Tmdb", it) })
+            }
+        }
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
         // A full backup was just restored (1.3.9): restart on it, once the web page got its answer.
         configServer.onBackupRestored = { Handler(Looper.getMainLooper()).postDelayed({ AppLanguage.restart(this) }, RESTORE_RESTART_MS) }
@@ -753,6 +765,7 @@ class MainActivity : ComponentActivity() {
         configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        tmdbRegistry?.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()
@@ -1750,6 +1763,7 @@ class MainActivity : ComponentActivity() {
         if (::configServerSupervisor.isInitialized) configServerSupervisor.stop()
         client.disconnect()
         harmonyRegistry.disconnectAll()
+        tmdbRegistry?.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()

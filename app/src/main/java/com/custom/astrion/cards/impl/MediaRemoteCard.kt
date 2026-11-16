@@ -45,7 +45,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -314,7 +313,6 @@ class MediaRemoteCard : CardRenderer {
 
         // Player view heights (to tune on the device): title lines, progress, transport, the row of keys.
         const val BLOCK_TITLE = 64
-        const val SYNOPSIS_LINES = 3
         const val APP_ICON = 0.5f // an app's icon, as a share of the cover's height
         const val BLOCK_KEYS = 56
 
@@ -556,7 +554,7 @@ class MediaRemoteCard : CardRenderer {
                     )
                 }
             }
-            if (config.bool("show_synopsis", true)) Synopsis(e)
+            if (config.bool("show_synopsis", true)) MediaSynopsis(e, theme)
             val seek: ((Double) -> Unit)? = if (e.supports(Feature.SEEK)) { s -> media(e, "media_seek", "seek_position" to s) } else null
             AtvProgress(e, theme, thick = true, onSeek = seek)
             Transport(e)
@@ -570,39 +568,6 @@ class MediaRemoteCard : CardRenderer {
                 Key(Icons.Filled.MoreHoriz, "Details") { onDetails() }
             }
             DeviceButtons(own(), active = true)
-        }
-
-        /**
-         * A film's year, rating and synopsis, when the player gives them (a Zidoo's poster wall,
-         * 1.5.8, Zavie): three lines, a tap shows it all.
-         */
-        @Composable
-        private fun Synopsis(e: EntityState) {
-            val overview = e.attrString("astrion_overview")
-            val meta =
-                listOfNotNull(
-                    e.attrInt("astrion_year")?.toString(),
-                    e.attrDouble("astrion_rating")?.let { "★ " + String.format(java.util.Locale.ROOT, "%.1f", it) }
-                ).joinToString(" · ")
-            if (overview == null && meta.isEmpty()) return
-            var open by remember(overview) { mutableStateOf(false) }
-            Column(
-                Modifier.fillMaxWidth().tapClickable { open = !open },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
-                if (meta.isNotEmpty()) Text(meta, color = theme.mutedText, fontSize = 12.sp, maxLines = 1)
-                overview?.let {
-                    Text(
-                        it,
-                        color = theme.mutedText,
-                        fontSize = 13.sp,
-                        maxLines = if (open) Int.MAX_VALUE else SYNOPSIS_LINES,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
         }
 
         /**
@@ -647,19 +612,22 @@ class MediaRemoteCard : CardRenderer {
             }
         }
 
-        /** [rememberImage], keeping the last picture of [path] up while a new one loads. */
+        /**
+         * The picture at [path], the previous one staying up only while it loads: gone as soon as
+         * the player has none, or its new one can't be read (1.5.9: an Apple TV waking up kept
+         * the show it played before going to sleep).
+         */
         @Composable
         private fun rememberSteadyImage(path: String?, px: Int): ImageBitmap? {
-            val loaded = rememberImage(ctx, path, px)
-            var last by remember(path) { mutableStateOf<ImageBitmap?>(null) }
-            SideEffect { if (loaded != null) last = loaded }
-            return loaded ?: last
+            var shown by remember { mutableStateOf<ImageBitmap?>(null) }
+            LaunchedEffect(path, px) { shown = loadImage(ctx, path, px) }
+            return shown
         }
 
         /** The cover in a [w]×[h] frame: filling it when its shape is close, else whole (a square album in a 16:9 frame). */
         @Composable
         private fun Cover(e: EntityState, w: Dp, h: Dp, ratio: Float) {
-            val path = e.attrString("entity_picture_local") ?: e.attrString("entity_picture")
+            val path = e.mediaPicture
             // Loaded at the card's width, not the cover's: the cover's size follows the room
             // FillState finds, and a picture reloaded at each new size went blank (a music note)
             // while it came back, changing the frame, the room, the size... the cover blinked

@@ -431,6 +431,7 @@
                     <div style="flex:1">
                         <label data-i18n="web_ui_height_of_screen">Height (% of screen)</label>
                         <input type="number" id="pageDialogPopupHeight" min="10" max="100" value="50">
+                        <label class="inline-check"><input type="checkbox" id="pageDialogPopupHeightAuto" onchange="document.getElementById('pageDialogPopupHeight').disabled = this.checked"> <span data-i18n="web_ui_height_auto">Auto: as tall as its cards</span></label>
                     </div>
                 </div>
                 <label style="margin-top:10px" data-i18n="web_ui_position">Position</label>
