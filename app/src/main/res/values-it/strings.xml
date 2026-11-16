@@ -262,6 +262,14 @@
     <string name="light_state_on">Acceso</string>
     <string name="light_state_off">Spento</string>
     <string name="light_brightness_pct">%1$d%%</string>
+    <string name="light_panel_color">Colore</string>
+    <string name="light_panel_white">Bianco</string>
+    <string name="light_panel_effect">Effetti</string>
+    <string name="light_preset_candle">Candela</string>
+    <string name="light_preset_warm">Caldo</string>
+    <string name="light_preset_neutral">Neutro</string>
+    <string name="light_preset_cool">Freddo</string>
+    <string name="light_color_wheel">Ruota dei colori</string>
 
     <!-- MediaPlayerCard / MediaPlayerDetailDialog -->
     <string name="media_state_playing">In riproduzione</string>
@@ -315,4 +323,19 @@
     <string name="picker_sources_button">Sorgenti</string>
     <string name="picker_no_sources">Questo lettore non fornisce un elenco di sorgenti o app.</string>
     <string name="picker_keypad">Tastierino numerico</string>
+    <!-- PlayStation card (1.5.8) -->
+    <string name="psn_online">Online</string>
+    <string name="psn_online_app">Online sull\'app PS</string>
+    <string name="psn_away">Assente</string>
+    <string name="psn_offline">Offline</string>
+    <string name="psn_playing">In gioco</string>
+    <string name="psn_no_game">Nessun gioco</string>
+    <string name="psn_no_game_hint">App e dischi non vengono mostrati, solo i giochi.</string>
+    <string name="psn_console_off">Console spenta</string>
+    <string name="psn_level">Livello %1$s</string>
+    <string name="psn_next_level">%1$d%% al livello successivo</string>
+    <string name="psn_platinum">Platino</string>
+    <string name="psn_gold">Oro</string>
+    <string name="psn_silver">Argento</string>
+    <string name="psn_bronze">Bronzo</string>
 </resources>

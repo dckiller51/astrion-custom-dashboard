@@ -469,6 +469,7 @@ function renderPreview() {
     const extraPreview = {
       tv_remote: typeof tvRemotePreviewHtml === 'function' ? tvRemotePreviewHtml : null,
       xbox: typeof xboxPreviewHtml === 'function' ? xboxPreviewHtml : null,
+      playstation: typeof playstationPreviewHtml === 'function' ? playstationPreviewHtml : null,
       row: typeof rowPreviewHtml === 'function' ? rowPreviewHtml : null,
       speaker_group: typeof speakerGroupPreviewHtml === 'function' ? speakerGroupPreviewHtml : null,
       picture_elements: typeof pictureElementsPreviewHtml === 'function' ? pictureElementsPreviewHtml : null
@@ -870,7 +871,8 @@ function renderPreview() {
         </div>`;
       const colorSwatchesHtml = `
         <div class="pl-color-row">
-          ${['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#FFFFFF']
+          ${(Array.isArray(o.colors) && o.colors.length ? o.colors.slice(0, 8)
+            : ['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#FFFFFF'])
             .map(c => `<div class="pl-swatch" style="background:${c}"></div>`).join('')}
         </div>`;
       const cycleBtnHtml = enabledControls.length > 1 ? `<div class="pc-cycle-btn" title="${I18N.t('web_preview_cycles_through', enabledControls.join(', '))}">${mdiSvg(MDI.chevronRight)}</div>` : '';

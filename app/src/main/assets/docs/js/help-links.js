@@ -27,6 +27,7 @@ const CARD_WIKI_PAGES = {
   camera: 'Card-Camera',
   plex: 'Card-Plex',
   xbox: 'Card-Xbox',
+  playstation: 'Card-PlayStation',
   zidoo: 'Card-Zidoo',
   media_remote: 'Card-MediaRemote',
   button_grid: 'Card-ButtonGrid',

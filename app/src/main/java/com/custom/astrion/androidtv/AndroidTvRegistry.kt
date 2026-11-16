@@ -207,7 +207,7 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
     private fun wakeScreen(device: Device, wake: AndroidTvServices.Wake): Boolean {
         val helper = device.helper ?: return false
         if (wake == AndroidTvServices.Wake.NONE) return false
-        if (wake == AndroidTvServices.Wake.TOGGLE && helper.screenOn() == true) return false
+        if (alreadyAwake(device, helper, wake)) return false
         // One Wake-on-LAN packet keeps a Mi Box S up for about a second, too short for the helper:
         // packets every WOL_EVERY_MS keep it up until the helper has turned the screen on.
         val burst = device.mac.takeIf { it.isNotBlank() }?.let { WolBurst(it).apply { start() } }
@@ -237,6 +237,18 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         } finally {
             burst?.running = false
         }
+    }
+
+    /**
+     * Whether the box is awake, so no waking (POWER then turns it off as usual): the protocol's
+     * link is up and says on, or (for POWER) the helper says the screen is on. Asking the helper
+     * alone wasn't enough: when it didn't answer in time, a box that was on got "woken" and
+     * POWER was dropped (Xavier: Power did nothing).
+     */
+    private fun alreadyAwake(device: Device, helper: AndroidTvHelperClient, wake: AndroidTvServices.Wake): Boolean {
+        val state = device.connection.state
+        if (state.connected && state.isOn == true) return true
+        return wake == AndroidTvServices.Wake.TOGGLE && helper.screenOn() == true
     }
 
     /** Wake-on-LAN packets for [mac] every [WOL_EVERY_MS] until [running] is cleared. */

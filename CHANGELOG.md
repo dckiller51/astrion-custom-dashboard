@@ -3,6 +3,30 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.5.8-beta] - 2026-11-16
+
+### Added
+
+- **PlayStation card** (`playstation`): your profile (avatar, online ID, status, PS Plus), the game being played (cover, title) and your trophies (level with its bar to the next one, platinum · gold · silver · bronze in their colours), from Home Assistant's official PlayStation Network integration. The builder finds the account and fills every entity in one click, whatever Home Assistant's language. Asked by Xavier.
+- **Media remote card, player view: the cover's frame takes the picture's shape** (a portrait poster gets a narrow frame), instead of grey bands on its sides. From Xavier's tests.
+- **Media remote card: a page behind ⋯** (`details_page`, *Page for ⋯* in the builder): the player view's ⋯ opens that page as a popup (an info card with the film's poster and cast, a TV guide…) instead of the player's details. Idea from Xavier.
+- **Light card: a colour wheel**: the long-press popup gets a real colour wheel (drag or tap; with the remote's D-pad, OK on the wheel then the arrows), a warm-to-cool slider within the bulb's own range beside the four presets (now translated), and the light's **effects** (WLED, LED strips…), one panel at a time. Your own swatches with `colors` (*Swatch colours* in the builder: a colour picker per swatch, up to 15); the wheel under the swatches, above them or hidden (`color_wheel`), and the power button right or left of the brightness (`popup_power`). From Wolfgang (Coyotex1).
+- **Media remote card: what plays, from another player** (`now_playing_entity`, *What plays, from* in the builder): its title, cover and progress show while it plays (Plex on the TV, say), play/pause and seek go to it; the keys, apps and power stay the card's player. Asked by Zavie.
+- **Media remote card on an Eversolo: no D-pad by default**: its screen ignores the arrow keys (Zavie's tests), so the card shows its side keys instead; `show_dpad: true` brings the D-pad back.
+- **Eversolo: repeat and shuffle**: while its own player plays, the player says its mode (`repeat`, `shuffle`) and takes `repeat_set` / `shuffle_set` (the media player card's buttons) through its Repeat key; the Zidoo card's Repeat key shows the mode (repeat list, repeat track, shuffle lit; plain when playing once). From Zavie's tests.
+- **Media remote card, player view: a film's year, rating and synopsis** (`show_synopsis`, on by default) when the player gives them: a Zidoo's poster wall (`movie.aggregation.overview`). Three lines, a tap shows it all. The film's page in the Zidoo's library shows it too (five lines). Asked by Zavie.
+- **Media remote card, player view: the app instead of an empty cover**: when the player sends no picture but names its app (`app_name` / `app_id`: Netflix on an Apple TV), the frame shows the card's shortcut for that app (its icon on its colour), else the app's name on a coloured tile. Idea from Zavie.
+
+### Fixed
+
+- **Physical Back in the media remote's player view** still reached the TV (stopping playback on Apple TV and Zidoo): the 1.5.7 fix relied on Android's back dispatcher, which didn't see the card. The player view now takes Back itself, before any hotkey.
+- **Volume popup "Muted"**: a Mute key aimed at a receiver's `remote.…` entity showed a volume bar, never *Muted*, and didn't stay up: the popup now reads volume and mute from the matching `media_player.…`.
+- **Popup without its title still as tall**: the ✕ kept a row of its own above the page. It now floats in the page's top-right corner, so the page starts at the top and the popup is only as tall as the page (tapping outside still closes it). From MR RIZKOP.
+- **Media remote, TV remote and Apple TV remote cards stopping past the page**, cut at the bottom by the page dots: they guessed the dots' height; they now end where the page itself ends (in a popup too). From Zavie's screenshots.
+- **Zidoo: the player view swapping between the film and an empty music cover** every few seconds: when the video player's status was late, the music player's (same title) was taken instead. While the same title plays, a film now stays a film. And the cover no longer blinks between the picture and a music note: it was reloaded at every new size the card found for it, blank meanwhile, which changed the size again; it now loads once at the card's width and the last picture stays up. From Zavie's Zidoo Z9X.
+- **Media remote card without its D-pad** (`show_dpad: false`) lost volume and channels too: its side keys now stay, evenly placed (volume left, channels right, Back, keypad and mute in the middle; without channels, one row with volume − and + at the ends). From Zavie.
+- **Android TV power key doing nothing**: when the TV Helper didn't answer in time, a box that was on was "woken" and POWER dropped. A box the protocol says is on now gets POWER as usual.
+
 ## [1.5.7-beta] - 2026-11-14
 
 ### Added

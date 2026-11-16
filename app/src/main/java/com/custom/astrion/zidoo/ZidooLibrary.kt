@@ -156,6 +156,12 @@ object ZidooLibrary {
         ?.mapNotNull { file -> file.obj("aggregation")?.long("lastWatchTime")?.takeIf { it > 0 } }
         ?.maxOrNull()
 
+    /** `getDetail`'s synopsis (`aggregation.aggregation.overview`, as a season's), else the outer one's. */
+    fun overview(o: JsonObject?): String? {
+        val outer = o?.obj("aggregation") ?: return null
+        return outer.obj("aggregation")?.str("overview") ?: outer.str("overview")
+    }
+
     /** `getDetail` of a season: its episodes in order, with the season's name and synopsis. */
     fun season(o: JsonObject?): ZidooLibraryList? {
         val season = o?.obj("aggregation") ?: return null

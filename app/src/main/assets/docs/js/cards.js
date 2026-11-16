@@ -207,9 +207,28 @@ function updateCardFormInputs() {
         <label class="inline-check"><input type="checkbox" id="optLightCtrlColorTemp"> ${I18N.t('web_card_light_ctrl_color_temp')}</label>
         <label class="inline-check"><input type="checkbox" id="optLightCtrlColor"> ${I18N.t('web_card_light_ctrl_color')}</label>
       </div>
+      <label>${I18N.t('web_card_light_popup')}</label>
+      <div class="hint-row">
+        <label class="inline-check">${I18N.t('web_card_light_power_pos')}
+          <select id="optLightPowerPos">
+            <option value="right">${I18N.t('web_card_light_pos_right')}</option>
+            <option value="left">${I18N.t('web_card_light_pos_left')}</option>
+          </select></label>
+        <label class="inline-check">${I18N.t('web_card_light_wheel')}
+          <select id="optLightWheel">
+            <option value="bottom">${I18N.t('web_card_light_wheel_bottom')}</option>
+            <option value="top">${I18N.t('web_card_light_wheel_top')}</option>
+            <option value="hidden">${I18N.t('web_card_light_wheel_hidden')}</option>
+          </select></label>
+      </div>
+      <label>${I18N.t('web_card_light_colors')}</label>
+      <input type="hidden" id="optLightColors">
+      <div id="lightSwatchEditor" class="hint-row"></div>
+      <div class="hint">${I18N.t('web_card_light_colors_hint')}</div>
       <label><input type="checkbox" id="optLightCollapsible"> ${I18N.t('web_card_light_collapsible')}</label>
       <div class="hint">${I18N.t('web_card_light_hint')}</div>
     `;
+    renderLightSwatches();
   } else if (type === 'media_player') {
     container.innerHTML = `
       <label>${I18N.t('web_card_media_name_label')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_media_name')}">
@@ -540,6 +559,9 @@ function updateCardFormInputs() {
   } else if (type === 'xbox') {
     container.innerHTML = xboxFormHtml();
     initXboxForm();
+  } else if (type === 'playstation') {
+    container.innerHTML = playstationFormHtml();
+    initPlaystationForm();
   } else if (type === 'speaker_group') {
     container.innerHTML = speakerGroupFormHtml();
     window._pendingSpeakers = [];
@@ -1688,6 +1710,10 @@ function fillCardForm(card) {
     document.getElementById('optLightCtrlColorTemp').checked = o.show_color_temp_control === true;
     document.getElementById('optLightCtrlColor').checked = o.show_color_control === true;
     document.getElementById('optLightCollapsible').checked = o.collapsible_controls === true;
+    document.getElementById('optLightColors').value = Array.isArray(o.colors) ? o.colors.join(', ') : '';
+    document.getElementById('optLightPowerPos').value = o.popup_power === 'left' ? 'left' : 'right';
+    document.getElementById('optLightWheel').value = ['top', 'hidden'].includes(o.color_wheel) ? o.color_wheel : 'bottom';
+    renderLightSwatches();
   } else if (type === 'media_player') {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
@@ -1769,6 +1795,8 @@ function fillCardForm(card) {
     fillTvRemoteForm(o);
   } else if (type === 'xbox') {
     fillXboxForm(o);
+  } else if (type === 'playstation') {
+    fillPlaystationForm(o);
   } else if (type === 'speaker_group') {
     fillSpeakerGroupForm(o);
   } else if (type === 'picture_elements') {
@@ -1949,6 +1977,12 @@ function addCardToPage() {
     newCard.options.show_color_temp_control = document.getElementById('optLightCtrlColorTemp').checked;
     newCard.options.show_color_control = document.getElementById('optLightCtrlColor').checked;
     if (document.getElementById('optLightCollapsible').checked) newCard.options.collapsible_controls = true;
+    // 1.5.8: the card's own swatches, kept only when they're real hex colours (as the app reads them).
+    const lightColors = lightColorList(document.getElementById('optLightColors').value);
+    if (lightColors.length) newCard.options.colors = lightColors;
+    if (document.getElementById('optLightPowerPos').value === 'left') newCard.options.popup_power = 'left';
+    const lightWheel = document.getElementById('optLightWheel').value;
+    if (lightWheel !== 'bottom') newCard.options.color_wheel = lightWheel;
   } else if (type === 'media_player') {
     const mediaName = document.getElementById('optName').value.trim();
     if (mediaName) newCard.options.name = mediaName;
@@ -2075,8 +2109,8 @@ function addCardToPage() {
     if (atvApps.length) newCard.options.apps = atvApps;
     if (!document.getElementById('atvShowApps').checked) newCard.options.showApps = false;
     window._pendingAtvApps = [];
-  } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row' || type === 'xbox') {
-    const collect = { tv_remote: collectTvRemoteOptions, xbox: collectXboxOptions, speaker_group: collectSpeakerGroupOptions,
+  } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row' || type === 'xbox' || type === 'playstation') {
+    const collect = { tv_remote: collectTvRemoteOptions, xbox: collectXboxOptions, playstation: collectPlaystationOptions, speaker_group: collectSpeakerGroupOptions,
       picture_elements: collectPictureElementsOptions, row: collectRowOptions }[type];
     const opts = collect();
     if (!opts) return;
@@ -2420,4 +2454,53 @@ function onSelectLayoutChange() {
   const layout = document.getElementById('optSelectLayout');
   const row = document.getElementById('selectIconColorRow');
   if (layout && row) row.style.display = layout.value === 'dropdown' ? 'none' : '';
+}
+
+/** "#f00, FFA500 ; #ffffff" → ["#FF0000", "#FFA500", "#FFFFFF"]: what LightColors.parseHex accepts, at most 15. */
+function lightColorList(text) {
+  return (text || '').split(/[\s,;]+/)
+    .map(t => t.trim().replace(/^#/, ''))
+    .filter(t => /^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(t))
+    .map(t => '#' + (t.length === 3 ? t.split('').map(c => c + c).join('') : t).toUpperCase())
+    .slice(0, 15);
+}
+
+/** The swatches the app shows when a light card sets no `colors` (LightColors.DEFAULT_SWATCHES). */
+const LIGHT_DEFAULT_SWATCHES = ['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#E91E63', '#FFB6C1', '#FFFFFF'];
+
+/**
+ * Swatch editor of the light card: one colour picker per swatch, ✕ to remove, + to add,
+ * "usual colours" to go back to the defaults. Stored in the hidden #optLightColors.
+ */
+function renderLightSwatches() {
+  const box = document.getElementById('lightSwatchEditor');
+  const field = document.getElementById('optLightColors');
+  if (!box || !field) return;
+  const own = lightColorList(field.value);
+  const list = own.length ? own : LIGHT_DEFAULT_SWATCHES;
+  box.innerHTML = list.map((c, i) => `
+    <span class="light-swatch" style="display:inline-flex;align-items:center;gap:2px">
+      <input type="color" value="${c}" onchange="editLightSwatch(${i}, this.value)" title="${c}">
+      <button type="button" class="btn-small" onclick="editLightSwatch(${i}, null)" title="${I18N.t('web_card_light_colors_remove')}">✕</button>
+    </span>`).join('') +
+    (list.length < 15 ? `<button type="button" class="btn-small" onclick="editLightSwatch(-1, '#FFFFFF')">+ ${I18N.t('web_card_light_colors_add')}</button>` : '') +
+    (own.length ? `<button type="button" class="btn-small" onclick="resetLightSwatches()">${I18N.t('web_card_light_colors_reset')}</button>`
+      : `<span class="hint">${I18N.t('web_card_light_colors_usual')}</span>`);
+}
+
+/** Changes swatch i (null removes it, -1 adds one); editing the usual colours starts your own list from them. */
+function editLightSwatch(i, value) {
+  const field = document.getElementById('optLightColors');
+  const own = lightColorList(field.value);
+  const list = own.length ? own : LIGHT_DEFAULT_SWATCHES.slice();
+  if (i < 0) list.push(value);
+  else if (value === null) list.splice(i, 1);
+  else list[i] = value;
+  field.value = (list.length ? list : ['#FFFFFF']).join(', ');
+  renderLightSwatches();
+}
+
+function resetLightSwatches() {
+  document.getElementById('optLightColors').value = '';
+  renderLightSwatches();
 }

@@ -23,9 +23,33 @@ const MEDIA_REMOTE_SWITCHES = [
   ['optMrQueue', 'show_queue', true],
   ['optMrIo', 'show_io', true],
   ['optMrQuality', 'show_quality', true],
+  ['optMrSynopsis', 'show_synopsis', true],
   ['optMrAutoPlayer', 'auto_player', false],
   ['optMrSearch', 'music_search', false]
 ];
+
+/**
+ * Whether [player] is an Eversolo added in Astrion (as the app tells it: its manufacturer, else
+ * its name). Its screen ignores the arrow keys, so its card has no D-pad unless asked (1.5.8).
+ */
+function mrIsEversolo(player, name) {
+  if (!/^media_player\.zidoo_/.test(player || '')) return false;
+  const e = (typeof haStates !== 'undefined' && haStates && haStates[player]) || null;
+  const a = (e && e.attributes) || {};
+  return a.manufacturer ? a.manufacturer === 'Eversolo' : /eversolo/i.test(player + ' ' + (name || ''));
+}
+
+/** A switch's default for this player: the table's, but no D-pad on an Eversolo. */
+function mrSwitchDefault(key, player, name) {
+  if (key === 'show_dpad' && mrIsEversolo(player, name)) return false;
+  return MEDIA_REMOTE_SWITCHES.find(s => s[1] === key)[2];
+}
+
+/** A new player chosen: the D-pad switch follows its default (none on an Eversolo). */
+function mrPlayerChanged() {
+  const player = document.getElementById('optMrPlayer').value.trim();
+  document.getElementById('optMrDpad').checked = mrSwitchDefault('show_dpad', player, document.getElementById('optName').value);
+}
 
 /** The remote's blocks under the header, in their default order (MediaRemoteCard.DEFAULT_ORDER). */
 const MEDIA_REMOTE_ORDER = ['playing', 'device', 'nav', 'apps', 'pad'];
@@ -71,7 +95,7 @@ function mediaRemoteFormHtml() {
   return `
     <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_mr_name_ph')}">
     <label>${I18N.t('web_card_mr_player')}</label>
-    <input type="text" id="optMrPlayer" list="mrPlayers" placeholder="media_player.zidoo_zidoo" onchange="onTvEntityChange()">
+    <input type="text" id="optMrPlayer" list="mrPlayers" placeholder="media_player.zidoo_zidoo" onchange="onTvEntityChange(); mrPlayerChanged()">
     ${list('mrPlayers', 'media_player')}
     <div class="hint">${I18N.t('web_card_mr_player_hint')}</div>
     <label>${I18N.t('web_card_mr_remote')}</label>
@@ -81,6 +105,9 @@ function mediaRemoteFormHtml() {
     <label>${I18N.t('web_card_mr_volume_entity')}</label>
     <input type="text" id="optMrVolumeEntity" list="mrRemotes" placeholder="remote.denon_ampli">
     <div class="hint">${I18N.t('web_card_mr_volume_entity_hint')}</div>
+    <label>${I18N.t('web_card_mr_now_playing_entity')}</label>
+    <input type="text" id="optMrNowPlaying" list="mrPlayers" placeholder="media_player.plex_…">
+    <div class="hint">${I18N.t('web_card_mr_now_playing_entity_hint')}</div>
     <label>${I18N.t('web_card_mr_kind')}</label>
     <select id="optMrKind">
       <option value="auto">${I18N.t('web_card_mr_kind_auto')}</option>
@@ -101,6 +128,10 @@ function mediaRemoteFormHtml() {
     <label>${I18N.t('web_card_mr_search_player')}</label>
     <input type="text" id="optMrSearchPlayer" list="mrPlayers" placeholder="media_player.music_assistant">
     <div class="hint">${I18N.t('web_card_mr_search_hint')}</div>
+    <label>${I18N.t('web_card_mr_details_page')}</label>
+    <input type="text" id="optMrDetailsPage" list="mrPages" placeholder="${I18N.t('web_card_mr_details_page_ph')}">
+    <datalist id="mrPages">${((typeof dashboardData !== 'undefined' && dashboardData && dashboardData.pages) || []).map(p => `<option value="${cxEsc(p.name)}"></option>`).join('')}</datalist>
+    <div class="hint">${I18N.t('web_card_mr_details_page_hint')}</div>
     <label>${I18N.t('web_card_mr_size')}</label>
     <select id="optMrSize">
       <option value="full">${I18N.t('web_card_mr_size_full')}</option>
@@ -128,8 +159,10 @@ function fillMediaRemoteForm(o) {
   document.getElementById('optMrPlayer').value = o.player_entity || '';
   document.getElementById('optMrRemote').value = o.remote_entity || '';
   document.getElementById('optMrVolumeEntity').value = o.volume_entity || '';
+  document.getElementById('optMrNowPlaying').value = o.now_playing_entity || '';
   document.getElementById('optMrKind').value = ['android', 'apple_tv'].includes(o.kind) ? o.kind : 'auto';
-  MEDIA_REMOTE_SWITCHES.forEach(([id, key, def]) => {
+  MEDIA_REMOTE_SWITCHES.forEach(([id, key]) => {
+    const def = mrSwitchDefault(key, o.player_entity, o.name);
     document.getElementById(id).checked = o[key] === undefined ? def : o[key] !== false;
   });
   // The apps: same editor as the TV remote card's (style, show, list, icons, the device's own apps).
@@ -137,14 +170,15 @@ function fillMediaRemoteForm(o) {
   fillMediaApps(o);
   document.getElementById('optMrAppsRows').value = [1, 2, 3].includes(Number(o.apps_rows)) ? String(o.apps_rows) : '0';
   document.getElementById('optMrSearchPlayer').value = o.search_player || '';
+  document.getElementById('optMrDetailsPage').value = o.details_page || '';
   document.getElementById('optMrSize').value = ['two_thirds', 'half'].includes(o.size) ? o.size : 'full';
   document.getElementById('optMrKeyShape').value = o.key_shape === 'rect' ? 'rect' : 'round';
   document.getElementById('optMrCover').value = o.cover_ratio === 'wide' ? 'wide' : 'square';
   window._mrOrder = mediaRemoteOrder(o);
   renderMediaRemoteOrder();
   // What the form doesn't show is kept as it is.
-  const known = ['name', 'player_entity', 'remote_entity', 'volume_entity', 'kind', 'apps', 'apps_style', 'show_apps', 'apps_rows',
-    'search_player', 'size', 'key_shape', 'cover_ratio', 'order'];
+  const known = ['name', 'player_entity', 'remote_entity', 'volume_entity', 'now_playing_entity', 'kind', 'apps', 'apps_style', 'show_apps', 'apps_rows',
+    'search_player', 'details_page', 'size', 'key_shape', 'cover_ratio', 'order'];
   window._mediaRemoteExtra = Object.fromEntries(Object.entries(o).filter(([k]) =>
     !known.includes(k) && !MEDIA_REMOTE_SWITCHES.some(s => s[1] === k)));
 }
@@ -164,9 +198,13 @@ function collectMediaRemoteForm(out) {
   if (remote) out.remote_entity = remote; else delete out.remote_entity;
   const volume = document.getElementById('optMrVolumeEntity').value.trim();
   if (volume) out.volume_entity = volume; else delete out.volume_entity;
+  const nowPlaying = document.getElementById('optMrNowPlaying').value.trim();
+  if (nowPlaying && nowPlaying !== player) out.now_playing_entity = nowPlaying; else delete out.now_playing_entity;
   const kind = document.getElementById('optMrKind').value;
   if (kind !== 'auto') out.kind = kind; else delete out.kind;
-  MEDIA_REMOTE_SWITCHES.forEach(([id, key, def]) => {
+  const mrName = document.getElementById('optName').value;
+  MEDIA_REMOTE_SWITCHES.forEach(([id, key]) => {
+    const def = mrSwitchDefault(key, player, mrName);
     const on = document.getElementById(id).checked;
     if (on !== def) out[key] = on; else delete out[key];
   });
@@ -176,6 +214,8 @@ function collectMediaRemoteForm(out) {
   if (rows > 0) out.apps_rows = rows; else delete out.apps_rows;
   const searchPlayer = document.getElementById('optMrSearchPlayer').value.trim();
   if (searchPlayer) out.search_player = searchPlayer; else delete out.search_player;
+  const detailsPage = document.getElementById('optMrDetailsPage').value.trim();
+  if (detailsPage) out.details_page = detailsPage; else delete out.details_page;
   const size = document.getElementById('optMrSize').value;
   if (size !== 'full') out.size = size; else delete out.size;
   if (document.getElementById('optMrKeyShape').value === 'rect') out.key_shape = 'rect'; else delete out.key_shape;
@@ -193,7 +233,7 @@ function mediaRemotePreviewHtml(card, idx) {
   const o = card.options || {};
   const e = (typeof haStates !== 'undefined' && haStates && haStates[o.player_entity]) || null;
   const a = (e && e.attributes) || {};
-  const on = key => { const s = MEDIA_REMOTE_SWITCHES.find(x => x[1] === key); return o[key] === undefined ? s[2] : o[key] !== false; };
+  const on = key => (o[key] === undefined ? mrSwitchDefault(key, o.player_entity, o.name) : o[key] !== false);
   const player = o.player_entity || '';
   const zidoo = /^media_player\.zidoo_/.test(player);
   const eversolo = zidoo && (a.manufacturer ? a.manufacturer === 'Eversolo' : /eversolo/i.test(player + ' ' + (o.name || '')));
@@ -270,6 +310,18 @@ function mediaRemotePreviewHtml(card, idx) {
         ${side(on('show_keypad') ? key(30, '#') : '<span style="width:30px"></span>', channels ? key(30, '▴') + key(30, '▾') : '')}
       </div>`);
     if (on('show_volume')) parts.push(`<div style="display:flex;justify-content:center">${key(30, '🔇')}</div>`);
+  } else {
+    // Without the D-pad (1.5.8): its side keys stay, as MediaRemoteCard.SideKeys lays them out.
+    const channels = on('show_channels') && !eversolo;
+    const vol = on('show_volume');
+    const middle = key(30, '←') + (on('show_keypad') ? key(30, '#') : '') + (vol && !channels ? key(30, '🔇') : '');
+    const row = items => `<div style="display:flex;justify-content:space-between;align-items:center">${items.join('')}</div>`;
+    const col = items => `<div style="display:flex;flex-direction:column;gap:4px">${items}</div>`;
+    parts.push(channels
+      ? row([col(vol ? key(30, '+') + key(30, '−') : ''),
+          col(`<div style="display:flex;gap:4px">${key(30, '←')}${on('show_keypad') ? key(30, '#') : ''}</div>${vol ? '<div style="display:flex;justify-content:center">' + key(30, '🔇') + '</div>' : ''}`),
+          col(key(30, '▴') + key(30, '▾'))])
+      : row([vol ? key(30, '−') : '', `<div style="display:flex;gap:6px">${middle}</div>`, vol ? key(30, '+') : '']));
   }
   return `
     <div class="card">

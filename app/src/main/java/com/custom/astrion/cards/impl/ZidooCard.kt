@@ -25,7 +25,9 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Replay10
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -282,10 +284,21 @@ class ZidooCard : CardRenderer {
                 ) { skip(ctx, entityId, e, -SKIP_S) }
             }
             if (!view.video && config.bool("show_repeat", true)) {
+                // An Eversolo that says its mode (1.5.8): the key shows it — repeat the list,
+                // the track, shuffle (lit), or play once (plain) — and steps to the next.
+                val repeat = e.attrString("repeat")
+                val icon =
+                    when {
+                        e.attrBoolean("shuffle") == true -> Icons.Filled.Shuffle
+                        repeat == "one" -> Icons.Filled.RepeatOne
+                        else -> Icons.Filled.Repeat
+                    }
+                val lit = e.attrBoolean("shuffle") == true || (repeat != null && repeat != "off")
                 ZidooRoundIcon(
-                    Icons.Filled.Repeat,
+                    icon,
                     stringResource(R.string.zidoo_card_repeat),
                     theme,
+                    accent = lit,
                     size = SMALL
                 ) { zidooKey(ctx, entityId, "Key.Repeat") }
             }

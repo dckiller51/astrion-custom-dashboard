@@ -75,7 +75,7 @@ const CARD_SECTIONS = {
   },
   media_remote: {
     essential: ['optName', 'optMrPlayer', 'optMrRemote', 'optMrVolumeEntity', 'optMrKind'],
-    display: ['optMrName', 'optMrPower', 'optMrSkip', 'optMrQuality', 'optMrAutoPlayer', 'optMrSize', 'optMrKeyShape', 'optMrCover', 'mrOrderList'],
+    display: ['optMrNowPlaying', 'optMrName', 'optMrPower', 'optMrSkip', 'optMrQuality', 'optMrAutoPlayer', 'optMrSynopsis', 'optMrDetailsPage', 'optMrSize', 'optMrKeyShape', 'optMrCover', 'mrOrderList'],
     controls: ['optMrDpad', 'optMrVolume', 'optMrChannels', 'optMrKeypad'],
     apps: ['optMrSources', 'optMrBrowse', 'optTvAppsStyle', 'optTvShowApps', 'tvAppPackages', 'tvAppsList'],
     library: ['optMrTracks', 'optMrQueue', 'optMrIo', 'optMrSearch', 'optMrSearchPlayer']
@@ -84,6 +84,11 @@ const CARD_SECTIONS = {
     essential: ['optPlexHost', 'optPlexToken'],
     controls: ['optPlexMediaEntity', 'optPlexSource', 'optPlexPlayEntity', 'optPlexPlayContentType'],
     display: ['optPlexShowOnDeck', 'optPlexItemsPerRow', 'optPlexShowSearch']
+  },
+  playstation: {
+    essential: ['psnAccountBox'],
+    display: ['psnProfileBox', 'psnGameBox'],
+    items: ['psnTrophiesBox']
   },
   xbox: {
     essential: ['xboxSource', 'xboxAccountBox'],

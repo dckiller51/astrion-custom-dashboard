@@ -82,6 +82,7 @@ import com.custom.astrion.ui.FocusHighlight
 import com.custom.astrion.ui.IrTransmit
 import com.custom.astrion.ui.ProvideTheme
 import com.custom.astrion.ui.RingFoundOverlay
+import com.custom.astrion.ui.ScreenBack
 import com.custom.astrion.ui.VolumeHotkeyTrigger
 import com.custom.astrion.ui.collectAsLiveEntityMap
 import com.custom.astrion.ui.toColors
@@ -1365,8 +1366,12 @@ class MainActivity : ComponentActivity() {
      * before any hotkey: otherwise Back also went to the TV, stopping what was playing.
      */
     private fun backTakenByScreen(event: KeyEvent, code: Int): Boolean {
-        if (code != KeyEvent.KEYCODE_BACK || !onBackPressedDispatcher.hasEnabledCallbacks()) return false
-        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) onBackPressedDispatcher.onBackPressed()
+        if (code != KeyEvent.KEYCODE_BACK) return false
+        if (!ScreenBack.active && !onBackPressedDispatcher.hasEnabledCallbacks()) return false
+        if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+            Log.i("MainActivity", "Back taken by the screen")
+            if (!ScreenBack.take()) onBackPressedDispatcher.onBackPressed()
+        }
         return true
     }
 
