@@ -51,6 +51,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -74,6 +76,7 @@ import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.extender.ExtenderRegistry
 import com.custom.astrion.ha.ConnectionState
 import com.custom.astrion.ha.EntityMap
+import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.HaLabels
 import com.custom.astrion.harmony.HarmonyHubRegistry
@@ -1379,36 +1382,48 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
                 // Swallows taps so they don't reach the backdrop behind it.
                 .tapClickable(onClick = {})
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Without its title (1.5.7, popupHideTitle) the row keeps only the ✕, on the right.
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = if (state.hideTitle) 2.dp else 8.dp),
-                    horizontalArrangement = if (state.hideTitle) Arrangement.End else Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (!state.hideTitle) {
+            if (state.hideTitle) {
+                // Without its title (1.5.7, popupHideTitle) the page starts at the top and the ✕
+                // floats in its corner (1.5.8): no row kept just for it (MR RIZKOP).
+                Box(Modifier.fillMaxSize()) {
+                    PageContent(state.targetPage, ctx)
+                    PopupClose(onClose, Modifier.align(Alignment.TopEnd).padding(4.dp))
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
                             state.targetPage.name,
                             color = LocalTheme.current.primaryText,
                             fontSize = 15.sp,
                             fontWeight = FontWeight.Medium
                         )
+                        PopupClose(onClose)
                     }
-                    Text(
-                        "✕",
-                        color = LocalTheme.current.mutedText,
-                        fontSize = 15.sp,
-                        modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .tapClickable { onClose() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    PageContent(state.targetPage, ctx)
                 }
-                PageContent(state.targetPage, ctx)
             }
         }
     }
+}
+
+/** The popup's ✕: a small, round, tappable mark. */
+@Composable
+private fun PopupClose(onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Text(
+        "✕",
+        color = LocalTheme.current.mutedText,
+        fontSize = 15.sp,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(LocalTheme.current.cardSurface.copy(alpha = 0.85f))
+            .tapClickable { onClose() }
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    )
 }
 
 /**
@@ -1439,7 +1454,7 @@ private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, target: String?, ctx:
     // Home Assistant, another remote…): no sound and nothing on screen to say why was confusing.
     // Unmuted elsewhere, it shows the volume a moment, then goes. A target without a readable
     // mute state (IR, Harmony) never has `is_volume_muted`: unchanged.
-    val targetMuted = target?.let { ctx.entities[it]?.attrBoolean("is_volume_muted") } == true
+    val targetMuted = volumeEntityOf(target, ctx)?.attrBoolean("is_volume_muted") == true
     var wasMuted by remember(target) { mutableStateOf(targetMuted) }
     LaunchedEffect(target, targetMuted) {
         val unmuted = wasMuted && !targetMuted
@@ -1451,7 +1466,7 @@ private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, target: String?, ctx:
         }
     }
     val shownId = if (targetMuted) target else visible
-    val e = shownId?.let { ctx.entities[it] } ?: return
+    val e = volumeEntityOf(shownId, ctx) ?: return
     val level = e.attrDouble("volume_level")?.toFloat()?.coerceIn(0f, 1f)
     val muted = e.attrBoolean("is_volume_muted") == true
 
@@ -1507,6 +1522,18 @@ private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, target: String?, ctx:
 private const val VOLUME_POPUP_MS = 2200L
 
 /**
+ * The entity holding [id]'s volume and mute (1.5.8): itself, or for a `remote.x` hotkey target
+ * (a Denon receiver's keys…) its `media_player.x`, which has them. Xavier's popup showed a bar,
+ * never *Muted*, his Mute key aiming at the receiver's remote entity.
+ */
+private fun volumeEntityOf(id: String?, ctx: CardContext): EntityState? {
+    id ?: return null
+    val e = ctx.entities[id]
+    if (e?.attrBoolean("is_volume_muted") != null || !id.startsWith("remote.")) return e
+    return ctx.entities["media_player." + id.substringAfter('.')] ?: e
+}
+
+/**
  * The entity whose mute state keeps the volume popup up (1.5.7): the volume device of an active
  * Activity when it's an entity here (an IR amp isn't), else the one the bound volume hotkeys drive
  * ([hotkeyEntityId]).
@@ -1522,16 +1549,21 @@ private fun PageContent(page: PageConfig, ctx: CardContext) {
     val pinned = cards.filter { it.options["pin"] == "bottom" }
     val scrolling = cards.filter { it.options["pin"] != "bottom" }
 
+    val bounds = remember { PageBounds() }
     Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier =
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(scrolling, key = { it.hashCode() }) { RenderCard(it, ctx) }
+        CompositionLocalProvider(LocalPageBounds provides bounds) {
+            LazyColumn(
+                modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    // 1.5.8: how far down the cards may go (PageBounds), inside the padding.
+                    .onGloballyPositioned { bounds.bottomPx = it.boundsInWindow().bottom },
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(scrolling, key = { it.hashCode() }) { RenderCard(it, ctx) }
+            }
         }
         if (pinned.isNotEmpty()) {
             Column(

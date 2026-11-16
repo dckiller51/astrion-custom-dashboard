@@ -17,6 +17,7 @@ import com.custom.astrion.cards.impl.MediaPlayerCard
 import com.custom.astrion.cards.impl.MediaRemoteCard
 import com.custom.astrion.cards.impl.MonitorCard
 import com.custom.astrion.cards.impl.PictureElementsCard
+import com.custom.astrion.cards.impl.PlayStationCard
 import com.custom.astrion.cards.impl.PlexCard
 import com.custom.astrion.cards.impl.RowCard
 import com.custom.astrion.cards.impl.SceneGridCard
@@ -84,7 +85,8 @@ class AstrionApp : Application() {
             VacuumCard(),
             ZidooCard(),
             MediaRemoteCard(),
-            InfoCard()
+            InfoCard(),
+            PlayStationCard()
             // ← Register your own card types here
         )
     }

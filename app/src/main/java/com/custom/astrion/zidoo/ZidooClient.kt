@@ -111,6 +111,9 @@ class ZidooClient(private val host: () -> String) {
     /** A saga's films, a series' seasons, or (through [ZidooLibrary.fileOf]) a film's video file. */
     fun collection(id: Long): JsonObject? = get("ZidooPoster/getCollection?id=$id", slow = true)
 
+    /** A film's synopsis, from its `getDetail` (1.5.8): when the poster wall's list didn't give it. */
+    fun overview(id: Long): String? = ZidooLibrary.overview(get("ZidooPoster/v2/getDetail?id=$id", slow = true))
+
     fun season(id: Long): ZidooLibraryList? = ZidooLibrary.season(get("ZidooPoster/v2/getDetail?id=$id", slow = true))
 
     // ---- An Eversolo's music library (1.5.0), see ZidooMusicLibrary ----

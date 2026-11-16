@@ -31,6 +31,7 @@ const GALLERY_TYPES = {
   camera: { cat: 'media', icon: 'camera' },
   plex: { cat: 'media', icon: 'film' },
   xbox: { cat: 'media', icon: 'game' },
+  playstation: { cat: 'media', icon: 'game' },
   zidoo: { cat: 'media', icon: 'player' },
   media_remote: { cat: 'media', icon: 'remote' },
   button_grid: { cat: 'grids', icon: 'apps' },

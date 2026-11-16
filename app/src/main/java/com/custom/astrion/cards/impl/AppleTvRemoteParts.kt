@@ -100,6 +100,9 @@ private val APP_FALLBACK_COLORS =
         Color(0xFF5B3FA8)
     )
 
+/** The tile colour an app without its own gets, by its place among the card's apps. */
+internal fun appFallbackColor(index: Int): Color = APP_FALLBACK_COLORS[Math.floorMod(index, APP_FALLBACK_COLORS.size)]
+
 private fun initialsOf(label: String): String {
     val words = label.split(' ', '+', '-', '.').filter { it.isNotBlank() }
     return when {

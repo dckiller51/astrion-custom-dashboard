@@ -244,6 +244,25 @@ class ZidooEntityTest {
     }
 
     @Test
+    fun `a film's synopsis, year and rating come from the poster wall`() {
+        // Zavie's Gemini Man (2019), cut down.
+        val film =
+            ZidooParse.movie(
+                ZidooParse.parse(
+                    """{"type":"movie","movie":{"id":13595,"voteAverage":6.300000000000001,"name":"Gemini Man","year":2019,""" +
+                        """"aggregation":{"overview":"Henry Brogan, un tueur professionnel…",""" +
+                        """"releaseDate":"2019-10-02","voteAverage":6.3}}}"""
+                )
+            )!!
+        assertEquals("Henry Brogan, un tueur professionnel…", film.overview)
+        assertEquals(2019, film.year)
+        assertEquals(6.3, film.rating!!, 0.001)
+        val dated = ZidooParse.movie(ZidooParse.parse("""{"movie":{"id":1,"year":0,"aggregation":{"releaseDate":"1979-05-25"}}}"""))!!
+        assertEquals(1979, dated.year)
+        assertNull(dated.overview)
+    }
+
+    @Test
     fun `the official Apple Music on an Eversolo is read from everSoloPlayInfo`() {
         fun read(state: Int) = ZidooParse.musicV2(
             ZidooParse.parse(

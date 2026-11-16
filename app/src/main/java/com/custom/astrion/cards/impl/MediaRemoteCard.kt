@@ -45,6 +45,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.LayoutCoordinates
@@ -75,6 +78,9 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.ServiceCall
+import com.custom.astrion.ui.LocalPageBounds
+import com.custom.astrion.ui.PageBounds
+import com.custom.astrion.ui.ScreenBackHandler
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.icons.MdiIcons
 import com.custom.astrion.ui.tapClickable
@@ -107,6 +113,8 @@ import kotlin.math.abs
  *     "apps": [ { "name": "Plex", "app": "com.plexapp.android" } ],
  *     "apps_style": "icons", "show_apps": true,         // as the TV remote card: "buttons" (default) or "icons"; false hides the shortcuts
  *     "show_skip": true, "show_browse": true, "show_sources": true, "show_keypad": true,
+ *     "now_playing_entity": "media_player.plex_tv",  // 1.5.8: what plays, from this player while it plays
+ *     "show_synopsis": true,               // 1.5.8: player view, a film's year, rating and synopsis (Zidoo)
  *     "show_dpad": true, "show_volume": true, "show_channels": true,
  *     "show_tracks": true, "show_queue": true, "show_io": true, "show_quality": true
  * } }
@@ -127,17 +135,20 @@ class MediaRemoteCard : CardRenderer {
         var playerView by remember { mutableStateOf(false) }
         var detailsOpen by remember { mutableStateOf(false) }
         val r = Parts(ctx, config, playerId, remoteId, popup, deviceDialog) { playerView = true }
-        val player = ctx.entities[playerId]
+        // `now_playing_entity` (1.5.8): what plays, from another player while it plays (Plex on the
+        // TV, say); the keys and the apps stay the player's (Zavie).
+        val player = nowPlayingOf(config, ctx, playerId)
         val active = player != null && player.state in ACTIVE_STATES
         // `auto_player`: to the player view when something starts, back to the remote when it stops.
         val auto = config.bool("auto_player", false)
         LaunchedEffect(active) { playerView = active && (auto || playerView) }
         // The remote's own Back key leaves the player view.
         BackHandler(enabled = playerView && active) { playerView = false }
+        ScreenBackHandler(enabled = playerView && active) { playerView = false }
         val density = LocalDensity.current
         val share = sizeShare(config.string("size"))
 
-        val showDpad = config.bool("show_dpad", true)
+        val showDpad = config.bool("show_dpad", r.dpadByDefault())
         val inPlayer = playerView && active
         val pad = basePad(r, player, inPlayer, active, showDpad, share)
 
@@ -146,7 +157,8 @@ class MediaRemoteCard : CardRenderer {
         // shrinks the cover, then puts app rows away in the Apps pop-up (Xavier's screenshots:
         // cards stopping short, or cut off below the D-pad).
         val room = remember(config) { mutableFloatStateOf(0f) }
-        val fill = remember(config, inPlayer, active) { FillState(room) }
+        val bounds = LocalPageBounds.current
+        val fill = remember(config, inPlayer, active, bounds) { FillState(room, bounds) }
         r.appsDrop = fill.appsDrop
         val limits = fillLimits(config, inPlayer, pad, cardInnerWidthDp(PADDING))
         val target = fill.room * share
@@ -165,7 +177,10 @@ class MediaRemoteCard : CardRenderer {
             ) {
                 r.Header()
                 if (inPlayer) {
-                    r.PlayerView(player!!, pad + fill.extra.toInt(), onRemote = { playerView = false }, onDetails = { detailsOpen = true })
+                    r.PlayerView(player!!, pad + fill.extra.toInt(), onRemote = { playerView = false }, onDetails = {
+                        // `details_page` (1.5.8): ⋯ opens that page as a popup (an info card…), else the player's details.
+                        config.string("details_page")?.takeIf { it.isNotBlank() }?.let(ctx.openPagePopup) ?: run { detailsOpen = true }
+                    })
                 } else {
                     r.RemoteBlocks(player, active, showDpad, pad, fill.extra.toInt())
                 }
@@ -180,7 +195,7 @@ class MediaRemoteCard : CardRenderer {
     @Composable
     private fun basePad(r: Parts, player: EntityState?, inPlayer: Boolean, active: Boolean, showDpad: Boolean, share: Float): Int {
         if (!inPlayer && !showDpad) return 0
-        val blocks = if (inPlayer && player != null) r.playerBlocks(player) else blockHeights(r, player, active, showDpad)
+        val blocks = if (inPlayer && player != null) r.playerBlocks() else blockHeights(r, active, showDpad)
         return trackpadFor(blocks, MIN_PAD, if (inPlayer) MAX_COVER else MAX_PAD, null, share)
     }
 
@@ -191,6 +206,13 @@ class MediaRemoteCard : CardRenderer {
         return (MIN_COVER - pad).toFloat()..(innerWidth / ratio - pad).coerceAtLeast((MIN_COVER - pad).toFloat())
     }
 
+    /** The player whose media shows: `now_playing_entity`'s while it plays, else the card's own. */
+    private fun nowPlayingOf(config: CardConfig, ctx: CardContext, playerId: String): EntityState? {
+        val own = ctx.entities[playerId]
+        val other = config.string("now_playing_entity")?.takeIf { it.isNotBlank() && it != playerId }?.let { ctx.entities[it] }
+        return other?.takeIf { it.state in ACTIVE_STATES } ?: own
+    }
+
     private fun remoteOf(config: CardConfig, playerId: String) = config.string("remote_entity") ?: "remote.${playerId.substringAfter('.')}"
 
     /**
@@ -199,7 +221,7 @@ class MediaRemoteCard : CardRenderer {
      * put away ([appsDrop]) when even that isn't enough. Each layout corrects the last, so it
      * settles in a frame or two; nothing changes once it fits.
      */
-    private class FillState(private val roomState: MutableFloatState) {
+    private class FillState(private val roomState: MutableFloatState, private val bounds: PageBounds?) {
         var room by roomState
         var extra by mutableFloatStateOf(0f)
         var appsDrop by mutableIntStateOf(0)
@@ -214,7 +236,9 @@ class MediaRemoteCard : CardRenderer {
         ) {
             val px = density.density
             val top = content.positionInWindow().y / px - PADDING
-            val limit = content.findRootCoordinates().size.height / px - PAGE_BOTTOM_CHROME
+            // The page's own bottom (1.5.8, PageBounds), else the screen's less the page dots.
+            val limit = bounds?.bottomPx?.takeIf { it > 0f }?.let { it / px }
+                ?: (content.findRootCoordinates().size.height / px - PAGE_BOTTOM_CHROME)
             (limit - top).takeIf { abs(it - room) > 1f }?.let { room = it }
             val target = room * share
             if (target <= 0f) return
@@ -229,16 +253,17 @@ class MediaRemoteCard : CardRenderer {
     }
 
     /** Heights (dp) of every block but the D-pad, in the order they are drawn. */
-    private fun blockHeights(r: Parts, player: EntityState?, active: Boolean, showDpad: Boolean): List<Int> = buildList {
+    private fun blockHeights(r: Parts, active: Boolean, showDpad: Boolean): List<Int> = buildList {
         add(BLOCK_POWER)
         if (active) {
             add(BLOCK_NOW_PLAYING + BLOCK_PROGRESS)
             add(BLOCK_TRANSPORT)
         }
-        if (r.hasDeviceButtons(player)) add(BLOCK_DEVICE)
+        if (r.hasDeviceButtons(r.own())) add(BLOCK_DEVICE)
         add(BLOCK_NAV)
         addAll(r.appsBlocks())
         if (showDpad && r.hasLowerRow()) add(BLOCK_LOWER)
+        if (!showDpad && r.hasSideKeys()) add(BLOCK_SIDE_KEYS)
     }
 
     /** All the player's details (volume slider, casting…), from the player view's ⋯ key. */
@@ -270,6 +295,7 @@ class MediaRemoteCard : CardRenderer {
         const val BLOCK_NAV = 56
         const val BLOCK_APPS = 72
         const val BLOCK_LOWER = 48 // the mute key, centred under the D-pad
+        const val BLOCK_SIDE_KEYS = 2 * 44 + 8 // without the D-pad: its side keys, at most two high (1.5.8)
         const val SIDE_KEY = 44
 
         // Back over volume + / −: three side keys, their 8 dp gap, and 24 dp between Back and volume +.
@@ -288,6 +314,8 @@ class MediaRemoteCard : CardRenderer {
 
         // Player view heights (to tune on the device): title lines, progress, transport, the row of keys.
         const val BLOCK_TITLE = 64
+        const val SYNOPSIS_LINES = 3
+        const val APP_ICON = 0.5f // an app's icon, as a share of the cover's height
         const val BLOCK_KEYS = 56
 
         /** The blocks in `order` (1.5.7); any left out follow in the default order, unknown names ignored. */
@@ -372,10 +400,19 @@ class MediaRemoteCard : CardRenderer {
             ctx.client.callService(ServiceCall.of("media_player", service, playerId, *data))
         }
 
+        /** The card's own player (its keys, apps and buttons), whatever `now_playing_entity` shows. */
+        fun own(): EntityState? = ctx.entities[playerId]
+
+        /** A media call to [e], the player shown (`now_playing_entity`'s while it plays, 1.5.8). */
+        fun media(e: EntityState, service: String, vararg data: Pair<String, Any?>) {
+            ctx.client.callService(ServiceCall.of("media_player", service, e.entityId, *data))
+        }
+
         /** ±10 s: a seek when the player can; else its rewind / fast-forward key (never the previous / next track). */
         fun skip(e: EntityState, delta: Double) {
             when {
-                e.supports(Feature.SEEK) -> mp("media_seek", "seek_position" to (currentMediaPosition(e) + delta).coerceAtLeast(0.0))
+                e.supports(Feature.SEEK) -> media(e, "media_seek", "seek_position" to (currentMediaPosition(e) + delta).coerceAtLeast(0.0))
+                e.entityId != playerId -> Unit
                 isZidoo() -> zidooKey(ctx, playerId, if (delta < 0) "Key.MediaBackward" else "Key.MediaForward")
                 else -> press(if (delta < 0) "rewind" else "fast_forward")
             }
@@ -430,10 +467,10 @@ class MediaRemoteCard : CardRenderer {
                         Transport(player)
                     }
                     // The library (and the player's own buttons) show even when nothing plays.
-                    "device" -> DeviceButtons(player, active)
+                    "device" -> DeviceButtons(own(), active)
                     "nav" -> NavRow()
                     "apps" -> AppsRow()
-                    "pad" -> if (showDpad) Pad(pad, extra)
+                    "pad" -> if (showDpad) Pad(pad, extra) else SideKeys()
                 }
             }
         }
@@ -442,7 +479,7 @@ class MediaRemoteCard : CardRenderer {
         fun NowPlaying(e: EntityState) {
             val np = AtvNowPlaying.of(e)
             val seek: ((Double) -> Unit)? =
-                if (e.supports(Feature.SEEK)) { s -> mp("media_seek", "seek_position" to s) } else null
+                if (e.supports(Feature.SEEK)) { s -> media(e, "media_seek", "seek_position" to s) } else null
             Row(
                 Modifier.fillMaxWidth().tapClickable(onClick = openPlayer),
                 verticalAlignment = Alignment.CenterVertically,
@@ -476,13 +513,13 @@ class MediaRemoteCard : CardRenderer {
         }
 
         /** Heights (dp) of the player view's blocks but the cover, for trackpadFor to size the cover. */
-        fun playerBlocks(e: EntityState): List<Int> = buildList {
+        fun playerBlocks(): List<Int> = buildList {
             add(BLOCK_POWER)
             add(BLOCK_TITLE)
             add(BLOCK_PROGRESS)
             add(BLOCK_TRANSPORT)
             add(BLOCK_KEYS)
-            if (hasDeviceButtons(e)) add(BLOCK_DEVICE)
+            if (hasDeviceButtons(own())) add(BLOCK_DEVICE)
         }
 
         /**
@@ -519,7 +556,8 @@ class MediaRemoteCard : CardRenderer {
                     )
                 }
             }
-            val seek: ((Double) -> Unit)? = if (e.supports(Feature.SEEK)) { s -> mp("media_seek", "seek_position" to s) } else null
+            if (config.bool("show_synopsis", true)) Synopsis(e)
+            val seek: ((Double) -> Unit)? = if (e.supports(Feature.SEEK)) { s -> media(e, "media_seek", "seek_position" to s) } else null
             AtvProgress(e, theme, thick = true, onSeek = seek)
             Transport(e)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -531,22 +569,120 @@ class MediaRemoteCard : CardRenderer {
                 }
                 Key(Icons.Filled.MoreHoriz, "Details") { onDetails() }
             }
-            DeviceButtons(e, active = true)
+            DeviceButtons(own(), active = true)
+        }
+
+        /**
+         * A film's year, rating and synopsis, when the player gives them (a Zidoo's poster wall,
+         * 1.5.8, Zavie): three lines, a tap shows it all.
+         */
+        @Composable
+        private fun Synopsis(e: EntityState) {
+            val overview = e.attrString("astrion_overview")
+            val meta =
+                listOfNotNull(
+                    e.attrInt("astrion_year")?.toString(),
+                    e.attrDouble("astrion_rating")?.let { "★ " + String.format(java.util.Locale.ROOT, "%.1f", it) }
+                ).joinToString(" · ")
+            if (overview == null && meta.isEmpty()) return
+            var open by remember(overview) { mutableStateOf(false) }
+            Column(
+                Modifier.fillMaxWidth().tapClickable { open = !open },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                if (meta.isNotEmpty()) Text(meta, color = theme.mutedText, fontSize = 12.sp, maxLines = 1)
+                overview?.let {
+                    Text(
+                        it,
+                        color = theme.mutedText,
+                        fontSize = 13.sp,
+                        maxLines = if (open) Int.MAX_VALUE else SYNOPSIS_LINES,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
+        /**
+         * The app [e] says it runs (`app_name`, else `app_id`) as the card's shortcut for it when it
+         * has one (its icon and colour), else a plain tile with its name; null when it says none.
+         * First: its place among the card's apps, for the tile's colour.
+         */
+        fun appTileOf(e: EntityState): Pair<Int, AtvApp>? {
+            val name = e.attrString("app_name")?.takeIf { it.isNotBlank() }
+            val id = e.attrString("app_id")?.takeIf { it.isNotBlank() }
+            if (name == null && id == null) return null
+            val i = shortcuts.apps.indexOfFirst { a ->
+                (name != null && (a["name"] as? String).equals(name, ignoreCase = true)) || (id != null && a["app"] == id)
+            }
+            if (i >= 0) return i to shortcuts.tileOf(shortcuts.apps[i])
+            val label = name ?: id!!
+            return label.hashCode() to AtvApp(source = label, label = label, icon = null, color = null)
+        }
+
+        /** An app tile's colour: its own, else (no icon either) one of the fallbacks. */
+        private fun appBack(app: Pair<Int, AtvApp>): Color? =
+            app.second.color ?: appFallbackColor(app.first).takeIf { app.second.icon == null }
+
+        /** The app's icon, or its name, in the cover's frame. */
+        @Composable
+        private fun AppCover(app: AtvApp, h: Dp) {
+            val px = with(LocalDensity.current) { (h * APP_ICON).toPx() }.toInt()
+            val icon = rememberImage(ctx, app.icon, px)
+            if (icon != null) {
+                Image(icon, app.label, contentScale = ContentScale.Fit, modifier = Modifier.size(h * APP_ICON))
+            } else {
+                Text(
+                    app.label,
+                    color = Color.White,
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(16.dp)
+                )
+            }
+        }
+
+        /** [rememberImage], keeping the last picture of [path] up while a new one loads. */
+        @Composable
+        private fun rememberSteadyImage(path: String?, px: Int): ImageBitmap? {
+            val loaded = rememberImage(ctx, path, px)
+            var last by remember(path) { mutableStateOf<ImageBitmap?>(null) }
+            SideEffect { if (loaded != null) last = loaded }
+            return loaded ?: last
         }
 
         /** The cover in a [w]×[h] frame: filling it when its shape is close, else whole (a square album in a 16:9 frame). */
         @Composable
         private fun Cover(e: EntityState, w: Dp, h: Dp, ratio: Float) {
             val path = e.attrString("entity_picture_local") ?: e.attrString("entity_picture")
-            val px = with(LocalDensity.current) { w.toPx() }.toInt()
-            val art = rememberImage(ctx, path, px)
-            Box(Modifier.size(w, h).clip(RoundedCornerShape(16.dp)).background(theme.insetSurface), contentAlignment = Alignment.Center) {
-                if (art != null) {
-                    val own = art.width.toFloat() / art.height.coerceAtLeast(1)
-                    val fills = kotlin.math.abs(own - ratio) / ratio < COVER_FILL
-                    Image(art, null, contentScale = if (fills) ContentScale.Crop else ContentScale.Fit, modifier = Modifier.fillMaxSize())
-                } else {
-                    Icon(Icons.Filled.MusicNote, null, tint = theme.mutedText, modifier = Modifier.size(h * 0.3f))
+            // Loaded at the card's width, not the cover's: the cover's size follows the room
+            // FillState finds, and a picture reloaded at each new size went blank (a music note)
+            // while it came back, changing the frame, the room, the size... the cover blinked
+            // between the film and a note (1.5.8, Zavie's Zidoo). The last picture stays up meanwhile.
+            val px = with(LocalDensity.current) { cardInnerWidthDp(PADDING).dp.toPx() }.toInt()
+            val art = rememberSteadyImage(path, px)
+            // The frame takes the picture's own shape (1.5.8), within w × h: a portrait poster
+            // gets a narrow frame instead of grey bands on its sides (Xavier: Game of Thrones).
+            val own = art?.let { it.width.toFloat() / it.height.coerceAtLeast(1) }
+            val (fw, fh) = when {
+                own == null || kotlin.math.abs(own - ratio) / ratio < COVER_FILL -> w to h
+                own < ratio -> h * own to h
+                else -> w to w / own
+            }
+            // No cover but the player names its app (Netflix on an Apple TV, 1.5.8, Zavie): the
+            // app's tile instead — its icon and colour from the card's apps, else its name.
+            val app = if (art == null) appTileOf(e) else null
+            val back = app?.let(::appBack) ?: theme.insetSurface
+            Box(Modifier.size(fw, fh).clip(RoundedCornerShape(16.dp)).background(back), contentAlignment = Alignment.Center) {
+                when {
+                    art != null -> Image(art, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                    app != null -> AppCover(app.second, h)
+                    else -> Icon(Icons.Filled.MusicNote, null, tint = theme.mutedText, modifier = Modifier.size(h * 0.3f))
                 }
             }
         }
@@ -555,13 +691,13 @@ class MediaRemoteCard : CardRenderer {
         fun Transport(e: EntityState) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
                 if (config.bool("show_skip", true)) Key(Icons.Filled.Replay10, "−10 s") { skip(e, -SKIP_S) }
-                Key(MdiIcons.SkipPrevious, "Previous") { mp("media_previous_track") }
+                Key(MdiIcons.SkipPrevious, "Previous") { media(e, "media_previous_track") }
                 Key(
                     if (e.state == "playing") Icons.Filled.Pause else Icons.Filled.PlayArrow,
                     "Play/Pause",
                     big = true
-                ) { mp("media_play_pause") }
-                Key(MdiIcons.SkipNext, "Next") { mp("media_next_track") }
+                ) { media(e, "media_play_pause") }
+                Key(MdiIcons.SkipNext, "Next") { media(e, "media_next_track") }
                 if (config.bool("show_skip", true)) Key(Icons.Filled.Forward10, "+10 s") { skip(e, SKIP_S) }
             }
         }
@@ -778,6 +914,65 @@ class MediaRemoteCard : CardRenderer {
                 }
             }
         }
+
+        /** Whether, without the D-pad, any of its side keys is left to draw. */
+        fun hasSideKeys() = hasVolume() || hasChannels() || hasLowerRow() || config.bool("show_keypad", true) || keys.of("back") != null
+
+        /**
+         * Without the D-pad (`show_dpad: false`, 1.5.8): its side keys stay, evenly placed (Zavie:
+         * hiding the D-pad took volume and channels away with it). With channels: volume (+ over −)
+         * on the left, channels on the right, Back and the keypad over mute in the middle. Without
+         * (an Eversolo, say): one row, volume − and + at the ends, Back, keypad and mute between.
+         */
+        @Composable
+        fun SideKeys() {
+            if (!hasSideKeys()) return
+            val side = SIDE_KEY.dp
+            // No share of the page's spare room (FillState's extra) here: spread around these
+            // keys it set them shaking up and down (Zavie, Apple TV): the card's own space below takes it.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (hasChannels()) {
+                    Column(Modifier.width(side), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (hasVolume()) {
+                            SmallKey(Icons.AutoMirrored.Filled.VolumeUp, "Vol +", side) { press("volume_up", volumeId) }
+                            SmallKey(Icons.AutoMirrored.Filled.VolumeDown, "Vol −", side) { press("volume_down", volumeId) }
+                        }
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { BackAndKeypad(side) }
+                        if (hasLowerRow()) SmallKey(Icons.AutoMirrored.Filled.VolumeOff, "Mute", side) { press("mute", volumeId) }
+                    }
+                    Column(Modifier.width(side), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SmallKey(Icons.Filled.KeyboardArrowUp, "Ch +", side) { press("channel_up") }
+                        SmallKey(Icons.Filled.KeyboardArrowDown, "Ch −", side) { press("channel_down") }
+                    }
+                } else {
+                    Box(Modifier.width(side)) {
+                        if (hasVolume()) SmallKey(Icons.AutoMirrored.Filled.VolumeDown, "Vol −", side) { press("volume_down", volumeId) }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        BackAndKeypad(side)
+                        if (hasLowerRow()) SmallKey(Icons.AutoMirrored.Filled.VolumeOff, "Mute", side) { press("mute", volumeId) }
+                    }
+                    Box(Modifier.width(side)) {
+                        if (hasVolume()) SmallKey(Icons.AutoMirrored.Filled.VolumeUp, "Vol +", side) { press("volume_up", volumeId) }
+                    }
+                }
+            }
+        }
+
+        @Composable
+        private fun BackAndKeypad(side: Dp) {
+            SmallKey(Icons.AutoMirrored.Filled.ArrowBack, "Back", side) { press("back") }
+            if (config.bool("show_keypad", true)) SmallKey(Icons.Filled.Dialpad, "Keypad", side) { popup = Popup.KEYPAD }
+        }
+
+        /** Its screen ignores the arrow keys (Zavie's tests, 1.5.8): an Eversolo shows no D-pad unless asked. */
+        fun dpadByDefault(): Boolean = !isMusicPlayer()
 
         /** An Eversolo (music) has no channels. */
         private fun isMusicPlayer(): Boolean = ctx.entities[playerId]?.let { ZidooView.of(it).eversolo } == true

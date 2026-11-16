@@ -59,6 +59,7 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.ServiceCall
+import com.custom.astrion.ui.LocalPageBounds
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
 import kotlinx.serialization.json.JsonArray
@@ -136,13 +137,14 @@ class TvRemoteCard : CardRenderer {
         val full = config.string("layout") == "full"
         val fit = remember(config) { AtvFit() }
         val density = LocalDensity.current
+        val pageBounds = LocalPageBounds.current
 
         Column(
             modifier =
             Modifier
                 .fillMaxWidth()
                 // Full: measures where the card ends once, to size the D-pad to the screen (as the Apple TV card does).
-                .then(if (full) Modifier.onGloballyPositioned { measureFit(fit, it, density) } else Modifier)
+                .then(if (full) Modifier.onGloballyPositioned { measureFit(fit, it, density, pageBounds) } else Modifier)
                 .clip(RoundedCornerShape(20.dp))
                 .background(ctx.theme.cardSurface)
                 .padding(if (full) FULL_PADDING.dp else 16.dp),

@@ -95,6 +95,10 @@ import kotlinx.serialization.json.JsonPrimitive
  *       "show_brightness_control": true,   // draggable brightness slider
  *       "show_color_temp_control": false,  // draggable warm<->cool slider
  *       "show_color_control": false,       // tappable color swatches
+ *       "colors": ["#FF0000", "#FFA500"],  // 1.5.8: your own swatches (hex, up to 15;
+ *       //   the card's row shows the first 8, the popup all of them)
+ *       "color_wheel": "bottom",           // 1.5.8: popup's wheel "bottom" | "top" | "hidden"
+ *       "popup_power": "right",            // 1.5.8: popup's power button "right" | "left"
  *       "collapsible_controls": false,
  *       //   When true, the whole controls area hides while the light is
  *       //   off (Mushroom's own default). When false (default here, for
@@ -154,7 +158,17 @@ class LightCard : CardRenderer {
                 )
 
         val actions = remember(entityId, ctx.client) { LightActions(entityId, ctx.client) }
-        val rowData = LightRowData(entityId, isOn, brightnessPct ?: 0, appearance, ctx.theme, controlsConfig, actions)
+        // 1.5.8: the card's own swatches (`colors`, hex), shared by the card and its popup.
+        val customColors = config.stringList("colors")
+        val swatches = remember(customColors) { LightColors.swatches(customColors) }
+        val cardSwatches = if (customColors.isEmpty()) CARD_DEFAULT_SWATCHES else swatches.take(CARD_SWATCHES_MAX)
+        val popupStyle =
+            LightPopupStyle(
+                swatches = swatches,
+                wheel = WheelPlace.of(config.string("color_wheel")),
+                powerLeft = config.string("popup_power") == "left"
+            )
+        val rowData = LightRowData(entityId, isOn, brightnessPct ?: 0, appearance, ctx.theme, controlsConfig, actions, cardSwatches)
 
         // Hoisted here (not inside a layout function) so the active-control
         // state survives regardless of which layout renders it.
@@ -193,6 +207,7 @@ class LightCard : CardRenderer {
                 e = e,
                 client = ctx.client,
                 theme = ctx.theme,
+                style = popupStyle,
                 onClose = { showDetail = false }
             )
         }
@@ -334,7 +349,8 @@ private data class LightRowData(
     val appearance: LightAppearance,
     val theme: ThemeColors,
     val controlsConfig: LightControlsConfig,
-    val actions: LightActions
+    val actions: LightActions,
+    val swatches: List<Triple<Int, Int, Int>>
 )
 
 /** The active control's slider/swatches, plus the cycle button when more than one control is enabled. */
@@ -373,7 +389,7 @@ private fun LightControlsRow(
                         kelvin = data.controlsConfig.currentKelvin,
                         onCommit = data.actions::commitKelvin
                     )
-                LightControl.COLOR -> ColorSwatchRow(onPick = data.actions::commitRgb)
+                LightControl.COLOR -> ColorSwatchRow(data.swatches, onPick = data.actions::commitRgb)
                 null -> {}
             }
         }
@@ -533,7 +549,7 @@ private fun PercentSlider(
  * `color_temp_kelvin` between the entity's own min/max_color_temp_kelvin.
  */
 @Composable
-private fun ColorTempSlider(entityId: String, isOn: Boolean, minKelvin: Int, maxKelvin: Int, kelvin: Int, onCommit: (Int) -> Unit) {
+internal fun ColorTempSlider(entityId: String, isOn: Boolean, minKelvin: Int, maxKelvin: Int, kelvin: Int, onCommit: (Int) -> Unit) {
     val range = (maxKelvin - minKelvin).coerceAtLeast(1)
     val drag = rememberDragFraction(entityId)
     var dragFraction by drag
@@ -581,20 +597,15 @@ private fun ColorTempSlider(entityId: String, isOn: Boolean, minKelvin: Int, max
     }
 }
 
+/** The card's row without `colors`: the 8 it always had. */
+private val CARD_DEFAULT_SWATCHES = LightColors.DEFAULT_SWATCHES.take(7) + LightColors.DEFAULT_SWATCHES.last()
+
+/** Most swatches the card's own row holds (the popup shows them all). */
+private const val CARD_SWATCHES_MAX = 8
+
 /** Compact row of tappable color swatches — sets `rgb_color` directly. */
 @Composable
-private fun ColorSwatchRow(onPick: (Int, Int, Int) -> Unit) {
-    val swatches =
-        listOf(
-            Triple(244, 67, 54),
-            Triple(255, 152, 0),
-            Triple(255, 235, 59),
-            Triple(76, 175, 80),
-            Triple(0, 188, 212),
-            Triple(33, 150, 243),
-            Triple(156, 39, 176),
-            Triple(255, 255, 255)
-        )
+private fun ColorSwatchRow(swatches: List<Triple<Int, Int, Int>>, onPick: (Int, Int, Int) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         swatches.forEach { (r, g, b) ->
             Box(
