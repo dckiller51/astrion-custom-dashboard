@@ -130,7 +130,7 @@ class MediaPlayerCard : CardRenderer {
         // all). Falling back to the raw "entity_picture" keeps every
         // entity that never had a "_local" variant working exactly as
         // before.
-        val artPath = e?.attrString("entity_picture_local") ?: e?.attrString("entity_picture")
+        val artPath = e?.mediaPicture
         var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
         LaunchedEffect(artPath) { art = artPath?.let { ctx.client.fetchBitmap(it, cache = true) } }
 

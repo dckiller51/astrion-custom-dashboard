@@ -81,6 +81,7 @@ import kotlinx.serialization.json.put
 object DashboardLoader {
     private const val TAG = "DashboardLoader"
     private const val MAX_DOCK_DEBOUNCE_S = 60
+    private const val MAX_INPUT_AGAIN_MS = 60_000
 
     val configFile: File
         get() = File(Environment.getExternalStorageDirectory(), "astrion/dashboard.json")
@@ -132,7 +133,13 @@ object DashboardLoader {
                     val linkedPageModeRaw = obj["linkedPageMode"]?.jsonPrimitive?.content
                     val linkedPageMode = if (linkedPageModeRaw == "popup") "popup" else "page"
                     val popupWidthFraction = obj["popupWidth"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.7f
-                    val popupHeightFraction = obj["popupHeight"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.5f
+                    // "auto" (1.5.9): as tall as its cards, kept as 0.
+                    val popupHeightFraction =
+                        if (obj["popupHeight"]?.jsonPrimitive?.content == "auto") {
+                            0f
+                        } else {
+                            obj["popupHeight"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.5f
+                        }
                     val popupPositionRaw = obj["popupPosition"]?.jsonPrimitive?.content
                     val popupPosition = if (popupPositionRaw in setOf("top", "bottom", "left", "right")) popupPositionRaw!! else "center"
                     val hiddenUnlessActivity = obj["hiddenUnlessActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
@@ -366,6 +373,7 @@ object DashboardLoader {
         val powerOnFirst = obj["powerOnFirst"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
         val powerOffOnExit = obj["powerOffOnExit"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
         val delayAfterMs = obj["delayAfterMs"]?.jsonPrimitive?.intOrNull ?: 0
+        val inputAgainAfterMs = obj["inputAgainAfterMs"]?.jsonPrimitive?.intOrNull?.coerceIn(0, MAX_INPUT_AGAIN_MS) ?: 0
         return ActivityDeviceConfig(
             deviceId,
             source,
@@ -375,7 +383,8 @@ object DashboardLoader {
             inputCommand,
             powerOnFirst,
             powerOffOnExit,
-            delayAfterMs
+            delayAfterMs,
+            inputAgainAfterMs
         )
     }
 
@@ -525,7 +534,14 @@ object DashboardLoader {
                             // one property regardless of which mechanism opens it as one.
                             if (page.linkedPageMode == "popup" || page.openMode == "popup") {
                                 put("popupWidth", page.popupWidthFraction)
-                                put("popupHeight", page.popupHeightFraction)
+                                if (page.popupHeightFraction <= 0f) {
+                                    put(
+                                        "popupHeight",
+                                        "auto"
+                                    )
+                                } else {
+                                    put("popupHeight", page.popupHeightFraction)
+                                }
                                 if (page.popupPosition != "center") put("popupPosition", page.popupPosition)
                                 if (page.popupHideTitle) put("popupHideTitle", true)
                             }
@@ -629,6 +645,7 @@ object DashboardLoader {
                                                     if (!d.powerOnFirst) put("powerOnFirst", false)
                                                     if (!d.powerOffOnExit) put("powerOffOnExit", false)
                                                     if (d.delayAfterMs != 0) put("delayAfterMs", d.delayAfterMs)
+                                                    if (d.inputAgainAfterMs != 0) put("inputAgainAfterMs", d.inputAgainAfterMs)
                                                 }
                                             )
                                         }

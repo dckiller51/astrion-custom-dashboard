@@ -216,6 +216,9 @@
     <string name="media_browser_add_to_queue">Zur Warteschlange</string>
     <string name="plex_error_no_items">Plex hat keine Einträge geliefert</string>
     <string name="plex_error_generic">Plex-Fehler</string>
+    <string name="plex_mrmc_no_file">Hier gibt es nichts abzuspielen: wähle einen Film oder eine Folge</string>
+    <string name="plex_mrmc_no_answer">MrMC hat auf %1$s nicht geantwortet: prüfe, ob es installiert und die Fernsteuerung über HTTP aktiviert ist</string>
+    <string name="plex_mrmc_refused">MrMC konnte den Film nicht öffnen</string>
     <string name="plex_library">Mediathek</string>
     <string name="plex_this_season">Diese Staffel</string>
     <string name="plex_play">Abspielen</string>

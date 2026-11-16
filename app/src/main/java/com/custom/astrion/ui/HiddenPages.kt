@@ -8,12 +8,29 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.Velocity
 import com.custom.astrion.config.PageConfig
 
-/** A page set to `"hideMode": "full"` whose Activity isn't running right now. */
+/**
+ * `"hiddenUnlessActivity": "__never__"` (1.5.9, *Never shown*): a page with no dot that a swipe
+ * never lands on, only opened by a tile, a key or a linked page (a popup page, MR RIZK). No
+ * Activity has that id, so it's always hidden, and always completely.
+ */
+internal const val PAGE_NEVER_SHOWN = "__never__"
+
+/** A page set to `"hideMode": "full"` whose Activity isn't running right now, or a page never shown. */
 internal fun isFullyHidden(page: PageConfig?, activeActivityIds: Set<String>): Boolean {
     val activity = page?.hiddenUnlessActivity ?: return false
+    if (activity == PAGE_NEVER_SHOWN) return true
     return page.hideMode == "full" && activity !in activeActivityIds
 }
 
@@ -45,7 +62,9 @@ private val Identity = HiddenPageContent { it }
  */
 @Composable
 internal fun HiddenPageSkipEffect(pages: List<PageConfig>, pagerState: PagerState, activeActivityIds: Set<String>): HiddenPageContent {
-    if (pages.none { it.hideMode == "full" && it.hiddenUnlessActivity != null }) return Identity
+    if (pages.none { it.hiddenUnlessActivity != null && (it.hideMode == "full" || it.hiddenUnlessActivity == PAGE_NEVER_SHOWN) }) {
+        return Identity
+    }
     val dragged by pagerState.interactionSource.collectIsDraggedAsState()
     var draggedSinceSettle by remember { mutableStateOf(false) }
     var lastSettled by remember { mutableIntStateOf(pagerState.settledPage) }
@@ -111,4 +130,36 @@ private fun exitTarget(pages: List<PageConfig>, index: Int, active: Set<String>)
     val parent = pages[index].parent?.let { name -> pages.indexOfFirst { it.name.equals(name, ignoreCase = true) } }
     if (parent != null && parent >= 0 && !isFullyHidden(pages[parent], active)) return parent
     return nextVisible(pages, index, -1, active) ?: nextVisible(pages, index, 1, active) ?: 0
+}
+
+/**
+ * For the pager's modifier: a swipe stops at the first and the last page that isn't fully hidden
+ * (see [PageReach]) instead of going on to hidden pages at either end. Pages opened by a tile or
+ * a key aren't concerned: those are jumps, not scrolls.
+ */
+@Composable
+internal fun rememberPageReachLimit(pages: List<PageConfig>, pagerState: PagerState, activeActivityIds: Set<String>): Modifier {
+    val reach = remember(pages, activeActivityIds) { PageReach.of(pages.map { isFullyHidden(it, activeActivityIds) }) }
+    val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val currentReach by rememberUpdatedState(reach)
+    val connection =
+        remember(pagerState, rtl) {
+            // A finger moving left (x < 0) goes to the next pages, the other way round in RTL.
+            fun forward(x: Float) = if (rtl) x else -x
+            fun position() = pagerState.currentPage + pagerState.currentPageOffsetFraction
+            object : NestedScrollConnection {
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    val r = currentReach ?: return Offset.Zero
+                    val span = (pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing).toFloat()
+                    val held = PageReach.held(position(), forward(available.x), span, r)
+                    return Offset(if (rtl) held else -held, 0f)
+                }
+
+                override suspend fun onPreFling(available: Velocity): Velocity {
+                    val r = currentReach ?: return Velocity.Zero
+                    return if (PageReach.blocksFling(position(), forward(available.x), r)) available else Velocity.Zero
+                }
+            }
+        }
+    return if (reach == null) Modifier else Modifier.nestedScroll(connection)
 }

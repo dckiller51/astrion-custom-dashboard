@@ -216,6 +216,9 @@
     <string name="media_browser_add_to_queue">Añadir a la cola</string>
     <string name="plex_error_no_items">No se han devuelto elementos de Plex</string>
     <string name="plex_error_generic">Error de Plex</string>
+    <string name="plex_mrmc_no_file">Nada que reproducir aquí: elige una película o un episodio</string>
+    <string name="plex_mrmc_no_answer">MrMC no ha respondido en %1$s: comprueba que está instalado y que su control remoto por HTTP está activado</string>
+    <string name="plex_mrmc_refused">MrMC no ha podido abrir la película</string>
     <string name="plex_library">Biblioteca</string>
     <string name="plex_this_season">Esta temporada</string>
     <string name="plex_play">Reproducir</string>

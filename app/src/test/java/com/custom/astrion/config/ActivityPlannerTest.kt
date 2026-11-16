@@ -270,4 +270,31 @@ class ActivityPlannerTest {
         assertEquals(listOf("turn_off media_player.tv", "cmd amp AmpOff"), plan.describe())
         assertEquals(mapOf("media_player.tv" to false, "amp" to false), plan.powerChanges)
     }
+
+    // ---- The input sent again (1.5.9) ----------------------------------------------------------
+
+    @Test
+    fun `the input is sent again after its delay, once everything else is done`() {
+        val tv =
+            ActivityDeviceConfig(
+                deviceId = "tv",
+                source = "ir",
+                inputCommand = "HDMI1",
+                powerOnCommand = "PowerOn",
+                inputAgainAfterMs = 3000
+            )
+        val box = ir("box", on = "PowerOn")
+        val plan = planner().start(activity("watch", tv, box))
+        assertEquals(listOf("cmd tv PowerOn", "cmd tv HDMI1", "cmd box PowerOn", "cmd tv HDMI1"), plan.describe())
+        // Nothing else waits for it: the box comes right away, the input again 3 s after the first.
+        assertEquals(0, plan.actions[2].gapBeforeMs)
+        assertEquals(3000, plan.actions[3].gapBeforeMs)
+    }
+
+    @Test
+    fun `an input not sent isn't sent again`() {
+        val amp = ActivityDeviceConfig(deviceId = "media_player.amp", source = "ha", inputCommand = "TV", inputAgainAfterMs = 2000)
+        val plan = planner(ha = mapOf("media_player.amp" to LiveHaState(on = true, source = "TV"))).start(activity("a", amp))
+        assertEquals(emptyList<String>(), plan.describe())
+    }
 }

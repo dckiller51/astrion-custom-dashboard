@@ -217,17 +217,18 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
             log("[${device.spec.name}] no MAC for Wake-on-LAN (web page › Android TV › Wake-on-LAN)")
         }
         try {
-            val deadline = System.currentTimeMillis() + WAKE_WINDOW_MS
-            // The wake channel first (helper 1.1.2): the only way that fits a one-second wake.
-            helper.wakeViaChannel(CHANNEL_WAIT_MS)?.let { on ->
-                log("[${device.spec.name}] helper wake (channel): screen ${if (on) "on" else "still off"}")
+            val start = System.currentTimeMillis()
+            val deadline = start + WAKE_WINDOW_MS
+
+            fun woke(how: String, on: Boolean): Boolean {
+                val took = System.currentTimeMillis() - start
+                log("[${device.spec.name}] helper wake$how: screen ${if (on) "on" else "still off"} after $took ms")
                 return on
             }
+            // The wake channel first (helper 1.1.2): the only way that fits a one-second wake.
+            helper.wakeViaChannel(CHANNEL_WAIT_MS)?.let { return woke(" (channel)", it) }
             while (true) {
-                helper.wake()?.let { on ->
-                    log("[${device.spec.name}] helper wake: screen ${if (on) "on" else "still off"}")
-                    return on
-                }
+                helper.wake()?.let { return woke("", it) }
                 if (System.currentTimeMillis() >= deadline) {
                     log("[${device.spec.name}] helper wake: no answer (asleep, Wake-on-LAN off, or no helper 1.1.0)")
                     return false
@@ -310,7 +311,11 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         private const val REFIND_EVERY = 3
         private const val KEY_GAP_MS = 60L
         private const val WOL_EVERY_MS = 250L
-        private const val WAKE_WINDOW_MS = 12_000L
+
+        // 1.5.9: 25 s, not 12: after a long sleep the box's LED lights at the first packets but its
+        // Wi-Fi takes longer to come back; with 12 s the burst stopped first and it fell asleep
+        // again (Zavie: LED on then off; a second Power, the box already back, worked).
+        private const val WAKE_WINDOW_MS = 25_000L
         private const val CHANNEL_WAIT_MS = 8_000
         private const val WAKE_RETRY_MS = 200L
         private val POWER_KEYS = listOfNotNull(AndroidTvKeys.code("POWER"), AndroidTvKeys.code("WAKEUP"))

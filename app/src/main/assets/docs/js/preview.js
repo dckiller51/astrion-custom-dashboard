@@ -300,7 +300,8 @@ function pageTreeRow(index, depth, hasKids, collapsed) {
   };
   if (index === dashboardData.startPage) badge('🏠', 'web_tree_start_page');
   if (page.popupWidth != null || (typeof popupOpenersOf === 'function' && popupOpenersOf(page.name) > 0)) badge('⧉', 'web_tree_popup');
-  if (page.hiddenUnlessActivity) badge('🎬', 'web_tree_activity_only');
+  if (page.hiddenUnlessActivity === '__never__') badge('🙈', 'web_tree_never_shown');
+  else if (page.hiddenUnlessActivity) badge('🎬', 'web_tree_activity_only');
 
   const button = (text, titleKey, onClick, extraClass) => {
     const b = document.createElement('span');

@@ -218,6 +218,11 @@ object RemoteSettings {
     private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
     private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
     private const val KEY_DENONS = "denons" // JSON array, see DenonConfig
+    private const val KEY_TMDB_TOKEN = "tmdb_token" // 1.5.9, see tmdb/TmdbRegistry
+    private const val KEY_TMDB_LANGUAGE = "tmdb_language"
+    private const val KEY_PLEX_HOST = "plex_host" // 1.5.9: the Plex server, for every Plex card
+    private const val KEY_PLEX_TOKEN = "plex_token"
+    private const val KEY_MEDIA_INFO = "media_info_source" // 1.5.9: "auto", "plex" or "tmdb", see tmdb/MediaInfoSource
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -230,6 +235,41 @@ object RemoteSettings {
     fun haUrl(context: Context): String = prefs(context).getString(KEY_HA_URL, "") ?: ""
 
     fun haToken(context: Context): String = prefs(context).getString(KEY_HA_TOKEN, "") ?: ""
+
+    /** TMDB (1.5.9): the user's own read access token (or v3 key); empty when not set. Never sent back to the web page. */
+    fun tmdbToken(context: Context): String = prefs(context).getString(KEY_TMDB_TOKEN, "") ?: ""
+
+    /** TMDB's language for titles and synopses ("fr-FR"); empty: the remote's own language. */
+    fun tmdbLanguage(context: Context): String = prefs(context).getString(KEY_TMDB_LANGUAGE, "") ?: ""
+
+    /** The Plex server set on the web page (1.5.9), "http://…:32400"; empty when not set. */
+    fun plexHost(context: Context): String = prefs(context).getString(KEY_PLEX_HOST, "") ?: ""
+
+    /** Its token (X-Plex-Token); never sent back to the web page, nor written in dashboard.json. */
+    fun plexToken(context: Context): String = prefs(context).getString(KEY_PLEX_TOKEN, "") ?: ""
+
+    /** Saves the Plex server; a null [token] keeps the one saved, an empty one removes it. */
+    fun savePlex(context: Context, host: String, token: String?) {
+        prefs(context).edit(commit = true) {
+            putString(KEY_PLEX_HOST, host.trim().trimEnd('/'))
+            if (token != null) putString(KEY_PLEX_TOKEN, token.trim())
+        }
+    }
+
+    /** Where what's playing is looked up (1.5.9): "auto" (Plex, then TMDB), "plex" or "tmdb". */
+    fun mediaInfoSource(context: Context): String = prefs(context).getString(KEY_MEDIA_INFO, "auto") ?: "auto"
+
+    fun saveMediaInfoSource(context: Context, source: String) {
+        prefs(context).edit(commit = true) { putString(KEY_MEDIA_INFO, source) }
+    }
+
+    /** Saves TMDB's settings; a null [token] keeps the one saved, an empty one removes it. */
+    fun saveTmdb(context: Context, token: String?, language: String) {
+        prefs(context).edit(commit = true) {
+            if (token != null) putString(KEY_TMDB_TOKEN, token.trim())
+            putString(KEY_TMDB_LANGUAGE, language.trim())
+        }
+    }
 
     /**
      * Optional HA webhook id (just the id — `POST <ha_url>/api/webhook/<id>`),

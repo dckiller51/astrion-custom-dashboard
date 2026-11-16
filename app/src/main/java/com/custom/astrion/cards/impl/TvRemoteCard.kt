@@ -460,7 +460,7 @@ class TvRemoteCard : CardRenderer {
         val theme = r.ctx.theme
         val np = AtvNowPlaying.of(entity)
         val app = r.appInFront(entity)
-        val hasCover = !(entity.attrString("entity_picture_local") ?: entity.attrString("entity_picture")).isNullOrBlank()
+        val hasCover = !entity.mediaPicture.isNullOrBlank()
         val title = if (np.app == null && app != null) app["name"] as? String ?: np.title else np.title
         Row(
             modifier =
@@ -509,7 +509,7 @@ class TvRemoteCard : CardRenderer {
         val theme = r.ctx.theme
         val np = AtvNowPlaying.of(entity)
         val app = r.appInFront(entity)
-        val hasCover = !(entity.attrString("entity_picture_local") ?: entity.attrString("entity_picture")).isNullOrBlank()
+        val hasCover = !entity.mediaPicture.isNullOrBlank()
         val title = if (np.app == null && app != null) app["name"] as? String ?: np.title else np.title
         Row(
             modifier = Modifier.fillMaxWidth(),

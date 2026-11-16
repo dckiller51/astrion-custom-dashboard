@@ -116,7 +116,7 @@ fun MediaPlayerDetailDialog(
             ?: e?.attrString("media_series_title")
             ?: e?.attrString("app_name")
 
-    val artPath = e?.attrString("entity_picture")
+    val artPath = e?.mediaPicture
     var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
     LaunchedEffect(artPath) { art = artPath?.let { client.fetchBitmap(it, cache = true) } }
 
@@ -175,6 +175,8 @@ fun MediaPlayerDetailDialog(
                 )
                 MediaQualityLine(e, theme)
             }
+            // What TMDB (or a Zidoo) says of it (1.5.9): the pop-up doesn't scroll, so ten lines at most.
+            e?.let { MediaSynopsis(it, theme, openLines = DETAIL_SYNOPSIS_LINES) }
 
             DetailLibraryButtons(entityId, e, client, theme, library)
 
@@ -377,3 +379,5 @@ private fun Circle(icon: ImageVector, size: androidx.compose.ui.unit.Dp, theme: 
         Icon(icon, contentDescription = null, tint = Color.White)
     }
 }
+
+private const val DETAIL_SYNOPSIS_LINES = 10

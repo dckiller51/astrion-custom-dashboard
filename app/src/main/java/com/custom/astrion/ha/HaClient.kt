@@ -236,6 +236,19 @@ class HaClient(
     @Volatile
     var localForecastHandler: ((entityId: String) -> JsonArray?)? = null
 
+    /**
+     * Optional extra for every entity as it's published (1.5.9: TMDB's synopsis, year, rating and
+     * poster on a media player, see [com.custom.astrion.tmdb.TmdbRegistry]): returns the entity
+     * as is when it has nothing to add. Called often: it must answer from what it already knows.
+     */
+    @Volatile
+    var entityEnricher: ((EntityState) -> EntityState)? = null
+
+    /** Publishes [entities] again: [entityEnricher] has something new. */
+    fun republish() {
+        _entities.value = mergedEntities()
+    }
+
     /** Adds or replaces a locally-driven entity and republishes [entities]. */
     fun setLocalEntity(state: EntityState) {
         localEntityStore[state.entityId] = state
@@ -247,8 +260,12 @@ class HaClient(
         if (localEntityStore.remove(entityId) != null) _entities.value = mergedEntities()
     }
 
-    private fun mergedEntities(): EntityMap =
-        if (localEntityStore.isEmpty()) HashMap(entityStore) else HashMap(entityStore).apply { putAll(localEntityStore) }
+    private fun mergedEntities(): EntityMap {
+        val merged = if (localEntityStore.isEmpty()) HashMap(entityStore) else HashMap(entityStore).apply { putAll(localEntityStore) }
+        val enrich = entityEnricher ?: return merged
+        for (entry in merged.entries) entry.setValue(enrich(entry.value))
+        return merged
+    }
 
     @Volatile private var entitiesDirty = false
 

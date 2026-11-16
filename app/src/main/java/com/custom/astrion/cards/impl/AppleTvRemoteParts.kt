@@ -61,7 +61,9 @@ import com.custom.astrion.ui.tapClickable
 import com.custom.astrion.ui.tapCombinedClickable
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /*
@@ -119,20 +121,29 @@ private fun initialsOf(label: String): String {
 @Composable
 internal fun rememberImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
     val image by produceState<ImageBitmap?>(initialValue = null, path, targetPx) {
-        value =
-            when {
-                path == null -> null
-                path.startsWith("http") || path.startsWith("/api/") -> runCatching { ctx.client.fetchBitmap(path) }.getOrNull()
-                else -> withContext(Dispatchers.IO) { decodeIconSampled(path, targetPx) }
-            }
+        value = loadImage(ctx, path, targetPx)
     }
+    return image
+}
+
+/** [rememberImage]'s loading: the picture at [path], or null when there is none or it can't be read. */
+internal suspend fun loadImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
+    val image =
+        when {
+            path == null -> null
+            path.startsWith("http") || path.startsWith("/api/") -> runCatching { ctx.client.fetchBitmap(path) }.getOrNull()
+            else -> withContext(Dispatchers.IO) { decodeIconSampled(path, targetPx) }
+        }
+    // runCatching swallows a cancellation: a load given up for a newer picture (a TMDB poster from
+    // the internet, overtaken by the Apple TV's own artwork) must not put "no picture" over it (1.5.9).
+    currentCoroutineContext().ensureActive()
     return image
 }
 
 /** The current item's cover art, or a TV glyph on an inset tile while there is none. */
 @Composable
 internal fun AtvArtwork(ctx: CardContext, entity: EntityState?, size: Dp, corner: Dp) {
-    val path = entity?.attrString("entity_picture_local") ?: entity?.attrString("entity_picture")
+    val path = entity?.mediaPicture
     val px = with(LocalDensity.current) { size.toPx() }.toInt()
     val art = rememberImage(ctx, path, px)
     Box(

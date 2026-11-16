@@ -43,6 +43,13 @@ data class EntityState(
      * rendering it. */
     fun attrString(key: String): String? = (attributes[key] as? JsonPrimitive)?.contentOrNull
 
+    /**
+     * What a media player plays, as a picture: its own (`entity_picture_local`, else
+     * `entity_picture`), else TMDB's poster (`astrion_poster`, 1.5.9).
+     */
+    val mediaPicture: String?
+        get() = attrString("entity_picture_local") ?: attrString("entity_picture") ?: attrString("astrion_poster")
+
     /** Attribute as Double, or null. Handles ints and numeric strings too. */
     fun attrDouble(key: String): Double? = (attributes[key] as? JsonPrimitive)?.let { prim ->
         prim.doubleOrNull ?: prim.contentOrNull?.toDoubleOrNull()
