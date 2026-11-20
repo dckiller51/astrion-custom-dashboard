@@ -142,42 +142,51 @@ class EpgRegistry(
         val began = System.currentTimeMillis()
         log("guide: downloading $url")
         try {
-            val now = System.currentTimeMillis()
-            val req = Request.Builder().url(url).header("Accept-Encoding", "identity").build()
-            http.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
-                val body = resp.body ?: throw IOException("empty answer")
-                val counted = CountingStream(body.byteStream())
-                val next = read(unpacked(BufferedInputStream(counted, BUF)), now)
-                if (stopped) return
-                bytes = counted.count
-                guide = next
-                dir.mkdirs()
-                file.writeText(next.toJson())
-                meta.edit().putString(KEY_SOURCE, sourceKey()).putLong(KEY_BYTES, bytes).apply()
-                lastError = null
-                val took = (System.currentTimeMillis() - began) / MS
-                val counts = "${next.channels.size} channels kept of ${next.available.size}, ${next.showCount} programmes"
-                log("guide: $counts, ${bytes / KB} KB in $took s")
-            }
+            val next = download(began) ?: return
+            bytes = next.second
+            guide = next.first
+            dir.mkdirs()
+            file.writeText(next.first.toJson())
+            meta.edit().putString(KEY_SOURCE, sourceKey()).putLong(KEY_BYTES, bytes).apply()
+            lastError = null
+            val took = (System.currentTimeMillis() - began) / MS
+            val counts = "${next.first.channels.size} channels kept of ${next.first.available.size}, ${next.first.showCount} programmes"
+            log("guide: $counts, ${bytes / KB} KB in $took s")
         } catch (e: IOException) {
             // A timeout is an InterruptedIOException too: only "stopped" is a stop.
             if (stopped) {
                 log("guide: reading stopped")
                 return
             }
-            lastError = e.message ?: e.javaClass.simpleName
-            log("guide not downloaded: $lastError")
+            failed("not downloaded", e.message ?: e.javaClass.simpleName)
+        } catch (e: NotXmltv) {
+            failed("not read", if (e.root.equals("html", ignoreCase = true)) WEB_PAGE else "not an XMLTV guide (${e.message})")
         } catch (e: XmlPullParserException) {
-            lastError = "not an XMLTV guide (${e.message})"
-            log("guide not read: $lastError")
+            failed("not read", "not an XMLTV guide (${e.message})")
         } catch (e: RuntimeException) {
-            lastError = e.message ?: e.javaClass.simpleName
-            log("guide not read: $lastError")
+            failed("not read", e.message ?: e.javaClass.simpleName)
         } finally {
             fetching = false
         }
         publish()
+    }
+
+    private fun failed(what: String, why: String) {
+        lastError = why
+        log("guide $what: $why")
+    }
+
+    /** The guide at [url] read as it comes, and how many bytes; null when stopped meanwhile. */
+    private fun download(now: Long): Pair<EpgGuide, Long>? {
+        val req = Request.Builder().url(url).header("Accept-Encoding", "identity").build()
+        http.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) throw IOException("HTTP ${resp.code}")
+            // A web page, not a guide: a site's home page given as the address (1.6.0).
+            if (resp.header("Content-Type").orEmpty().contains("text/html", ignoreCase = true)) throw NotXmltv("html")
+            val counted = CountingStream(resp.body?.byteStream() ?: return null)
+            val next = read(unpacked(BufferedInputStream(counted, BUF)), now)
+            return if (stopped) null else next to counted.count
+        }
     }
 
     /** Gzip or plain XML, told by the first two bytes. */
@@ -256,6 +265,9 @@ class EpgRegistry(
 
     companion object {
         private const val TAG = "Epg"
+
+        /** The page shows it as is: what to change, in the address field's own words. */
+        private const val WEB_PAGE = "this address is a web page, not a guide: give the guide file's own address (…xml.gz)"
         private const val META = "astrion_epg"
         private const val KEY_SOURCE = "source"
         private const val KEY_BYTES = "bytes"

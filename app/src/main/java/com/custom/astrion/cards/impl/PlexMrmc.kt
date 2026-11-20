@@ -11,7 +11,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
 /**
- * Playing a Plex film with MrMC on an Apple TV (1.5.9, dckiller51's idea): the new Plex app for
+ * Playing a Plex film with MrMC on an Apple TV (1.6.0, dckiller51's idea): the new Plex app for
  * Apple TV opens on its home screen whatever its links say, and no longer lets a server drive it.
  * MrMC (Kodi for tvOS) plays the film's file straight from the Plex server when asked through its
  * JSON-RPC (*Allow remote control via HTTP*). Pure, so it is unit-tested; MrmcPlayer does the calls.
@@ -65,7 +65,7 @@ internal object PlexMrmc {
 }
 
 /**
- * Playing a Plex item with Rivulet on an Apple TV (1.5.9): a Plex client for tvOS whose own
+ * Playing a Plex item with Rivulet on an Apple TV (1.6.0): a Plex client for tvOS whose own
  * `rivulet://` links start an item where it was left (`play`) or open its page (`detail`). The
  * path form, as the Apple TV's Companion channel drops a link's query. A series or a season
  * (`…/children`) opens its page: there is no one file to play.

@@ -1,5 +1,8 @@
 package com.custom.astrion.epg
 
+/** What was read isn't an XMLTV guide: its first element is [root] (`html`: a web page), not `tv`. */
+class NotXmltv(val root: String) : IllegalStateException("<$root>, not <tv>")
+
 /** A channel of an XMLTV guide: its id ("France2.fr"), its name, its logo. */
 data class EpgChannel(val id: String, val name: String, val icon: String?)
 
@@ -110,12 +113,18 @@ object EpgParse {
         show: (EpgShow) -> Unit
     ) {
         val r = Reader(x, language)
+        var root = true
         while (true) {
             when (x.next()) {
                 XmlTokens.Token.DONE -> return
-                XmlTokens.Token.START -> when (x.name) {
-                    "channel" -> r.channel()?.let(channel)
-                    "programme" -> r.programme(keep, from, to)?.let(show)
+                XmlTokens.Token.START -> {
+                    // A web page (a site's home page given as the address) isn't a guide (1.6.0).
+                    if (root && x.name != "tv") throw NotXmltv(x.name)
+                    root = false
+                    when (x.name) {
+                        "channel" -> r.channel()?.let(channel)
+                        "programme" -> r.programme(keep, from, to)?.let(show)
+                    }
                 }
                 else -> Unit
             }

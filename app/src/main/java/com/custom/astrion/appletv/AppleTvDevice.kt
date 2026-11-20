@@ -354,7 +354,7 @@ class AppleTvDevice(
     /**
      * The artwork of what [playing] plays. An item is its identifier and its title: a live channel
      * keeps one identifier from a programme to the next. A new item drops the last one's artwork
-     * straight away (1.5.9: an Apple TV waking up showed the programme it played before going to
+     * straight away (1.6.0: an Apple TV waking up showed the programme it played before going to
      * sleep). The pushes with no title yet (waking up, reconnecting) leave it be.
      */
     private fun refreshArtwork(playing: MrpPlaying?) {

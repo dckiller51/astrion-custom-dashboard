@@ -1,7 +1,7 @@
 package com.custom.astrion.ui
 
 /**
- * How far a swipe may go between pages (1.5.9, MR RIZK): never past the first or the last page
+ * How far a swipe may go between pages (1.6.0, MR RIZK): never past the first or the last page
  * that isn't fully hidden. Pages never shown (popup pages) at the end of the list used to be
  * swiped onto, drawn as the last page and then left: the last page seemed to repeat, and a quick
  * swipe could slip through to a hidden one. Pure, so it is unit-tested.

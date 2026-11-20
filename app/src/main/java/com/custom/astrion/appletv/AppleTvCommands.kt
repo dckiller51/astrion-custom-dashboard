@@ -192,7 +192,7 @@ internal object AppleTvCommands {
         return when {
             type == "url" -> { c -> c.launch(id) }
             type == "app" -> selectSourceAction(mapOf("source" to id), knownApps)
-            // 1.5.9: a deep link sent as a film or a show ("video", as a card may send it) opens in its app.
+            // 1.6.0: a deep link sent as a film or a show ("video", as a card may send it) opens in its app.
             isDeepLink(id) -> { c -> c.launch(id) }
             else -> null
         }

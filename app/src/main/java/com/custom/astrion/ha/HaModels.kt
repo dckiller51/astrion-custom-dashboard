@@ -45,7 +45,7 @@ data class EntityState(
 
     /**
      * What a media player plays, as a picture: its own (`entity_picture_local`, else
-     * `entity_picture`), else TMDB's poster (`astrion_poster`, 1.5.9).
+     * `entity_picture`), else TMDB's poster (`astrion_poster`, 1.6.0).
      */
     val mediaPicture: String?
         get() = attrString("entity_picture_local") ?: attrString("entity_picture") ?: attrString("astrion_poster")

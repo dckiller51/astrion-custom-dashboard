@@ -14,7 +14,7 @@ import java.io.IOException
 import org.json.JSONObject
 
 /**
- * The web page's TMDB part (1.5.9), kept out of [ConfigServer]:
+ * The web page's TMDB part (1.6.0), kept out of [ConfigServer]:
  *
  *  GET  /tmdb        {configured, language, effectiveLanguage}: never the token itself
  *  POST /tmdb        token (empty: removes it; absent: keeps it), language; restarts TMDB

@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.Velocity
 import com.custom.astrion.config.PageConfig
 
 /**
- * `"hiddenUnlessActivity": "__never__"` (1.5.9, *Never shown*): a page with no dot that a swipe
+ * `"hiddenUnlessActivity": "__never__"` (1.6.0, *Never shown*): a page with no dot that a swipe
  * never lands on, only opened by a tile, a key or a linked page (a popup page, MR RIZK). No
  * Activity has that id, so it's always hidden, and always completely.
  */

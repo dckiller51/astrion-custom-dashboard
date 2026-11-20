@@ -10,7 +10,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 
-/** Where what's playing is looked up (1.5.9): Plex first then TMDB, or only one of them. */
+/** Where what's playing is looked up (1.6.0): Plex first then TMDB, or only one of them. */
 enum class MediaInfoSource(val id: String) {
     AUTO("auto"),
     PLEX("plex"),
@@ -34,7 +34,7 @@ data class PlexSession(
 )
 
 /**
- * What the Plex server says of what plays (1.5.9): exact, in the library's own language, with
+ * What the Plex server says of what plays (1.6.0): exact, in the library's own language, with
  * nothing to guess, where TMDB has to search a cleaned title. Pure, so it is unit-tested.
  */
 object PlexNowPlaying {

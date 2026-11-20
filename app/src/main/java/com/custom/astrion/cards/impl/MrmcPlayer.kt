@@ -27,7 +27,7 @@ internal data class PlexServer(val host: String, val token: String)
 internal data class MrmcTarget(val host: String, val port: Int, val mediaEntity: String, val app: String)
 
 /**
- * Plays a Plex film with MrMC (1.5.9, see [PlexMrmc]): MrMC opened on the Apple TV when it doesn't
+ * Plays a Plex film with MrMC (1.6.0, see [PlexMrmc]): MrMC opened on the Apple TV when it doesn't
  * answer yet, then asked to play the film's file from the Plex server, with a token for it alone.
  * Runs on its own scope: closing the card's pop-up doesn't stop a film on its way.
  */

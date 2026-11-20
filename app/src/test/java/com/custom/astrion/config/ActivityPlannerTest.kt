@@ -271,7 +271,7 @@ class ActivityPlannerTest {
         assertEquals(mapOf("media_player.tv" to false, "amp" to false), plan.powerChanges)
     }
 
-    // ---- The input sent again (1.5.9) ----------------------------------------------------------
+    // ---- The input sent again (1.6.0) ----------------------------------------------------------
 
     @Test
     fun `the input is sent again after its delay, once everything else is done`() {

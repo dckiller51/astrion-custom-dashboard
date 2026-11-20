@@ -22,7 +22,7 @@ import java.util.Locale
 
 /**
  * A film's year, rating and synopsis, when the player gives them (a Zidoo's poster wall, 1.5.8)
- * or TMDB found them (1.5.9): [lines] lines, a tap shows up to [openLines]. Nothing when neither.
+ * or TMDB found them (1.6.0): [lines] lines, a tap shows up to [openLines]. Nothing when neither.
  * The media remote card's player view and the player's details pop-up.
  */
 @Composable
