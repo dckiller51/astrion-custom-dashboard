@@ -7,6 +7,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Animated pictures** (`picture_elements`): `"frames": ["/sdcard/astrion/icons/a.png", …]` with `"frame_ms"` (default 150, at least 40) loops those PNGs over the card's `image`, which stays as the still shown while they load. A path can repeat (a long quiet stretch between two effects) and is loaded only once. The loop stops while the screen is off. The web builder keeps both keys as they are.
 - **No page bar** (*Show the page bar* under the page list; `"showPageIndicator": false`): the bar under the pages (dots, page name, "‹ back") is gone and the pages get its height — for a remote that changes pages only with its keys and tiles, e.g. every page *Never shown* and the colour keys opening them. Its swipe up to a page's linked page goes with it.
 
 ### Fixed
