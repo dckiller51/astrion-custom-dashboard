@@ -30,6 +30,7 @@ let zidoos = [];           // full [{localId, name, entityId, host, mac}] (1.4.6
 let denons = [];           // [{localId, name, entityId, host, port, inputNames, hiddenInputs}] (1.5.4)
 let samsungs = [];         // [{localId, name, entityId, host, mac, paired}] (1.5.3)
 let skys = [];             // [{localId, name, entityId, host, kind: 'skyq' | 'skyhd'}] (1.5.3)
+let hues = [];             // [{localId, name, host, paired, reachable, lights, groups, scenes}] (1.6.1), no key: it stays on the remote
 let lgTvs = [];            // [{localId, name, entityId, host, mac, paired}] (1.5.2), no key: it stays on the remote
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
@@ -83,6 +84,7 @@ async function loadAll() {
     skys = Array.isArray(data.skys) ? data.skys : [];
     samsungs = Array.isArray(data.samsungs) ? data.samsungs : [];
     denons = Array.isArray(data.denons) ? data.denons : [];
+    hues = Array.isArray(data.hues) ? data.hues : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -245,6 +247,7 @@ function renderDevicesList() {
   renderSkys();
   renderSamsungs();
   renderDenons();
+  renderHues();
   renderDirectCounts();
 
   const tileIrCount = document.getElementById('tileIrCount');
@@ -273,7 +276,7 @@ function renderDevicesList() {
 
 // The direct devices (1.4.9) live in one view, a tab per kind of device: the old views' ids
 // still open it, on their tab.
-const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewSky: 'tv', viewSamsung: 'tv', viewZidoo: 'players', viewDenon: 'audio' };
+const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewSky: 'tv', viewSamsung: 'tv', viewZidoo: 'players', viewDenon: 'audio', viewHue: 'light' };
 
 function showView(id) {
   if (DIRECT_TABS[id]) {
@@ -308,11 +311,13 @@ function renderDirectCounts() {
   const tv = appleTvs.length + androidTvs.length + lgTvs.length + skys.length + samsungs.length;
   const players = zidoos.length;
   const audio = denons.length;
+  const light = hues.length;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
   set('directCountTv', tv);
   set('directCountPlayers', players);
   set('directCountAudio', audio);
-  const all = tv + players + audio;
+  set('directCountLight', light);
+  const all = tv + players + audio + light;
   set('tileDirectCount', all ? countLabel(all, 'web_dev_count_direct') : I18N.t('web_dev_direct_none'));
 }
 
@@ -413,6 +418,7 @@ function closeDeviceForms() {
   setDisplay('skyForm', 'none');
   setDisplay('samsungForm', 'none');
   setDisplay('denonForm', 'none');
+  setDisplay('hueForm', 'none');
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -471,6 +477,8 @@ async function openDeviceForm(type) {
     document.getElementById('zidooName').value = '';
     document.getElementById('zidooForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('zidooHost').focus();
+  } else if (type === 'hue') {
+    openHueForm();
   } else if (type === 'denon') {
     document.getElementById('denonForm').style.display = '';
     document.getElementById('denonHost').value = '';
@@ -662,6 +670,12 @@ async function persistHaAndHubs() {
       body.append('denon_host[]', r.host || '');
       body.append('denon_port[]', String(r.port || 8080));
       body.append('denon_inputs[]', JSON.stringify({ names: r.inputNames || {}, hidden: r.hiddenInputs || [], zones: r.zones || 1 }));
+    });
+    body.set('hue_present', '1'); // same for the Hue bridges (1.6.1); their keys stay on the remote
+    hues.forEach(b => {
+      body.append('hue_localid[]', b.localId || '');
+      body.append('hue_name[]', b.name || '');
+      body.append('hue_host[]', b.host || '');
     });
     const res = await fetch('/save-connection', {
       method: 'POST',

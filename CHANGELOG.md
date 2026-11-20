@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.1-beta] - 2026-11-20
+
+### Added
+
+- **Philips Hue bridge, without Home Assistant** (*Devices › Direct devices › Lighting*): find the bridge (or type its IP address), press the button on top of it, **Pair**. Every light and plug becomes `light.hue_<name>`, every room and zone `light.hue_<room>` (all its lights at once), the whole home `light.hue_all`, every scene `scene.hue_<room>_<scene>`, shaped like Home Assistant's Hue integration: the **light card** works as is (brightness, colour wheel and swatches, white from warm to cool within each lamp's range, the lamp's effects: candle, fire…), and so do buttons, scene tiles, hotkeys and Activities. The bridge pushes every change at once (a light switched from the Hue app or a wall switch); a lamp off its power shows unavailable. A light renamed in the Hue app keeps its entity, so its cards keep working. The key the bridge gives stays on the remote. The square bridge (v2) and the Hue Bridge Pro, through their local API (CLIP v2).
+
 ## [1.6.0] - 2026-11-20
 
 Everything since 1.5.0, from the 1.5.1 to 1.5.9 betas and 1.6.0.

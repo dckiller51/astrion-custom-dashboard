@@ -179,6 +179,21 @@ data class LgTvConfig(
 )
 
 /**
+ * One Philips Hue bridge added on the web page (1.6.1), paired once with the button on top of it.
+ * [localId] is the bridge id. [appKey] and [pin] (its certificate's fingerprint) never leave the
+ * remote: the web page only learns it's paired. [entities]: the entity id each light, room, zone
+ * and scene got, by resource id, so it keeps it when renamed in the Hue app.
+ */
+data class HueConfig(
+    val localId: String,
+    val name: String,
+    val host: String,
+    val appKey: String = "",
+    val pin: String = "",
+    val entities: Map<String, String> = emptyMap()
+)
+
+/**
  * A single Harmony Hub the app can talk to directly, bypassing Home
  * Assistant. [localId] is a stable app-generated key (independent of the
  * hub's own numeric [hubId]) used to reference this hub from dashboard.json
@@ -220,6 +235,7 @@ object RemoteSettings {
     private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
     private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
     private const val KEY_DENONS = "denons" // JSON array, see DenonConfig
+    private const val KEY_HUES = "hues" // JSON array, see HueConfig (1.6.1)
     private const val KEY_TMDB_TOKEN = "tmdb_token" // 1.6.0, see tmdb/TmdbRegistry
     private const val KEY_TMDB_LANGUAGE = "tmdb_language"
     private const val KEY_PLEX_HOST = "plex_host" // 1.6.0: the Plex server, for every Plex card
@@ -573,6 +589,42 @@ object RemoteSettings {
                 }
             }
         prefs(context).edit(commit = true) { putString(KEY_LGTVS, array.toString()) }
+    }
+
+    /** All Hue bridges, in the order they were added (1.6.1). */
+    fun hues(context: Context): List<HueConfig> {
+        val raw = prefs(context).getString(KEY_HUES, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entities =
+                    (obj["entities"] as? JsonObject)?.mapNotNull { (rid, v) ->
+                        (v as? JsonPrimitive)?.content?.let { rid to it }
+                    }?.toMap().orEmpty()
+                HueConfig(localId, str("name").ifBlank { "Hue" }, str("host"), str("appKey"), str("pin"), entities)
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveHues(context: Context, bridges: List<HueConfig>) {
+        val array =
+            buildJsonArray {
+                bridges.forEach { b ->
+                    addJsonObject {
+                        put("localId", b.localId)
+                        put("name", b.name)
+                        put("host", b.host)
+                        put("appKey", b.appKey)
+                        put("pin", b.pin)
+                        put("entities", JsonObject(b.entities.mapValues { JsonPrimitive(it.value) }))
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_HUES, array.toString()) }
     }
 
     /** All Denon / Marantz receivers, in the order they were added (1.5.4). */

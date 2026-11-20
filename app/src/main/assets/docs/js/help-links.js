@@ -59,6 +59,7 @@ const SECTION_WIKI_PAGES = {
   web_dev_add_a_lgtv: 'LG-TV',
   web_dev_add_a_zidoo: 'Zidoo-and-Eversolo',
   web_dev_add_a_denon: 'Denon-Marantz',
+  web_dev_add_a_hue: 'Philips-Hue',
   web_dev_backup_and_restore: 'Web-Page',
   web_dev_ir_database: 'IR-Devices',
   web_updates_heading: 'Updates-and-Beta',
