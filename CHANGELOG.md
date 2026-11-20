@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **No page bar** (*Show the page bar* under the page list; `"showPageIndicator": false`): the bar under the pages (dots, page name, "‹ back") is gone and the pages get its height — for a remote that changes pages only with its keys and tiles, e.g. every page *Never shown* and the colour keys opening them. Its swipe up to a page's linked page goes with it.
+
+### Fixed
+
+- **Builder: "Swipe left / right to change page" survived a reload**: a dashboard loaded from the remote or pasted in lost `swipePages: false`, so saving it again turned swiping back on.
+
 ## [1.5.9-beta] - 2026-11-17
 
 ### Added

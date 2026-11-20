@@ -1075,7 +1075,8 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
 
             val backTargetName = resolveBackTargetName(config.pages, shownPage, linkedJump)
 
-            PageIndicator(
+            // `showPageIndicator: false`: no bar at all, so the pager above (weight 1f) takes its height.
+            if (config.showPageIndicator) PageIndicator(
                 pages = config.pages,
                 current = shownPage,
                 activeActivityIds = activeActivityIds,
