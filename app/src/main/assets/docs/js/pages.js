@@ -242,7 +242,7 @@ function openPageDialog(index) {
   document.getElementById('pageDialogLinkedPage').value = isNew ? '' : (dashboardData.pages[index].linkedPage || '');
   document.getElementById('pageDialogLinkedPageMode').value = isNew ? 'page' : (dashboardData.pages[index].linkedPageMode === 'popup' ? 'popup' : 'page');
   document.getElementById('pageDialogPopupWidth').value = isNew ? 70 : Math.round((dashboardData.pages[index].popupWidth ?? 0.7) * 100);
-  // 1.5.9: "auto", as tall as the page's cards.
+  // 1.6.0: "auto", as tall as the page's cards.
   const autoHeight = !isNew && dashboardData.pages[index].popupHeight === 'auto';
   document.getElementById('pageDialogPopupHeightAuto').checked = autoHeight;
   document.getElementById('pageDialogPopupHeight').disabled = autoHeight;
@@ -402,7 +402,7 @@ function populatePageLinkedPageSelect(excludeIndex) {
 function populatePageHiddenUnlessActivitySelect() {
   const select = document.getElementById('pageDialogHiddenUnlessActivity');
   const options = collectTrackableActivities();
-  // 1.5.9: "__never__" (HiddenPages.kt PAGE_NEVER_SHOWN), a page only opened by a tile, a key or a linked page.
+  // 1.6.0: "__never__" (HiddenPages.kt PAGE_NEVER_SHOWN), a page only opened by a tile, a key or a linked page.
   select.innerHTML = `<option value="">${I18N.t('web_page_hidden_always')}</option>` +
     `<option value="__never__">${I18N.t('web_page_hidden_never')}</option>` +
     options.map(o => `<option value="${o.id.replace(/"/g, '&quot;')}">${o.label}</option>`).join('');

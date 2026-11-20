@@ -44,7 +44,11 @@ class ZidooRoutes(private val context: Context) {
         if (!HOST.matches(host)) return error(Response.Status.BAD_REQUEST, "invalid address")
         val model = ZidooClient {
             host
-        }.model() ?: return error(Response.Status.SERVICE_UNAVAILABLE, "no Zidoo answers at $host:${ZidooClient.PORT}")
+        }.model()
+            ?: return error(
+                Response.Status.SERVICE_UNAVAILABLE,
+                HostNames.unresolved(host) ?: "no Zidoo answers at $host:${ZidooClient.PORT}"
+            )
         return json(
             Response.Status.OK,
             JSONObject()

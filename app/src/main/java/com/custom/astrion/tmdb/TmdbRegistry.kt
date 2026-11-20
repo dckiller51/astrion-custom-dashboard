@@ -17,12 +17,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 
 /**
- * What media players play, in Astrion (1.5.9, Zavie's idea): a player that plays a film or a
+ * What media players play, in Astrion (1.6.0, Zavie's idea): a player that plays a film or a
  * series without saying what it is about gets its synopsis, year, rating and poster as attributes
  * (`astrion_overview`, `astrion_year`, `astrion_rating`, `astrion_poster`, and where they come from
  * in `astrion_meta_source`), for every card. From the Plex server set on the web page when it plays
  * that title ([plex]: exact, in the library's language), else from TMDB ([tmdb]: a search on the
- * title); [MediaInfoSource] picks one or both. One lookup per title, kept in memory; the tokens
+ * title); [MediaInfoSource] picks one or both. Live TV: the TV guide's programme on air under that
+ * title, when a guide is set ([epg]). One lookup per title, kept in memory; the tokens
  * never leave the remote but for their own server. A player that already says them (a Zidoo added
  * in Astrion) is left alone.
  */
@@ -30,7 +31,9 @@ class TmdbRegistry(
     private val tmdb: TmdbClient?,
     private val plex: PlexSessionsClient?,
     private val language: String,
-    private val log: (String) -> Unit = { Log.d(TAG, it) }
+    private val log: (String) -> Unit = { Log.d(TAG, it) },
+    /** The TV guide (1.6.0): what's on air under a title (the player's, then the cleaned one), see epg/EpgRegistry. */
+    private val epg: ((String, String?) -> TmdbInfo?)? = null
 ) {
     private val cache =
         object : LinkedHashMap<String, TmdbInfo?>(CACHE, LOAD, true) {
@@ -60,24 +63,61 @@ class TmdbRegistry(
     }
 
     /** [e] with what's known of what it plays; a lookup started when not yet asked. */
-    fun enrich(e: EntityState): EntityState {
-        if (e.domain != "media_player" || e.state !in ACTIVE || e.attributes.containsKey(OVERVIEW)) return e
+    fun enrich(entity: EntityState): EntityState {
+        if (entity.domain != "media_player" || entity.state !in ACTIVE || entity.attributes.containsKey(OVERVIEW)) return entity
+        val e = withEpisode(entity)
         val q = TmdbMatch.queryOf(e::attrString) ?: return e
-        val key = q.key
+        live(e, q)?.let { return with(e, it) }
+        val plexPlayer = plexPlays(e)
+        // A local library's player (Plex, Kodi, a Zidoo…, 1.6.0, Zavie): its server knows what it
+        // plays, TMDB isn't asked. Plex set on the web page still answers for Plex.
+        val local = TmdbMatch.isLocalPlayer(e.attrString("app_name"), e.entityId)
+        if (local && !plexPlayer) return e
+        val key = q.key + if (local) "|local" else ""
         synchronized(cache) {
             if (cache.containsKey(key)) return cache[key]?.let { with(e, it) } ?: e
         }
-        if (plex == null && (tmdb == null || refused)) return e
-        // The player says it plays Plex (its app, or Home Assistant's Plex player itself).
-        val plexPlayer = "plex" in e.attrString("app_name")?.lowercase().orEmpty() || "plex" in e.entityId
-        if (inFlight.add(key)) runCatching { executor.execute { lookup(q, plexPlayer) } }.onFailure { inFlight.remove(key) }
+        ask(q, key, plexPlayer, !local)
         return e
     }
 
-    private fun lookup(q: TmdbQuery, plexPlayer: Boolean) {
+    /** A lookup for [q], unless one is under way or nothing is left to ask. */
+    private fun ask(q: TmdbQuery, key: String, plexPlayer: Boolean, tmdbToo: Boolean) {
+        if (plex == null && (tmdb == null || refused)) return
+        if (inFlight.add(key)) runCatching { executor.execute { lookup(q, key, plexPlayer, tmdbToo) } }.onFailure { inFlight.remove(key) }
+    }
+
+    /**
+     * An Apple TV or CANAL+ episode says "Saison 2, ép. 5" as its artist (1.6.0, Zavie): its season
+     * and episode as Home Assistant's attributes, so the cards show "S2 · E5".
+     */
+    private fun withEpisode(e: EntityState): EntityState {
+        if (e.attributes.containsKey("media_season")) return e
+        val (season, episode) = TmdbMatch.episodeOf(e.attrString("media_artist")) ?: return e
+        val extra = mapOf("media_season" to JsonPrimitive(season), "media_episode" to JsonPrimitive(episode))
+        return e.copy(attributes = JsonObject(e.attributes + extra))
+    }
+
+    /**
+     * Live TV: the guide's programme on air under [e]'s title, exactly and for today (not cached:
+     * tomorrow's news has another synopsis). Plex first when the player plays it.
+     */
+    private fun live(e: EntityState, q: TmdbQuery): TmdbInfo? {
+        val guide = epg ?: return null
+        if (plexPlays(e)) return null
+        return guide(e.attrString("media_title") ?: q.title, q.title)
+    }
+
+    /** The player says it plays Plex (its app, or Home Assistant's Plex player itself). */
+    private fun plexPlays(e: EntityState): Boolean {
+        if (plex == null) return false
+        return "plex" in e.attrString("app_name")?.lowercase().orEmpty() || "plex" in e.entityId
+    }
+
+    private fun lookup(q: TmdbQuery, key: String, plexPlayer: Boolean, tmdbToo: Boolean) {
         try {
-            val info = plexInfo(q, plexPlayer) ?: tmdbInfo(q)
-            synchronized(cache) { cache[q.key] = info }
+            val info = plexInfo(q, plexPlayer, tmdbToo) ?: if (tmdbToo) tmdbInfo(q) else null
+            synchronized(cache) { cache[key] = info }
             val found = info?.let { "${it.title} (${it.year ?: "?"}), from ${it.source}" } ?: "nothing found"
             log("\"${q.title}\": $found")
             ha?.republish()
@@ -90,12 +130,12 @@ class TmdbRegistry(
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         } finally {
-            inFlight.remove(q.key)
+            inFlight.remove(key)
         }
     }
 
     /** What the Plex server plays under [q]'s title; asked again a moment later for a Plex player (its session may not be listed yet). */
-    private fun plexInfo(q: TmdbQuery, plexPlayer: Boolean): TmdbInfo? {
+    private fun plexInfo(q: TmdbQuery, plexPlayer: Boolean, tmdbToo: Boolean): TmdbInfo? {
         val client = plex ?: return null
         return try {
             val found =
@@ -109,7 +149,7 @@ class TmdbRegistry(
             found?.let { PlexNowPlaying.infoOf(it, ::plexArtUrl) }
         } catch (e: IOException) {
             // With TMDB as well, TMDB answers instead; Plex alone: asked again with the next update.
-            if (tmdb == null || refused) throw e
+            if (!tmdbToo || tmdb == null || refused) throw e
             log("Plex didn't answer (${e.message}): TMDB instead")
             null
         }
@@ -226,10 +266,15 @@ fun tmdbLanguageOf(context: Context): String {
 }
 
 /**
- * Starts what's-playing lookups (1.5.9) from the web page's settings: the Plex server and TMDB,
+ * Starts what's-playing lookups (1.6.0) from the web page's settings: the Plex server and TMDB,
  * each when set and allowed by [MediaInfoSource]; null when neither is.
  */
-fun installTmdb(context: Context, haClient: HaClient, log: (String) -> Unit = {}): TmdbRegistry? {
+fun installTmdb(
+    context: Context,
+    haClient: HaClient,
+    log: (String) -> Unit = {},
+    epg: ((String, String?) -> TmdbInfo?)? = null
+): TmdbRegistry? {
     val source = MediaInfoSource.of(RemoteSettings.mediaInfoSource(context))
     val tmdb =
         RemoteSettings
@@ -239,7 +284,7 @@ fun installTmdb(context: Context, haClient: HaClient, log: (String) -> Unit = {}
     val host = RemoteSettings.plexHost(context)
     val token = RemoteSettings.plexToken(context)
     val plex = if (host.isNotBlank() && token.isNotBlank() && source != MediaInfoSource.TMDB) PlexSessionsClient(host, token) else null
-    if (tmdb == null && plex == null) return null
-    log("what's playing: ${listOfNotNull(plex?.let { "Plex" }, tmdb?.let { "TMDB" }).joinToString(" then ")}")
-    return TmdbRegistry(tmdb, plex, tmdbLanguageOf(context), log).also { it.start(haClient) }
+    if (tmdb == null && plex == null && epg == null) return null
+    log("what's playing: ${listOfNotNull(plex?.let { "Plex" }, epg?.let { "TV guide" }, tmdb?.let { "TMDB" }).joinToString(" then ")}")
+    return TmdbRegistry(tmdb, plex, tmdbLanguageOf(context), log, epg).also { it.start(haClient) }
 }

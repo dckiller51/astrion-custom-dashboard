@@ -237,7 +237,7 @@ class HaClient(
     var localForecastHandler: ((entityId: String) -> JsonArray?)? = null
 
     /**
-     * Optional extra for every entity as it's published (1.5.9: TMDB's synopsis, year, rating and
+     * Optional extra for every entity as it's published (1.6.0: TMDB's synopsis, year, rating and
      * poster on a media player, see [com.custom.astrion.tmdb.TmdbRegistry]): returns the entity
      * as is when it has nothing to add. Called often: it must answer from what it already knows.
      */
@@ -252,6 +252,17 @@ class HaClient(
     /** Adds or replaces a locally-driven entity and republishes [entities]. */
     fun setLocalEntity(state: EntityState) {
         localEntityStore[state.entityId] = state
+        _entities.value = mergedEntities()
+    }
+
+    /**
+     * Several locally-driven entities at once, and [remove] gone, republished once (1.6.0: the TV
+     * guide's channels every minute, rather than one republish per channel).
+     */
+    fun setLocalEntities(states: Collection<EntityState>, remove: Collection<String> = emptyList()) {
+        if (states.isEmpty() && remove.isEmpty()) return
+        states.forEach { localEntityStore[it.entityId] = it }
+        remove.forEach { localEntityStore.remove(it) }
         _entities.value = mergedEntities()
     }
 
@@ -448,6 +459,19 @@ class HaClient(
                 null
             }
         }
+
+    /**
+     * A Home Assistant player's picture asked again a little later (see [MediaArt]): [show] gets
+     * each answer. Returns at once for any other picture; cancelled with its caller.
+     */
+    suspend fun settleArt(path: String?, targetPx: Int = screenLongEdgePx(), cache: Boolean = false, show: (ImageBitmap) -> Unit) {
+        if (path == null || !MediaArt.settles(path)) return
+        for (ms in MediaArt.AGAIN_MS) {
+            delay(ms)
+            if (cache) artCache.remove(path)
+            fetchBitmap(path, targetPx, cache)?.let(show)
+        }
+    }
 
     private fun screenLongEdgePx(): Int = Resources.getSystem().displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
 

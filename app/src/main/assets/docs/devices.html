@@ -74,6 +74,11 @@
                     <span class="tile-name" data-i18n="web_tmdb_title">Films &amp; series (TMDB)</span>
                     <span class="tile-count" id="tileTmdbCount" data-i18n="web_tmdb_tile_off">Not set</span>
                 </button>
+                <button type="button" class="tile tile-epg" onclick="showView('viewEpg')">
+                    <span class="tile-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M8 5v14M12 14h6M12 17h4"></path></svg></span>
+                    <span class="tile-name" data-i18n="web_epg_title">TV guide</span>
+                    <span class="tile-count" id="tileEpgCount" data-i18n="web_epg_tile_off">Not set</span>
+                </button>
             </div>
 
             <div class="utility-row">
@@ -704,18 +709,25 @@
             <div id="irDatabaseFilesList"></div>
         </div>
 
-        <!-- ---- Plex server (1.5.9, js/plex.js) ------------------------------ -->
+        <!-- ---- Plex server (1.6.0, js/plex.js) ------------------------------ -->
         <div id="viewPlexServer" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
             <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 4h5l5 8-5 8H8l5-8z"></path></svg><span data-i18n="web_plexdev_title">Plex server</span></h2>
             <div class="section-box" id="plexServerBox"></div>
         </div>
 
-        <!-- ---- TMDB (1.5.9, js/tmdb.js) ------------------------------------- -->
+        <!-- ---- TMDB (1.6.0, js/tmdb.js) ------------------------------------- -->
         <div id="viewTmdb" class="category-view">
             <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
             <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"></path></svg><span data-i18n="web_tmdb_title">Films &amp; series (TMDB)</span></h2>
             <div class="section-box" id="tmdbBox"></div>
+        </div>
+
+        <!-- ---- TV guide (1.6.0, js/epg.js) --------------------------------- -->
+        <div id="viewEpg" class="category-view">
+            <button type="button" class="back-link" onclick="showView('viewHome')" data-i18n="web_dev_devices">← Devices</button>
+            <h2 class="view-title"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18M8 5v14M12 14h6M12 17h4"></path></svg><span data-i18n="web_epg_title">TV guide</span></h2>
+            <div class="section-box" id="epgBox"></div>
         </div>
 
         <!-- ---- Built-in weather (1.3.2, js/weather.js) ---------------------- -->
@@ -811,6 +823,7 @@
 <script src="js/i18n.js"></script>
 <script src="js/weather.js"></script>
 <script src="js/tmdb.js"></script>
+<script src="js/epg.js"></script>
 <script src="js/plex.js"></script>
 <script src="js/androidtv.js"></script>
 <script src="js/zidoo.js"></script>

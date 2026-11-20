@@ -33,6 +33,9 @@ class SkyClient(private val host: () -> String, private val skyQ: Boolean) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<SkyProtocol.Programme>>?) = size > GUIDE_CACHE
     }
 
+    /** When a channel's day came back empty, to ask again later (guarded by [guide]). */
+    private val guideMissedAt = HashMap<String, Long>()
+
     // ---- keys -----------------------------------------------------------------------------------
 
     /** Presses Sky key [name] (see [SkyProtocol.KEYS]); false when the box didn't take it. */
@@ -133,8 +136,29 @@ class SkyClient(private val host: () -> String, private val skyQ: Boolean) {
     fun onNowAndNext(sid: String, country: String?, nowS: Long): Pair<SkyProtocol.Programme?, SkyProtocol.Programme?> {
         val day = SkyProtocol.today(nowS)
         val key = "$sid/$day"
-        val list = synchronized(guide) { guide[key] } ?: schedule(sid, country, day).also { synchronized(guide) { guide[key] = it } }
+        val list = synchronized(guide) { guide[key] } ?: read(key, sid, country, day)
         return SkyProtocol.onNow(list, nowS) to SkyProtocol.onNext(list, nowS)
+    }
+
+    /**
+     * A channel's day from Sky's guide, kept when it has programmes. An empty answer (no internet,
+     * Sky's service down) is asked again after [GUIDE_RETRY_MS], not the next day (1.6.0).
+     */
+    private fun read(key: String, sid: String, country: String?, day: LocalDate): List<SkyProtocol.Programme> {
+        val now = System.currentTimeMillis()
+        val missed = synchronized(guide) { guideMissedAt[key] }
+        if (missed != null && now - missed < GUIDE_RETRY_MS) return emptyList()
+        val got = schedule(sid, country, day)
+        synchronized(guide) {
+            if (got.isEmpty()) {
+                if (guideMissedAt.size >= GUIDE_CACHE) guideMissedAt.clear()
+                guideMissedAt[key] = now
+            } else {
+                guide[key] = got
+                guideMissedAt.remove(key)
+            }
+        }
+        return got
     }
 
     private fun schedule(sid: String, country: String?, day: LocalDate): List<SkyProtocol.Programme> {
@@ -172,6 +196,7 @@ class SkyClient(private val host: () -> String, private val skyQ: Boolean) {
         private const val MAX_ROUNDS = 10
         private const val CONTROL_RETRY_MS = 60_000L
         private const val GUIDE_CACHE = 64
+        private const val GUIDE_RETRY_MS = 10 * 60_000L
         private const val LOAD = 0.75f
         private const val BANNER_MS = 2_000
 

@@ -1,4 +1,4 @@
-// ---- TMDB (1.5.9) -----------------------------------------------------------------
+// ---- TMDB (1.6.0) -----------------------------------------------------------------
 //
 // The user's own TMDB token, kept on the remote (GET/POST /tmdb, web/TmdbRoutes.kt): the remote
 // then gives every media player that plays a film or a series its synopsis, year, rating and

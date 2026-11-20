@@ -227,6 +227,7 @@ private fun NowPlaying(e: EntityState, client: HaClient, palette: ClockPalette) 
     val artPath = e.mediaPicture
     val art by produceState<ImageBitmap?>(initialValue = null, artPath) {
         value = artPath?.let { runCatching { client.fetchBitmap(it, cache = true) }.getOrNull() }
+        client.settleArt(artPath, cache = true) { value = it }
     }
     val subtitle =
         listOfNotNull(e.attrString("media_series_title"), e.attrString("media_artist"))

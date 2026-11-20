@@ -627,6 +627,11 @@ function updateCardFormInputs() {
   } else if (type === 'zidoo') {
     container.innerHTML = zidooCardFormHtml();
     fillMediaApps({});
+  } else if (type === 'tv_guide') {
+    container.innerHTML = tvGuideFormHtml();
+    window._pendingTvGuide = [];
+    renderTvGuideRows();
+    tvGuideLoadKnown();
   } else if (type === 'info') {
     container.innerHTML = infoFormHtml();
     window._pendingInfoBlocks = [];
@@ -698,7 +703,7 @@ function updateCardFormInputs() {
   // (see haEntityFieldHtml above), not a free-text field to autocomplete.
   ['optRemoteEntity', 'optMediaEntity', 'optMuteEntity', 'optSgMaster',
     'optCalendarEntity', 'optMapImage', 'giEntityId',
-    'optPlexMediaEntity', 'optPlexPlayEntity', 'optVisEntity', 'giVisEntity'].forEach(id => {
+    'optPlexMediaEntity', 'optPlexPlayEntity', 'optTvGuidePlayer', 'optVisEntity', 'giVisEntity'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const dom = id === 'optRemoteEntity' ? 'remote'
@@ -708,6 +713,7 @@ function updateCardFormInputs() {
       : id === 'optMapImage' ? 'image'
       : id === 'optPlexMediaEntity' ? 'media_player'
       : id === 'optPlexPlayEntity' ? 'media_player'
+      : id === 'optTvGuidePlayer' ? 'media_player'
       : null; // giEntityId, optVisEntity, giVisEntity — any domain (scene.*, script.*, media_player.*, …)
     attachEntityAutocomplete(el, dom);
   });
@@ -1846,6 +1852,8 @@ function fillCardForm(card) {
     fillZidooCardForm(o);
   } else if (type === 'media_remote') {
     fillMediaRemoteForm(o);
+  } else if (type === 'tv_guide') {
+    fillTvGuideForm(o);
   } else if (type === 'info') {
     fillInfoForm(o);
   } else if (type === 'plex') {
@@ -2184,13 +2192,15 @@ function addCardToPage() {
     if (!collectZidooCardForm(newCard.options)) return;
   } else if (type === 'media_remote') {
     if (!collectMediaRemoteForm(newCard.options)) return;
+  } else if (type === 'tv_guide') {
+    if (!collectTvGuideForm(newCard.options)) return;
   } else if (type === 'info') {
     if (!collectInfoForm(newCard.options)) return;
   } else if (type === 'plex') {
     const plexHost = document.getElementById('optPlexHost').value.trim();
     const plexToken = document.getElementById('optPlexToken').value.trim();
     const plexMediaEntity = document.getElementById('optPlexMediaEntity').value.trim();
-    // 1.5.9: host and token may stay empty: the remote's Plex server (Devices › Plex server) is used.
+    // 1.6.0: host and token may stay empty: the remote's Plex server (Devices › Plex server) is used.
     if (!plexMediaEntity || (!plexHost) !== (!plexToken)) {
       alert(I18N.t('web_card_alert_plex_fields'));
       return;
@@ -2215,7 +2225,7 @@ function addCardToPage() {
     const plexItemsPerRow = parseInt(document.getElementById('optPlexItemsPerRow').value, 10);
     if (!isNaN(plexItemsPerRow) && plexItemsPerRow !== 12) newCard.options.items_per_row = plexItemsPerRow;
     if (!document.getElementById('optPlexShowSearch').checked) newCard.options.show_search = false;
-    // 1.5.9: Rivulet or MrMC on the Apple TV plays the film (Plex for Apple TV ignores the item in its links).
+    // 1.6.0: Rivulet or MrMC on the Apple TV plays the film (Plex for Apple TV ignores the item in its links).
     ['play_with', 'mrmc_host', 'mrmc_port', 'mrmc_app'].forEach(k => delete newCard.options[k]);
     if (document.getElementById('optPlexPlayWith').value === 'rivulet') newCard.options.play_with = 'rivulet';
     if (document.getElementById('optPlexPlayWith').value === 'mrmc') {
@@ -2541,7 +2551,7 @@ function resetLightSwatches() {
   renderLightSwatches();
 }
 
-/** The Plex card's MrMC fields, shown when it plays with MrMC (1.5.9). */
+/** The Plex card's MrMC fields, shown when it plays with MrMC (1.6.0). */
 function plexPlayWithChanged() {
   const box = document.getElementById('optPlexMrmc');
   const sel = document.getElementById('optPlexPlayWith');

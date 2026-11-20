@@ -76,6 +76,11 @@ class AndroidTvConnection(
         if (!quiet && !state.connected) thread?.interrupt() // ends the wait: try again now
     }
 
+    /** Not connected: tries again now instead of after the back-off (a TV just woken, 1.6.0). */
+    fun retryNow() {
+        if (!state.connected) thread?.interrupt()
+    }
+
     /** Presses a key ([direction]: short press by default, or start/end of a long press). */
     fun sendKey(keyCode: Int, direction: Int = RemoteMessages.DIRECTION_SHORT) = send(RemoteMessages.keyInject(keyCode, direction))
 

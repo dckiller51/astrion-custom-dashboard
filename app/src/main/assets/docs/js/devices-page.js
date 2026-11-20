@@ -620,6 +620,7 @@ async function persistHaAndHubs() {
       body.append('adtv_mac[]', tv.mac || '');
       body.append('adtv_cert[]', tv.certSha256 || '');
       body.append('adtv_helper[]', tv.helperCode || '');
+      body.append('adtv_blewake[]', tv.bleWake || '');
     });
     body.set('zidoo_present', '1'); // same for the Zidoo list (1.4.6)
     zidoos.forEach(z => {

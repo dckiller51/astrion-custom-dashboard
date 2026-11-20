@@ -16,7 +16,7 @@ import okhttp3.Request
 import org.json.JSONObject
 
 /**
- * The web page's Plex server (1.5.9), kept out of [ConfigServer] and out of dashboard.json:
+ * The web page's Plex server (1.6.0), kept out of [ConfigServer] and out of dashboard.json:
  *
  *  GET  /plex        {configured, host, mediaInfo}: never the token itself
  *  POST /plex        host, token (empty: removes it; absent: keeps it), mediaInfo ("auto", "plex", "tmdb")

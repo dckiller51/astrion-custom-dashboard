@@ -226,7 +226,7 @@ data class PageConfig(
      * a full page, undermining the point of using popup mode at all. */
     val popupWidthFraction: Float = 0.7f,
     /** Popup height as a fraction of the screen height (0–1). See
-     * [popupWidthFraction]. Defaults to 0.5. 0: "auto" (1.5.9), as tall as
+     * [popupWidthFraction]. Defaults to 0.5. 0: "auto" (1.6.0), as tall as
      * the page's cards, up to almost the screen. */
     val popupHeightFraction: Float = 0.5f,
     /** Where the popup is anchored on screen: "center" (default), "top",
@@ -618,7 +618,7 @@ data class ActivityDeviceConfig(
      * the last device and on stop (power-off runs with no delays between
      * devices — nothing downstream needs to wait for it). */
     val delayAfterMs: Int = 0,
-    /** Send the input again this long after it was sent (1.5.9), at the end of the start: a TV
+    /** Send the input again this long after it was sent (1.6.0), at the end of the start: a TV
      * that misses it while still switching (leaving an app, a box powering on). 0: never. */
     val inputAgainAfterMs: Int = 0
 )

@@ -42,7 +42,9 @@ class SkyRoutes(private val context: Context) {
         session.parseBody(HashMap())
         val host = session.parameters["host"]?.firstOrNull()?.trim().orEmpty()
         if (!HOST.matches(host)) return error(Response.Status.BAD_REQUEST, "invalid address")
-        val kind = SkyClient.check(host) ?: return error(Response.Status.SERVICE_UNAVAILABLE, "no Sky box answers at $host")
+        val kind =
+            SkyClient.check(host)
+                ?: return error(Response.Status.SERVICE_UNAVAILABLE, HostNames.unresolved(host) ?: "no Sky box answers at $host")
         val model = if (kind == "skyq") SkyClient({ host }, true).deviceInfo()?.model.orEmpty() else ""
         return json(Response.Status.OK, JSONObject().put("kind", kind).put("model", model))
     }

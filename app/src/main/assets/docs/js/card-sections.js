@@ -75,8 +75,8 @@ const CARD_SECTIONS = {
   },
   media_remote: {
     essential: ['optName', 'optMrPlayer', 'optMrRemote', 'optMrVolumeEntity', 'optMrKind'],
-    display: ['optMrNowPlaying', 'optMrName', 'optMrPower', 'optMrSkip', 'optMrQuality', 'optMrAutoPlayer', 'optMrSynopsis', 'optMrDetailsPage', 'optMrSize', 'optMrKeyShape', 'optMrCover', 'mrOrderList'],
-    controls: ['optMrDpad', 'optMrVolume', 'optMrChannels', 'optMrKeypad'],
+    display: ['optMrNowPlaying', 'optMrName', 'optMrPower', 'optMrSkip', 'optMrPrevious', 'optMrPlayPause', 'optMrNext', 'optMrQuality', 'optMrAutoPlayer', 'optMrSynopsis', 'optMrDetailsPage', 'optMrSize', 'optMrKeyShape', 'optMrCover', 'mrOrderList'],
+    controls: ['optMrNavOneRow', 'optMrDpad', 'optMrVolume', 'optMrChannels', 'optMrKeypad'],
     apps: ['optMrSources', 'optMrBrowse', 'optTvAppsStyle', 'optTvShowApps', 'tvAppPackages', 'tvAppsList'],
     library: ['optMrTracks', 'optMrQueue', 'optMrIo', 'optMrSearch', 'optMrSearchPlayer']
   },

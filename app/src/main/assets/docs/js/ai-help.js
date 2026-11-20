@@ -5,6 +5,20 @@
 // guide, the card pages, the current dashboard.json (secrets left out) and the remote's entity ids.
 // The assistant's answer is pasted back into "Load an existing dashboard.json", and undo is there.
 
+/**
+ * Every card type and its wiki page (1.6.0): the assistant gets each one's link, as the home page
+ * doesn't list them.
+ */
+const AI_CARD_PAGES = [
+  ['title', 'Card-Title'], ['light', 'Card-Light'], ['switch', 'Card-Switch'], ['cover', 'Card-Cover'],
+  ['fan', 'Card-Fan'], ['climate', 'Card-Climate'], ['select', 'Card-Select'], ['source_select', 'Card-SourceSelect'],
+  ['monitor', 'Card-Monitor'], ['info', 'Card-Info'], ['media_player', 'Card-MediaPlayer'], ['media_remote', 'Card-MediaRemote'],
+  ['speaker_group', 'Card-SpeakerGroup'], ['camera', 'Card-Camera'], ['plex', 'Card-Plex'], ['tv_guide', 'Card-TvGuide'],
+  ['xbox', 'Card-Xbox'], ['playstation', 'Card-PlayStation'], ['zidoo', 'Card-Zidoo'], ['button_grid', 'Card-ButtonGrid'],
+  ['scene_grid', 'Card-SceneGrid'], ['apple_tv_remote, tv_remote', 'Card-Remote'], ['clock_weather', 'Card-ClockWeather'],
+  ['picture_elements', 'Card-PictureElements'], ['vacuum', 'Card-Vacuum'], ['row', 'Card-Row']
+];
+
 /** Keys whose values never leave the builder (a Plex token, a password…). */
 const AI_SECRET = /token|password|passwd|secret|api_?key/i;
 
@@ -33,6 +47,7 @@ function aiPrompt() {
     I18N.t('web_ai_prompt_docs'),
     `- ${WIKI_BASE}${guide}`,
     `- ${WIKI_BASE}Home`,
+    ...AI_CARD_PAGES.map(([type, page]) => `- ${type}: ${WIKI_BASE}${page}`),
     '',
     I18N.t('web_ai_prompt_rules'),
     '',

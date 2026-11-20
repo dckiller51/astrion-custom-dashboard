@@ -112,6 +112,8 @@ import kotlin.math.abs
  *     "apps": [ { "name": "Plex", "app": "com.plexapp.android" } ],
  *     "apps_style": "icons", "show_apps": true,         // as the TV remote card: "buttons" (default) or "icons"; false hides the shortcuts
  *     "show_skip": true, "show_browse": true, "show_sources": true, "show_keypad": true,
+ *     "show_previous": true, "show_play_pause": true, "show_next": true,  // 1.6.0: each transport key
+ *     "nav_one_row": false,                // 1.6.0: Back · Apps · Home · 0–9 · Menu in one row
  *     "now_playing_entity": "media_player.plex_tv",  // 1.5.8: what plays, from this player while it plays
  *     "show_synopsis": true,               // 1.5.8: player view, a film's year, rating and synopsis (Zidoo)
  *     "show_dpad": true, "show_volume": true, "show_channels": true,
@@ -614,13 +616,16 @@ class MediaRemoteCard : CardRenderer {
 
         /**
          * The picture at [path], the previous one staying up only while it loads: gone as soon as
-         * the player has none, or its new one can't be read (1.5.9: an Apple TV waking up kept
+         * the player has none, or its new one can't be read (1.6.0: an Apple TV waking up kept
          * the show it played before going to sleep).
          */
         @Composable
         private fun rememberSteadyImage(path: String?, px: Int): ImageBitmap? {
             var shown by remember { mutableStateOf<ImageBitmap?>(null) }
-            LaunchedEffect(path, px) { shown = loadImage(ctx, path, px) }
+            LaunchedEffect(path, px) {
+                shown = loadImage(ctx, path, px)
+                ctx.client.settleArt(path) { shown = it }
+            }
             return shown
         }
 
@@ -658,14 +663,17 @@ class MediaRemoteCard : CardRenderer {
         @Composable
         fun Transport(e: EntityState) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                // Each key can be hidden (1.6.0, a user's request: a player whose chapters do nothing).
                 if (config.bool("show_skip", true)) Key(Icons.Filled.Replay10, "−10 s") { skip(e, -SKIP_S) }
-                Key(MdiIcons.SkipPrevious, "Previous") { media(e, "media_previous_track") }
-                Key(
-                    if (e.state == "playing") Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    "Play/Pause",
-                    big = true
-                ) { media(e, "media_play_pause") }
-                Key(MdiIcons.SkipNext, "Next") { media(e, "media_next_track") }
+                if (config.bool("show_previous", true)) Key(MdiIcons.SkipPrevious, "Previous") { media(e, "media_previous_track") }
+                if (config.bool("show_play_pause", true)) {
+                    Key(
+                        if (e.state == "playing") Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        "Play/Pause",
+                        big = true
+                    ) { media(e, "media_play_pause") }
+                }
+                if (config.bool("show_next", true)) Key(MdiIcons.SkipNext, "Next") { media(e, "media_next_track") }
                 if (config.bool("show_skip", true)) Key(Icons.Filled.Forward10, "+10 s") { skip(e, SKIP_S) }
             }
         }
@@ -758,18 +766,43 @@ class MediaRemoteCard : CardRenderer {
          */
         @Composable
         fun NavRow() {
+            if (navOneRow()) {
+                NavOneRow()
+                return
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 SideSlot { if (config.bool("show_sources", true)) Key(Icons.Filled.Apps, "Apps") { popup = Popup.SOURCES } }
                 Key(Icons.Filled.Home, "Home") { press("home") }
-                val settings = if (isZidoo()) ctx.entities[playerId]?.attrString("astrion_settings_app") else null
-                SideSlot {
-                    when {
-                        settings != null -> Key(Icons.Filled.Settings, "Settings") { mp("select_source", "source" to settings) }
-                        keys.of("menu") != null -> Key(Icons.Filled.Menu, "Menu") { press("menu") }
-                    }
-                }
+                SideSlot { MenuKey() }
             }
         }
+
+        /**
+         * `nav_one_row` (1.6.0, a user's request): Back · Apps · HOME · 0–9 · Menu in one row, a row
+         * saved; Back and the keypad then leave the D-pad's sides.
+         */
+        @Composable
+        private fun NavOneRow() {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Key(Icons.AutoMirrored.Filled.ArrowBack, "Back") { press("back") }
+                if (config.bool("show_sources", true)) Key(Icons.Filled.Apps, "Apps") { popup = Popup.SOURCES }
+                Key(Icons.Filled.Home, "Home") { press("home") }
+                if (config.bool("show_keypad", true)) Key(Icons.Filled.Dialpad, "Keypad") { popup = Popup.KEYPAD }
+                MenuKey()
+            }
+        }
+
+        /** Menu; a Zidoo / Eversolo's settings instead, as its menu key does nothing there (1.5.6). */
+        @Composable
+        private fun MenuKey() {
+            val settings = if (isZidoo()) ctx.entities[playerId]?.attrString("astrion_settings_app") else null
+            when {
+                settings != null -> Key(Icons.Filled.Settings, "Settings") { mp("select_source", "source" to settings) }
+                keys.of("menu") != null -> Key(Icons.Filled.Menu, "Menu") { press("menu") }
+            }
+        }
+
+        private fun navOneRow() = config.bool("nav_one_row", false)
 
         /** A slot as wide as the pad's side keys, so what's in it is centred above them. */
         @Composable
@@ -856,10 +889,12 @@ class MediaRemoteCard : CardRenderer {
                         }
                         Box(Modifier.align(Alignment.Center)) { SmallKey(null, "OK", ok) { press("center") } }
                     }
-                    Box(
-                        Modifier.align(Alignment.TopStart)
-                    ) { SmallKey(Icons.AutoMirrored.Filled.ArrowBack, "Back", side) { press("back") } }
-                    if (config.bool("show_keypad", true)) {
+                    if (!navOneRow()) {
+                        Box(Modifier.align(Alignment.TopStart)) {
+                            SmallKey(Icons.AutoMirrored.Filled.ArrowBack, "Back", side) { press("back") }
+                        }
+                    }
+                    if (config.bool("show_keypad", true) && !navOneRow()) {
                         Box(Modifier.align(Alignment.TopEnd)) { SmallKey(Icons.Filled.Dialpad, "Keypad", side) { popup = Popup.KEYPAD } }
                     }
                     if (hasVolume()) {
@@ -884,7 +919,8 @@ class MediaRemoteCard : CardRenderer {
         }
 
         /** Whether, without the D-pad, any of its side keys is left to draw. */
-        fun hasSideKeys() = hasVolume() || hasChannels() || hasLowerRow() || config.bool("show_keypad", true) || keys.of("back") != null
+        fun hasSideKeys() =
+            hasVolume() || hasChannels() || hasLowerRow() || (!navOneRow() && (config.bool("show_keypad", true) || keys.of("back") != null))
 
         /**
          * Without the D-pad (`show_dpad: false`, 1.5.8): its side keys stay, evenly placed (Zavie:
@@ -935,6 +971,7 @@ class MediaRemoteCard : CardRenderer {
 
         @Composable
         private fun BackAndKeypad(side: Dp) {
+            if (navOneRow()) return // already in the nav row
             SmallKey(Icons.AutoMirrored.Filled.ArrowBack, "Back", side) { press("back") }
             if (config.bool("show_keypad", true)) SmallKey(Icons.Filled.Dialpad, "Keypad", side) { popup = Popup.KEYPAD }
         }

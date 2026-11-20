@@ -507,10 +507,14 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
             pageCount = { pageCount }
         )
     val hiddenPageContent = HiddenPageSkipEffect(config.pages, pagerState, activeActivityIds)
+    // 1.6.0, for the log: the pager made anew (it starts again on the start page).
+    LaunchedEffect(pagerState) { Log.i("Dashboard", "pager made, on page #${pagerState.currentPage}") }
 
     val navigateToPage: (String) -> Unit = { pageName ->
         val idx = config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
         if (idx >= 0) {
+            // A tile, a card or an Activity's page (ActivityDispatcher): in the log, before the change.
+            Log.i("Dashboard", "navigate to \"$pageName\" (a tile, a card or an Activity starting)")
             scope.launch { pagerState.scrollToPage(idx) }
         }
     }
@@ -1076,46 +1080,49 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
             val backTargetName = resolveBackTargetName(config.pages, shownPage, linkedJump)
 
             // `showPageIndicator: false`: no bar at all, so the pager above (weight 1f) takes its height.
-            if (config.showPageIndicator) PageIndicator(
-                pages = config.pages,
-                current = shownPage,
-                activeActivityIds = activeActivityIds,
-                backTargetName = backTargetName,
-                // Same instant scrollToPage as navigateToPage/hardware nav —
-                // a dot tap is a direct jump too, not a swipe gesture, so it
-                // shouldn't visibly scroll through pages in between.
-                onDotClick = { index -> scope.launch { pagerState.scrollToPage(index) } },
-                onNavigateToParent = { jumpToPageByName(config.pages, backTargetName, scope, pagerState) },
-                // Swipe UP now jumps to this page's own `linkedPage` (a
-                // per-card "more options" page, e.g. Apple TV's extra
-                // controls) instead of opening the Activities overlay —
-                // that moved to the top bar's swipe-down above. A page
-                // with no `linkedPage` set simply does nothing on swipe-up,
-                // same as a page with no `parent`/remembered source does
-                // nothing on BACK.
-                onSwipeUpToLinkedPage = {
-                    val current = config.pages.getOrNull(shownPage)
-                    if (current != null) {
-                        val linkedName = current.linkedPage
-                        val linkedPageConfig = linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
-                        if (current.linkedPageMode == "popup" && linkedPageConfig != null) {
-                            onLinkedPopupPageChange(
-                                LinkedPagePopupState(
-                                    targetPage = linkedPageConfig,
-                                    widthFraction = current.popupWidthFraction,
-                                    heightFraction = current.popupHeightFraction,
-                                    position = current.popupPosition,
-                                    hideTitle = current.popupHideTitle
-                                ),
-                                null
-                            )
-                        } else {
-                            if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
-                            jumpToPageByName(config.pages, linkedName, scope, pagerState)
+            if (config.showPageIndicator) {
+                PageIndicator(
+                    pages = config.pages,
+                    current = shownPage,
+                    activeActivityIds = activeActivityIds,
+                    backTargetName = backTargetName,
+                    // Same instant scrollToPage as navigateToPage/hardware nav —
+                    // a dot tap is a direct jump too, not a swipe gesture, so it
+                    // shouldn't visibly scroll through pages in between.
+                    onDotClick = { index -> scope.launch { pagerState.scrollToPage(index) } },
+                    onNavigateToParent = { jumpToPageByName(config.pages, backTargetName, scope, pagerState) },
+                    // Swipe UP now jumps to this page's own `linkedPage` (a
+                    // per-card "more options" page, e.g. Apple TV's extra
+                    // controls) instead of opening the Activities overlay —
+                    // that moved to the top bar's swipe-down above. A page
+                    // with no `linkedPage` set simply does nothing on swipe-up,
+                    // same as a page with no `parent`/remembered source does
+                    // nothing on BACK.
+                    onSwipeUpToLinkedPage = {
+                        val current = config.pages.getOrNull(shownPage)
+                        if (current != null) {
+                            val linkedName = current.linkedPage
+                            val linkedPageConfig =
+                                linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+                            if (current.linkedPageMode == "popup" && linkedPageConfig != null) {
+                                onLinkedPopupPageChange(
+                                    LinkedPagePopupState(
+                                        targetPage = linkedPageConfig,
+                                        widthFraction = current.popupWidthFraction,
+                                        heightFraction = current.popupHeightFraction,
+                                        position = current.popupPosition,
+                                        hideTitle = current.popupHideTitle
+                                    ),
+                                    null
+                                )
+                            } else {
+                                if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
+                                jumpToPageByName(config.pages, linkedName, scope, pagerState)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
 
         if (overlayState.showSettings) {
@@ -1375,7 +1382,7 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
             .tapClickable(onClick = onClose),
         contentAlignment = alignment
     ) {
-        // Height "auto" (1.5.9, heightFraction 0): as tall as the page's cards, up to almost the
+        // Height "auto" (1.6.0, heightFraction 0): as tall as the page's cards, up to almost the
         // screen (MR RIZK sized his by hand to fit them).
         val auto = state.heightFraction <= 0f
         val maxAuto = (LocalConfiguration.current.screenHeightDp * POPUP_AUTO_MAX).dp
@@ -1420,7 +1427,7 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
 }
 
 /**
- * The popup's ✕: a small mark, in a 44 dp tap area (1.5.9: the small chip alone took a precise
+ * The popup's ✕: a small mark, in a 44 dp tap area (1.6.0: the small chip alone took a precise
  * tap, MR RIZK).
  */
 @Composable
@@ -1570,7 +1577,7 @@ private fun PageContent(page: PageConfig, ctx: CardContext, wrapHeight: Boolean 
     val scrolling = cards.filter { it.options["pin"] != "bottom" }
 
     val bounds = remember { PageBounds() }
-    // wrapHeight (1.5.9, a popup with its height on "auto"): as tall as the cards, up to the room given.
+    // wrapHeight (1.6.0, a popup with its height on "auto"): as tall as the cards, up to the room given.
     Column(modifier = if (wrapHeight) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
         CompositionLocalProvider(LocalPageBounds provides bounds) {
             LazyColumn(
@@ -1743,7 +1750,7 @@ private fun PageIndicator(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 5.dp, horizontal = 10.dp)
-            // 1.5.9: always as tall as the "‹ back" chevron's 44 dp tap area, so the dots and the
+            // 1.6.0: always as tall as the "‹ back" chevron's 44 dp tap area, so the dots and the
             // page name don't move up or down between a page with a parent and one without (MR RIZK).
             .defaultMinSize(minHeight = 44.dp)
             .pointerInput(Unit) {

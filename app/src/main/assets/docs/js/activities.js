@@ -323,7 +323,7 @@ function saveCurrentDeviceConfig() {
     powerOnFirst: document.getElementById('wizPowerOnFirst')?.checked !== false,
     powerOffOnExit: document.getElementById('wizPowerOffOnExit')?.checked !== false,
     delayAfterMs: parseInt(document.getElementById('wizDelay')?.value, 10) || 0,
-    // 1.5.9: seconds in the form, milliseconds in dashboard.json (at most 60 s).
+    // 1.6.0: seconds in the form, milliseconds in dashboard.json (at most 60 s).
     inputAgainAfterMs: Math.min(60000, Math.max(0, Math.round((parseFloat(document.getElementById('wizInputAgain')?.value) || 0) * 1000))),
   };
   const keepOnBox = document.getElementById('wizKeepOn');

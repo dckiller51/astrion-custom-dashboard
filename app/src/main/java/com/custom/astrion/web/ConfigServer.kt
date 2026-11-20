@@ -106,9 +106,10 @@ import org.json.JSONObject
  *  POST /sky-check      a Sky box's kind (Sky Q / Sky+ HD) and model (host), see SkyRoutes (1.5.3)
  *  POST /samsung-pair   allows the remote on a Samsung TV (host): its prompt, then {model, mac}, see SamsungRoutes (1.5.3)
  *  POST /denon-check    a Denon / Marantz receiver's model and port (host), see DenonRoutes (1.5.4)
- *  GET/POST /tmdb, POST /tmdb-test   TMDB's token and language, a test search, see TmdbRoutes (1.5.9)
- *  GET/POST /plex, POST /plex-test   the Plex server for every Plex card, a test, see PlexRoutes (1.5.9)
+ *  GET/POST /tmdb, POST /tmdb-test   TMDB's token and language, a test search, see TmdbRoutes (1.6.0)
+ *  GET/POST /plex, POST /plex-test   the Plex server for every Plex card, a test, see PlexRoutes (1.6.0)
  *  GET  /plex-art?path=/library/…    a Plex picture, the token added here (what's playing's poster)
+ *  GET/POST /epg, POST /epg-refresh  the TV guide's source and channels, see EpgRoutes (1.6.0)
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -272,11 +273,19 @@ class ConfigServer(
     var denonRegistry: com.custom.astrion.denon.DenonRegistry? = null
     private val denonRoutes = DenonRoutes(context)
 
-    /** TMDB's or the Plex server's settings changed (1.5.9): the activity starts what's-playing lookups again on them. */
+    /** TMDB's or the Plex server's settings changed (1.6.0): the activity starts what's-playing lookups again on them. */
     @Volatile
     var onTmdbChanged: () -> Unit = {}
     private val tmdbRoutes = TmdbRoutes(context) { onTmdbChanged() }
     private val plexRoutes = PlexRoutes(context) { onTmdbChanged() }
+
+    /** The TV guide (1.6.0): the running one, and what to do when its settings change. */
+    @Volatile
+    var epgRegistry: com.custom.astrion.epg.EpgRegistry? = null
+
+    @Volatile
+    var onEpgChanged: () -> Unit = {}
+    private val epgRoutes = EpgRoutes(context, { epgRegistry }) { onEpgChanged() }
 
     /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
     @Volatile
@@ -343,6 +352,7 @@ class ConfigServer(
             ?: denonRoutes.serve(uri, session)
             ?: tmdbRoutes.serve(uri, session)
             ?: plexRoutes.serve(uri, session)
+            ?: epgRoutes.serve(uri, session)
             ?: screenshotRoutes.serve(uri, session)
             ?: templateRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()

@@ -1124,6 +1124,8 @@ function renderPreview() {
       cardEl.innerHTML = zidooCardPreviewHtml(card, idx);
     } else if (card.type === 'media_remote') {
       cardEl.innerHTML = mediaRemotePreviewHtml(card, idx);
+    } else if (card.type === 'tv_guide') {
+      cardEl.innerHTML = tvGuidePreviewHtml(card, idx);
     } else if (card.type === 'info') {
       cardEl.className = 'card';
       cardEl.innerHTML = infoPreviewHtml(card, idx);

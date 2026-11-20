@@ -118,7 +118,10 @@ fun MediaPlayerDetailDialog(
 
     val artPath = e?.mediaPicture
     var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(artPath) { art = artPath?.let { client.fetchBitmap(it, cache = true) } }
+    LaunchedEffect(artPath) {
+        art = artPath?.let { client.fetchBitmap(it, cache = true) }
+        client.settleArt(artPath, cache = true) { art = it }
+    }
 
     fun mp(service: String, data: Array<out Pair<String, Any?>> = emptyArray()) {
         client.callService(ServiceCall.of("media_player", service, entityId, *data))
@@ -175,7 +178,7 @@ fun MediaPlayerDetailDialog(
                 )
                 MediaQualityLine(e, theme)
             }
-            // What TMDB (or a Zidoo) says of it (1.5.9): the pop-up doesn't scroll, so ten lines at most.
+            // What TMDB (or a Zidoo) says of it (1.6.0): the pop-up doesn't scroll, so ten lines at most.
             e?.let { MediaSynopsis(it, theme, openLines = DETAIL_SYNOPSIS_LINES) }
 
             DetailLibraryButtons(entityId, e, client, theme, library)

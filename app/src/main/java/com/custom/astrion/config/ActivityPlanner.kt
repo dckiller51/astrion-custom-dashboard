@@ -173,7 +173,7 @@ class ActivityPlanner(
             return steps.isNotEmpty()
         }
 
-        /** Inputs to send again later (1.5.9, `inputAgainAfterMs`): when (plan time), the device, the input. */
+        /** Inputs to send again later (1.6.0, `inputAgainAfterMs`): when (plan time), the device, the input. */
         private val again = mutableListOf<Triple<Long, ActivityDeviceConfig, String>>()
 
         /** Select an input: the profile's named sequence, or one command. */
@@ -183,7 +183,7 @@ class ActivityPlanner(
         }
 
         /**
-         * The inputs asked again (1.5.9), once everything else is done, at their time: a TV that
+         * The inputs asked again (1.6.0), once everything else is done, at their time: a TV that
          * took the input while still switching from an app gets it again once settled, and no
          * other device waits for it.
          */

@@ -87,7 +87,7 @@ import com.custom.astrion.ui.tapClickable
  *
  * Config shape:
  *   { "type": "plex", "options": {
- *       "host": "http://plex-server:32400",   // optional (1.5.9): else the remote's Plex
+ *       "host": "http://plex-server:32400",   // optional (1.6.0): else the remote's Plex
  *       "token": "<X-Plex-Token>",             //   (web page › Devices › Plex), kept off the dashboard
  *       "media_entity": "media_player.tv",
  *       "play_entity": "media_player.plex_tv_client",   // optional
@@ -121,9 +121,9 @@ class PlexCard : CardRenderer {
         val showShows: Boolean,
         val itemsPerRow: Int,
         val showSearch: Boolean,
-        /** `play_with: "mrmc"` (1.5.9): MrMC on the Apple TV plays the film, see [MrmcPlayer]. */
+        /** `play_with: "mrmc"` (1.6.0): MrMC on the Apple TV plays the film, see [MrmcPlayer]. */
         val mrmc: MrmcTarget?,
-        /** `play_with: "rivulet"` (1.5.9): Rivulet on the Apple TV plays the item, see [PlexRivulet]. */
+        /** `play_with: "rivulet"` (1.6.0): Rivulet on the Apple TV plays the item, see [PlexRivulet]. */
         val rivulet: Boolean
     )
 
@@ -139,7 +139,7 @@ class PlexCard : CardRenderer {
     }
 
     /**
-     * The card's server: its own `host` / `token`, else the remote's Plex (1.5.9, set on the web
+     * The card's server: its own `host` / `token`, else the remote's Plex (1.6.0, set on the web
      * page's Devices › Plex), so the token needn't sit in dashboard.json.
      */
     private fun readConfig(config: CardConfig, context: Context): PlexConfig? {
@@ -219,7 +219,7 @@ class PlexCard : CardRenderer {
         // machineId comes from the same /identity call rows already depend on; if it's still
         // null here the Plex server didn't answer it (or answered oddly) — rather than silently
         // doing nothing, fall back to just opening the app like the no-play_entity case does below.
-        // An Apple TV added in Astrion only opens the app too (1.5.9): Plex on tvOS ignores the
+        // An Apple TV added in Astrion only opens the app too (1.6.0): Plex on tvOS ignores the
         // item in its links (plex://preplay and plex://play alike) and no longer shows up as a
         // player the server could drive.
         if (cfg.playEntity != null && machineId != null) {

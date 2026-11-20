@@ -1,4 +1,4 @@
-// ---- Plex server (1.5.9) ------------------------------------------------------------
+// ---- Plex server (1.6.0) ------------------------------------------------------------
 //
 // The Plex server and its token, kept on the remote (GET/POST /plex, web/PlexRoutes.kt) rather
 // than in dashboard.json: a Plex card without its own host / token uses them. The token is never
