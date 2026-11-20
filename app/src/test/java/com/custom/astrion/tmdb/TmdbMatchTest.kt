@@ -34,6 +34,32 @@ class TmdbMatchTest {
     fun `an Apple TV episode's artist isn't taken for the title`() {
         val q = query("media_title" to "Star Wars : Le Réveil de la Force", "media_artist" to "Saison 3, ép. 12", "app_name" to "TV")!!
         assertEquals("Star Wars : Le Réveil de la Force", q.title)
+        // Its artist says it's an episode: the series is looked up.
+        assertTrue(q.tv)
+    }
+
+    @Test
+    fun `season and episode from an Apple TV or CANAL+ artist`() {
+        assertEquals(2 to 5, TmdbMatch.episodeOf("Saison 2, ép. 5"))
+        assertEquals(3 to 12, TmdbMatch.episodeOf("Saison 3, ép. 12"))
+        assertEquals(1 to 4, TmdbMatch.episodeOf("Season 1, Ep. 4"))
+        assertEquals(1 to 4, TmdbMatch.episodeOf("saison 1 épisode 4"))
+        assertEquals(10 to 1, TmdbMatch.episodeOf("Staffel 10, Folge 1"))
+        assertNull(TmdbMatch.episodeOf("The Last of Us"))
+        assertNull(TmdbMatch.episodeOf("Saison 2"))
+        assertNull(TmdbMatch.episodeOf(null))
+    }
+
+    @Test
+    fun `local library players aren't for TMDB`() {
+        assertTrue(TmdbMatch.isLocalPlayer("Plex", "media_player.apple_tv"))
+        assertTrue(TmdbMatch.isLocalPlayer("Movie Theater", "media_player.shield"))
+        assertTrue(TmdbMatch.isLocalPlayer(null, "media_player.kodi_salon"))
+        assertTrue(TmdbMatch.isLocalPlayer(null, "media_player.zidoo_z9x"))
+        assertTrue(TmdbMatch.isLocalPlayer("Jellyfin", "media_player.x"))
+        assertFalse(TmdbMatch.isLocalPlayer("Netflix", "media_player.apple_tv"))
+        assertFalse(TmdbMatch.isLocalPlayer("CANAL+", "media_player.apple_tv"))
+        assertFalse(TmdbMatch.isLocalPlayer(null, "media_player.salon"))
     }
 
     @Test

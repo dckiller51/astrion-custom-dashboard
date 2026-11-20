@@ -30,6 +30,7 @@ const GALLERY_TYPES = {
   speaker_group: { cat: 'media', icon: 'speaker' },
   camera: { cat: 'media', icon: 'camera' },
   plex: { cat: 'media', icon: 'film' },
+  tv_guide: { cat: 'media', icon: 'guide' },
   xbox: { cat: 'media', icon: 'game' },
   playstation: { cat: 'media', icon: 'game' },
   zidoo: { cat: 'media', icon: 'player' },
@@ -68,6 +69,7 @@ const GALLERY_ICONS = {
   columns: '<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>',
   code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
+  guide: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 5v14M12 14h6M12 17h4"/>',
   device: '<rect x="2" y="6" width="14" height="10" rx="2"/><rect x="18" y="8" width="4" height="10" rx="1"/>'
 };
 

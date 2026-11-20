@@ -9,9 +9,11 @@ import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.web.ConfigServer
 import com.custom.astrion.zidoo.ZidooClient
+import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -19,6 +21,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.doubleOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 
 /**
  * Android TVs paired directly (1.3.6): one [AndroidTvConnection] per TV, each published as a
@@ -36,7 +41,9 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         val connection: AndroidTvConnection,
         val helper: AndroidTvHelperClient?,
         /** For Wake-on-LAN (1.5.7), from the TV's certificate. */
-        val mac: String = ""
+        val mac: String = "",
+        /** The ESP32 that wakes it over Bluetooth (1.6.0), blank without one. */
+        val bleWake: String = ""
     ) {
         @Volatile var helperState = AndroidTvHelperState()
 
@@ -47,6 +54,12 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
     private val byRemoteEntity = HashMap<String, Device>()
     private val hosts = ConcurrentHashMap<String, String>() // localId -> current host
     private val sender = Executors.newSingleThreadExecutor { r -> Thread(r, "AndroidTv-send").apply { isDaemon = true } }
+    private val http =
+        OkHttpClient
+            .Builder()
+            .connectTimeout(HTTP_TIMEOUT_S, TimeUnit.SECONDS)
+            .readTimeout(HTTP_TIMEOUT_S, TimeUnit.SECONDS)
+            .build()
     private var client: HaClient? = null
     private var previousHandler: ((ServiceCall) -> Boolean)? = null
 
@@ -90,7 +103,7 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
                         log = { log("[${cfg.name}] $it") }
                     )
                 }
-            device = Device(spec, connection, helper, cfg.mac)
+            device = Device(spec, connection, helper, cfg.mac, cfg.bleWake)
             devices[spec.entityId] = device
             byRemoteEntity[spec.remoteEntityId] = device
             publish(device)
@@ -174,8 +187,9 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
 
     private fun perform(device: Device, action: AndroidTvServices.Action, data: Map<String, Any?>) {
         val connection = device.connection
-        // Woken by the helper: POWER would turn it straight back off, WAKEUP is useless.
-        val keys = if (wakeScreen(device, action.wake)) action.keys.filterNot { it in POWER_KEYS } else action.keys
+        // Woken (over Bluetooth or by the helper): POWER would turn it straight back off, WAKEUP is useless.
+        val woken = wakeOverBluetooth(device, action.wake) || wakeScreen(device, action.wake)
+        val keys = if (woken) action.keys.filterNot { it in POWER_KEYS } else action.keys
         keys.forEachIndexed { i, key ->
             if (i > 0) Thread.sleep(KEY_GAP_MS)
             if (action.longPress) {
@@ -194,6 +208,49 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         }
         action.seekMs?.let { ms ->
             if (device.helper?.media("seek", ms) != true) log("[${device.spec.name}] seeking needs the Astrion TV Helper")
+        }
+    }
+
+    /**
+     * Wakes a TV whose Wi-Fi sleeps (Xiaomi TVs and boxes in deep standby, 1.6.0) through the ESP32
+     * set for it: it sends the TV's remote's Bluetooth wake signal. Then waits for the TV to answer
+     * on the network and say it's on. A TV already on is left alone (POWER turns it off). True when
+     * the TV is on thanks to it.
+     */
+    private fun wakeOverBluetooth(device: Device, wake: AndroidTvServices.Wake): Boolean {
+        val host = device.bleWake.takeIf { it.isNotBlank() } ?: return false
+        if (wake == AndroidTvServices.Wake.NONE) return false
+        val state = device.connection.state
+        if (state.connected && state.isOn == true) return false
+        if (wake == AndroidTvServices.Wake.TOGGLE && device.helper?.screenOn() == true) return false
+        if (!pressBleWake(device, host)) return false
+        log("[${device.spec.name}] Bluetooth wake sent by the ESP32 $host")
+        val start = System.currentTimeMillis()
+        while (System.currentTimeMillis() - start < BLE_WAKE_WINDOW_MS) {
+            Thread.sleep(BLE_WAKE_POLL_MS)
+            val s = device.connection.state
+            if (s.connected && s.isOn == true) {
+                log("[${device.spec.name}] on after ${System.currentTimeMillis() - start} ms")
+                return true
+            }
+            device.connection.retryNow()
+        }
+        log("[${device.spec.name}] Bluetooth wake: no answer on the network after ${BLE_WAKE_WINDOW_MS / MS_PER_SECOND} s")
+        return false
+    }
+
+    /** Presses the ESP32's "Wake the TV" button (ESPHome's web server); false when it didn't take it. */
+    private fun pressBleWake(device: Device, host: String): Boolean {
+        val url = BleWake.url(host)
+        return try {
+            val req = Request.Builder().url(url).post(ByteArray(0).toRequestBody(null)).build()
+            http.newCall(req).execute().use { resp ->
+                if (!resp.isSuccessful) log("[${device.spec.name}] Bluetooth wake: $url answered ${resp.code}")
+                resp.isSuccessful
+            }
+        } catch (e: IOException) {
+            log("[${device.spec.name}] Bluetooth wake: ESP32 $host not reached (${e.message})")
+            false
         }
     }
 
@@ -312,12 +369,17 @@ class AndroidTvRegistry(context: Context, configs: List<AndroidTvConfig>, privat
         private const val KEY_GAP_MS = 60L
         private const val WOL_EVERY_MS = 250L
 
-        // 1.5.9: 25 s, not 12: after a long sleep the box's LED lights at the first packets but its
+        // 1.6.0: 25 s, not 12: after a long sleep the box's LED lights at the first packets but its
         // Wi-Fi takes longer to come back; with 12 s the burst stopped first and it fell asleep
         // again (Zavie: LED on then off; a second Power, the box already back, worked).
         private const val WAKE_WINDOW_MS = 25_000L
         private const val CHANNEL_WAIT_MS = 8_000
         private const val WAKE_RETRY_MS = 200L
+
+        // 1.6.0: a Xiaomi TV woken over Bluetooth takes a few seconds to get its Wi-Fi back.
+        private const val BLE_WAKE_WINDOW_MS = 20_000L
+        private const val BLE_WAKE_POLL_MS = 1_000L
+        private const val HTTP_TIMEOUT_S = 4L
         private val POWER_KEYS = listOfNotNull(AndroidTvKeys.code("POWER"), AndroidTvKeys.code("WAKEUP"))
         private const val MS_PER_SECOND = 1000
         private const val MIN_HOLD_MS = 300L

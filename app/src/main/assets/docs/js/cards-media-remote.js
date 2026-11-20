@@ -13,9 +13,13 @@ const MEDIA_REMOTE_SWITCHES = [
   ['optMrName', 'show_name', true],
   ['optMrPower', 'show_power', true],
   ['optMrSkip', 'show_skip', true],
+  ['optMrPrevious', 'show_previous', true],
+  ['optMrPlayPause', 'show_play_pause', true],
+  ['optMrNext', 'show_next', true],
   ['optMrBrowse', 'show_browse', true],
   ['optMrSources', 'show_sources', true],
   ['optMrKeypad', 'show_keypad', true],
+  ['optMrNavOneRow', 'nav_one_row', false],
   ['optMrDpad', 'show_dpad', true],
   ['optMrVolume', 'show_volume', true],
   ['optMrChannels', 'show_channels', true],
@@ -259,7 +263,7 @@ function mediaRemotePreviewHtml(card, idx) {
         <div style="color:${C.muted};font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(sub)}</div></div></div>`);
   parts.push(`<div style="height:3px;border-radius:2px;background:#2f4248"><div style="width:32%;height:3px;border-radius:2px;background:${C.accent}"></div></div>`);
   const skip = on('show_skip');
-  parts.push(`<div style="display:flex;justify-content:space-evenly;align-items:center">${skip ? key(26, '↺') : ''}${key(26, '⏮')}${key(36, '❚❚', { accent: true })}${key(26, '⏭')}${skip ? key(26, '↻') : ''}</div>`);
+  parts.push(`<div style="display:flex;justify-content:space-evenly;align-items:center">${skip ? key(26, '↺') : ''}${on('show_previous') ? key(26, '⏮') : ''}${on('show_play_pause') ? key(36, '❚❚', { accent: true }) : ''}${on('show_next') ? key(26, '⏭') : ''}${skip ? key(26, '↻') : ''}</div>`);
   // The library and the player's own buttons (a Zidoo / Eversolo only).
   block = 'device';
   const chips = [];
@@ -274,7 +278,9 @@ function mediaRemotePreviewHtml(card, idx) {
   if (zidoo && on('show_quality')) parts.push(`<div style="text-align:center;color:#748790;font-size:9px">FLAC · 44.1 kHz · 16 bit</div>`);
   // Apps · Home · Menu, over the pad's side keys.
   block = 'nav';
-  parts.push(`<div style="display:flex;justify-content:space-between;align-items:center">${slot(on('show_sources') ? key(30, '▦') : '')}${key(30, '⌂')}${slot(key(30, zidoo ? '⚙' : '☰'))}</div>`);
+  parts.push(on('nav_one_row')
+    ? `<div style="display:flex;justify-content:space-between;align-items:center">${key(30, '↩')}${on('show_sources') ? key(30, '▦') : ''}${key(30, '⌂')}${on('show_keypad') ? key(30, '#') : ''}${key(30, zidoo ? '⚙' : '☰')}</div>`
+    : `<div style="display:flex;justify-content:space-between;align-items:center">${slot(on('show_sources') ? key(30, '▦') : '')}${key(30, '⌂')}${slot(key(30, zidoo ? '⚙' : '☰'))}</div>`);
   // The app rows: the card's apps, else the player's own (left to the remote).
   block = 'apps';
   if (o.show_apps !== false) {

@@ -43,7 +43,11 @@ class DenonRoutes(private val context: Context) {
         val host = session.parameters["host"]?.firstOrNull()?.trim().orEmpty()
         if (!HOST.matches(host)) return error(Response.Status.BAD_REQUEST, "invalid address")
         val (port, model) =
-            DenonClient.check(host) ?: return error(Response.Status.SERVICE_UNAVAILABLE, "no Denon / Marantz receiver answers at $host")
+            DenonClient.check(host)
+                ?: return error(
+                    Response.Status.SERVICE_UNAVAILABLE,
+                    HostNames.unresolved(host) ?: "no Denon / Marantz receiver answers at $host"
+                )
         return json(Response.Status.OK, JSONObject().put("port", port).put("model", model))
     }
 

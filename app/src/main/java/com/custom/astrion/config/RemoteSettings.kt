@@ -95,7 +95,9 @@ data class AndroidTvConfig(
     val mac: String = "",
     val certSha256: String = "",
     /** The code of the Astrion TV Helper app installed on that TV (title, cover, opening apps), blank without it. */
-    val helperCode: String = ""
+    val helperCode: String = "",
+    /** The ESP32 that wakes it over Bluetooth (esphome-xiaomi-ble-wake, 1.6.0): its address, blank without one. */
+    val bleWake: String = ""
 )
 
 /**
@@ -218,11 +220,13 @@ object RemoteSettings {
     private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
     private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
     private const val KEY_DENONS = "denons" // JSON array, see DenonConfig
-    private const val KEY_TMDB_TOKEN = "tmdb_token" // 1.5.9, see tmdb/TmdbRegistry
+    private const val KEY_TMDB_TOKEN = "tmdb_token" // 1.6.0, see tmdb/TmdbRegistry
     private const val KEY_TMDB_LANGUAGE = "tmdb_language"
-    private const val KEY_PLEX_HOST = "plex_host" // 1.5.9: the Plex server, for every Plex card
+    private const val KEY_PLEX_HOST = "plex_host" // 1.6.0: the Plex server, for every Plex card
     private const val KEY_PLEX_TOKEN = "plex_token"
-    private const val KEY_MEDIA_INFO = "media_info_source" // 1.5.9: "auto", "plex" or "tmdb", see tmdb/MediaInfoSource
+    private const val KEY_MEDIA_INFO = "media_info_source" // 1.6.0: "auto", "plex" or "tmdb", see tmdb/MediaInfoSource
+    private const val KEY_EPG_URL = "epg_url" // 1.6.0: the TV guide's XMLTV source, see epg/EpgRegistry
+    private const val KEY_EPG_CHANNELS = "epg_channels" // its channels kept, ids separated by "\n"
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -236,13 +240,13 @@ object RemoteSettings {
 
     fun haToken(context: Context): String = prefs(context).getString(KEY_HA_TOKEN, "") ?: ""
 
-    /** TMDB (1.5.9): the user's own read access token (or v3 key); empty when not set. Never sent back to the web page. */
+    /** TMDB (1.6.0): the user's own read access token (or v3 key); empty when not set. Never sent back to the web page. */
     fun tmdbToken(context: Context): String = prefs(context).getString(KEY_TMDB_TOKEN, "") ?: ""
 
     /** TMDB's language for titles and synopses ("fr-FR"); empty: the remote's own language. */
     fun tmdbLanguage(context: Context): String = prefs(context).getString(KEY_TMDB_LANGUAGE, "") ?: ""
 
-    /** The Plex server set on the web page (1.5.9), "http://…:32400"; empty when not set. */
+    /** The Plex server set on the web page (1.6.0), "http://…:32400"; empty when not set. */
     fun plexHost(context: Context): String = prefs(context).getString(KEY_PLEX_HOST, "") ?: ""
 
     /** Its token (X-Plex-Token); never sent back to the web page, nor written in dashboard.json. */
@@ -256,11 +260,25 @@ object RemoteSettings {
         }
     }
 
-    /** Where what's playing is looked up (1.5.9): "auto" (Plex, then TMDB), "plex" or "tmdb". */
+    /** Where what's playing is looked up (1.6.0): "auto" (Plex, then TMDB), "plex" or "tmdb". */
     fun mediaInfoSource(context: Context): String = prefs(context).getString(KEY_MEDIA_INFO, "auto") ?: "auto"
 
     fun saveMediaInfoSource(context: Context, source: String) {
         prefs(context).edit(commit = true) { putString(KEY_MEDIA_INFO, source) }
+    }
+
+    /** The TV guide's XMLTV address (1.6.0); empty: no guide. */
+    fun epgUrl(context: Context): String = prefs(context).getString(KEY_EPG_URL, "") ?: ""
+
+    /** The guide's channels kept (their XMLTV ids); empty: chosen by the guide (see EpgRegistry). */
+    fun epgChannels(context: Context): List<String> =
+        prefs(context).getString(KEY_EPG_CHANNELS, "").orEmpty().split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+
+    fun saveEpg(context: Context, url: String, channels: List<String>) {
+        prefs(context).edit(commit = true) {
+            putString(KEY_EPG_URL, url.trim())
+            putString(KEY_EPG_CHANNELS, channels.joinToString("\n"))
+        }
     }
 
     /** Saves TMDB's settings; a null [token] keeps the one saved, an empty one removes it. */
@@ -471,7 +489,8 @@ object RemoteSettings {
                     str("serviceName"),
                     str("mac"),
                     str("certSha256"),
-                    str("helperCode")
+                    str("helperCode"),
+                    str("bleWake")
                 )
             }
         } catch (_: Exception) {
@@ -492,6 +511,7 @@ object RemoteSettings {
                         put("mac", tv.mac)
                         put("certSha256", tv.certSha256)
                         put("helperCode", tv.helperCode)
+                        put("bleWake", tv.bleWake)
                     }
                 }
             }

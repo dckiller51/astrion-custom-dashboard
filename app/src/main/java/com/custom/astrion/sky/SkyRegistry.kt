@@ -39,6 +39,9 @@ class SkyRegistry(configs: List<SkyConfig>, private val log: (String) -> Unit = 
         @Volatile var poll: ScheduledFuture<*>? = null
 
         @Volatile var channelsReadAt = 0L
+
+        /** Reads missed in a row, while still shown as answering (see [pollOnce]). */
+        @Volatile var misses = 0
     }
 
     private val devices = LinkedHashMap<String, Device>() // by media entity id
@@ -106,7 +109,21 @@ class SkyRegistry(configs: List<SkyConfig>, private val log: (String) -> Unit = 
 
     private fun pollOnce(device: Device) {
         val before = device.state
-        val next = runCatching { read(device, before) }.getOrElse { before.copy(reachable = false) }
+        val read = runCatching { read(device, before) }.getOrElse { before.copy(reachable = false) }
+        // 1.6.0 (dvbit's Sky Q, on Ethernet, answering every time from a computer): a miss or two is
+        // the remote's own Wi-Fi (dozing with the screen off, dropping for a few seconds), not the
+        // box. It's "not answering" after MISSES_BEFORE_DOWN reads in a row, asked again sooner
+        // meanwhile; a read missed while the remote went quiet doesn't count.
+        if (!read.reachable && before.reachable) {
+            if (quiet) return
+            device.misses++
+            if (device.misses < MISSES_BEFORE_DOWN) {
+                schedule(device, RETRY_MS)
+                return
+            }
+        }
+        if (read.reachable) device.misses = 0
+        val next = read
         if (next.reachable != before.reachable || next.standby != before.standby) {
             log("[${device.spec.name}] ${if (!next.reachable) "not answering" else if (next.standby) "in standby" else "on"}")
         }
@@ -185,6 +202,8 @@ class SkyRegistry(configs: List<SkyConfig>, private val log: (String) -> Unit = 
     companion object {
         private const val TAG = "SkyRegistry"
         private const val ON_POLL_MS = 5_000L
+        private const val RETRY_MS = 3_000L
+        private const val MISSES_BEFORE_DOWN = 3
         private const val OFF_POLL_MS = 30_000L
         private const val AFTER_COMMAND_MS = 1_200L
         private const val CHANNELS_REFRESH_MS = 6 * 60 * 60_000L

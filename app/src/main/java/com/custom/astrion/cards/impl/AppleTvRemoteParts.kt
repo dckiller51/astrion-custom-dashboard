@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.ha.EntityState
+import com.custom.astrion.tmdb.TmdbMatch
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
@@ -122,6 +123,8 @@ private fun initialsOf(label: String): String {
 internal fun rememberImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
     val image by produceState<ImageBitmap?>(initialValue = null, path, targetPx) {
         value = loadImage(ctx, path, targetPx)
+        // A Home Assistant player's picture may settle late (1.6.0, Zavie): asked again.
+        ctx.client.settleArt(path) { value = it }
     }
     return image
 }
@@ -135,7 +138,7 @@ internal suspend fun loadImage(ctx: CardContext, path: String?, targetPx: Int): 
             else -> withContext(Dispatchers.IO) { decodeIconSampled(path, targetPx) }
         }
     // runCatching swallows a cancellation: a load given up for a newer picture (a TMDB poster from
-    // the internet, overtaken by the Apple TV's own artwork) must not put "no picture" over it (1.5.9).
+    // the internet, overtaken by the Apple TV's own artwork) must not put "no picture" over it (1.6.0).
     currentCoroutineContext().ensureActive()
     return image
 }
@@ -175,11 +178,15 @@ internal data class AtvNowPlaying(val title: String, val subtitle: String?, val 
             val subtitle =
                 when {
                     series != null -> listOfNotNull(series, episodeTag).joinToString(" · ")
-                    else -> e.attrString("media_artist")?.takeIf { it.isNotBlank() }
+                    // An Apple TV or CANAL+ episode says "Saison 2, ép. 5" as its artist (1.6.0, Zavie).
+                    else -> e.attrString("media_artist")?.takeIf { it.isNotBlank() }?.let(::artistLine)
                 }
             val title = mediaTitle ?: app ?: e.friendlyName.ifBlank { e.entityId }
             return AtvNowPlaying(title, if (mediaTitle != null) subtitle else null, if (mediaTitle != null) app else null)
         }
+
+        /** The artist, or "S2 · E5" for an episode's "Saison 2, ép. 5". */
+        private fun artistLine(artist: String): String = TmdbMatch.episodeOf(artist)?.let { (s, ep) -> "S$s · E$ep" } ?: artist
     }
 }
 

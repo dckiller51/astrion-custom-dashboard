@@ -159,33 +159,7 @@ class ButtonGridCard : CardRenderer {
      * "closePopup" documents, just as likely (if not more) on a
      * button_grid button. No-op when no popup is open. See the class doc
      * for the full config shape. */
-    @Suppress("UNCHECKED_CAST")
-    private fun fire(ctx: CardContext, b: Map<String, Any?>) {
-        val service = b["service"] as? String
-        if (service != null) {
-            val domain = service.substringBefore('.')
-            val svc = service.substringAfter('.')
-            val entityId = b["entity_id"] as? String
-            val data = (b["data"] as? Map<String, Any?>).orEmpty()
-            ctx.client.callService(
-                ServiceCall.of(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())
-            )
-        }
-        val hub = b["hub"] as? String
-        val harmonyDevice = b["harmonyDevice"] as? String
-        val harmonyCommand = b["harmonyCommand"] as? String
-        if (harmonyDevice != null && harmonyCommand != null) {
-            ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
-        }
-        (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
-        (b["stopActivity"] as? String)?.let(ctx.stopActivity)
-        ctx.sendIrAction(b)
-        if (b["closePopup"] == true) ctx.closePopup()
-        // "page" (1.5.2), like a scene tile's: after the rest, so a popup it opens isn't the one closed.
-        (b["page"] as? String)?.takeIf { it.isNotBlank() }?.let { page ->
-            if (b["pageMode"] == "popup") ctx.openPagePopup(page) else ctx.navigateToPage(page)
-        }
-    }
+    private fun fire(ctx: CardContext, b: Map<String, Any?>) = fireButtonAction(ctx, b)
 
     /** True when this button's optional `"state_entity"`/`"state_value"`
      * condition currently matches — see the class doc for the conditional-
@@ -356,4 +330,36 @@ private fun defaultHeight(hasIcon: Boolean, sideBySide: Boolean, iconDp: Int): I
     !hasIcon -> 48
     sideBySide -> maxOf(48, iconDp + 16)
     else -> maxOf(68, iconDp + 36)
+}
+
+/**
+ * A button's action (a service, a Harmony command or activity, IR, a page): the button grid's, and
+ * the TV guide card's channels (1.6.0), which take the same keys.
+ */
+@Suppress("UNCHECKED_CAST")
+internal fun fireButtonAction(ctx: CardContext, b: Map<String, Any?>) {
+    val service = b["service"] as? String
+    if (service != null) {
+        val domain = service.substringBefore('.')
+        val svc = service.substringAfter('.')
+        val entityId = b["entity_id"] as? String
+        val data = (b["data"] as? Map<String, Any?>).orEmpty()
+        ctx.client.callService(
+            ServiceCall.of(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())
+        )
+    }
+    val hub = b["hub"] as? String
+    val harmonyDevice = b["harmonyDevice"] as? String
+    val harmonyCommand = b["harmonyCommand"] as? String
+    if (harmonyDevice != null && harmonyCommand != null) {
+        ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
+    }
+    (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
+    (b["stopActivity"] as? String)?.let(ctx.stopActivity)
+    ctx.sendIrAction(b)
+    if (b["closePopup"] == true) ctx.closePopup()
+    // "page" (1.5.2), like a scene tile's: after the rest, so a popup it opens isn't the one closed.
+    (b["page"] as? String)?.takeIf { it.isNotBlank() }?.let { page ->
+        if (b["pageMode"] == "popup") ctx.openPagePopup(page) else ctx.navigateToPage(page)
+    }
 }

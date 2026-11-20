@@ -133,7 +133,7 @@ object DashboardLoader {
                     val linkedPageModeRaw = obj["linkedPageMode"]?.jsonPrimitive?.content
                     val linkedPageMode = if (linkedPageModeRaw == "popup") "popup" else "page"
                     val popupWidthFraction = obj["popupWidth"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.7f
-                    // "auto" (1.5.9): as tall as its cards, kept as 0.
+                    // "auto" (1.6.0): as tall as its cards, kept as 0.
                     val popupHeightFraction =
                         if (obj["popupHeight"]?.jsonPrimitive?.content == "auto") {
                             0f
@@ -197,7 +197,8 @@ object DashboardLoader {
                 power,
                 weather,
                 keepOn,
-                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true
+                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                showPageIndicator = (root["showPageIndicator"] as? JsonPrimitive)?.booleanOrNull ?: true
             ).let { it.copy(haEntities = DashboardEntities.of(root, it)) }
         }
         else -> error("top level must be an object or array")

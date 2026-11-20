@@ -287,6 +287,8 @@
             <div id="pageTree" class="page-tree"></div>
             <label class="inline-check page-tree-swipe"><input type="checkbox" id="swipePagesToggle" checked onchange="onSwipePagesChange(this.checked)"> <span data-i18n="web_tree_swipe_pages">Swipe left / right to change page</span></label>
             <div class="hint page-tree-hint" data-i18n="web_tree_swipe_pages_hint">Unticked, pages change only with buttons and tiles, hotkeys and the page dots: no more landing on another page by accident.</div>
+            <label class="inline-check page-tree-swipe"><input type="checkbox" id="showPageIndicatorToggle" checked onchange="onShowPageIndicatorChange(this.checked)"> <span data-i18n="web_tree_show_page_indicator">Show the page bar (dots and page name)</span></label>
+            <div class="hint page-tree-hint" data-i18n="web_tree_show_page_indicator_hint">Unticked, the bar under the pages is gone and the pages get its height: pages then change only with buttons and tiles, hotkeys and linked pages.</div>
             <div class="hint page-tree-hint" data-i18n="web_tree_hint">Click a page to show it. Drag it to reorder, or onto another page to make it a sub-page.</div>
         </div>
         </div>
@@ -327,6 +329,7 @@
                     <option value="speaker_group" data-i18n="web_modal_type_speaker_group">Speaker group (speaker_group)</option>
                     <option value="camera" data-i18n="web_modal_type_camera">Camera (camera)</option>
                     <option value="plex" data-i18n="web_modal_type_plex">Plex (plex)</option>
+                    <option value="tv_guide" data-i18n="web_modal_type_tv_guide">TV guide (tv_guide)</option>
                     <option value="xbox" data-i18n="web_modal_type_xbox">Xbox / TrueAchievements (xbox)</option>
                     <option value="playstation" data-i18n="web_modal_type_playstation">PlayStation Network (playstation)</option>
                     <option value="zidoo" data-i18n="web_modal_type_zidoo">Zidoo / Eversolo (zidoo)</option>
@@ -503,6 +506,7 @@
 <script src="js/cards-zidoo.js"></script>
 <script src="js/cards-media-remote.js"></script>
 <script src="js/cards-info.js"></script>
+<script src="js/cards-tvguide.js"></script>
 <script src="js/help-links.js"></script>
 <script src="js/ai-help.js"></script>
 <script src="js/history.js"></script>

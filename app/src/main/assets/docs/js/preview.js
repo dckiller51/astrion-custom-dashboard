@@ -225,9 +225,17 @@ function onSwipePagesChange(on) {
   updateJsonOutput();
 }
 
+/** The "page bar" box: dashboard.json's showPageIndicator, true when absent. */
+function onShowPageIndicatorChange(on) {
+  if (on) delete dashboardData.showPageIndicator; else dashboardData.showPageIndicator = false;
+  updateJsonOutput();
+}
+
 function renderTabs() {
   const swipe = document.getElementById('swipePagesToggle');
   if (swipe) swipe.checked = dashboardData.swipePages !== false;
+  const bar = document.getElementById('showPageIndicatorToggle');
+  if (bar) bar.checked = dashboardData.showPageIndicator !== false;
   const tree = document.getElementById('pageTree');
   if (!tree) return;
   tree.innerHTML = '';
@@ -1116,6 +1124,8 @@ function renderPreview() {
       cardEl.innerHTML = zidooCardPreviewHtml(card, idx);
     } else if (card.type === 'media_remote') {
       cardEl.innerHTML = mediaRemotePreviewHtml(card, idx);
+    } else if (card.type === 'tv_guide') {
+      cardEl.innerHTML = tvGuidePreviewHtml(card, idx);
     } else if (card.type === 'info') {
       cardEl.className = 'card';
       cardEl.innerHTML = infoPreviewHtml(card, idx);

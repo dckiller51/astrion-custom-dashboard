@@ -31,7 +31,7 @@
     <ID>MatchingDeclarationName:Theme.kt$ThemeColors</ID>
     <ID>NestedBlockDepth:ConfigServer.kt$ConfigServer$override fun serve(session: IHTTPSession): Response</ID>
     <ID>NestedBlockDepth:JsonPlain.kt$JsonPlain$fun toPlain(el: JsonElement): Any?</ID>
-    <ID>SpreadOperator:ButtonGridCard.kt$ButtonGridCard$(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())</ID>
+    <ID>SpreadOperator:ButtonGridCard.kt$(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())</ID>
     <ID>SpreadOperator:MediaPlayerCard.kt$MediaPlayerCard$(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())</ID>
     <ID>SpreadOperator:MediaPlayerDetailDialog.kt$("media_player", service, entityId, *data)</ID>
     <ID>SwallowedException:Theme.kt$e: Exception</ID>

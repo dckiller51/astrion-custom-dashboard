@@ -29,14 +29,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
 import com.custom.astrion.androidtv.AndroidTvRegistry
@@ -56,6 +54,8 @@ import com.custom.astrion.config.JsonPlain
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.denon.DenonRegistry
 import com.custom.astrion.denon.installDenon
+import com.custom.astrion.epg.EpgRegistry
+import com.custom.astrion.epg.installEpg
 import com.custom.astrion.extender.ExtenderRegistry
 import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
@@ -164,7 +164,7 @@ class MainActivity : ComponentActivity() {
             listOf("remote.androidtv_", "remote.zidoo_", "remote.appletv_", "remote.lgtv_", "remote.samsung_", "remote.denon_")
 
         // The four D-pad keys that move Compose focus when unmapped — see
-        // clearFocusTrigger's own doc, dispatchKeyEvent().
+        // maybeClearFocusForDirectionalHotkey, dispatchKeyEvent().
         val DIRECTIONAL_KEYS = setOf(HardwareKey.UP, HardwareKey.DOWN, HardwareKey.LEFT, HardwareKey.RIGHT)
 
         // Activation keys Compose's clickable reacts to — see
@@ -452,7 +452,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var zidooRegistry: ZidooRegistry // Zidoo players, direct (1.4.6)
     private lateinit var lgTvRegistry: LgTvRegistry // LG TVs, direct (1.5.2)
     private lateinit var skyRegistry: SkyRegistry // Sky boxes, direct (1.5.3)
-    private var tmdbRegistry: TmdbRegistry? = null // TMDB, when a token is set (1.5.9)
+    private var tmdbRegistry: TmdbRegistry? = null // TMDB, when a token is set (1.6.0)
+    private var epgRegistry: EpgRegistry? = null // the TV guide, when a source is set (1.6.0)
     private lateinit var samsungRegistry: SamsungRegistry // Samsung TVs, direct (1.5.3)
     private lateinit var denonRegistry: DenonRegistry // Denon / Marantz receivers, direct (1.5.4)
 
@@ -503,6 +504,15 @@ class MainActivity : ComponentActivity() {
     private val keyRouter = HardwareKeyRouter()
     private var dashboard by mutableStateOf(DashboardLoader.Result(DashboardConfig.default, null))
     private var navTarget by mutableStateOf<Int?>(null)
+
+    /** What asked for the next page change, for the log (1.6.0). */
+    private var pendingNavWhy: String? = null
+
+    /** Jumps to page [idx] (see [navTarget]), [why] logged with the change. */
+    private fun navTo(idx: Int, why: String) {
+        pendingNavWhy = why
+        navTarget = idx
+    }
     private var popupTarget by mutableStateOf<String?>(null)
     private var overlayTarget by mutableStateOf<String?>(null)
 
@@ -513,21 +523,6 @@ class MainActivity : ComponentActivity() {
 
     /** See DashboardNavigation.volumeEntityId: set by [bindHotkeys]. */
     private var volumeEntityId by mutableStateOf<String?>(null)
-
-    /** Bumped (nanoTime, never meaningfully "cleared" — only ever compared
-     * for change, same one-shot-nonce pattern as [volumeHotkeyTrigger])
-     * every time a directional D-pad key (UP/DOWN/LEFT/RIGHT) is consumed
-     * by a configured hotkey in [dispatchKeyEvent] instead of reaching
-     * Compose's own focus-navigation. Without this, whichever tile/card
-     * already had Compose focus (e.g. from an earlier touch, or the
-     * initial default) kept showing its focus outline even though that
-     * D-pad key can no longer move it on this page — a cursor that looks
-     * navigable but isn't. [composeContent] observes this to clear focus
-     * at that moment instead, so no outline is drawn until the person
-     * touches a tile or presses a direction that IS still free to move
-     * focus (a page/config with no hotkey on that key at all — untouched,
-     * "the current focus outline behavior is perfect" for that case). */
-    private var clearFocusTrigger by mutableStateOf(0L)
 
     /** Set when a CENTER/Enter press was swallowed because the focus
      * outline was hidden (see [shouldSwallowHiddenFocusActivation]), so the
@@ -715,7 +710,7 @@ class MainActivity : ComponentActivity() {
                 // Reuses the exact mechanism hardware shortcut buttons already use
                 // (see runHotkey's `hk.page` branch): set navTarget, Dashboard's
                 // LaunchedEffect(navTarget) does the scrollToPage + clears it.
-                onSetPage = { index -> runOnUiThread { navTarget = index } },
+                onSetPage = { index -> runOnUiThread { navTo(index, "web page / API") } },
                 getActivityRuntime = { activityRuntime },
                 onStartActivity = { id -> runOnUiThread { startActivityFn?.invoke(id) } },
                 onStopActivity = { room -> runOnUiThread { stopActivityFn?.invoke(room) } }
@@ -740,13 +735,25 @@ class MainActivity : ComponentActivity() {
         denonRegistry = installDenon(this, client, log = { Log.i("Denon", it) })
         configServer.denonRegistry = denonRegistry
         localWeather.attach(client)
-        // What media players play (1.5.9), from the Plex server and/or TMDB, for every card;
+        // What media players play (1.6.0), from the Plex server and/or TMDB, for every card;
         // started again when their settings change.
-        tmdbRegistry = installTmdb(this, client, log = { Log.i("Tmdb", it) })
+        // The TV guide (1.6.0) first: what's playing live gets its synopsis from it.
+        epgRegistry = installEpg(this, client, log = { Log.i("Epg", it) })
+        configServer.epgRegistry = epgRegistry
+        tmdbRegistry = installMediaInfo()
         configServer.onTmdbChanged = {
             runOnUiThread {
                 tmdbRegistry?.stop()
-                tmdbRegistry = installTmdb(this, client, log = { Log.i("Tmdb", it) })
+                tmdbRegistry = installMediaInfo()
+            }
+        }
+        configServer.onEpgChanged = {
+            runOnUiThread {
+                epgRegistry?.stop()
+                epgRegistry = installEpg(this, client, log = { Log.i("Epg", it) })
+                configServer.epgRegistry = epgRegistry
+                tmdbRegistry?.stop()
+                tmdbRegistry = installMediaInfo()
             }
         }
         configServer.onRemoteRenamed = { runOnUiThread { remoteName = RemoteIdentity.name(this) } }
@@ -754,6 +761,12 @@ class MainActivity : ComponentActivity() {
         configServer.onBackupRestored = { Handler(Looper.getMainLooper()).postDelayed({ AppLanguage.restart(this) }, RESTORE_RESTART_MS) }
         // The web page's screenshots (1.5.4): this activity's window, on the server's thread.
         configServer.onScreenshot = { ScreenCapture.png(this) }
+    }
+
+    /** What's playing (1.6.0): Plex, the TV guide, TMDB, as set on the web page. */
+    private fun installMediaInfo(): TmdbRegistry? {
+        val guide = epgRegistry?.let { g -> { title: String, also: String? -> g.infoFor(title, also) } }
+        return installTmdb(this, client, log = { Log.i("Tmdb", it) }, epg = guide)
     }
 
     /** Called when the user saves new HA/Harmony connection settings via the
@@ -766,6 +779,7 @@ class MainActivity : ComponentActivity() {
         client.disconnect()
         harmonyRegistry.disconnectAll()
         tmdbRegistry?.stop()
+        epgRegistry?.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()
@@ -811,14 +825,12 @@ class MainActivity : ComponentActivity() {
             SideEffect { chargeDockMonitor.dockConfig = dock }
             val dockOverlay = dockOverlayFor(isDocked, dock)
             Box {
-                val focusManager = LocalFocusManager.current
-                LaunchedEffect(clearFocusTrigger) {
-                    // 0L is the initial/never-fired value (see its own doc)
-                    // — skip clearing focus on first composition for that
-                    // reason alone, so app launch doesn't itself strip the
-                    // very first default focus for no reason.
-                    if (clearFocusTrigger != 0L) focusManager.clearFocus(force = true)
-                }
+                // 1.6.0: a directional hotkey no longer clears Compose's focus. Android handed it
+                // straight back and Compose gave it to the first focusable tile it found, on the
+                // page next door when that one was still composed: the pager followed it and the
+                // remote jumped to its first page on an arrow sent to the Apple TV. The outline is
+                // hidden instead (FocusHighlight, maybeClearFocusForDirectionalHotkey), which is
+                // what kept it from showing anyway.
                 Dashboard(
                     connection = DashboardConnection(client = client, entities = entities, connectionState = connection),
                     registries = DashboardRegistries(harmonyRegistry = harmonyRegistry, extenderRegistry = extenderRegistry),
@@ -832,6 +844,11 @@ class MainActivity : ComponentActivity() {
                         popupTarget = popupTarget,
                         onPopupHandled = { popupTarget = null },
                         onPageChanged = { pageIndex ->
+                            // 1.6.0: every page change in the log, with what asked for it when known
+                            // (else a swipe, a dot or a card's tile).
+                            val name = dashboard.config.pages.getOrNull(pageIndex)?.name
+                            Log.i("MainActivity", "page → $name (#$pageIndex) — ${pendingNavWhy ?: "swipe, dot or card"}")
+                            pendingNavWhy = null
                             currentPageIndex = pageIndex
                             rebindHotkeysForCurrentPage()
                         },
@@ -930,7 +947,7 @@ class MainActivity : ComponentActivity() {
                 ?.parent ?: return false
         val idx = dashboard.config.pages.indexOfFirst { it.name.equals(parentName, ignoreCase = true) }
         if (idx < 0) return false
-        navTarget = idx
+        navTo(idx, "parent of the page")
         return true
     }
 
@@ -994,6 +1011,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun reloadDashboard() {
+        Log.i("MainActivity", "dashboard reloaded")
         val result = DashboardLoader.load()
         dashboard = result
         currentPageIndex = currentPageIndex.coerceIn(0, result.config.pages.size - 1)
@@ -1173,7 +1191,7 @@ class MainActivity : ComponentActivity() {
     private fun openPageHotkey(pageName: String, popup: Boolean): Boolean {
         val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
         if (idx < 0) return false
-        if (popup) popupTarget = dashboard.config.pages[idx].name else navTarget = idx
+        if (popup) popupTarget = dashboard.config.pages[idx].name else navTo(idx, "hotkey page")
         return true
     }
 
@@ -1181,7 +1199,7 @@ class MainActivity : ComponentActivity() {
         val pageName = activityRuntime?.activeActivity(room)?.page ?: return false
         val idx = dashboard.config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
         if (idx < 0) return false
-        navTarget = idx
+        navTo(idx, "hotkey: current activity of $room")
         return true
     }
 
@@ -1293,31 +1311,21 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Clears Compose's D-pad focus the moment a directional key (UP/DOWN/
-     * LEFT/RIGHT) is about to be consumed as a hotkey below — split out of
-     * [dispatchKeyEvent] purely to keep that function's cyclomatic
-     * complexity under detekt's threshold, no behavior difference from
-     * having it inline. See [clearFocusTrigger]'s own doc for why: without
-     * this, any focus outline already shown would otherwise sit there
-     * looking like a movable cursor that in fact can't move on this key
-     * anymore, since the key never reaches Compose's own focus-navigation
-     * (`super.dispatchKeyEvent` is never called for a mapped key). CENTER
-     * is deliberately excluded — an activation key, not a "move" one.
+     * Hides the focus outline the moment a directional key (UP/DOWN/LEFT/RIGHT) is about to be
+     * consumed as a hotkey below: otherwise an outline already shown would sit there looking like a
+     * cursor that can't move on this key any more (the key never reaches Compose). CENTER is left
+     * out, an activation key. Compose's focus itself is left alone (1.6.0): clearing it made Android
+     * hand it straight back to the first focusable tile, on the page next door when that one was
+     * still composed, and the pager followed — an arrow sent to the Apple TV jumped to the first
+     * page. Split out of [dispatchKeyEvent] for detekt's complexity threshold.
      */
     private fun maybeClearFocusForDirectionalHotkey(event: KeyEvent, code: Int) {
         if (event.action == KeyEvent.ACTION_DOWN &&
             event.repeatCount == 0 &&
             HardwareKey.fromKeyCode(code) in DIRECTIONAL_KEYS
         ) {
-            clearFocusTrigger = System.nanoTime()
-            // clearFocusTrigger alone didn't fix the outline: the key press
-            // itself takes the window out of touch mode (ViewRootImpl does
-            // that before the event reaches dispatchKeyEvent), which hands
-            // the Compose view a default focus, and clearing Compose focus
-            // outside touch mode makes Android hand focus straight back to
-            // the root — so a tile got re-focused and outlined anyway. The
-            // outline itself is hidden instead, until a directional key is
-            // left to Compose's focus navigation again (dispatchUnmappedKey).
+            // The outline is hidden until a directional key is left to Compose's focus navigation
+            // again (dispatchUnmappedKey).
             FocusHighlight.visible = false
         }
     }
@@ -1764,6 +1772,7 @@ class MainActivity : ComponentActivity() {
         client.disconnect()
         harmonyRegistry.disconnectAll()
         tmdbRegistry?.stop()
+        epgRegistry?.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()

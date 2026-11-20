@@ -219,6 +219,10 @@
     <string name="plex_mrmc_no_file">Nothing to play here: pick a film or an episode</string>
     <string name="plex_mrmc_no_answer">MrMC didn\'t answer on %1$s: check that it\'s installed and its remote control via HTTP is on</string>
     <string name="plex_mrmc_refused">MrMC couldn\'t open the film</string>
+    <string name="tv_guide_empty">No channel: set the TV guide on the web page (Devices › TV guide)</string>
+    <string name="tv_guide_nothing">Nothing in the guide</string>
+    <string name="tv_guide_next">Next: %1$s</string>
+    <string name="tv_guide_watch">Watch</string>
     <string name="plex_library">Library</string>
     <string name="plex_this_season">This season</string>
     <string name="plex_play">Play</string>

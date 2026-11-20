@@ -50,6 +50,10 @@ data class AppConfig(
     /** `swipePages: false` (1.4.9): no swiping left / right between pages; they change with
      * buttons, tiles, hotkeys and the page dots only. */
     val swipePages: Boolean = true,
+    /** `showPageIndicator: false`: no bar under the pages (dots, page name, "‹ back"), and the pages
+     * get its height. For a remote that changes pages with keys and tiles only; the bar's swipe up to a
+     * page's `linkedPage` goes with it. */
+    val showPageIndicator: Boolean = true,
     /** The Home Assistant entities this dashboard uses — the only ones the remote receives
      * (1.5.2, see [DashboardEntities]). Null = every entity, as before. */
     val haEntities: Set<String>? = null
@@ -222,7 +226,7 @@ data class PageConfig(
      * a full page, undermining the point of using popup mode at all. */
     val popupWidthFraction: Float = 0.7f,
     /** Popup height as a fraction of the screen height (0–1). See
-     * [popupWidthFraction]. Defaults to 0.5. 0: "auto" (1.5.9), as tall as
+     * [popupWidthFraction]. Defaults to 0.5. 0: "auto" (1.6.0), as tall as
      * the page's cards, up to almost the screen. */
     val popupHeightFraction: Float = 0.5f,
     /** Where the popup is anchored on screen: "center" (default), "top",
@@ -614,7 +618,7 @@ data class ActivityDeviceConfig(
      * the last device and on stop (power-off runs with no delays between
      * devices — nothing downstream needs to wait for it). */
     val delayAfterMs: Int = 0,
-    /** Send the input again this long after it was sent (1.5.9), at the end of the start: a TV
+    /** Send the input again this long after it was sent (1.6.0), at the end of the start: a TV
      * that misses it while still switching (leaving an app, a box powering on). 0: never. */
     val inputAgainAfterMs: Int = 0
 )

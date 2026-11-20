@@ -27,11 +27,12 @@ data class TmdbInfo(
     companion object {
         const val TMDB = "tmdb"
         const val PLEX = "plex"
+        const val EPG = "epg"
     }
 }
 
 /**
- * From a player's attributes to a TMDB search, and from TMDB's answer to [TmdbInfo] (1.5.9).
+ * From a player's attributes to a TMDB search, and from TMDB's answer to [TmdbInfo] (1.6.0).
  * Pure, so it is unit-tested. The title clean-up follows Zavie's Home Assistant recipe: a
  * studio's name in front ("Marvel Studios' Avengers"), a file's name (dots, year, quality tags),
  * HBO Max sending the episode as the title and the series as the artist.
@@ -63,7 +64,35 @@ object TmdbMatch {
         listOf("music", "musique", "musica", "música", "musik", "spotify", "deezer", "tidal", "qobuz", "podcast", "radio", "sonos", "heos")
     private val MUSIC_TYPES = setOf("music", "podcast", "playlist", "album", "track")
 
+    /**
+     * Players of a local library (1.6.0, Zavie): what they play is known to their server, so
+     * TMDB isn't asked (a search on a file's name may find another film). Plex set on the web
+     * page still answers for Plex.
+     */
+    private val LOCAL_PLAYERS = listOf("plex", "jellyfin", "emby", "kodi", "coreelec", "movie theater", "zidoo", "eversolo")
+
+    /** "Saison 2, ép. 5", "Season 2, Ep. 5": an Apple TV or CANAL+ episode, its series as the title (1.6.0, Zavie). */
+    private val EPISODE_ARTIST =
+        Regex(
+            "^\\s*(?:saison|season|staffel|stagione|temporada)\\s*(\\d{1,3})\\s*[,·.-]?\\s*" +
+                "(?:épisode|episode|episodio|folge|ép|ep|e)\\.?\\s*(\\d{1,4})\\s*$",
+            RegexOption.IGNORE_CASE
+        )
+
     private const val MIN_TITLE = 2
+
+    /** A local library's player, by its app or its entity id: Plex, Kodi, a Zidoo… */
+    fun isLocalPlayer(app: String?, entityId: String): Boolean {
+        val a = app?.lowercase().orEmpty()
+        val id = entityId.lowercase()
+        return LOCAL_PLAYERS.any { it in a || it.replace(' ', '_') in id }
+    }
+
+    /** Season and episode from an artist like "Saison 2, ép. 5", else null. */
+    fun episodeOf(artist: String?): Pair<Int, Int>? {
+        val m = artist?.let(EPISODE_ARTIST::find) ?: return null
+        return m.groupValues[1].toInt() to m.groupValues[2].toInt()
+    }
 
     /**
      * The search for a player's attributes ([attr]: its string attributes), or null when there
@@ -81,7 +110,7 @@ object TmdbMatch {
             // HBO Max: the episode as the title, the series as the artist.
             ?: artist?.takeIf { "hbo" in app || app == "max" }
         val raw = series ?: attr("media_title")?.takeIf { it.isNotBlank() } ?: return null
-        val tv = series != null || type == "tvshow" || type == "episode" || attr("media_season") != null
+        val tv = series != null || type == "tvshow" || type == "episode" || attr("media_season") != null || episodeOf(artist) != null
         return clean(raw, tv)
     }
 

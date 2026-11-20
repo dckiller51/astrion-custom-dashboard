@@ -812,6 +812,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-
 .tile.tile-plex { border-color: #4a3d14; } .tile.tile-plex:hover, .tile.tile-plex:focus-visible { border-color: #E5A00D; }
 .tile.tile-plex .tile-icon { background: rgba(229,160,13,0.14); color: #E5A00D; }
 .tile.tile-tmdb .tile-icon { background: rgba(1,180,228,0.14); color: #01B4E4; }
+.tile.tile-epg { border-color: #3d2f4a; } .tile.tile-epg:hover, .tile.tile-epg:focus-visible { border-color: #B28BFF; }
+.tile.tile-epg .tile-icon { background: rgba(178,139,255,0.14); color: #B28BFF; }
 .weather-place { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
 .weather-place button { margin-left: auto; }
 .weather-result { display: block; width: 100%; text-align: left; margin-top: 6px; }

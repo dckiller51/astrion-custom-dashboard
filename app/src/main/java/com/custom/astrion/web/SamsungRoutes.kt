@@ -80,7 +80,9 @@ class SamsungRoutes(private val context: Context, private val registry: () -> Sa
         session.parseBody(HashMap())
         val host = session.parameters["host"]?.firstOrNull()?.trim().orEmpty()
         if (!HOST.matches(host)) return error(Response.Status.BAD_REQUEST, "invalid address")
-        val info = SamsungRest(host).info() ?: return error(Response.Status.SERVICE_UNAVAILABLE, "no Samsung TV answers at $host")
+        val info =
+            SamsungRest(host).info()
+                ?: return error(Response.Status.SERVICE_UNAVAILABLE, HostNames.unresolved(host) ?: "no Samsung TV answers at $host")
         val outcome = Outcome()
         val conn =
             SamsungConnection(

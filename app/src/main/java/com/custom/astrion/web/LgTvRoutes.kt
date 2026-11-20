@@ -117,7 +117,7 @@ class LgTvRoutes(private val context: Context, private val registry: () -> LgTvR
                 when {
                     outcome.failure?.contains("refused") == true -> "refused on the TV"
                     outcome.prompted -> "not accepted on the TV in time"
-                    else -> "no LG TV answers at $host (${outcome.failure ?: "no answer"})"
+                    else -> HostNames.unresolved(host) ?: "no LG TV answers at $host (${outcome.failure ?: "no answer"})"
                 }
             return error(Response.Status.SERVICE_UNAVAILABLE, why)
         }

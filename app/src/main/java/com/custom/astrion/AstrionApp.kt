@@ -26,6 +26,7 @@ import com.custom.astrion.cards.impl.SourceSelectCard
 import com.custom.astrion.cards.impl.SpeakerGroupCard
 import com.custom.astrion.cards.impl.SwitchCard
 import com.custom.astrion.cards.impl.TitleCard
+import com.custom.astrion.cards.impl.TvGuideCard
 import com.custom.astrion.cards.impl.TvRemoteCard
 import com.custom.astrion.cards.impl.VacuumCard
 import com.custom.astrion.cards.impl.XboxCard
@@ -81,6 +82,7 @@ class AstrionApp : Application() {
             SwitchCard(),
             TitleCard(),
             TvRemoteCard(),
+            TvGuideCard(),
             XboxCard(),
             VacuumCard(),
             ZidooCard(),
