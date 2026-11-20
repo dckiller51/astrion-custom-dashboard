@@ -197,7 +197,8 @@ object DashboardLoader {
                 power,
                 weather,
                 keepOn,
-                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true
+                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                showPageIndicator = (root["showPageIndicator"] as? JsonPrimitive)?.booleanOrNull ?: true
             ).let { it.copy(haEntities = DashboardEntities.of(root, it)) }
         }
         else -> error("top level must be an object or array")

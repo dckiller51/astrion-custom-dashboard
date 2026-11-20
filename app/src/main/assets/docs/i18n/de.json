@@ -1593,6 +1593,8 @@
   "web_ui_states_comma_hint": "Mehrere Zustände: durch Kommas trennen, z. B. on, off, idle.",
   "web_tree_swipe_pages": "Nach links / rechts wischen, um die Seite zu wechseln",
   "web_tree_swipe_pages_hint": "Abgewählt wechseln Seiten nur über Tasten und Kacheln, Tastenbelegungen und die Seitenpunkte: kein versehentliches Landen auf einer anderen Seite mehr.",
+  "web_tree_show_page_indicator": "Seitenleiste anzeigen (Punkte und Seitenname)",
+  "web_tree_show_page_indicator_hint": "Abgewählt verschwindet die Leiste unter den Seiten und die Seiten bekommen ihre Höhe: Seiten wechseln dann nur über Tasten und Kacheln, Tastenbelegungen und verknüpfte Seiten.",
   "web_card_copy_title": "Auf andere Seiten kopieren",
   "web_card_copy_hint": "Dieselbe Karte wird jeder angehakten Seite hinzugefügt, z. B. eine Leiste mit Seitentasten oben auf jeder Seite.",
   "web_card_copy_all": "Alle",

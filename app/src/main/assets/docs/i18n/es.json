@@ -1593,6 +1593,8 @@
   "web_ui_states_comma_hint": "Varios estados: sepáralos con comas, p. ej. on, off, idle.",
   "web_tree_swipe_pages": "Deslizar a izquierda / derecha para cambiar de página",
   "web_tree_swipe_pages_hint": "Desmarcado, se cambia de página solo con botones y mosaicos, atajos y los puntos de página: se acabó llegar sin querer a otra página.",
+  "web_tree_show_page_indicator": "Mostrar la barra de páginas (puntos y nombre de página)",
+  "web_tree_show_page_indicator_hint": "Desmarcado, la barra bajo las páginas desaparece y las páginas ganan su altura: se cambia de página solo con botones y mosaicos, atajos y páginas enlazadas.",
   "web_card_copy_title": "Copiar a otras páginas",
   "web_card_copy_hint": "La misma tarjeta se añade a cada página marcada, p. ej. una barra de botones de páginas arriba de cada página.",
   "web_card_copy_all": "Todas",
