@@ -40,6 +40,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
         /** The app list didn't come once: said in the log, once. */
         @Volatile var appsWarned = false
 
+        /** A film kept through the music player's status (stickToFilm): said in the log, once. */
+        @Volatile var filmKept = false
+
         /** The video file whose film was last looked up, and what was found. */
         var moviePath: String? = null
         var movie: ZidooMovie? = null
@@ -140,7 +143,21 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
                 input = c.lastInput,
                 muted = c.lastMuted
             )
-        return if (playback == null) base else withPlayback(device, base, playback, now)
+        return if (playback == null) base else withPlayback(device, base, stickToFilm(device, before, playback), now)
+    }
+
+    /**
+     * The video player's status sometimes doesn't come (a slow answer) and the music player's,
+     * asked next, tells the same title: taken as is, the card swapped between the film (its
+     * backdrop) and a song with no cover, every few seconds (1.5.8, Zavie's Zidoo Z9X). While
+     * the same title plays, a film stays a film.
+     */
+    private fun stickToFilm(device: Device, before: ZidooState, p: ZidooPlayback): ZidooPlayback {
+        if (p.source == ZidooSource.VIDEO || before.source != ZidooSource.VIDEO) return p
+        if (p.title.isNullOrBlank() || p.title != before.title && p.title != device.movie?.name) return p
+        if (!device.filmKept) log("[${device.spec.name}] video status didn't come; the film kept (the music player tells the same title)")
+        device.filmKept = true
+        return p.copy(source = ZidooSource.VIDEO, path = null)
     }
 
     /** The installed apps: read once it answers, then every [APPS_REFRESH_MS]. */
@@ -186,6 +203,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             artist = p.artist,
             album = p.album,
             seriesName = movie?.seriesName,
+            overview = movie?.overview,
+            year = movie?.year,
+            rating = movie?.rating,
             season = movie?.season,
             episode = movie?.episode,
             durationMs = p.durationMs,
@@ -193,7 +213,11 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             positionAt = now,
             pictureUrl = picture,
             quality = p.quality,
-            canSeek = p.canSeek
+            canSeek = p.canSeek,
+            subtitle = p.subtitle,
+            audio = p.audio,
+            appName = p.appName,
+            loop = p.loop
         )
     }
 
@@ -290,6 +314,9 @@ class ZidooRegistry(configs: List<ZidooConfig>, private val log: (String) -> Uni
             val lib = libraries[entityId] ?: also?.let { libraries["media_player." + it.substringAfter('.')] } ?: return null
             return if (lib.isZidoo) null else lib.client
         }
+
+        /** The player added in Astrion published as [entityId], Zidoo or Eversolo: the Zidoo / Eversolo card's own calls (1.5.1). */
+        fun clientOf(entityId: String): ZidooClient? = libraries[entityId]?.client
 
         private const val TAG = "ZidooRegistry"
         private const val ON_POLL_MS = 3_000L

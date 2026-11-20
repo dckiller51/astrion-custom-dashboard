@@ -18,6 +18,10 @@ import java.util.Locale
  * log without adb. Only this process's lines: an app may always read those, and nothing from
  * other apps leaks into the file.
  *
+ * 1.5.7: also the app's previous runs still in the log buffer (their pids, kept by [rememberRun]):
+ * a test build installed from the web page restarts the app, and what happened before the restart
+ * (the download, the installer) was lost from the log a tester sent.
+ *
  * 1.3.8: the header also gives the network as the remote sees it (Wi-Fi signal and speed, band,
  * IP, gateway, DNS, internet reachable or not), and [save] writes the same text to a file from the
  * remote's own settings — for when the web page is the thing that doesn't answer.
@@ -40,16 +44,38 @@ object AppLogs {
         val network = context?.let { runCatching { networkSummary(it) }.getOrElse { e -> "Network: unknown ($e)" } }
         val body =
             runCatching {
+                val pids = context?.let { runsOf(it) }.orEmpty() + Process.myPid()
                 val process =
-                    ProcessBuilder("logcat", "-d", "-v", "time", "-t", MAX_LINES.toString(), "--pid=${Process.myPid()}")
+                    ProcessBuilder("logcat", "-d", "-v", "time", "-t", (MAX_LINES * pids.size).toString())
                         .redirectErrorStream(true)
                         .start()
-                process.inputStream.bufferedReader().use { it.readText() }.also { process.waitFor() }
+                val text = process.inputStream.bufferedReader().use { it.readText() }.also { process.waitFor() }
+                // Only this app's runs: Android already gives an app its own lines only, this keeps
+                // it so on a ROM that would give more.
+                text.lineSequence().filter { line -> pidOf(line)?.let { it in pids } ?: line.startsWith("---------") }
+                    .toList().takeLast(MAX_LINES).joinToString("\n")
             }.getOrElse { "logcat failed: $it" }
         return header + (network?.let { "$it\n" } ?: "") + "\n" + body
     }
 
     /** Writes [dump] to `astrion/logs/astrion-log-….txt` and keeps the last few; the file, or null when storage refused. */
+    private const val RUNS = "app_log_runs"
+    private const val KEEP_RUNS = 3
+    private val PID = Regex("""^\S+ \S+ [VDIWEF]/[^(]*\(\s*(\d+)\)""")
+
+    /** Called once per start: this run's pid joins the last [KEEP_RUNS] ones. */
+    fun rememberRun(context: Context) {
+        val prefs = context.getSharedPreferences(RUNS, Context.MODE_PRIVATE)
+        val runs = (prefs.getString("pids", "").orEmpty().split(',').mapNotNull { it.toIntOrNull() } + Process.myPid()).distinct()
+        prefs.edit().putString("pids", runs.takeLast(KEEP_RUNS).joinToString(",")).apply()
+    }
+
+    private fun runsOf(context: Context): Set<Int> = context.getSharedPreferences(RUNS, Context.MODE_PRIVATE)
+        .getString("pids", "").orEmpty().split(',').mapNotNull { it.toIntOrNull() }.toSet()
+
+    /** The pid of a `-v time` line ("11-13 10:22:31.042 I/zygote  (32479): …"). */
+    internal fun pidOf(line: String): Int? = PID.find(line)?.groupValues?.get(1)?.toIntOrNull()
+
     fun save(context: Context): File? = runCatching {
         val folder = dir.apply { mkdirs() }
         val file = File(folder, fileName())

@@ -22,6 +22,7 @@ const GALLERY_TYPES = {
   vacuum: { cat: 'home', icon: 'vacuum' },
   clock_weather: { cat: 'home', icon: 'sun' },
   monitor: { cat: 'home', icon: 'chart' },
+  info: { cat: 'layout', icon: 'image' },
   media_player: { cat: 'media', icon: 'play' },
   tv_remote: { cat: 'media', icon: 'remote' },
   apple_tv_remote: { cat: 'media', icon: 'box' },
@@ -29,7 +30,11 @@ const GALLERY_TYPES = {
   speaker_group: { cat: 'media', icon: 'speaker' },
   camera: { cat: 'media', icon: 'camera' },
   plex: { cat: 'media', icon: 'film' },
+  tv_guide: { cat: 'media', icon: 'guide' },
   xbox: { cat: 'media', icon: 'game' },
+  playstation: { cat: 'media', icon: 'game' },
+  zidoo: { cat: 'media', icon: 'player' },
+  media_remote: { cat: 'media', icon: 'remote' },
   button_grid: { cat: 'grids', icon: 'apps' },
   scene_grid: { cat: 'grids', icon: 'spark' },
   title: { cat: 'layout', icon: 'text' },
@@ -64,6 +69,7 @@ const GALLERY_ICONS = {
   columns: '<rect x="3" y="4" width="8" height="16" rx="1"/><rect x="13" y="4" width="8" height="16" rx="1"/>',
   image: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 8"/>',
   code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/>',
+  guide: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M8 5v14M12 14h6M12 17h4"/>',
   device: '<rect x="2" y="6" width="14" height="10" rx="2"/><rect x="18" y="8" width="4" height="10" rx="1"/>'
 };
 
@@ -201,8 +207,8 @@ function galleryDeviceIcon(d) {
       const a = (haStates && haStates[d.entityId] && haStates[d.entityId].attributes) || {};
       return /eversolo/i.test(a.manufacturer || '') || /^DMP/i.test(a.model || '') ? 'audio' : 'player';
     }
-    if (/^appletv_/.test(obj)) return 'box';
-    if (/^androidtv_/.test(obj)) return 'tv';
+    if (/^appletv_/.test(obj) || /^sky_/.test(obj)) return 'box';
+    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj) || /^samsung_/.test(obj)) return 'tv';
     return 'play';
   }
   return { light: 'bulb', switch: 'power', cover: 'blind', fan: 'fan', climate: 'thermo', camera: 'camera', vacuum: 'vacuum',
@@ -252,11 +258,22 @@ function pickGallerySuggestion(i) {
 /** The device's own apps as the remote publishes them (a Zidoo / Eversolo added in Astrion). */
 function galleryDeviceApps(entityId) {
   const a = haStates && haStates[entityId] && haStates[entityId].attributes;
-  return a && Array.isArray(a.astrion_apps) ? a.astrion_apps.filter(x => x && x.app).map(x => ({ name: x.name || x.app, app: x.app })) : null;
+  return a && Array.isArray(a.astrion_apps) ? a.astrion_apps.filter(x => x && x.app).map(x => (x.icon ? { name: x.name || x.app, app: x.app, icon: x.icon } : { name: x.name || x.app, app: x.app })) : null;
 }
 
-/** The cards that suit [d], best first, each with the options to fill its form with. */
+/** The cards that suit [d], best first: the device's own, then the media remote for a player (1.5.6). */
 function gallerySuggestionsFor(d) {
+  const list = gallerySuggestionsBase(d);
+  const obj = d.entityId.split('.')[1] || '';
+  if (d.domain === 'media_player' && /^(zidoo|lgtv|samsung|sky|appletv|androidtv)_/.test(obj)) {
+    const apps = galleryDeviceApps(d.entityId);
+    const mr = { name: d.name || d.entityId, player_entity: d.entityId, remote_entity: 'remote.' + obj };
+    list.splice(1, 0, { type: 'media_remote', opts: apps ? { ...mr, apps } : mr });
+  }
+  return list;
+}
+
+function gallerySuggestionsBase(d) {
   const e = d.entityId;
   const name = d.name || e;
   const obj = e.split('.')[1] || '';
@@ -267,8 +284,34 @@ function gallerySuggestionsFor(d) {
     if (/^zidoo_/.test(obj)) {
       const apps = galleryDeviceApps(e);
       return [
-        { type: 'media_player', recommended: true, opts: apps ? { ...full, apps } : full },
+        // 1.5.1: its own card first, what plays decides its buttons.
+        { type: 'zidoo', recommended: true, opts: { name, entity: e } },
+        { type: 'media_player', opts: apps ? { ...full, apps } : full },
         { type: 'tv_remote', opts: remote },
+        { type: 'source_select', opts: source }
+      ];
+    }
+    if (/^lgtv_/.test(obj) || /^samsung_/.test(obj)) {
+      // An LG (1.5.2) or Samsung (1.5.3) TV added in Astrion: its remote first, its apps already in.
+      const apps = galleryDeviceApps(e);
+      return [
+        { type: 'tv_remote', recommended: true, opts: apps ? { ...remote, apps } : remote },
+        { type: 'media_player', opts: full },
+        { type: 'source_select', opts: source }
+      ];
+    }
+    if (/^denon_/.test(obj)) {
+      // A Denon / Marantz receiver added in Astrion (1.5.4): power, volume, input and sound mode.
+      return [
+        { type: 'media_player', recommended: true, opts: { name, entity_id: e } },
+        { type: 'source_select', opts: source }
+      ];
+    }
+    if (/^sky_/.test(obj)) {
+      // A Sky box added in Astrion (1.5.3): its remote first; a Sky Q's favourite channels are its sources.
+      return [
+        { type: 'tv_remote', recommended: true, opts: remote },
+        { type: 'media_player', opts: full },
         { type: 'source_select', opts: source }
       ];
     }

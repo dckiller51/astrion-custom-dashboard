@@ -1,5 +1,5 @@
 const CLIMATE_MOCK = {
-  hvac_modes: ['fan_only', 'heat', 'cool', 'heat_cool', 'dry'],
+  hvac_modes: ['off', 'fan_only', 'heat', 'cool', 'heat_cool', 'dry'],
   fan_modes: ['auto', 'quiet', '1', '2', '3', '4', '5'],
   swing_modes: ['stop', 'swing'],
   state: 'cool',

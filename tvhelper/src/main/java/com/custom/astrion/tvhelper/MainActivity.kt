@@ -27,6 +27,7 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private lateinit var commands: TextView
+    private lateinit var keepAwake: Button
 
     private val refresher =
         object : Runnable {
@@ -59,6 +60,16 @@ class MainActivity : Activity() {
                 setOnClickListener { openNotificationAccess() }
             }
         )
+        // 1.1.0: for boxes the remote can't wake from their deep sleep (Xiaomi Mi Box S…).
+        keepAwake =
+            Button(this).apply {
+                setOnClickListener {
+                    KeepAwake.set(this@MainActivity, !KeepAwake.enabled(this@MainActivity))
+                    refresh()
+                }
+            }
+        column.addView(keepAwake)
+        column.addView(text(getString(R.string.keep_awake_hint), SMALL_SP, MUTED))
         setContentView(ScrollView(this).apply { addView(column) })
     }
 
@@ -79,14 +90,20 @@ class MainActivity : Activity() {
         lines += getString(if (media) R.string.media_ok else R.string.media_missing)
         lines += getString(if (apps) R.string.apps_ok else R.string.apps_missing)
         lines += getString(R.string.address, addresses().joinToString(", ").ifEmpty { "?" }, HelperRoutes.PORT)
+        val awake = KeepAwake.enabled(this)
+        val doze = awake && !KeepAwake.unrestricted(this)
+        lines += getString(if (awake) R.string.keep_awake_on else R.string.keep_awake_off)
         status.text = lines.joinToString("\n\n")
+        keepAwake.text = getString(if (awake) R.string.keep_awake_disable else R.string.keep_awake_enable)
         commands.text =
-            if (media && apps) {
+            if (media && apps && !doze) {
                 ""
             } else {
                 getString(R.string.adb_title) + "\n" + listOfNotNull(
                     "adb shell cmd notification allow_listener $packageName/${MediaListener::class.java.name}".takeIf { !media },
-                    "adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow".takeIf { !apps }
+                    "adb shell appops set $packageName SYSTEM_ALERT_WINDOW allow".takeIf { !apps },
+                    // Battery savings (Doze) would cut the Wi-Fi despite the helper's locks.
+                    "adb shell dumpsys deviceidle whitelist +$packageName".takeIf { doze }
                 ).joinToString("\n")
             }
     }

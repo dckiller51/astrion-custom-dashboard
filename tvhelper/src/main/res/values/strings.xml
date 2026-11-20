@@ -11,4 +11,10 @@
     <string name="adb_title">To allow them, run once from a computer (adb connect &lt;this TV&gt;:5555 first):</string>
     <string name="open_settings">Open notification access settings</string>
     <string name="settings_unavailable">This TV has no such settings screen: use the ADB command</string>
+    <string name="keep_awake_on">Stay reachable in standby: on</string>
+    <string name="keep_awake_off">Stay reachable in standby: off</string>
+    <string name="keep_awake_enable">Stay reachable in standby</string>
+    <string name="keep_awake_disable">Stop staying reachable in standby</string>
+    <string name="keep_awake_hint">For boxes the remote can\'t wake (Xiaomi Mi Box S…): the screen still turns off, but the box keeps its network up so the remote can turn it back on. Uses a little more power in standby.</string>
+    <string name="keep_awake_notification">Astrion: reachable in standby</string>
 </resources>

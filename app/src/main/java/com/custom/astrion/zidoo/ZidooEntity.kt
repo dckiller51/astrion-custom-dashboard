@@ -45,8 +45,56 @@ data class ZidooState(
     /** Muted, when the player says (an Eversolo, 1.5.0). */
     val muted: Boolean? = null,
     /** False when what plays can't be moved in (an AirPlay stream, 1.5.0): no seek bar to drag. */
-    val canSeek: Boolean = true
+    val canSeek: Boolean = true,
+    /** The video player's subtitle and audio track (1.5.1). */
+    val subtitle: String? = null,
+    val audio: String? = null,
+    /** The app an Eversolo hosts or the stream it gets (1.5.1). */
+    val appName: String? = null,
+    /** An Eversolo's repeat / shuffle (`loopModel`, 1.5.8): see [EversoloLoop]. */
+    val loop: Int? = null,
+    /** A film's synopsis, year and rating, from the poster wall (1.5.8). */
+    val overview: String? = null,
+    val year: Int? = null,
+    val rating: Double? = null
 )
+
+/**
+ * An Eversolo's repeat and shuffle (1.5.8, Zavie's tests): one `loopModel` its `Key.Repeat`
+ * key steps through — 0 repeat the list, 1 repeat the track, 2 shuffle, 3 play the list once —
+ * and back to 0. Home Assistant's repeat_set / shuffle_set become that many presses.
+ */
+object EversoloLoop {
+    const val ALL = 0
+    const val ONE = 1
+    const val SHUFFLE = 2
+    const val OFF = 3
+    const val KEY = "Key.Repeat"
+    private const val STEPS = 4
+
+    fun repeatOf(loop: Int): String = when (loop) {
+        ALL -> "all"
+        ONE -> "one"
+        else -> "off"
+    }
+
+    fun shuffleOf(loop: Int): Boolean = loop == SHUFFLE
+
+    /** The `loopModel` repeat_set / shuffle_set asks for; null when the call says nothing usable. */
+    fun target(service: String, data: Map<String, Any?>, loop: Int): Int? = when (service) {
+        "repeat_set" -> when (data["repeat"]) {
+            "all" -> ALL
+            "one" -> ONE
+            "off" -> OFF
+            else -> null
+        }
+        "shuffle_set" -> (data["shuffle"] as? Boolean)?.let { on -> if (on) SHUFFLE else if (loop == SHUFFLE) OFF else loop }
+        else -> null
+    }
+
+    /** Presses of [KEY] from [from] to [to]. */
+    fun presses(from: Int, to: Int): Int = ((to - from) % STEPS + STEPS) % STEPS
+}
 
 /**
  * The player's remote keys (`Key.*`, the names its control API takes), and the Android TV key
@@ -139,6 +187,8 @@ object ZidooEntityMapper {
     // Home Assistant MediaPlayerEntityFeature bits.
     private const val PAUSE = 1
     private const val SEEK = 2
+    private const val SHUFFLE_SET = 32768
+    private const val REPEAT_SET = 262144
     private const val VOLUME_MUTE = 8
     private const val PREVIOUS_TRACK = 16
     private const val NEXT_TRACK = 32
@@ -184,7 +234,11 @@ object ZidooEntityMapper {
         val sources = inputs + s.apps.keys.sortedWith(String.CASE_INSENSITIVE_ORDER)
         if (sources.isNotEmpty()) a["source_list"] = sources
         mediaApps(s.apps).takeIf { it.isNotEmpty() }?.let { a["astrion_apps"] = it }
-        if (playing) addNowPlaying(a, s)
+        settingsApp(s.apps)?.let { a["astrion_settings_app"] = it }
+        if (playing) {
+            addNowPlaying(a, s)
+            addFilm(a, s)
+        }
         if (s.reachable) addEversoloState(a, s, eversolo, playing)
         return ZidooEntityData(spec.entityId, stateOf(s), a)
     }
@@ -209,12 +263,30 @@ object ZidooEntityMapper {
     /** Mute when the player says it; an Eversolo's input other than its own player as the source, its own player when idle (1.5.0). */
     private fun addEversoloState(a: MutableMap<String, Any?>, s: ZidooState, eversolo: Boolean, playing: Boolean) {
         s.muted?.let { a["is_volume_muted"] = it }
+        // Its own player's repeat and shuffle (1.5.8).
+        val loop = s.loop?.takeIf { eversolo && playing && s.source == ZidooSource.MUSIC }
+        if (loop != null) {
+            a["repeat"] = EversoloLoop.repeatOf(loop)
+            a["shuffle"] = EversoloLoop.shuffleOf(loop)
+            a["supported_features"] = (a["supported_features"] as Int) or SHUFFLE_SET or REPEAT_SET
+        }
         val input = s.input?.takeIf { eversolo } ?: return
         if (input != EversoloInput.INTERNAL || !playing) a["source"] = input.label
     }
 
+    /** A film's synopsis, year and rating (1.5.8), for the media remote card's player view. */
+    private fun addFilm(a: MutableMap<String, Any?>, s: ZidooState) {
+        s.overview?.let { a["astrion_overview"] = it }
+        s.year?.let { a["astrion_year"] = it }
+        s.rating?.let { a["astrion_rating"] = it }
+    }
+
     /** What plays as an audiophile reads it, and a web radio's "Live" (no length: no bar), 1.5.0. */
     private fun addAudio(a: MutableMap<String, Any?>, s: ZidooState) {
+        // The Zidoo / Eversolo card's (1.5.1): the app an Eversolo hosts, a film's tracks.
+        s.appName?.let { a["app_name"] = it }
+        s.subtitle?.let { a["astrion_subtitle"] = it }
+        s.audio?.let { a["astrion_audio"] = it }
         s.quality?.let { a["astrion_quality"] = it }
         if (s.source == ZidooSource.MUSIC && (s.durationMs ?: 0) <= 0) a["astrion_live"] = true
     }
@@ -228,6 +300,14 @@ object ZidooEntityMapper {
         .filter { (_, pkg) -> pkg !in UTILITY_APPS }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.key })
         .map { (label, pkg) -> mapOf("name" to label, "app" to pkg) }
+
+    /**
+     * The player's own settings app (1.5.6), for the media remote's menu key, which does nothing on
+     * a Zidoo: the first of [SETTINGS_APPS] the player lists.
+     */
+    fun settingsApp(apps: Map<String, String>): String? = SETTINGS_APPS.firstOrNull { it in apps.values }
+
+    private val SETTINGS_APPS = listOf("com.eversolo.setting", "com.android.settings", "com.zidoo.settings", "com.android.quick.settings")
 
     private val UTILITY_APPS =
         setOf(
@@ -316,6 +396,7 @@ object ZidooServices {
             "media_seek" -> (data["seek_position"] as? Number)?.let { seek(state, (it.toDouble() * MS_PER_SECOND).toLong()) }
             "select_source" -> EversoloInput.ofLabel(data["source"])?.let { keys(it.key) } ?: launchOf(data["source"])
             "play_media" -> launchOf(data["media_content_id"])
+            "repeat_set", "shuffle_set" -> loop(service, data, state)
             else -> null
         }
     }
@@ -344,6 +425,13 @@ object ZidooServices {
         "media_next_track" -> track(state, next = true)
         "media_previous_track" -> track(state, next = false)
         else -> null
+    }
+
+    /** An Eversolo's repeat / shuffle (1.5.8): its Repeat key as many times as it takes; null without a `loopModel`. */
+    private fun loop(service: String, data: Map<String, Any?>, state: ZidooState): List<ZidooStep>? {
+        val from = state.loop ?: return null
+        val to = EversoloLoop.target(service, data, from) ?: return null
+        return List(EversoloLoop.presses(from, to)) { ZidooStep.Key(EversoloLoop.KEY) }
     }
 
     /** Wake-on-LAN for a player that's fully off, then its power key for one in network standby. */

@@ -4,9 +4,14 @@ import android.content.Context
 import androidx.core.content.edit
 import java.util.UUID
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -90,7 +95,9 @@ data class AndroidTvConfig(
     val mac: String = "",
     val certSha256: String = "",
     /** The code of the Astrion TV Helper app installed on that TV (title, cover, opening apps), blank without it. */
-    val helperCode: String = ""
+    val helperCode: String = "",
+    /** The ESP32 that wakes it over Bluetooth (esphome-xiaomi-ble-wake, 1.6.0): its address, blank without one. */
+    val bleWake: String = ""
 )
 
 /**
@@ -104,6 +111,71 @@ data class ZidooConfig(
     val host: String,
     /** The player's MAC address, for Wake-on-LAN. Blank when the player didn't give one. */
     val mac: String = ""
+)
+
+/**
+ * One Sky box added on the web page (1.5.3): a Sky Q ([skyQ], keys on port 49160 and its state) or
+ * a Sky+ HD (keys on 5900 only). No pairing. Published as [entityId] (`media_player.sky_…`) plus
+ * the matching `remote.sky_…`.
+ */
+data class SkyConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val skyQ: Boolean = true
+)
+
+/**
+ * One Denon / Marantz AV receiver added on the web page (1.5.4), by IP; no pairing. [port] is the
+ * one its web API answered on (8080 on AVR-X models from 2016, else 80). Published as [entityId]
+ * (`media_player.denon_…`) plus the matching `remote.denon_…`.
+ */
+data class DenonConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val port: Int = 8080,
+    /** The inputs' names given in Astrion, by input code: for receivers that don't say theirs. */
+    val inputNames: Map<String, String> = emptyMap(),
+    /** The input codes hidden in Astrion. */
+    val hiddenInputs: Set<String> = emptySet(),
+    /** 1.5.7: its zones published too: 1 the main zone only, 2 with zone 2, 3 with zones 2 and 3. */
+    val zones: Int = 1
+)
+
+/**
+ * One Samsung Tizen TV added on the web page (1.5.3), allowed once (the TV's prompt). Published as
+ * [entityId] (`media_player.samsung_…`) plus the matching `remote.samsung_…`. [token] and [pin]
+ * (the TV's certificate fingerprint) never leave the remote. [tls] false: a TV without tokens
+ * (2016–2017), on `ws://…:8001`.
+ */
+data class SamsungConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val mac: String = "",
+    val token: String = "",
+    val pin: String = "",
+    val tls: Boolean = true
+)
+
+/**
+ * One LG webOS TV added on the web page (1.5.2), paired once (the TV's prompt). Published as
+ * [entityId] (`media_player.lgtv_…`) plus the matching `remote.lgtv_…`. [clientKey] and [pin]
+ * (the TV's certificate fingerprint) never leave the remote: the web page only learns it's paired.
+ */
+data class LgTvConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    /** The TV's MAC address, for Wake-on-LAN. Blank when the TV didn't give one. */
+    val mac: String = "",
+    val clientKey: String = "",
+    val pin: String = ""
 )
 
 /**
@@ -144,6 +216,17 @@ object RemoteSettings {
     private const val KEY_ANDROID_TVS = "android_tvs" // JSON array, see AndroidTvConfig
     private const val KEY_ANDROID_TV_IDENTITY = "android_tv_identity" // key:cert, see AndroidTvIdentity
     private const val KEY_ZIDOOS = "zidoos" // JSON array, see ZidooConfig
+    private const val KEY_LGTVS = "lgtvs" // JSON array, see LgTvConfig
+    private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
+    private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
+    private const val KEY_DENONS = "denons" // JSON array, see DenonConfig
+    private const val KEY_TMDB_TOKEN = "tmdb_token" // 1.6.0, see tmdb/TmdbRegistry
+    private const val KEY_TMDB_LANGUAGE = "tmdb_language"
+    private const val KEY_PLEX_HOST = "plex_host" // 1.6.0: the Plex server, for every Plex card
+    private const val KEY_PLEX_TOKEN = "plex_token"
+    private const val KEY_MEDIA_INFO = "media_info_source" // 1.6.0: "auto", "plex" or "tmdb", see tmdb/MediaInfoSource
+    private const val KEY_EPG_URL = "epg_url" // 1.6.0: the TV guide's XMLTV source, see epg/EpgRegistry
+    private const val KEY_EPG_CHANNELS = "epg_channels" // its channels kept, ids separated by "\n"
 
     // Legacy single-hub keys (pre-multi-hub). Read once for migration, never written again.
     private const val LEGACY_KEY_HARMONY_IP = "harmony_hub_ip"
@@ -156,6 +239,55 @@ object RemoteSettings {
     fun haUrl(context: Context): String = prefs(context).getString(KEY_HA_URL, "") ?: ""
 
     fun haToken(context: Context): String = prefs(context).getString(KEY_HA_TOKEN, "") ?: ""
+
+    /** TMDB (1.6.0): the user's own read access token (or v3 key); empty when not set. Never sent back to the web page. */
+    fun tmdbToken(context: Context): String = prefs(context).getString(KEY_TMDB_TOKEN, "") ?: ""
+
+    /** TMDB's language for titles and synopses ("fr-FR"); empty: the remote's own language. */
+    fun tmdbLanguage(context: Context): String = prefs(context).getString(KEY_TMDB_LANGUAGE, "") ?: ""
+
+    /** The Plex server set on the web page (1.6.0), "http://…:32400"; empty when not set. */
+    fun plexHost(context: Context): String = prefs(context).getString(KEY_PLEX_HOST, "") ?: ""
+
+    /** Its token (X-Plex-Token); never sent back to the web page, nor written in dashboard.json. */
+    fun plexToken(context: Context): String = prefs(context).getString(KEY_PLEX_TOKEN, "") ?: ""
+
+    /** Saves the Plex server; a null [token] keeps the one saved, an empty one removes it. */
+    fun savePlex(context: Context, host: String, token: String?) {
+        prefs(context).edit(commit = true) {
+            putString(KEY_PLEX_HOST, host.trim().trimEnd('/'))
+            if (token != null) putString(KEY_PLEX_TOKEN, token.trim())
+        }
+    }
+
+    /** Where what's playing is looked up (1.6.0): "auto" (Plex, then TMDB), "plex" or "tmdb". */
+    fun mediaInfoSource(context: Context): String = prefs(context).getString(KEY_MEDIA_INFO, "auto") ?: "auto"
+
+    fun saveMediaInfoSource(context: Context, source: String) {
+        prefs(context).edit(commit = true) { putString(KEY_MEDIA_INFO, source) }
+    }
+
+    /** The TV guide's XMLTV address (1.6.0); empty: no guide. */
+    fun epgUrl(context: Context): String = prefs(context).getString(KEY_EPG_URL, "") ?: ""
+
+    /** The guide's channels kept (their XMLTV ids); empty: chosen by the guide (see EpgRegistry). */
+    fun epgChannels(context: Context): List<String> =
+        prefs(context).getString(KEY_EPG_CHANNELS, "").orEmpty().split('\n').map { it.trim() }.filter { it.isNotEmpty() }
+
+    fun saveEpg(context: Context, url: String, channels: List<String>) {
+        prefs(context).edit(commit = true) {
+            putString(KEY_EPG_URL, url.trim())
+            putString(KEY_EPG_CHANNELS, channels.joinToString("\n"))
+        }
+    }
+
+    /** Saves TMDB's settings; a null [token] keeps the one saved, an empty one removes it. */
+    fun saveTmdb(context: Context, token: String?, language: String) {
+        prefs(context).edit(commit = true) {
+            if (token != null) putString(KEY_TMDB_TOKEN, token.trim())
+            putString(KEY_TMDB_LANGUAGE, language.trim())
+        }
+    }
 
     /**
      * Optional HA webhook id (just the id — `POST <ha_url>/api/webhook/<id>`),
@@ -357,7 +489,8 @@ object RemoteSettings {
                     str("serviceName"),
                     str("mac"),
                     str("certSha256"),
-                    str("helperCode")
+                    str("helperCode"),
+                    str("bleWake")
                 )
             }
         } catch (_: Exception) {
@@ -378,6 +511,7 @@ object RemoteSettings {
                         put("mac", tv.mac)
                         put("certSha256", tv.certSha256)
                         put("helperCode", tv.helperCode)
+                        put("bleWake", tv.bleWake)
                     }
                 }
             }
@@ -405,6 +539,165 @@ object RemoteSettings {
         } catch (_: Exception) {
             emptyList()
         }
+    }
+
+    /** All LG TVs, in the order they were added (1.5.2). */
+    fun lgTvs(context: Context): List<LgTvConfig> {
+        val raw = prefs(context).getString(KEY_LGTVS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                LgTvConfig(localId, str("name").ifBlank { "LG TV" }, entityId, str("host"), str("mac"), str("clientKey"), str("pin"))
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveLgTvs(context: Context, tvs: List<LgTvConfig>) {
+        val array =
+            buildJsonArray {
+                tvs.forEach { t ->
+                    addJsonObject {
+                        put("localId", t.localId)
+                        put("name", t.name)
+                        put("entityId", t.entityId)
+                        put("host", t.host)
+                        put("mac", t.mac)
+                        put("clientKey", t.clientKey)
+                        put("pin", t.pin)
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_LGTVS, array.toString()) }
+    }
+
+    /** All Denon / Marantz receivers, in the order they were added (1.5.4). */
+    fun denons(context: Context): List<DenonConfig> {
+        val raw = prefs(context).getString(KEY_DENONS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                DenonConfig(
+                    localId,
+                    str("name").ifBlank { "Receiver" },
+                    entityId,
+                    str("host"),
+                    str("port").toIntOrNull() ?: DEFAULT_DENON_PORT,
+                    inputNames =
+                    (obj["inputNames"] as? JsonObject)?.mapNotNull { (k, v) ->
+                        (v as? JsonPrimitive)?.content?.takeIf { it.isNotBlank() }?.let { k to it }
+                    }?.toMap().orEmpty(),
+                    hiddenInputs = (obj["hiddenInputs"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }?.toSet().orEmpty(),
+                    zones = str("zones").toIntOrNull()?.coerceIn(1, 3) ?: 1
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveDenons(context: Context, receivers: List<DenonConfig>) {
+        val array =
+            buildJsonArray {
+                receivers.forEach { r ->
+                    addJsonObject {
+                        put("localId", r.localId)
+                        put("name", r.name)
+                        put("entityId", r.entityId)
+                        put("host", r.host)
+                        put("port", r.port.toString())
+                        put("inputNames", buildJsonObject { r.inputNames.forEach { (k, v) -> put(k, v) } })
+                        put("hiddenInputs", buildJsonArray { r.hiddenInputs.forEach { add(it) } })
+                        put("zones", r.zones.toString())
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_DENONS, array.toString()) }
+    }
+
+    private const val DEFAULT_DENON_PORT = 8080
+
+    /** All Samsung TVs, in the order they were added (1.5.3). */
+    fun samsungs(context: Context): List<SamsungConfig> {
+        val raw = prefs(context).getString(KEY_SAMSUNGS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                SamsungConfig(
+                    localId,
+                    str("name").ifBlank { "Samsung TV" },
+                    entityId,
+                    str("host"),
+                    str("mac"),
+                    str("token"),
+                    str("pin"),
+                    str("tls") != "false"
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSamsungs(context: Context, tvs: List<SamsungConfig>) {
+        val array =
+            buildJsonArray {
+                tvs.forEach { t ->
+                    addJsonObject {
+                        put("localId", t.localId)
+                        put("name", t.name)
+                        put("entityId", t.entityId)
+                        put("host", t.host)
+                        put("mac", t.mac)
+                        put("token", t.token)
+                        put("pin", t.pin)
+                        put("tls", t.tls.toString())
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_SAMSUNGS, array.toString()) }
+    }
+
+    /** All Sky boxes, in the order they were added (1.5.3). */
+    fun skys(context: Context): List<SkyConfig> {
+        val raw = prefs(context).getString(KEY_SKYS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                SkyConfig(localId, str("name").ifBlank { "Sky" }, entityId, str("host"), str("kind") != "skyhd")
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSkys(context: Context, skys: List<SkyConfig>) {
+        val array =
+            buildJsonArray {
+                skys.forEach { b ->
+                    addJsonObject {
+                        put("localId", b.localId)
+                        put("name", b.name)
+                        put("entityId", b.entityId)
+                        put("host", b.host)
+                        put("kind", if (b.skyQ) "skyq" else "skyhd")
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_SKYS, array.toString()) }
     }
 
     fun saveZidoos(context: Context, zidoos: List<ZidooConfig>) {

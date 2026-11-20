@@ -17,8 +17,17 @@ android {
         applicationId = "com.custom.astrion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 60
-        versionName = "1.5.0"
+        versionCode = 69
+        versionName = "1.6.0"
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            // The beta built by GitHub (.github/workflows/beta-release.yml) is signed with the
+            // usual debug keystore, given here: with another key it couldn't update an
+            // installed beta. Unset locally: Android's own ~/.android/debug.keystore.
+            System.getenv("DEBUG_KEYSTORE")?.takeIf { it.isNotBlank() }?.let { storeFile = file(it) }
+        }
     }
 
     buildTypes {

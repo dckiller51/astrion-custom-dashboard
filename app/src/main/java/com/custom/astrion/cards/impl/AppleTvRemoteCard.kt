@@ -57,6 +57,8 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.ServiceCall
+import com.custom.astrion.ui.LocalPageBounds
+import com.custom.astrion.ui.PageBounds
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
 
@@ -274,11 +276,14 @@ class AppleTvRemoteCard : CardRenderer {
             if (picker.value) SourcePickerDialog(ctx, media, r.appIcons(), r.apps.map { it.source }) { picker.value = false }
         }
         val density = LocalDensity.current
+        val pageBounds = LocalPageBounds.current
         Column(
             modifier =
             Modifier
                 .fillMaxWidth()
-                .then(if (layout == AtvLayout.FULL) Modifier.onGloballyPositioned { measureFit(fit, it, density) } else Modifier)
+                .then(
+                    if (layout == AtvLayout.FULL) Modifier.onGloballyPositioned { measureFit(fit, it, density, pageBounds) } else Modifier
+                )
                 .clip(RoundedCornerShape(24.dp))
                 .background(ctx.theme.cardSurface)
                 .padding(if (layout == AtvLayout.CLASSIC) CLASSIC_PADDING.dp else CARD_PADDING.dp),
@@ -601,10 +606,12 @@ private const val APPS_LABELLED_H = 62
  * holds other cards it simply scrolls, as before.
  */
 @Composable
-internal fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = null): Int {
+internal fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = null, share: Float = 1f): Int {
     val screen = LocalConfiguration.current.screenHeightDp
-    val used = DASHBOARD_CHROME_H + CARD_PADDING * 2 + blocks.sum() + GAP * blocks.size
-    val raw = screen - used
+    // [share] (1.5.7, the media remote's size): the card takes that part of the screen below the chrome.
+    val room = (screen - DASHBOARD_CHROME_H) * share
+    val used = CARD_PADDING * 2 + blocks.sum() + GAP * blocks.size
+    val raw = (room - used).toInt()
     val correction = fit?.errors?.get(blocks) ?: 0f
     val pad = (raw + correction).toInt().coerceIn(min, max)
     if (fit != null) {
@@ -619,12 +626,13 @@ internal fun trackpadFor(blocks: List<Int>, min: Int, max: Int, fit: AtvFit? = n
  * Once per set of blocks: how far the card's bottom lands past (or short of) the bottom of the
  * screen minus the page dots, turned into a correction for [trackpadFor].
  */
-internal fun measureFit(fit: AtvFit, coords: LayoutCoordinates, density: Density) {
+internal fun measureFit(fit: AtvFit, coords: LayoutCoordinates, density: Density, page: PageBounds? = null) {
     val blocks = fit.blocks ?: return
     if (fit.errors.containsKey(blocks)) return
     val rootHeight = coords.findRootCoordinates().size.height
     val bottom = coords.positionInWindow().y + coords.size.height
-    val limit = rootHeight - with(density) { PAGE_BOTTOM_CHROME_H.dp.toPx() }
+    // The page's own bottom (1.5.8, PageBounds), else the screen's less the page dots.
+    val limit = page?.bottomPx?.takeIf { it > 0f } ?: (rootHeight - with(density) { PAGE_BOTTOM_CHROME_H.dp.toPx() })
     val overflowDp = with(density) { (bottom - limit).toDp().value }
     fit.errors[blocks] = fit.usedPad - overflowDp - fit.rawEstimate
 }

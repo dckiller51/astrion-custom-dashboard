@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.custom.astrion.R
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
@@ -95,6 +96,7 @@ internal fun MediaQueueDialog(client: HaClient, player: String, theme: ThemeColo
         )
 
     Dialog(onDismissRequest = onClose) {
+        ScreenCapture.TrackForScreenshots()
         Column(
             modifier =
             Modifier

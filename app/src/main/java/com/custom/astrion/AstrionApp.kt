@@ -11,10 +11,13 @@ import com.custom.astrion.cards.impl.ClimateCard
 import com.custom.astrion.cards.impl.ClockWeatherCard
 import com.custom.astrion.cards.impl.CoverCard
 import com.custom.astrion.cards.impl.FanCard
+import com.custom.astrion.cards.impl.InfoCard
 import com.custom.astrion.cards.impl.LightCard
 import com.custom.astrion.cards.impl.MediaPlayerCard
+import com.custom.astrion.cards.impl.MediaRemoteCard
 import com.custom.astrion.cards.impl.MonitorCard
 import com.custom.astrion.cards.impl.PictureElementsCard
+import com.custom.astrion.cards.impl.PlayStationCard
 import com.custom.astrion.cards.impl.PlexCard
 import com.custom.astrion.cards.impl.RowCard
 import com.custom.astrion.cards.impl.SceneGridCard
@@ -23,9 +26,11 @@ import com.custom.astrion.cards.impl.SourceSelectCard
 import com.custom.astrion.cards.impl.SpeakerGroupCard
 import com.custom.astrion.cards.impl.SwitchCard
 import com.custom.astrion.cards.impl.TitleCard
+import com.custom.astrion.cards.impl.TvGuideCard
 import com.custom.astrion.cards.impl.TvRemoteCard
 import com.custom.astrion.cards.impl.VacuumCard
 import com.custom.astrion.cards.impl.XboxCard
+import com.custom.astrion.cards.impl.ZidooCard
 import com.custom.astrion.config.ActiveActivityStore
 import com.custom.astrion.config.DeviceStateStore
 import com.custom.astrion.ha.HaLabels
@@ -51,6 +56,7 @@ class AstrionApp : Application() {
     override fun onCreate() {
         super.onCreate()
         HaLabels.init(this)
+        AppLogs.rememberRun(this)
         installDeviceStateStore()
         // Off the main thread: a cache listing is cheap, but startup is not
         // the place for any disk I/O that can wait.
@@ -76,8 +82,13 @@ class AstrionApp : Application() {
             SwitchCard(),
             TitleCard(),
             TvRemoteCard(),
+            TvGuideCard(),
             XboxCard(),
-            VacuumCard()
+            VacuumCard(),
+            ZidooCard(),
+            MediaRemoteCard(),
+            InfoCard(),
+            PlayStationCard()
             // ← Register your own card types here
         )
     }

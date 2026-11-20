@@ -119,8 +119,32 @@ function isNetworkAndroidTv(entityId) {
   return /^media_player\.androidtv_/.test(entityId || '');
 }
 
+/** An LG TV paired in Astrion (1.5.2, media_player.lgtv_…): turn_on = Wake-on-LAN, turn_off =
+ * off, select_source = an input (HDMI 1…) or an app by name. */
+function isNetworkLgTv(entityId) {
+  return /^media_player\.lgtv_/.test(entityId || '');
+}
+
+/** A Sky box added in Astrion (1.5.3, media_player.sky_…): turn_on / turn_off = its power key
+ * (a Sky Q only when it's in standby / on), select_source = a channel by number or name. */
+function isNetworkSky(entityId) {
+  return /^media_player\.sky_/.test(entityId || '');
+}
+
+/** A Denon / Marantz receiver added in Astrion (1.5.4, media_player.denon_…): on (PWON), standby
+ * (PWSTANDBY) and an input by name. */
+function isNetworkDenon(entityId) {
+  return /^media_player\.denon_/.test(entityId || '');
+}
+
+/** A Samsung TV added in Astrion (1.5.3, media_player.samsung_…): turned on (its power key, or
+ * Wake-on-LAN), off, and an app by name — the same as an LG TV for the wizard. */
+function isNetworkSamsung(entityId) {
+  return /^media_player\.samsung_/.test(entityId || '');
+}
+
 function isNetworkTv(entityId) {
-  return isNetworkAppleTv(entityId) || isNetworkAndroidTv(entityId);
+  return isNetworkAppleTv(entityId) || isNetworkAndroidTv(entityId) || isNetworkLgTv(entityId) || isNetworkSamsung(entityId);
 }
 
 /** [{entityId, name, domain}] — the Devices catalog first, then every live
@@ -157,6 +181,10 @@ function deviceRefLabel(ref) {
   if (ref.source === 'harmony') return `${ref.deviceLabel || ref.deviceId} (Harmony)`;
   if (isNetworkAppleTv(ref.deviceId)) return I18N.t('web_activity_ref_atv', haEntityName(ref.deviceId));
   if (isNetworkAndroidTv(ref.deviceId)) return I18N.t('web_activity_ref_adtv', haEntityName(ref.deviceId));
+  if (isNetworkLgTv(ref.deviceId)) return I18N.t('web_activity_ref_lgtv', haEntityName(ref.deviceId));
+  if (isNetworkSamsung(ref.deviceId)) return I18N.t('web_activity_ref_samsung', haEntityName(ref.deviceId));
+  if (isNetworkDenon(ref.deviceId)) return I18N.t('web_activity_ref_denon', haEntityName(ref.deviceId));
+  if (isNetworkSky(ref.deviceId)) return I18N.t('web_activity_ref_sky', haEntityName(ref.deviceId));
   return `${haEntityName(ref.deviceId)} (HA — ${ref.deviceId})`;
 }
 
@@ -184,7 +212,7 @@ function startActivityWizard(editId) {
     icon: existing?.icon || '',
     // deviceRefs: [{source, deviceId, hub?, deviceLabel?}] — selection only, no commands yet
     deviceRefs: existing ? existing.devices.map(d => ({ source: d.source, deviceId: d.deviceId, hub: d.hub })) : [],
-    // deviceConfig[i] matches deviceRefs[i]: {powerOnCommand, powerOffCommand, inputCommand, powerOnFirst, powerOffOnExit, delayAfterMs}
+    // deviceConfig[i] matches deviceRefs[i]: {powerOnCommand, powerOffCommand, inputCommand, powerOnFirst, powerOffOnExit, delayAfterMs, inputAgainAfterMs}
     deviceConfig: existing ? existing.devices.map(d => ({
       powerOnCommand: d.powerOnCommand || null,
       powerOffCommand: d.powerOffCommand || null,
@@ -192,6 +220,7 @@ function startActivityWizard(editId) {
       powerOnFirst: d.powerOnFirst !== false,
       powerOffOnExit: d.powerOffOnExit !== false,
       delayAfterMs: d.delayAfterMs || 0,
+      inputAgainAfterMs: d.inputAgainAfterMs || 0,
     })) : [],
     configureIndex: 0,
     // Device ids kept on between Activities (dashboardData.keepOnDevices) — a setting of the device,
@@ -294,6 +323,8 @@ function saveCurrentDeviceConfig() {
     powerOnFirst: document.getElementById('wizPowerOnFirst')?.checked !== false,
     powerOffOnExit: document.getElementById('wizPowerOffOnExit')?.checked !== false,
     delayAfterMs: parseInt(document.getElementById('wizDelay')?.value, 10) || 0,
+    // 1.6.0: seconds in the form, milliseconds in dashboard.json (at most 60 s).
+    inputAgainAfterMs: Math.min(60000, Math.max(0, Math.round((parseFloat(document.getElementById('wizInputAgain')?.value) || 0) * 1000))),
   };
   const keepOnBox = document.getElementById('wizKeepOn');
   if (keepOnBox) {
@@ -355,7 +386,11 @@ function renderWizardDevices() {
   const allHa = haEntityChoices();
   const appleTvs = allHa.filter(c => isNetworkAppleTv(c.entityId));
   const androidTvs = allHa.filter(c => isNetworkAndroidTv(c.entityId));
-  const haChoices = allHa.filter(c => !isNetworkTv(c.entityId));
+  const lgTvs = allHa.filter(c => isNetworkLgTv(c.entityId));
+  const skys = allHa.filter(c => isNetworkSky(c.entityId));
+  const samsungs = allHa.filter(c => isNetworkSamsung(c.entityId));
+  const denons = allHa.filter(c => isNetworkDenon(c.entityId));
+  const haChoices = allHa.filter(c => !isNetworkTv(c.entityId) && !isNetworkSky(c.entityId) && !isNetworkDenon(c.entityId));
   return `
     <div class="hint">${I18N.t('web_activity_devices_hint')}</div>
 
@@ -388,6 +423,42 @@ function renderWizardDevices() {
           ${c.name}
         </label>
       `).join('') + `<div class="hint">${I18N.t('web_activity_adtv_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_lgtv_heading')}</h3>
+    ${lgTvs.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_lgtv')}</div>` :
+      lgTvs.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_lgtv_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_samsung_heading')}</h3>
+    ${samsungs.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_samsung')}</div>` :
+      samsungs.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_samsung_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_denon_heading')}</h3>
+    ${denons.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_denon')}</div>` :
+      denons.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_denon_hint')}</div>`}
+
+    <h3 style="margin-top:14px">${I18N.t('web_activity_sky_heading')}</h3>
+    ${skys.length === 0 ? `<div class="hint">${I18N.t('web_activity_no_sky')}</div>` :
+      skys.map(c => `
+        <label class="inline-check">
+          <input type="checkbox" data-ha-ref="${c.entityId}" ${selectedHaIds.has(c.entityId) ? 'checked' : ''} onchange="toggleHaDeviceRef('${c.entityId}', this.checked)">
+          ${c.name}
+        </label>
+      `).join('') + `<div class="hint">${I18N.t('web_activity_sky_hint')}</div>`}
 
     <h3 style="margin-top:14px">${I18N.t('web_activity_ha_heading')}</h3>
     <select id="wizHaEntitySelect">
@@ -457,7 +528,7 @@ function renderWizardConfigure() {
     ${ref.source === 'ha' ? `
       <label>${isNetworkTv(ref.deviceId) ? 'App to launch (optional — e.g. Netflix)' : 'Source (optional, passed to media_player.select_source)'}</label>
       <input type="text" id="wizInputText" value="${cfg.inputCommand || ''}" list="wizInputTextHints" placeholder="${isNetworkTv(ref.deviceId) ? 'e.g. Netflix' : 'e.g. Apple TV'}">
-      <datalist id="wizInputTextHints">${haSourceEntries(ref.deviceId).map(([v]) => `<option value="${v}"></option>`).join('')}</datalist>
+      <datalist id="wizInputTextHints">${(isNetworkSamsung(ref.deviceId) ? [['HOME']] : []).concat(haSourceEntries(ref.deviceId)).map(([v]) => `<option value="${v}"></option>`).join('')}</datalist>
     ` : `
       <div id="wizProfileHint"></div>
       ${commandFieldHtml('wizPowerOn', 'Power-on command (optional)', ref)}
@@ -471,6 +542,9 @@ function renderWizardConfigure() {
     <div class="hint">${I18N.t('web_activity_keep_on_hint')}</div>
     <label>${I18N.t('web_activity_delay_label')}</label>
     <input type="number" id="wizDelay" value="${cfg.delayAfterMs || 0}" min="0">
+    <label>${I18N.t('web_activity_input_again_label')}</label>
+    <input type="number" id="wizInputAgain" value="${(cfg.inputAgainAfterMs || 0) / 1000}" min="0" max="60" step="0.5">
+    <div class="hint">${I18N.t('web_activity_input_again_hint')}</div>
   `;
 }
 
@@ -753,6 +827,7 @@ function saveActivityWizard() {
       ...(cfg.powerOnFirst === false ? { powerOnFirst: false } : {}),
       ...(cfg.powerOffOnExit === false ? { powerOffOnExit: false } : {}),
       ...(cfg.delayAfterMs ? { delayAfterMs: cfg.delayAfterMs } : {}),
+      ...(cfg.inputAgainAfterMs ? { inputAgainAfterMs: cfg.inputAgainAfterMs } : {}),
     };
   });
   const volRef = volumeDeviceRef();

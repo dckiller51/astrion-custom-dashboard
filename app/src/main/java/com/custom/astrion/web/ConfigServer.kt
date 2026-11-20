@@ -102,6 +102,14 @@ import org.json.JSONObject
  *  GET  /appletv-artwork/<localId>  the current artwork for a paired Apple TV, if MRP has fetched
  *                        one; this is what a device's `entity_picture` attribute points at
  *  POST /zidoo-check    a Zidoo player's model and MAC address (host), see ZidooRoutes (1.4.6)
+ *  POST /lgtv-pair      pairs an LG TV (host): its prompt, then {model, mac}, see LgTvRoutes (1.5.2)
+ *  POST /sky-check      a Sky box's kind (Sky Q / Sky+ HD) and model (host), see SkyRoutes (1.5.3)
+ *  POST /samsung-pair   allows the remote on a Samsung TV (host): its prompt, then {model, mac}, see SamsungRoutes (1.5.3)
+ *  POST /denon-check    a Denon / Marantz receiver's model and port (host), see DenonRoutes (1.5.4)
+ *  GET/POST /tmdb, POST /tmdb-test   TMDB's token and language, a test search, see TmdbRoutes (1.6.0)
+ *  GET/POST /plex, POST /plex-test   the Plex server for every Plex card, a test, see PlexRoutes (1.6.0)
+ *  GET  /plex-art?path=/library/…    a Plex picture, the token added here (what's playing's poster)
+ *  GET/POST /epg, POST /epg-refresh  the TV guide's source and channels, see EpgRoutes (1.6.0)
  *  GET  /harmony-discover resolve a hub's numeric hubId from its IP alone
  *                        (?ip=<address>) — used by the "Auto-detect ID" button
  *  GET  /camera-snapshot proxy a single still frame for a camera.* entity
@@ -122,6 +130,7 @@ import org.json.JSONObject
  *                        carries `X-Astrion-Version-Id`, the history version
  *                        it created (see /history)
  *  POST /icons          upload a PNG into /sdcard/astrion/icons/
+ *  POST /icons-import-direct  each direct device's app icons into its own folder (1.5.2), see DirectIconImport
  *  GET  /icons-list       list every uploaded icon's filename, as JSON — feeds
  *                        the dashboard editor's icon picker
  *  DELETE /icons/<file>  delete an uploaded icon (Devices page → Icons)
@@ -133,11 +142,14 @@ import org.json.JSONObject
  *                        device (/builder/)
  *  GET  /check-update     check this project's GitHub Releases for a newer build
  *  POST /install-update   download the newer APK and open the system installer
+ *                        (`force=1`: the official one even when installed)
  *  POST /install-beta-update  same as /install-update but against the rolling
  *                        dev-latest pre-release instead — always installs
  *                        whatever the tag currently points to, no separate
  *                        check step (used by the beta toggle in the builder,
  *                        docs/js/hotkeys.js's installBetaUpdate())
+ *  POST /install-test-update  a test build: the pre-release tagged `tag`
+ *                        (test-latest…), installed whatever the version
  *  GET  /pages            list this device's dashboard pages (id + name), in
  *                        pager order — lets a remote controller (e.g. the
  *                        Home Assistant "astrion" integration) discover what
@@ -245,11 +257,48 @@ class ConfigServer(
     /** Zidoo players (1.4.6): added by IP, no pairing. */
     private val zidooRoutes = ZidooRoutes(context)
 
+    /** LG TVs (1.5.2): paired once, the TV's prompt; their apps' icons. */
+    var lgTvRegistry: com.custom.astrion.lgtv.LgTvRegistry? = null
+    private val lgTvRoutes = LgTvRoutes(context) { lgTvRegistry }
+
+    /** Sky boxes (1.5.3): added by IP, no pairing. */
+    var skyRegistry: com.custom.astrion.sky.SkyRegistry? = null
+    private val skyRoutes = SkyRoutes(context)
+
+    /** Samsung TVs (1.5.3): allowed once on the TV. */
+    var samsungRegistry: com.custom.astrion.samsung.SamsungRegistry? = null
+    private val samsungRoutes = SamsungRoutes(context) { samsungRegistry }
+
+    /** Denon / Marantz receivers (1.5.4): added by IP, no pairing. */
+    var denonRegistry: com.custom.astrion.denon.DenonRegistry? = null
+    private val denonRoutes = DenonRoutes(context)
+
+    /** TMDB's or the Plex server's settings changed (1.6.0): the activity starts what's-playing lookups again on them. */
+    @Volatile
+    var onTmdbChanged: () -> Unit = {}
+    private val tmdbRoutes = TmdbRoutes(context) { onTmdbChanged() }
+    private val plexRoutes = PlexRoutes(context) { onTmdbChanged() }
+
+    /** The TV guide (1.6.0): the running one, and what to do when its settings change. */
+    @Volatile
+    var epgRegistry: com.custom.astrion.epg.EpgRegistry? = null
+
+    @Volatile
+    var onEpgChanged: () -> Unit = {}
+    private val epgRoutes = EpgRoutes(context, { epgRegistry }) { onEpgChanged() }
+
     /** Called after POST /restore (1.3.9): the activity restarts the app on the restored settings. */
     @Volatile
     var onBackupRestored: () -> Unit = {}
 
     private val backupRoutes = BackupRoutes(context) { onBackupRestored() }
+
+    /** Takes a screenshot of the app (1.5.4, POST /screenshot): PNG, or null when it can't. */
+    @Volatile
+    var onScreenshot: () -> ByteArray? = { null }
+
+    private val screenshotRoutes = ScreenshotRoutes(context) { onScreenshot() }
+    private val templateRoutes = TemplateRoutes(haClient)
 
     /** Called after POST /remote-name — the activity refreshes what shows the name. */
     @Volatile
@@ -297,7 +346,15 @@ class ConfigServer(
         val method = session.method
         val uri = session.uri
         webAuth.check(session) ?: backupRoutes.serve(uri, session) ?: androidTvRoutes.serve(uri, session)
-            ?: zidooRoutes.serve(uri, session) ?: when (uri) {
+            ?: zidooRoutes.serve(uri, session) ?: lgTvRoutes.serve(uri, session)
+            ?: skyRoutes.serve(uri, session)
+            ?: samsungRoutes.serve(uri, session)
+            ?: denonRoutes.serve(uri, session)
+            ?: tmdbRoutes.serve(uri, session)
+            ?: plexRoutes.serve(uri, session)
+            ?: epgRoutes.serve(uri, session)
+            ?: screenshotRoutes.serve(uri, session)
+            ?: templateRoutes.serve(uri, session) ?: when (uri) {
             "/" -> if (method == Method.GET) serveRootDocsAsset("/") else methodNotAllowed()
             "/dashboard.json" ->
                 when (method) {
@@ -323,14 +380,22 @@ class ConfigServer(
             "/check-update" -> if (method == Method.GET) handleCheckUpdate() else methodNotAllowed()
             "/save-connection" -> if (method == Method.POST) handleSaveConnection(session) else methodNotAllowed()
             "/icons" -> if (method == Method.POST) handleIconUpload(session) else methodNotAllowed()
+            "/icons-import-direct" ->
+                if (method == Method.POST) {
+                    val report = DirectIconImport(iconsDir, lgTvRegistry, appleTvRegistry, skyRegistry, samsungRegistry).run()
+                    jsonResponse(Response.Status.OK, JSONObject().put("devices", report))
+                } else {
+                    methodNotAllowed()
+                }
             "/ir-database" ->
                 when (method) {
                     Method.GET -> serveIrDatabaseList()
                     Method.POST -> handleIrDatabaseUpload(session)
                     else -> methodNotAllowed()
                 }
-            "/install-update" -> if (method == Method.POST) handleInstallUpdate() else methodNotAllowed()
+            "/install-update" -> if (method == Method.POST) handleInstallUpdate(session) else methodNotAllowed()
             "/install-beta-update" -> if (method == Method.POST) handleInstallBetaUpdate() else methodNotAllowed()
+            "/install-test-update" -> if (method == Method.POST) handleInstallTestUpdate(session) else methodNotAllowed()
             "/pages" -> if (method == Method.GET) servePages() else methodNotAllowed()
             "/current-page" -> if (method == Method.GET) serveCurrentPage() else methodNotAllowed()
             "/version" -> if (method == Method.GET) serveVersion() else methodNotAllowed()
@@ -418,7 +483,19 @@ class ConfigServer(
             )
         }
         val content =
-            runCatching { zidooRoutes.reconcileHaDevices(androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))) }
+            runCatching {
+                denonRoutes.reconcileHaDevices(
+                    samsungRoutes.reconcileHaDevices(
+                        skyRoutes.reconcileHaDevices(
+                            lgTvRoutes.reconcileHaDevices(
+                                zidooRoutes.reconcileHaDevices(
+                                    androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))
+                                )
+                            )
+                        )
+                    )
+                )
+            }
                 .getOrElse { file.readText() }
         return newFixedLengthResponse(Response.Status.OK, "application/json", content)
     }
@@ -596,6 +673,10 @@ class ConfigServer(
                 put("appleTvs", appleTvsJson())
                 put("androidTvs", androidTvRoutes.configJson())
                 put("zidoos", zidooRoutes.configJson())
+                put("lgtvs", lgTvRoutes.configJson())
+                put("skys", skyRoutes.configJson())
+                put("samsungs", samsungRoutes.configJson())
+                put("denons", denonRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1129,12 +1210,13 @@ class ConfigServer(
      *
      * `?refresh=1` (1.4.0, the builder on opening and its "Reload from Home Assistant") re-reads
      * them all from Home Assistant first, so entities renamed or added there show up even while
-     * the remote sleeps (screen off, only a few entities live).
+     * the remote sleeps (screen off, only a few entities live), and — since the remote only
+     * receives the dashboard's own entities (1.5.2) — so every other one can be picked too.
      */
     private fun serveHaStates(session: IHTTPSession): Response {
         if (session.parameters["refresh"]?.firstOrNull() == "1") runBlocking { haClient.refreshStates() }
         val connected = haClient.connection.value == ConnectionState.CONNECTED
-        val entities = haClient.entities.value
+        val entities = haClient.allEntities()
         val json =
             buildJsonObject {
                 put("connected", connected)
@@ -1187,6 +1269,10 @@ class ConfigServer(
         }
         androidTvRoutes.saveRows(params)
         zidooRoutes.saveRows(params)
+        lgTvRoutes.saveRows(params)
+        skyRoutes.saveRows(params)
+        samsungRoutes.saveRows(params)
+        denonRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
@@ -1755,13 +1841,8 @@ class ConfigServer(
      * thumbnails instead of making the person type a path by hand.
      */
     private fun serveIconsList(): Response {
-        val names =
-            iconsDir
-                .listFiles()
-                ?.filter { it.isFile }
-                ?.map { it.name }
-                ?.sorted() ?: emptyList()
-        val json = JSONArray(names).toString()
+        // 1.5.2: a direct device's imported icons are in its own folder, listed as "folder/file".
+        val json = JSONArray(IconFolders.list(iconsDir)).toString()
         return newFixedLengthResponse(Response.Status.OK, "application/json", json)
     }
 
@@ -1773,14 +1854,18 @@ class ConfigServer(
      * that dashboard.json still references.
      */
     private fun deleteIcon(uri: String): Response {
-        val name = sanitize(uri.removePrefix("/icons/"))
-        val file = File(iconsDir, name)
+        val name = uri.removePrefix("/icons/")
+        val file = IconFolders.resolve(iconsDir, name)
         return when {
-            name.isBlank() || !file.isFile ->
+            file == null || !file.isFile ->
                 jsonResponse(Response.Status.NOT_FOUND, JSONObject().put("error", "No icon named $name"))
             !file.delete() ->
                 jsonResponse(Response.Status.INTERNAL_ERROR, JSONObject().put("error", "Could not delete $name"))
-            else -> jsonResponse(Response.Status.OK, JSONObject().put("status", "ok").put("deleted", name))
+            else -> {
+                // A device's folder goes with its last icon.
+                file.parentFile?.takeIf { it != iconsDir && it.listFiles().isNullOrEmpty() }?.delete()
+                jsonResponse(Response.Status.OK, JSONObject().put("status", "ok").put("deleted", name))
+            }
         }
     }
 
@@ -1794,9 +1879,9 @@ class ConfigServer(
      * `/icons/../../whatever` can't escape [iconsDir].
      */
     private fun serveIcon(uri: String): Response {
-        val name = sanitize(uri.removePrefix("/icons/"))
-        val file = File(iconsDir, name)
-        if (name.isBlank() || !file.isFile) {
+        val name = uri.removePrefix("/icons/")
+        val file = IconFolders.resolve(iconsDir, name)
+        if (file == null || !file.isFile) {
             return newFixedLengthResponse(
                 Response.Status.NOT_FOUND,
                 "text/plain",
@@ -1845,11 +1930,17 @@ class ConfigServer(
         return redirectHome(message)
     }
 
-    private fun handleInstallUpdate(): Response {
+    private fun handleInstallUpdate(session: IHTTPSession): Response {
+        // `force=1` (1.5.5, the builder's Reinstall): the official release even when it's the one installed.
+        val force = session.parameters["force"]?.firstOrNull() == "1"
         val result =
-            lastResult ?: run {
-                val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
-                if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
+            if (force) {
+                UpdateChecker.checkForUpdate(force = true)
+            } else {
+                lastResult ?: run {
+                    val isBeta = BuildConfig.VERSION_NAME.contains("-beta")
+                    if (isBeta) UpdateChecker.checkBetaUpdate(UpdateChecker.installedAt(context)) else UpdateChecker.checkForUpdate()
+                }
             }
         val info =
             (result as? UpdateChecker.CheckResult.Available)?.info
@@ -1907,8 +1998,20 @@ class ConfigServer(
      * meta-refresh HTML, which `fetch()` doesn't act on anyway and which
      * always reports 200 OK even for a failure.
      */
-    private fun handleInstallBetaUpdate(): Response {
-        val result = UpdateChecker.checkBetaUpdate()
+    private fun handleInstallBetaUpdate(): Response = installPlain(UpdateChecker.checkBetaUpdate(), "No beta build available")
+
+    /**
+     * POST /install-test-update (1.5.5): a test build, the pre-release tagged `tag` (`test-latest`
+     * by default, see [UpdateChecker.checkTestBuild]) — installed whatever the version.
+     */
+    private fun handleInstallTestUpdate(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        val tag = session.parameters["tag"]?.firstOrNull()?.trim()?.lowercase().orEmpty().ifEmpty { "test-latest" }
+        return installPlain(UpdateChecker.checkTestBuild(tag), "No test build tagged $tag")
+    }
+
+    /** Downloads [result]'s APK and opens the installer; plain status + text, for `fetch()`. */
+    private fun installPlain(result: UpdateChecker.CheckResult, none: String): Response {
         val info =
             (result as? UpdateChecker.CheckResult.Available)?.info
                 ?: return newFixedLengthResponse(
@@ -1916,7 +2019,7 @@ class ConfigServer(
                     "text/plain",
                     when (result) {
                         is UpdateChecker.CheckResult.Failed -> result.reason
-                        else -> "No beta build available"
+                        else -> none
                     }
                 )
 
@@ -1937,19 +2040,22 @@ class ConfigServer(
         }
 
         if (UpdateChecker.isDownloading) return updateAlreadyDownloading()
+        // Logged step by step (1.5.7): a test build sometimes needs two taps to install.
+        Log.i("Update", "install ${info.version}: downloading ${info.apkUrl}")
         val file =
             UpdateChecker.download(context, info.apkUrl)
                 ?: return newFixedLengthResponse(
                     Response.Status.INTERNAL_ERROR,
                     "text/plain",
                     "Download failed"
-                )
+                ).also { Log.w("Update", "install ${info.version}: download failed") }
 
         return try {
+            Log.i("Update", "install ${info.version}: downloaded ${file.length()} bytes, opening the installer")
             UpdateChecker.promptInstall(context, file)
             newFixedLengthResponse(Response.Status.OK, "text/plain", "Installing ${info.version}")
         } catch (e: Exception) {
-            Log.e("ConfigServer", "beta install prompt failed", e)
+            Log.e("ConfigServer", "install prompt failed", e)
             newFixedLengthResponse(
                 Response.Status.INTERNAL_ERROR,
                 "text/plain",

@@ -5,6 +5,7 @@ import android.util.Log
 import com.custom.astrion.androidtv.AndroidTvHelperClient
 import com.custom.astrion.androidtv.AndroidTvPairingException
 import com.custom.astrion.androidtv.AndroidTvRegistry
+import com.custom.astrion.androidtv.BleWake
 import com.custom.astrion.config.AndroidTvConfig
 import com.custom.astrion.config.DashboardLoader
 import com.custom.astrion.config.RemoteSettings
@@ -124,6 +125,7 @@ class AndroidTvRoutes(private val context: Context, private val registry: () -> 
                     .put("mac", tv.mac)
                     .put("certSha256", tv.certSha256)
                     .put("helperCode", tv.helperCode)
+                    .put("bleWake", tv.bleWake)
             )
         }
     }
@@ -143,6 +145,7 @@ class AndroidTvRoutes(private val context: Context, private val registry: () -> 
         val macs = col("mac")
         val certs = col("cert")
         val helperCodes = col("helper")
+        val bleWakes = col("blewake")
         val used = HashSet<String>()
         val tvs =
             localIds.indices.mapNotNull { i ->
@@ -162,7 +165,8 @@ class AndroidTvRoutes(private val context: Context, private val registry: () -> 
                     serviceName = services.getOrNull(i).orEmpty().trim(),
                     mac = macs.getOrNull(i).orEmpty().trim(),
                     certSha256 = cert,
-                    helperCode = helperCodes.getOrNull(i).orEmpty().trim().uppercase().takeIf { HELPER_CODE.matches(it) }.orEmpty()
+                    helperCode = helperCodes.getOrNull(i).orEmpty().trim().uppercase().takeIf { HELPER_CODE.matches(it) }.orEmpty(),
+                    bleWake = bleWakes.getOrNull(i).orEmpty().trim().takeIf { BleWake.isHost(it) }.orEmpty()
                 )
             }
         RemoteSettings.saveAndroidTvs(context, tvs)

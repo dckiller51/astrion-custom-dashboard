@@ -41,6 +41,71 @@ function haEntityFieldHtml(domain, fieldId, label) {
   `;
 }
 
+// "Show only when" (visibility, see Visibility.kt): Home Assistant's own rules, on a card's options
+// and on each button_grid / scene_grid item. The fields write one `state` rule; anything else
+// written in the JSON (several rules, numeric_state, and / or) is kept unless the fields replace it.
+function visibilityFieldsHtml(p) {
+  return `<div id="${p}VisBox">
+    <label>${I18N.t('web_card_vis_entity')}</label><input type="text" id="${p}VisEntity" placeholder="lock.front_door">
+    <select id="${p}VisOp"><option value="state">${I18N.t('web_card_vis_is')}</option><option value="state_not">${I18N.t('web_card_vis_is_not')}</option></select>
+    <input type="text" id="${p}VisValues" placeholder="${I18N.t('web_card_vis_values_ph')}">
+    <div class="hint">${I18N.t('web_card_vis_hint')}</div>
+    <div class="hint" id="${p}VisKept" hidden>${I18N.t('web_card_vis_kept')} <a href="#" onclick="clearKeptVisibility('${p}'); return false;">${I18N.t('web_card_vis_remove')}</a></div>
+  </div>`;
+}
+
+/** The rule as the fields show it ({ entity, op, values }), or null when it's more than one state rule. */
+function simpleVisibility(vis) {
+  const c = Array.isArray(vis) && vis.length === 1 ? vis[0] : null;
+  if (!c || c.condition !== 'state' || typeof c.entity !== 'string' || Object.keys(c).length !== 3) return null;
+  const op = 'state' in c ? 'state' : 'state_not';
+  const values = [].concat(c[op]);
+  return values.length && values.every(v => typeof v === 'string') ? { entity: c.entity, op, values } : null;
+}
+
+function fillVisibilityFields(p, vis) {
+  const entity = document.getElementById(p + 'VisEntity');
+  if (!entity) return;
+  const simple = simpleVisibility(vis);
+  entity.value = simple ? simple.entity : '';
+  document.getElementById(p + 'VisOp').value = simple ? simple.op : 'state';
+  document.getElementById(p + 'VisValues').value = simple ? simple.values.join(', ') : '';
+  const kept = document.getElementById(p + 'VisKept');
+  const advanced = !simple && Array.isArray(vis) && vis.length > 0;
+  kept.hidden = !advanced;
+  kept.dataset.rule = advanced ? JSON.stringify(vis) : '';
+  // The section is folded unless this card or item has a rule.
+  const section = document.getElementById(p + 'VisBox').closest('details');
+  if (section && Array.isArray(vis) && vis.length) section.open = true;
+}
+
+function clearKeptVisibility(p) {
+  const kept = document.getElementById(p + 'VisKept');
+  kept.dataset.rule = '';
+  kept.hidden = true;
+}
+
+/** The rule the fields ask for: undefined (no fields on this form), null (none), the rule, or false (alerted: a state is missing). */
+function readVisibility(p) {
+  const entityEl = document.getElementById(p + 'VisEntity');
+  if (!entityEl) return undefined;
+  const entity = entityEl.value.trim();
+  if (entity) {
+    const values = document.getElementById(p + 'VisValues').value.split(',').map(v => v.trim()).filter(Boolean);
+    if (!values.length) { alert(I18N.t('web_card_vis_err_values')); return false; }
+    const op = document.getElementById(p + 'VisOp').value;
+    return [{ condition: 'state', entity, [op]: values.length > 1 ? values : values[0] }];
+  }
+  const kept = document.getElementById(p + 'VisKept').dataset.rule;
+  return kept ? JSON.parse(kept) : null;
+}
+
+function applyVisibility(target, vis) {
+  if (vis === undefined) return;
+  if (vis) target.visibility = vis;
+  else delete target.visibility;
+}
+
 function updateCardFormInputs() {
   // A fresh form: nothing being edited (an edit left open on a card closed earlier used to stay,
   // and "Save changes" then warned about a button that wasn't there — 1.4.1).
@@ -142,9 +207,28 @@ function updateCardFormInputs() {
         <label class="inline-check"><input type="checkbox" id="optLightCtrlColorTemp"> ${I18N.t('web_card_light_ctrl_color_temp')}</label>
         <label class="inline-check"><input type="checkbox" id="optLightCtrlColor"> ${I18N.t('web_card_light_ctrl_color')}</label>
       </div>
+      <label>${I18N.t('web_card_light_popup')}</label>
+      <div class="hint-row">
+        <label class="inline-check">${I18N.t('web_card_light_power_pos')}
+          <select id="optLightPowerPos">
+            <option value="right">${I18N.t('web_card_light_pos_right')}</option>
+            <option value="left">${I18N.t('web_card_light_pos_left')}</option>
+          </select></label>
+        <label class="inline-check">${I18N.t('web_card_light_wheel')}
+          <select id="optLightWheel">
+            <option value="bottom">${I18N.t('web_card_light_wheel_bottom')}</option>
+            <option value="top">${I18N.t('web_card_light_wheel_top')}</option>
+            <option value="hidden">${I18N.t('web_card_light_wheel_hidden')}</option>
+          </select></label>
+      </div>
+      <label>${I18N.t('web_card_light_colors')}</label>
+      <input type="hidden" id="optLightColors">
+      <div id="lightSwatchEditor" class="hint-row"></div>
+      <div class="hint">${I18N.t('web_card_light_colors_hint')}</div>
       <label><input type="checkbox" id="optLightCollapsible"> ${I18N.t('web_card_light_collapsible')}</label>
       <div class="hint">${I18N.t('web_card_light_hint')}</div>
     `;
+    renderLightSwatches();
   } else if (type === 'media_player') {
     container.innerHTML = `
       <label>${I18N.t('web_card_media_name_label')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_ph_media_name')}">
@@ -209,6 +293,7 @@ function updateCardFormInputs() {
             <select id="optMediaArtworkRatio">
               <option value="square">${I18N.t('web_card_square_ish_default')}</option>
               <option value="portrait">${I18N.t('web_card_portrait_2_3_movie_posters')}</option>
+              <option value="wide">${I18N.t('web_card_wide_16_9_tv_episodes')}</option>
             </select>
           </div>
         </div>
@@ -285,6 +370,10 @@ function updateCardFormInputs() {
         <option value="label">${I18N.t('web_card_display_label')}</option>
         <option value="icons">${I18N.t('web_card_display_icon')}</option>
       </select>
+      <label><input type="checkbox" id="optClimateShowPower" checked> ${I18N.t('web_card_climate_show_power')}</label>
+      <label><input type="checkbox" id="optClimateShowHvac" checked> ${I18N.t('web_card_climate_show_hvac_modes')}</label>
+      <label><input type="checkbox" id="optClimateShowFan" checked> ${I18N.t('web_card_climate_show_fan_modes')}</label>
+      <label><input type="checkbox" id="optClimateShowSwing" checked> ${I18N.t('web_card_climate_show_swing_modes')}</label>
       <div class="hint">${I18N.t('web_card_climate_hint')}</div>
       <label><input type="checkbox" id="optShowCaptions" checked> ${I18N.t('web_card_climate_show_captions')}</label>
     `;
@@ -319,6 +408,7 @@ function updateCardFormInputs() {
           <label>${I18N.t('web_card_service_domain_service_optional_or_combine')}</label><input type="text" id="giService" placeholder="${I18N.t('web_card_ph_service')}">
           <label>${I18N.t('web_card_entity_id_optional')}</label><input type="text" id="giEntityId" placeholder="${I18N.t('web_card_ph_media_tv')}">
           <label>${I18N.t('web_card_grid_data_label')}</label><input type="text" id="giData" placeholder='{"media_content_type":"app"}'>
+          ${giPageFieldsHtml(I18N.t('web_card_grid_button_page'))}
           <div class="divider" style="margin:12px 0"></div>
           <label>${I18N.t('web_card_harmony_action_optional_or_and_combine')}</label>
           <select id="giHarmonyMode" onchange="onGiHarmonyModeChange()">
@@ -350,11 +440,7 @@ function updateCardFormInputs() {
           <div class="hint">${I18N.t('web_card_visually_highlights_this_button_while_state')}</div>
         ` : `
           <label>${I18N.t('web_card_grid_scene_entity')}</label><input type="text" id="giEntityId" placeholder="${I18N.t('web_card_ph_scene_entity')}">
-          <label>${I18N.t('web_card_grid_page')}</label><input type="text" id="giPage" placeholder="${I18N.t('web_card_ph_page')}">
-          <select id="giPageMode">
-            <option value="page">${I18N.t('web_card_as_a_full_page_default')}</option>
-            <option value="popup">${I18N.t('web_card_as_a_popup_over_the_current')}</option>
-          </select>
+          ${giPageFieldsHtml(I18N.t('web_card_grid_page'))}
           <div class="hint">${I18N.t('web_card_popup_size_position_come_from_that')}</div>
           <label class="inline-check"><input type="checkbox" id="giClosePopup"> ${I18N.t('web_card_close_the_open_popup_after_this_2')}</label>
           <div class="hint">${I18N.t('web_card_for_a_tile_placed_inside_a')}</div>
@@ -415,6 +501,8 @@ function updateCardFormInputs() {
         <textarea id="giLongPress" rows="2" placeholder='{"service":"script.astrion_bed_lights_off"}'></textarea>
         <div class="hint">${I18N.t('web_card_long_press_hint', type)}</div>
         ${iconFieldHtml('giIcon')}
+        <div class="divider" style="margin:12px 0"></div>
+        ${visibilityFieldsHtml('gi')}
         <button type="button" class="grid-add" onclick="addGridItem('${type}')" id="giSubmitBtn" data-add-key="${type === 'button_grid' ? 'web_card_grid_add_button' : 'web_card_grid_add_scene'}">${type === 'button_grid' ? I18N.t('web_card_grid_add_button') : I18N.t('web_card_grid_add_scene')}</button>
         <button type="button" class="grid-cancel" onclick="cancelGridItemEdit()" id="giCancelBtn" style="display:none">${I18N.t('web_cancel_edit')}</button>
         <button type="button" class="secondary" onclick="addGridSpacer('${type}')">${I18N.t('web_card_grid_add_spacer')}</button>
@@ -471,6 +559,9 @@ function updateCardFormInputs() {
   } else if (type === 'xbox') {
     container.innerHTML = xboxFormHtml();
     initXboxForm();
+  } else if (type === 'playstation') {
+    container.innerHTML = playstationFormHtml();
+    initPlaystationForm();
   } else if (type === 'speaker_group') {
     container.innerHTML = speakerGroupFormHtml();
     window._pendingSpeakers = [];
@@ -533,10 +624,31 @@ function updateCardFormInputs() {
     `;
     window._pendingMonitorRows = window._pendingMonitorRows || [];
     renderMonitorRows();
+  } else if (type === 'zidoo') {
+    container.innerHTML = zidooCardFormHtml();
+    fillMediaApps({});
+  } else if (type === 'tv_guide') {
+    container.innerHTML = tvGuideFormHtml();
+    window._pendingTvGuide = [];
+    renderTvGuideRows();
+    tvGuideLoadKnown();
+  } else if (type === 'info') {
+    container.innerHTML = infoFormHtml();
+    window._pendingInfoBlocks = [];
+    window._infoExtra = {};
+    renderInfoBlocks();
+  } else if (type === 'media_remote') {
+    container.innerHTML = mediaRemoteFormHtml();
+    window._pendingTvApps = [];
+    window._mediaRemoteExtra = {};
+    renderTvApps();
+    window._mrOrder = MEDIA_REMOTE_ORDER.slice();
+    renderMediaRemoteOrder();
   } else if (type === 'plex') {
     container.innerHTML = `
       <label>${I18N.t('web_card_plex_host')}</label><input type="text" id="optPlexHost" placeholder="${I18N.t('web_card_ph_plex_host')}">
       <label>${I18N.t('web_card_plex_token')}</label><input type="text" id="optPlexToken" placeholder="${I18N.t('web_card_ph_plex_token')}">
+      <div class="hint">${I18N.t('web_card_plex_device_hint')}</div>
       <div class="hint">${I18N.t('web_card_plex_token_hint')} <a href="https://github.com/dckiller51/astrion-custom-dashboard/wiki/Card-Plex#finding-your-token" target="_blank" rel="noopener">${I18N.t('web_card_plex_token_help')}</a></div>
       <label>${I18N.t('web_card_plex_media_entity')}</label><input type="text" id="optPlexMediaEntity" placeholder="${I18N.t('web_card_ph_media_tv')}">
       <label>${I18N.t('web_card_plex_source')}</label><input type="text" id="optPlexSource" value="Plex" placeholder="${I18N.t('web_card_plex')}">
@@ -547,6 +659,19 @@ function updateCardFormInputs() {
         <option value="url">${I18N.t('web_card_plex_type_url')}</option>
       </select>
       <div class="hint">${I18N.t('web_card_plex_client_hint')}</div>
+      <label>${I18N.t('web_card_plex_play_with')}</label>
+      <select id="optPlexPlayWith" onchange="plexPlayWithChanged()">
+        <option value="plex">${I18N.t('web_card_plex_play_with_plex')}</option>
+        <option value="rivulet">${I18N.t('web_card_plex_play_with_rivulet')}</option>
+        <option value="mrmc">${I18N.t('web_card_plex_play_with_mrmc')}</option>
+      </select>
+      <div class="hint" id="optPlexRivuletHint" style="display:none">${I18N.t('web_card_plex_rivulet_hint')}</div>
+      <div id="optPlexMrmc" style="display:none">
+        <label>${I18N.t('web_card_plex_mrmc_host')}</label><input type="text" id="optPlexMrmcHost" placeholder="192.168.1.30">
+        <label>${I18N.t('web_card_plex_mrmc_port')}</label><input type="number" id="optPlexMrmcPort" min="1" max="65535" placeholder="8080">
+        <label>${I18N.t('web_card_plex_mrmc_app')}</label><input type="text" id="optPlexMrmcApp" placeholder="MrMC">
+        <div class="hint">${I18N.t('web_card_plex_mrmc_hint')}</div>
+      </div>
       <label>${I18N.t('web_card_plex_rows')}</label>
       <div class="hint-row">
         <label class="inline-check"><input type="checkbox" id="optPlexShowOnDeck" checked> ${I18N.t('web_card_plex_row_on_deck')}</label>
@@ -568,24 +693,28 @@ function updateCardFormInputs() {
     `;
   }
 
+  // Every form but the raw JSON one (the options as typed) and a row (its cards have their own).
+  if (type !== 'row' && !document.getElementById('optRawJson')) container.insertAdjacentHTML('beforeend', visibilityFieldsHtml('opt'));
+
   // Attach live entity autocomplete to whichever entity_id fields this card
   // type created. Only attaches when /ha-states data is available (device mode
   // + HA connected); otherwise the inputs stay plain text fields. optEntityId
   // itself is excluded — it's now a strict <select> over the Devices catalog
   // (see haEntityFieldHtml above), not a free-text field to autocomplete.
-  ['optRemoteEntity', 'optMediaEntity', 'optMuteEntity',
+  ['optRemoteEntity', 'optMediaEntity', 'optMuteEntity', 'optSgMaster',
     'optCalendarEntity', 'optMapImage', 'giEntityId',
-    'optPlexMediaEntity', 'optPlexPlayEntity'].forEach(id => {
+    'optPlexMediaEntity', 'optPlexPlayEntity', 'optTvGuidePlayer', 'optVisEntity', 'giVisEntity'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const dom = id === 'optRemoteEntity' ? 'remote'
-      : id === 'optMediaEntity' ? 'media_player'
+      : id === 'optMediaEntity' || id === 'optSgMaster' ? 'media_player'
       : id === 'optMuteEntity' ? 'remote'
       : id === 'optCalendarEntity' ? 'calendar'
       : id === 'optMapImage' ? 'image'
       : id === 'optPlexMediaEntity' ? 'media_player'
       : id === 'optPlexPlayEntity' ? 'media_player'
-      : null; // giEntityId — any domain (scene.*, script.*, media_player.*, …)
+      : id === 'optTvGuidePlayer' ? 'media_player'
+      : null; // giEntityId, optVisEntity, giVisEntity — any domain (scene.*, script.*, media_player.*, …)
     attachEntityAutocomplete(el, dom);
   });
 }
@@ -648,15 +777,44 @@ let editingGridItem = null; // index of the button/scene being edited within _pe
 let gridEditSnapshot = null; // the form's text fields as the edited item filled them (see confirmPendingGridItems)
 
 /** The grid item form's text fields (selects are left out: some are filled later, asynchronously). */
-const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand',
+const GRID_ITEM_TEXT_FIELDS = ['giName', 'giIcon', 'giService', 'giEntityId', 'giData', 'giIrDevice', 'giIrCommand',
   'giIrDelay', 'giActivityId', 'giHarmonyDevice', 'giHarmonyCommand', 'giStateEntity', 'giStateValue', 'giLongPress',
   'giStopActivity', 'giRoom', 'giDevices', 'giNowPlaying', 'giClosePopup', 'giLongOnly', 'giTrack', 'giActiveBorder',
   // 1.5.0: the colours too. A tile whose only change was its colour wasn't seen as changed, so
   // saving the card dropped it (a tester's Activities grid kept its default colours).
-  'giColorHex', 'giTextColorHex', 'giActiveColorHex'];
+  'giColorHex', 'giTextColorHex', 'giActiveColorHex', 'giVisEntity', 'giVisValues'];
 // A select always holds a value: counted only when comparing an edited item with itself (1.5.0:
 // a changed Activity, page mode or Harmony action was dropped the same way).
-const GRID_ITEM_SELECTS = ['giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice'];
+const GRID_ITEM_SELECTS = ['giPage', 'giPageMode', 'giActivityRef', 'giHarmonyMode', 'giHub', 'giActivitySelect', 'giIrDevice', 'giVisOp'];
+/**
+ * The page a grid item opens (1.5.2): a list of the dashboard's pages instead of a name typed by
+ * hand (a typo opened nothing), then full page or popup. A page no longer in the dashboard is kept.
+ */
+function giPageFieldsHtml(label) {
+  const pages = (dashboardData.pages || []).map(p => p && p.name).filter(Boolean);
+  return `
+    <label>${label}</label>
+    <select id="giPage">
+      <option value="">${I18N.t('web_card_grid_page_none')}</option>
+      ${pages.map(n => `<option value="${escapeAttr(n)}">${escapeAttr(n)}</option>`).join('')}
+    </select>
+    <select id="giPageMode">
+      <option value="page">${I18N.t('web_card_as_a_full_page_default')}</option>
+      <option value="popup">${I18N.t('web_card_as_a_popup_over_the_current')}</option>
+    </select>`;
+}
+
+function setGiPage(item) {
+  const sel = document.getElementById('giPage');
+  if (!sel) return;
+  const page = item.page || '';
+  if (page && ![...sel.options].some(o => o.value === page)) {
+    sel.insertAdjacentHTML('beforeend', `<option value="${escapeAttr(page)}">${escapeAttr(page)} ⚠</option>`);
+  }
+  sel.value = page;
+  document.getElementById('giPageMode').value = item.pageMode === 'popup' ? 'popup' : 'page';
+}
+
 function gridItemTextSnapshot(withSelects) {
   const fields = withSelects ? GRID_ITEM_TEXT_FIELDS.concat(GRID_ITEM_SELECTS) : GRID_ITEM_TEXT_FIELDS;
   return fields.map(id => {
@@ -1062,10 +1220,12 @@ function fillGridItemForm(type, item) {
   if (stopEl) stopEl.value = item.stopActivity || '';
   document.getElementById('giIcon').value = item.icon || '';
   updateIconThumb('giIcon');
+  fillVisibilityFields('gi', item.visibility);
   if (type === 'button_grid') {
     document.getElementById('giService').value = item.service || '';
     document.getElementById('giEntityId').value = item.entity_id || '';
     document.getElementById('giData').value = item.data ? JSON.stringify(item.data) : '';
+    setGiPage(item);
     document.getElementById('giIrDevice').value = item.irDevice || '';
     fillGiIrCommands(item);
     document.getElementById('giClosePopup').checked = item.closePopup === true;
@@ -1079,8 +1239,7 @@ function fillGridItemForm(type, item) {
     document.getElementById('giActiveBorder').checked = item.active_border === true || typeof item.active_border === 'string';
   } else {
     document.getElementById('giEntityId').value = item.entity_id || '';
-    document.getElementById('giPage').value = item.page || '';
-    document.getElementById('giPageMode').value = item.pageMode === 'popup' ? 'popup' : 'page';
+    setGiPage(item);
     document.getElementById('giClosePopup').checked = item.closePopup === true;
     if (item.irDevice) {
       document.getElementById('giIrDevice').value = item.irDevice;
@@ -1156,6 +1315,7 @@ function cancelGridItemEdit() {
   document.getElementById('giName').value = '';
   document.getElementById('giIcon').value = '';
   updateIconThumb('giIcon');
+  fillVisibilityFields('gi', null);
   ['giService', 'giEntityId', 'giData', 'giPage', 'giIrDevice', 'giIrCommand', 'giIrDelay', 'giActivityRef', 'giStateEntity', 'giStateValue', 'giLongPress', 'giStopActivity'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
@@ -1256,6 +1416,10 @@ function addGridItem(type) {
       if (activeColor) item.active_color = activeColor;
       if (activeBorder) item.active_border = true;
     }
+    // 1.5.2: a button can open a page too, like a scene tile.
+    const btnPage = (document.getElementById('giPage')?.value || '').trim();
+    if (btnPage) item.page = btnPage;
+    if (btnPage && document.getElementById('giPageMode')?.value === 'popup') item.pageMode = 'popup';
     const btnColor = colorFieldValue('giColor');
     const btnTextColor = colorFieldValue('giTextColor');
     if (btnColor) item.color = btnColor;
@@ -1359,6 +1523,9 @@ function addGridItem(type) {
     if (sceneTextColor) item.text_color = sceneTextColor;
   }
   if (longPress) item.long_press = longPress;
+  const vis = readVisibility('gi');
+  if (vis === false) return;
+  applyVisibility(item, vis);
   window._pendingGridItems = window._pendingGridItems || [];
   if (editingGridItem !== null) {
     window._pendingGridItems[editingGridItem] = item;
@@ -1563,6 +1730,10 @@ function fillCardForm(card) {
     document.getElementById('optLightCtrlColorTemp').checked = o.show_color_temp_control === true;
     document.getElementById('optLightCtrlColor').checked = o.show_color_control === true;
     document.getElementById('optLightCollapsible').checked = o.collapsible_controls === true;
+    document.getElementById('optLightColors').value = Array.isArray(o.colors) ? o.colors.join(', ') : '';
+    document.getElementById('optLightPowerPos').value = o.popup_power === 'left' ? 'left' : 'right';
+    document.getElementById('optLightWheel').value = ['top', 'hidden'].includes(o.color_wheel) ? o.color_wheel : 'bottom';
+    renderLightSwatches();
   } else if (type === 'media_player') {
     document.getElementById('optName').value = o.name || '';
     setEntitySelectValue('optEntityId', o.entity_id);
@@ -1582,7 +1753,7 @@ function fillCardForm(card) {
     document.getElementById('optMediaVolSet').checked = vCtrls.includes('set');
     document.getElementById('optMediaTopButtons').value = JSON.stringify(o.top_buttons || [], null, 2);
     document.getElementById('optMediaArtworkFit').value = o.artwork_fit === 'contain' ? 'contain' : 'cover';
-    document.getElementById('optMediaArtworkRatio').value = o.artwork_ratio === 'portrait' ? 'portrait' : 'square';
+    document.getElementById('optMediaArtworkRatio').value = ['portrait', 'wide'].includes(o.artwork_ratio) ? o.artwork_ratio : 'square';
     updateMediaTopButtonsVisibility();
     document.getElementById('optMediaMusicSearch').checked = o.music_search === true;
     document.getElementById('optMediaQueue').checked = o.show_queue !== false;
@@ -1621,6 +1792,10 @@ function fillCardForm(card) {
     document.getElementById('optSwingModes').value = (o.swing_modes || []).join(',');
     document.getElementById('optSwingModeStyle').value = o.swing_mode_style === 'icons' ? 'icons' : 'label';
     document.getElementById('optShowCaptions').checked = o.show_captions !== false;
+    document.getElementById('optClimateShowPower').checked = o.show_power !== false;
+    document.getElementById('optClimateShowHvac').checked = o.show_hvac_modes !== false;
+    document.getElementById('optClimateShowFan').checked = o.show_fan_modes !== false;
+    document.getElementById('optClimateShowSwing').checked = o.show_swing_modes !== false;
   } else if (type === 'button_grid' || type === 'scene_grid') {
     document.getElementById('optColumns').value = o.columns || 2;
     document.getElementById('optIconPosition').value = ['top', 'bottom', 'left', 'right'].includes(o.iconPosition) ? o.iconPosition : 'top';
@@ -1640,6 +1815,8 @@ function fillCardForm(card) {
     fillTvRemoteForm(o);
   } else if (type === 'xbox') {
     fillXboxForm(o);
+  } else if (type === 'playstation') {
+    fillPlaystationForm(o);
   } else if (type === 'speaker_group') {
     fillSpeakerGroupForm(o);
   } else if (type === 'picture_elements') {
@@ -1671,6 +1848,14 @@ function fillCardForm(card) {
     // Any other option set by hand in dashboard.json survives an edit through this form.
     window._monitorExtraOptions = Object.fromEntries(Object.entries(o).filter(([k]) => !['title', 'layout', 'marquee', 'entities'].includes(k)));
     renderMonitorRows();
+  } else if (type === 'zidoo') {
+    fillZidooCardForm(o);
+  } else if (type === 'media_remote') {
+    fillMediaRemoteForm(o);
+  } else if (type === 'tv_guide') {
+    fillTvGuideForm(o);
+  } else if (type === 'info') {
+    fillInfoForm(o);
   } else if (type === 'plex') {
     document.getElementById('optPlexHost').value = o.host || '';
     document.getElementById('optPlexToken').value = o.token || '';
@@ -1683,11 +1868,17 @@ function fillCardForm(card) {
     document.getElementById('optPlexShowShows').checked = o.show_recently_added_shows !== false;
     document.getElementById('optPlexItemsPerRow').value = o.items_per_row ?? 12;
     document.getElementById('optPlexShowSearch').checked = o.show_search !== false;
+    document.getElementById('optPlexPlayWith').value = ['mrmc', 'rivulet'].includes(o.play_with) ? o.play_with : 'plex';
+    document.getElementById('optPlexMrmcHost').value = o.mrmc_host || '';
+    document.getElementById('optPlexMrmcPort').value = o.mrmc_port ?? '';
+    document.getElementById('optPlexMrmcApp').value = o.mrmc_app || '';
+    plexPlayWithChanged();
   } else {
     const customField = document.getElementById('optCustomType');
     if (customField) customField.value = type;
     document.getElementById('optRawJson').value = JSON.stringify(o, null, 2);
   }
+  fillVisibilityFields('opt', o.visibility);
 }
 
 function cancelCardEdit() {
@@ -1743,6 +1934,9 @@ function addCardToPage() {
   const pageIndex = currentActivePage;
   const type = document.getElementById('cardTypeSelect').value;
   if (!confirmPendingGridItems()) return;
+  // Read before the branches below empty their pending lists, so a refused rule loses nothing.
+  const vis = readVisibility('opt');
+  if (vis === false) return;
   let newCard = { type: type, options: {} };
 
   if (NAME_ENTITY_TYPES.includes(type)) {
@@ -1810,6 +2004,12 @@ function addCardToPage() {
     newCard.options.show_color_temp_control = document.getElementById('optLightCtrlColorTemp').checked;
     newCard.options.show_color_control = document.getElementById('optLightCtrlColor').checked;
     if (document.getElementById('optLightCollapsible').checked) newCard.options.collapsible_controls = true;
+    // 1.5.8: the card's own swatches, kept only when they're real hex colours (as the app reads them).
+    const lightColors = lightColorList(document.getElementById('optLightColors').value);
+    if (lightColors.length) newCard.options.colors = lightColors;
+    if (document.getElementById('optLightPowerPos').value === 'left') newCard.options.popup_power = 'left';
+    const lightWheel = document.getElementById('optLightWheel').value;
+    if (lightWheel !== 'bottom') newCard.options.color_wheel = lightWheel;
   } else if (type === 'media_player') {
     const mediaName = document.getElementById('optName').value.trim();
     if (mediaName) newCard.options.name = mediaName;
@@ -1851,7 +2051,8 @@ function addCardToPage() {
         return;
       }
       if (document.getElementById('optMediaArtworkFit').value === 'contain') newCard.options.artwork_fit = 'contain';
-      if (document.getElementById('optMediaArtworkRatio').value === 'portrait') newCard.options.artwork_ratio = 'portrait';
+      const artworkRatio = document.getElementById('optMediaArtworkRatio').value;
+      if (artworkRatio !== 'square') newCard.options.artwork_ratio = artworkRatio;
     }
   } else if (type === 'camera') {
     const camName = document.getElementById('optName').value.trim();
@@ -1885,6 +2086,10 @@ function addCardToPage() {
     if (swingModes) newCard.options.swing_modes = swingModes.split(',').map(s => s.trim()).filter(Boolean);
     if (document.getElementById('optSwingModeStyle').value === 'icons') newCard.options.swing_mode_style = 'icons';
     if (!document.getElementById('optShowCaptions').checked) newCard.options.show_captions = false;
+    if (!document.getElementById('optClimateShowPower').checked) newCard.options.show_power = false;
+    if (!document.getElementById('optClimateShowHvac').checked) newCard.options.show_hvac_modes = false;
+    if (!document.getElementById('optClimateShowFan').checked) newCard.options.show_fan_modes = false;
+    if (!document.getElementById('optClimateShowSwing').checked) newCard.options.show_swing_modes = false;
   } else if (type === 'button_grid') {
     newCard.options.columns = parseInt(document.getElementById('optColumns').value, 10) || 2;
     const iconPosition = document.getElementById('optIconPosition').value;
@@ -1931,8 +2136,8 @@ function addCardToPage() {
     if (atvApps.length) newCard.options.apps = atvApps;
     if (!document.getElementById('atvShowApps').checked) newCard.options.showApps = false;
     window._pendingAtvApps = [];
-  } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row' || type === 'xbox') {
-    const collect = { tv_remote: collectTvRemoteOptions, xbox: collectXboxOptions, speaker_group: collectSpeakerGroupOptions,
+  } else if (type === 'tv_remote' || type === 'speaker_group' || type === 'picture_elements' || type === 'row' || type === 'xbox' || type === 'playstation') {
+    const collect = { tv_remote: collectTvRemoteOptions, xbox: collectXboxOptions, playstation: collectPlaystationOptions, speaker_group: collectSpeakerGroupOptions,
       picture_elements: collectPictureElementsOptions, row: collectRowOptions }[type];
     const opts = collect();
     if (!opts) return;
@@ -1983,16 +2188,25 @@ function addCardToPage() {
     });
     window._pendingMonitorRows = [];
     window._monitorExtraOptions = {};
+  } else if (type === 'zidoo') {
+    if (!collectZidooCardForm(newCard.options)) return;
+  } else if (type === 'media_remote') {
+    if (!collectMediaRemoteForm(newCard.options)) return;
+  } else if (type === 'tv_guide') {
+    if (!collectTvGuideForm(newCard.options)) return;
+  } else if (type === 'info') {
+    if (!collectInfoForm(newCard.options)) return;
   } else if (type === 'plex') {
     const plexHost = document.getElementById('optPlexHost').value.trim();
     const plexToken = document.getElementById('optPlexToken').value.trim();
     const plexMediaEntity = document.getElementById('optPlexMediaEntity').value.trim();
-    if (!plexHost || !plexToken || !plexMediaEntity) {
+    // 1.6.0: host and token may stay empty: the remote's Plex server (Devices › Plex server) is used.
+    if (!plexMediaEntity || (!plexHost) !== (!plexToken)) {
       alert(I18N.t('web_card_alert_plex_fields'));
       return;
     }
-    newCard.options.host = plexHost;
-    newCard.options.token = plexToken;
+    if (plexHost) newCard.options.host = plexHost; else delete newCard.options.host;
+    if (plexToken) newCard.options.token = plexToken; else delete newCard.options.token;
     newCard.options.media_entity = plexMediaEntity;
     const plexSource = document.getElementById('optPlexSource').value.trim();
     if (plexSource && plexSource !== 'Plex') newCard.options.source = plexSource;
@@ -2011,12 +2225,30 @@ function addCardToPage() {
     const plexItemsPerRow = parseInt(document.getElementById('optPlexItemsPerRow').value, 10);
     if (!isNaN(plexItemsPerRow) && plexItemsPerRow !== 12) newCard.options.items_per_row = plexItemsPerRow;
     if (!document.getElementById('optPlexShowSearch').checked) newCard.options.show_search = false;
+    // 1.6.0: Rivulet or MrMC on the Apple TV plays the film (Plex for Apple TV ignores the item in its links).
+    ['play_with', 'mrmc_host', 'mrmc_port', 'mrmc_app'].forEach(k => delete newCard.options[k]);
+    if (document.getElementById('optPlexPlayWith').value === 'rivulet') newCard.options.play_with = 'rivulet';
+    if (document.getElementById('optPlexPlayWith').value === 'mrmc') {
+      const mrmcHost = document.getElementById('optPlexMrmcHost').value.trim();
+      if (!mrmcHost) {
+        alert(I18N.t('web_card_alert_plex_mrmc_host'));
+        return;
+      }
+      newCard.options.play_with = 'mrmc';
+      newCard.options.mrmc_host = mrmcHost;
+      const mrmcPort = parseInt(document.getElementById('optPlexMrmcPort').value, 10);
+      if (!isNaN(mrmcPort) && mrmcPort !== 8080) newCard.options.mrmc_port = mrmcPort;
+      const mrmcApp = document.getElementById('optPlexMrmcApp').value.trim();
+      if (mrmcApp && mrmcApp !== 'MrMC') newCard.options.mrmc_app = mrmcApp;
+    }
   } else {
     if (type === 'custom') newCard.type = document.getElementById('optCustomType').value.trim() || 'custom';
     try {
       newCard.options = JSON.parse(document.getElementById('optRawJson').value || '{}');
     } catch (e) { alert(I18N.t('web_card_alert_options_json')); return; }
   }
+
+  applyVisibility(newCard.options, vis);
 
   // Editing a card inside a row: it goes back into the row, not onto the page.
   if (window._rowCtx && window._rowCtx.active) {
@@ -2058,8 +2290,10 @@ function removeCard(idx) {
 // — e.g. briefly, before the initial /dashboard.json load finishes.
 function iconUrl(path) {
   if (!path) return null;
-  const name = String(path).split(/[\\/]/).pop();
-  return name ? `/icons/${encodeURIComponent(name)}` : null;
+  // 1.5.2: an icon in a device's folder keeps it ("LG OLED 65B8/Netflix.png").
+  const p = String(path).replace(/\\/g, '/');
+  const rel = p.includes('astrion/icons/') ? p.split('astrion/icons/').pop() : p.split('/').pop();
+  return rel ? '/icons/' + rel.split('/').map(encodeURIComponent).join('/') : null;
 }
 
 // Mirrors SceneGridCard.kt's parseHexColor: "#RRGGBB" is treated as opaque,
@@ -2174,12 +2408,18 @@ async function openIconPicker(targetId) {
     return;
   }
 
-  grid.innerHTML = names.map(name => `
+  // 1.5.2: a direct device's imported icons under a heading with its folder's name.
+  let folder = null;
+  grid.innerHTML = names.map(name => {
+    const dir = name.includes('/') ? name.split('/')[0] : '';
+    const head = dir !== folder && dir ? `<div class="icon-picker-folder" style="grid-column:1/-1;margin-top:8px;font-weight:600">📁 ${dir}</div>` : '';
+    folder = dir;
+    return head + `
     <div class="icon-picker-item" onclick="selectIcon('${name.replace(/'/g, "\\'")}')">
       <img src="${iconUrl(name)}" alt="" loading="lazy">
-      <span>${name}</span>
-    </div>
-  `).join('');
+      <span>${dir ? name.slice(dir.length + 1) : name}</span>
+    </div>`;
+  }).join('');
 }
 
 function selectIcon(name) {
@@ -2260,4 +2500,62 @@ function onSelectLayoutChange() {
   const layout = document.getElementById('optSelectLayout');
   const row = document.getElementById('selectIconColorRow');
   if (layout && row) row.style.display = layout.value === 'dropdown' ? 'none' : '';
+}
+
+/** "#f00, FFA500 ; #ffffff" → ["#FF0000", "#FFA500", "#FFFFFF"]: what LightColors.parseHex accepts, at most 15. */
+function lightColorList(text) {
+  return (text || '').split(/[\s,;]+/)
+    .map(t => t.trim().replace(/^#/, ''))
+    .filter(t => /^([0-9a-f]{3}|[0-9a-f]{6})$/i.test(t))
+    .map(t => '#' + (t.length === 3 ? t.split('').map(c => c + c).join('') : t).toUpperCase())
+    .slice(0, 15);
+}
+
+/** The swatches the app shows when a light card sets no `colors` (LightColors.DEFAULT_SWATCHES). */
+const LIGHT_DEFAULT_SWATCHES = ['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#E91E63', '#FFB6C1', '#FFFFFF'];
+
+/**
+ * Swatch editor of the light card: one colour picker per swatch, ✕ to remove, + to add,
+ * "usual colours" to go back to the defaults. Stored in the hidden #optLightColors.
+ */
+function renderLightSwatches() {
+  const box = document.getElementById('lightSwatchEditor');
+  const field = document.getElementById('optLightColors');
+  if (!box || !field) return;
+  const own = lightColorList(field.value);
+  const list = own.length ? own : LIGHT_DEFAULT_SWATCHES;
+  box.innerHTML = list.map((c, i) => `
+    <span class="light-swatch" style="display:inline-flex;align-items:center;gap:2px">
+      <input type="color" value="${c}" onchange="editLightSwatch(${i}, this.value)" title="${c}">
+      <button type="button" class="btn-small" onclick="editLightSwatch(${i}, null)" title="${I18N.t('web_card_light_colors_remove')}">✕</button>
+    </span>`).join('') +
+    (list.length < 15 ? `<button type="button" class="btn-small" onclick="editLightSwatch(-1, '#FFFFFF')">+ ${I18N.t('web_card_light_colors_add')}</button>` : '') +
+    (own.length ? `<button type="button" class="btn-small" onclick="resetLightSwatches()">${I18N.t('web_card_light_colors_reset')}</button>`
+      : `<span class="hint">${I18N.t('web_card_light_colors_usual')}</span>`);
+}
+
+/** Changes swatch i (null removes it, -1 adds one); editing the usual colours starts your own list from them. */
+function editLightSwatch(i, value) {
+  const field = document.getElementById('optLightColors');
+  const own = lightColorList(field.value);
+  const list = own.length ? own : LIGHT_DEFAULT_SWATCHES.slice();
+  if (i < 0) list.push(value);
+  else if (value === null) list.splice(i, 1);
+  else list[i] = value;
+  field.value = (list.length ? list : ['#FFFFFF']).join(', ');
+  renderLightSwatches();
+}
+
+function resetLightSwatches() {
+  document.getElementById('optLightColors').value = '';
+  renderLightSwatches();
+}
+
+/** The Plex card's MrMC fields, shown when it plays with MrMC (1.6.0). */
+function plexPlayWithChanged() {
+  const box = document.getElementById('optPlexMrmc');
+  const sel = document.getElementById('optPlexPlayWith');
+  if (box && sel) box.style.display = sel.value === 'mrmc' ? '' : 'none';
+  const riv = document.getElementById('optPlexRivuletHint');
+  if (riv && sel) riv.style.display = sel.value === 'rivulet' ? '' : 'none';
 }

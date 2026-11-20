@@ -150,6 +150,35 @@
     <string name="zidoo_library_watched">Watched</string>
     <string name="zidoo_library_stopped_at">Stopped at %1$s of %2$s</string>
     <string name="zidoo_library_sorting">Putting them in order, latest watched first…</string>
+    <string name="zidoo_card_nothing">Nothing playing</string>
+    <string name="zidoo_card_apps">Apps</string>
+    <string name="zidoo_card_back10">Back 10 s</string>
+    <string name="zidoo_card_forward10">Forward 10 s</string>
+    <string name="zidoo_card_repeat">Repeat</string>
+    <string name="zidoo_card_subtitles">Subtitles</string>
+    <string name="zidoo_card_audio">Audio</string>
+    <string name="zidoo_card_chapters">Chapters</string>
+    <string name="zidoo_card_queue">Queue</string>
+    <string name="zidoo_card_input">Input</string>
+    <string name="zidoo_card_output">Output</string>
+    <string name="zidoo_card_season">Season %1$d</string>
+    <string name="zidoo_card_episode">Episode %1$d</string>
+    <string name="zidoo_in_internal">Internal player</string>
+    <string name="zidoo_in_bluetooth">Bluetooth</string>
+    <string name="zidoo_in_usb">USB-C</string>
+    <string name="zidoo_in_coaxial">Coaxial</string>
+    <string name="zidoo_in_optical">Optical</string>
+    <string name="zidoo_card_tracks">Tracks</string>
+    <string name="zidoo_card_chapter_previous">Previous chapter</string>
+    <string name="zidoo_card_chapter_next">Next chapter</string>
+    <string name="zidoo_card_loading">Asking the player…</string>
+    <string name="zidoo_card_no_tracks">The player gives no track for this.</string>
+    <string name="zidoo_card_queue_count">%1$d tracks</string>
+    <string name="zidoo_card_queue_empty">The queue is empty.</string>
+    <string name="zidoo_card_queue_read_only">This app\'s queue can only be shown: it doesn\'t take a track chosen from here.</string>
+    <string name="zidoo_card_queue_skips">This app\'s queue can\'t be picked from: a tap skips to the track, one at a time.</string>
+    <string name="zidoo_card_io">Input and output</string>
+    <string name="zidoo_card_output_confirm">Tap %1$s again to switch: a wrong output cuts the sound.</string>
     <string name="zidoo_music_title">Music</string>
     <string name="zidoo_music_albums">Albums</string>
     <string name="zidoo_music_artists">Artists</string>
@@ -187,6 +216,13 @@
     <string name="media_browser_add_to_queue">Add to queue</string>
     <string name="plex_error_no_items">No items returned from Plex</string>
     <string name="plex_error_generic">Plex error</string>
+    <string name="plex_mrmc_no_file">Nothing to play here: pick a film or an episode</string>
+    <string name="plex_mrmc_no_answer">MrMC didn\'t answer on %1$s: check that it\'s installed and its remote control via HTTP is on</string>
+    <string name="plex_mrmc_refused">MrMC couldn\'t open the film</string>
+    <string name="tv_guide_empty">No channel: set the TV guide on the web page (Devices › TV guide)</string>
+    <string name="tv_guide_nothing">Nothing in the guide</string>
+    <string name="tv_guide_next">Next: %1$s</string>
+    <string name="tv_guide_watch">Watch</string>
     <string name="plex_library">Library</string>
     <string name="plex_this_season">This season</string>
     <string name="plex_play">Play</string>
@@ -233,6 +269,14 @@
     <string name="light_state_on">On</string>
     <string name="light_state_off">Off</string>
     <string name="light_brightness_pct">%1$d%%</string>
+    <string name="light_panel_color">Colour</string>
+    <string name="light_panel_white">White</string>
+    <string name="light_panel_effect">Effects</string>
+    <string name="light_preset_candle">Candle</string>
+    <string name="light_preset_warm">Warm</string>
+    <string name="light_preset_neutral">Neutral</string>
+    <string name="light_preset_cool">Cool</string>
+    <string name="light_color_wheel">Colour wheel</string>
 
     <!-- MediaPlayerCard / MediaPlayerDetailDialog -->
     <string name="media_state_playing">Playing</string>
@@ -286,4 +330,19 @@
     <string name="picker_sources_button">Sources</string>
     <string name="picker_no_sources">This player gives no list of sources or apps.</string>
     <string name="picker_keypad">Number keys</string>
+    <!-- PlayStation card (1.5.8) -->
+    <string name="psn_online">Online</string>
+    <string name="psn_online_app">Online on the PS App</string>
+    <string name="psn_away">Away</string>
+    <string name="psn_offline">Offline</string>
+    <string name="psn_playing">Playing</string>
+    <string name="psn_no_game">No game</string>
+    <string name="psn_no_game_hint">Apps and discs aren\'t shown, only games.</string>
+    <string name="psn_console_off">Console off</string>
+    <string name="psn_level">Level %1$s</string>
+    <string name="psn_next_level">%1$d%% to the next level</string>
+    <string name="psn_platinum">Platinum</string>
+    <string name="psn_gold">Gold</string>
+    <string name="psn_silver">Silver</string>
+    <string name="psn_bronze">Bronze</string>
 </resources>

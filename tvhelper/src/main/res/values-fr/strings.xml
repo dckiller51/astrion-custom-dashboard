@@ -11,4 +11,10 @@
     <string name="adb_title">Pour les autoriser, lancez une fois depuis un ordinateur (d\'abord adb connect &lt;cette TV&gt;:5555) :</string>
     <string name="open_settings">Ouvrir l\'accès aux notifications</string>
     <string name="settings_unavailable">Cette TV n\'a pas cet écran de réglages : utilisez la commande ADB</string>
+    <string name="keep_awake_on">Joignable en veille : activé</string>
+    <string name="keep_awake_off">Joignable en veille : désactivé</string>
+    <string name="keep_awake_enable">Rester joignable en veille</string>
+    <string name="keep_awake_disable">Ne plus rester joignable en veille</string>
+    <string name="keep_awake_hint">Pour les box que la télécommande ne sait pas réveiller (Xiaomi Mi Box S…) : l\'écran s\'éteint toujours, mais la box garde son réseau pour que la télécommande la rallume. Consomme un peu plus en veille.</string>
+    <string name="keep_awake_notification">Astrion : joignable en veille</string>
 </resources>

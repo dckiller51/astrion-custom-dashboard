@@ -104,7 +104,7 @@ function resetAll() {
 // so an imported popup page came back as a full page and lost it on save.
 const PAGE_FIELDS_NORMALIZED = new Set([
   'name', 'cards', 'hotkeys', 'longHotkeys', 'parent', 'parentKey', 'linkedPage', 'linkedPageMode',
-  'popupWidth', 'popupHeight', 'popupPosition', 'hiddenUnlessActivity',
+  'popupWidth', 'popupHeight', 'popupPosition', 'popupHideTitle', 'hiddenUnlessActivity',
   'openWhenEntity', 'openWhenState', 'closeWhenState', 'openMode'
 ]);
 
@@ -129,6 +129,7 @@ function normalizePageFromJson(p) {
     ...(p.popupWidth != null ? { popupWidth: p.popupWidth } : {}),
     ...(p.popupHeight != null ? { popupHeight: p.popupHeight } : {}),
     ...(p.popupPosition && p.popupPosition !== 'center' ? { popupPosition: p.popupPosition } : {}),
+    ...(p.popupHideTitle ? { popupHideTitle: true } : {}),
     ...(p.hiddenUnlessActivity ? { hiddenUnlessActivity: p.hiddenUnlessActivity } : {}),
     ...(p.openWhenEntity ? { openWhenEntity: p.openWhenEntity } : {}),
     ...(p.openWhenEntity && p.openWhenState && p.openWhenState !== 'on' ? { openWhenState: p.openWhenState } : {}),
@@ -161,6 +162,9 @@ function normalizeDashboardData(parsed) {
     power: parsed.power && typeof parsed.power === 'object' ? parsed.power : undefined,
     weather: parsed.weather && typeof parsed.weather === 'object' ? parsed.weather : undefined,
     keepOnDevices: Array.isArray(parsed.keepOnDevices) && parsed.keepOnDevices.length ? parsed.keepOnDevices : undefined,
+    // Only written when turned off (both default to true), so they round-trip like the ones above.
+    swipePages: parsed.swipePages === false ? false : undefined,
+    showPageIndicator: parsed.showPageIndicator === false ? false : undefined,
   };
   if (data.pages.length === 0) {
     data.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });
@@ -238,8 +242,13 @@ function openPageDialog(index) {
   document.getElementById('pageDialogLinkedPage').value = isNew ? '' : (dashboardData.pages[index].linkedPage || '');
   document.getElementById('pageDialogLinkedPageMode').value = isNew ? 'page' : (dashboardData.pages[index].linkedPageMode === 'popup' ? 'popup' : 'page');
   document.getElementById('pageDialogPopupWidth').value = isNew ? 70 : Math.round((dashboardData.pages[index].popupWidth ?? 0.7) * 100);
-  document.getElementById('pageDialogPopupHeight').value = isNew ? 50 : Math.round((dashboardData.pages[index].popupHeight ?? 0.5) * 100);
+  // 1.6.0: "auto", as tall as the page's cards.
+  const autoHeight = !isNew && dashboardData.pages[index].popupHeight === 'auto';
+  document.getElementById('pageDialogPopupHeightAuto').checked = autoHeight;
+  document.getElementById('pageDialogPopupHeight').disabled = autoHeight;
+  document.getElementById('pageDialogPopupHeight').value = isNew || autoHeight ? 50 : Math.round((dashboardData.pages[index].popupHeight ?? 0.5) * 100);
   document.getElementById('pageDialogPopupPosition').value = isNew ? 'center' : (dashboardData.pages[index].popupPosition || 'center');
+  document.getElementById('pageDialogPopupHideTitle').checked = !isNew && !!dashboardData.pages[index].popupHideTitle;
   // Not itself a stored field — inferred from there being saved popup
   // geometry with neither other trigger set to popup, i.e. it can only be
   // there because some tile elsewhere opens this page as a popup (or the
@@ -393,7 +402,9 @@ function populatePageLinkedPageSelect(excludeIndex) {
 function populatePageHiddenUnlessActivitySelect() {
   const select = document.getElementById('pageDialogHiddenUnlessActivity');
   const options = collectTrackableActivities();
+  // 1.6.0: "__never__" (HiddenPages.kt PAGE_NEVER_SHOWN), a page only opened by a tile, a key or a linked page.
   select.innerHTML = `<option value="">${I18N.t('web_page_hidden_always')}</option>` +
+    `<option value="__never__">${I18N.t('web_page_hidden_never')}</option>` +
     options.map(o => `<option value="${o.id.replace(/"/g, '&quot;')}">${o.label}</option>`).join('');
   if (options.length === 0) {
     select.innerHTML += `<option value="" disabled>${I18N.t('web_page_hidden_no_activities')}</option>`;
@@ -413,11 +424,14 @@ function savePageDialog() {
   const linkedPage = document.getElementById('pageDialogLinkedPage').value || undefined;
   const linkedPageMode = document.getElementById('pageDialogLinkedPageMode').value;
   const popupWidth = (document.getElementById('pageDialogPopupWidth').value || 70) / 100;
-  const popupHeight = (document.getElementById('pageDialogPopupHeight').value || 50) / 100;
+  const popupHeight = document.getElementById('pageDialogPopupHeightAuto').checked
+    ? 'auto'
+    : (document.getElementById('pageDialogPopupHeight').value || 50) / 100;
   const popupPosition = document.getElementById('pageDialogPopupPosition').value;
+  const popupHideTitle = document.getElementById('pageDialogPopupHideTitle').checked;
   const tilePopup = document.getElementById('pageDialogTilePopup').checked;
   const hiddenUnlessActivity = document.getElementById('pageDialogHiddenUnlessActivity').value || undefined;
-  const hideFull = !!hiddenUnlessActivity && document.getElementById('pageDialogHideFull').checked;
+  const hideFull = !!hiddenUnlessActivity && hiddenUnlessActivity !== '__never__' && document.getElementById('pageDialogHideFull').checked;
   const openWhenEntity = document.getElementById('pageDialogOpenWhenEntity').value.trim() || undefined;
   const openWhenState = document.getElementById('pageDialogOpenWhenState').value.trim() || undefined;
   const closeWhenState = document.getElementById('pageDialogCloseWhenState').value.trim() || undefined;
@@ -448,6 +462,7 @@ function savePageDialog() {
       page.popupWidth = popupWidth;
       page.popupHeight = popupHeight;
       if (popupPosition !== 'center') page.popupPosition = popupPosition;
+      if (popupHideTitle) page.popupHideTitle = true;
     }
     dashboardData.pages.push(page);
     currentActivePage = dashboardData.pages.length - 1;
@@ -488,10 +503,12 @@ function savePageDialog() {
       page.popupWidth = popupWidth;
       page.popupHeight = popupHeight;
       if (popupPosition !== 'center') page.popupPosition = popupPosition; else delete page.popupPosition;
+      if (popupHideTitle) page.popupHideTitle = true; else delete page.popupHideTitle;
     } else {
       delete page.popupWidth;
       delete page.popupHeight;
       delete page.popupPosition;
+      delete page.popupHideTitle;
     }
     if (makeStart) dashboardData.startPage = editingPage;
     else if (dashboardData.startPage === editingPage) dashboardData.startPage = 0;
@@ -646,6 +663,7 @@ function wireModalBackdropClose(modalId, closeFn) {
 /** The "Hide completely" option only makes sense once an Activity is chosen. */
 function onPageDialogHiddenChange() {
   const row = document.getElementById('pageDialogHideFullRow');
-  const hasActivity = !!document.getElementById('pageDialogHiddenUnlessActivity').value;
-  if (row) row.style.display = hasActivity ? '' : 'none';
+  const value = document.getElementById('pageDialogHiddenUnlessActivity').value;
+  // Never shown is always hidden completely: nothing to choose.
+  if (row) row.style.display = value && value !== '__never__' ? '' : 'none';
 }

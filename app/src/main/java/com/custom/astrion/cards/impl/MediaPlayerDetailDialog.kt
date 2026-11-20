@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -17,6 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.custom.astrion.R
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
@@ -111,15 +116,19 @@ fun MediaPlayerDetailDialog(
             ?: e?.attrString("media_series_title")
             ?: e?.attrString("app_name")
 
-    val artPath = e?.attrString("entity_picture")
+    val artPath = e?.mediaPicture
     var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(artPath) { art = artPath?.let { client.fetchBitmap(it) } }
+    LaunchedEffect(artPath) {
+        art = artPath?.let { client.fetchBitmap(it, cache = true) }
+        client.settleArt(artPath, cache = true) { art = it }
+    }
 
     fun mp(service: String, data: Array<out Pair<String, Any?>> = emptyArray()) {
         client.callService(ServiceCall.of("media_player", service, entityId, *data))
     }
 
     Dialog(onDismissRequest = onClose) {
+        ScreenCapture.TrackForScreenshots()
         ForwardHotkeys() // the remote's buttons keep working here (1.4.9)
         Column(
             modifier =
@@ -133,7 +142,10 @@ fun MediaPlayerDetailDialog(
         ) {
             val artMod = Modifier.fillMaxWidth().aspectRatio(1.3f).clip(RoundedCornerShape(18.dp))
             if (art != null) {
-                Image(art!!, null, modifier = artMod, contentScale = ContentScale.Crop)
+                // The whole picture (1.5.6): an album's square cover was cut at the top and bottom.
+                Box(artMod.background(theme.controlBackground), contentAlignment = Alignment.Center) {
+                    Image(art!!, null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+                }
             } else {
                 val isOff = e == null || e.state == "off" || e.isUnavailable
                 Box(artMod.background(theme.controlBackground), contentAlignment = Alignment.Center) {
@@ -166,6 +178,8 @@ fun MediaPlayerDetailDialog(
                 )
                 MediaQualityLine(e, theme)
             }
+            // What TMDB (or a Zidoo) says of it (1.6.0): the pop-up doesn't scroll, so ten lines at most.
+            e?.let { MediaSynopsis(it, theme, openLines = DETAIL_SYNOPSIS_LINES) }
 
             DetailLibraryButtons(entityId, e, client, theme, library)
 
@@ -199,20 +213,21 @@ fun MediaPlayerDetailDialog(
             }
 
             if (volumeRow) {
+                // Centred, − · mute · + (1.5.6): without a slider the buttons sat on the left.
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val step = !hasVolumeSet && hasVolumeStep
+                    if (step) Circle(Icons.AutoMirrored.Filled.VolumeDown, 40.dp, theme) { mp("volume_down") }
                     volumeButtons.forEach { b -> Circle(b.icon, 40.dp, theme) { mp(b.action, b.data.toTypedArray()) } }
                     if (hasVolumeSet) {
                         DialogVolumeSlider(entityId, e, Modifier.weight(1f), theme) { level ->
                             mp("volume_set", arrayOf("volume_level" to level))
                         }
-                    } else if (hasVolumeStep) {
-                        Circle(MdiIcons.VolumeOff, 40.dp, theme) { mp("volume_down") }
-                        Circle(MdiIcons.VolumeHigh, 40.dp, theme) { mp("volume_up") }
                     }
+                    if (step) Circle(Icons.AutoMirrored.Filled.VolumeUp, 40.dp, theme) { mp("volume_up") }
                 }
             }
 
@@ -367,3 +382,5 @@ private fun Circle(icon: ImageVector, size: androidx.compose.ui.unit.Dp, theme: 
         Icon(icon, contentDescription = null, tint = Color.White)
     }
 }
+
+private const val DETAIL_SYNOPSIS_LINES = 10

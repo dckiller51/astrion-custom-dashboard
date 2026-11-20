@@ -130,9 +130,12 @@ class MediaPlayerCard : CardRenderer {
         // all). Falling back to the raw "entity_picture" keeps every
         // entity that never had a "_local" variant working exactly as
         // before.
-        val artPath = e?.attrString("entity_picture_local") ?: e?.attrString("entity_picture")
+        val artPath = e?.mediaPicture
         var art by remember(artPath) { mutableStateOf<ImageBitmap?>(null) }
-        LaunchedEffect(artPath) { art = artPath?.let { ctx.client.fetchBitmap(it) } }
+        LaunchedEffect(artPath) {
+            art = artPath?.let { ctx.client.fetchBitmap(it, cache = true) }
+            ctx.client.settleArt(artPath, cache = true) { art = it }
+        }
 
         val actions = remember(entityId, ctx.client) { MediaActions(entityId, ctx.client) }
 
@@ -163,7 +166,12 @@ class MediaPlayerCard : CardRenderer {
             mediaControls = mediaControls,
             volumeControls = volumeControls,
             artworkFit = if (config.string("artwork_fit") == "contain") ContentScale.Fit else ContentScale.Crop,
-            artworkAspectRatio = if (config.string("artwork_ratio") == "portrait") 2f / 3f else 1.2f,
+            artworkAspectRatio =
+            when (config.string("artwork_ratio")) {
+                "portrait" -> 2f / 3f
+                "wide" -> 16f / 9f
+                else -> 1.2f
+            },
             musicSearch = if (config.bool("music_search")) config.string("search_player") ?: entityId else null,
             queuePlayer = if (config.bool("show_queue", true)) config.string("search_player") ?: entityId else null,
             showSources = config.bool("show_sources", false),
@@ -826,7 +834,8 @@ private data class MediaPlayerConfig(
     val artworkFit: ContentScale = ContentScale.Crop,
     /** Aspect ratio (width / height) of the artwork area in [MediaFullVariant].
      * Defaults to 1.2 (the original near-square shape). `"portrait"` in the
-     * config switches this to 2/3, a closer fit for movie/TV posters. */
+     * config switches this to 2/3, a closer fit for movie/TV posters;
+     * `"wide"` to 16/9, for episode stills and video thumbnails. */
     val artworkAspectRatio: Float = 1.2f,
     /** `music_search` (1.3.9): the player that searches and plays the results; null without the option. */
     val musicSearch: String? = null,

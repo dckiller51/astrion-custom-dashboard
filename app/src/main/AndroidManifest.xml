@@ -80,5 +80,9 @@
             </intent-filter>
         </receiver>
 
+        <!-- 1.5.7: the package installer's answer to an update (UpdateChecker.promptInstall). -->
+        <receiver
+            android:name=".update.InstallResultReceiver"
+            android:exported="false" />
     </application>
 </manifest>

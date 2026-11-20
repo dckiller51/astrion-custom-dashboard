@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.cards.Visibility
 import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.ServiceCall
@@ -60,6 +61,9 @@ import com.custom.astrion.ui.tapCombinedClickable
  * Each button can also have its own colors (1.4.4), over the theme's: "color"
  * (background) and "text_color" (label), hex like scene_grid's "color".
  *
+ * "page" (1.5.2) opens a dashboard page, like a scene tile's ("pageMode": "popup" floats it
+ * over the current one), after the button's other actions.
+ *
  * "closePopup": true dismisses whichever popup is currently open, fired
  * after every other action on that button — e.g. a small TV/Projector
  * popup (opened via a scene_grid/title tile's own "pageMode": "popup")
@@ -73,6 +77,10 @@ import com.custom.astrion.ui.tapCombinedClickable
  * held (touch long-press or held D-pad CENTER) instead of tapped — same
  * action fields as a button, see GridLongPress.kt. Without it, a hold is
  * just a tap.
+ *
+ * "visibility": [ ... ] shows the button only while those Home Assistant rules hold (see
+ * Visibility), e.g. `[{ "condition": "state", "entity": "lock.front_door", "state_not": "locked" }]`;
+ * the buttons after it move up to close the gap.
  *
  * Config shape:
  *   { "type": "button_grid", "options": {
@@ -103,7 +111,11 @@ class ButtonGridCard : CardRenderer {
     @Composable
     override fun Render(config: CardConfig, ctx: CardContext) {
         val columns = config.int("columns", 3).coerceAtLeast(1)
-        val buttons = (config.options["buttons"] as? List<Map<String, Any?>>) ?: emptyList()
+        // A button whose `visibility` rules don't hold is left out, so the others close the gap.
+        val buttons =
+            (config.options["buttons"] as? List<Map<String, Any?>>)
+                .orEmpty()
+                .filter { Visibility.isVisible(it["visibility"], ctx.entities) }
         // Card-wide — every button in the grid shares one layout, same idea as
         // "columns". Unrecognized/missing values fall back to "top", the
         // original (and only, before this) behavior.
@@ -147,29 +159,7 @@ class ButtonGridCard : CardRenderer {
      * "closePopup" documents, just as likely (if not more) on a
      * button_grid button. No-op when no popup is open. See the class doc
      * for the full config shape. */
-    @Suppress("UNCHECKED_CAST")
-    private fun fire(ctx: CardContext, b: Map<String, Any?>) {
-        val service = b["service"] as? String
-        if (service != null) {
-            val domain = service.substringBefore('.')
-            val svc = service.substringAfter('.')
-            val entityId = b["entity_id"] as? String
-            val data = (b["data"] as? Map<String, Any?>).orEmpty()
-            ctx.client.callService(
-                ServiceCall.of(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())
-            )
-        }
-        val hub = b["hub"] as? String
-        val harmonyDevice = b["harmonyDevice"] as? String
-        val harmonyCommand = b["harmonyCommand"] as? String
-        if (harmonyDevice != null && harmonyCommand != null) {
-            ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
-        }
-        (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
-        (b["stopActivity"] as? String)?.let(ctx.stopActivity)
-        ctx.sendIrAction(b)
-        if (b["closePopup"] == true) ctx.closePopup()
-    }
+    private fun fire(ctx: CardContext, b: Map<String, Any?>) = fireButtonAction(ctx, b)
 
     /** True when this button's optional `"state_entity"`/`"state_value"`
      * condition currently matches — see the class doc for the conditional-
@@ -340,4 +330,36 @@ private fun defaultHeight(hasIcon: Boolean, sideBySide: Boolean, iconDp: Int): I
     !hasIcon -> 48
     sideBySide -> maxOf(48, iconDp + 16)
     else -> maxOf(68, iconDp + 36)
+}
+
+/**
+ * A button's action (a service, a Harmony command or activity, IR, a page): the button grid's, and
+ * the TV guide card's channels (1.6.0), which take the same keys.
+ */
+@Suppress("UNCHECKED_CAST")
+internal fun fireButtonAction(ctx: CardContext, b: Map<String, Any?>) {
+    val service = b["service"] as? String
+    if (service != null) {
+        val domain = service.substringBefore('.')
+        val svc = service.substringAfter('.')
+        val entityId = b["entity_id"] as? String
+        val data = (b["data"] as? Map<String, Any?>).orEmpty()
+        ctx.client.callService(
+            ServiceCall.of(domain, svc, entityId, *data.entries.map { it.key to it.value }.toTypedArray())
+        )
+    }
+    val hub = b["hub"] as? String
+    val harmonyDevice = b["harmonyDevice"] as? String
+    val harmonyCommand = b["harmonyCommand"] as? String
+    if (harmonyDevice != null && harmonyCommand != null) {
+        ctx.sendHarmonyCommand(harmonyDevice, harmonyCommand, hub)
+    }
+    (b["activityId"] as? String)?.let { ctx.startHarmonyActivity(it, hub) }
+    (b["stopActivity"] as? String)?.let(ctx.stopActivity)
+    ctx.sendIrAction(b)
+    if (b["closePopup"] == true) ctx.closePopup()
+    // "page" (1.5.2), like a scene tile's: after the rest, so a popup it opens isn't the one closed.
+    (b["page"] as? String)?.takeIf { it.isNotBlank() }?.let { page ->
+        if (b["pageMode"] == "popup") ctx.openPagePopup(page) else ctx.navigateToPage(page)
+    }
 }

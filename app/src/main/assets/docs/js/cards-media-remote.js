@@ -1,0 +1,338 @@
+// ---- media_remote card (builder form) ------------------------------------------------
+//
+// The universal media remote: one card for any player (Zidoo, Eversolo, Apple TV, Android TV,
+// Samsung, LG…). The form says which player to follow (player_entity), which remote entity sends
+// the keys (remote_entity), where the volume goes (volume_entity), how the keys are named
+// (kind), and which blocks may show. The card itself picks the buttons by what plays.
+// Apps written by hand in the JSON ("apps": [{name, app}]) and any other option are kept.
+//
+// Uses: I18N, haStates, cxEsc (cards-extra.js).
+
+/** The card's switches: [field id, option, shown by default]. */
+const MEDIA_REMOTE_SWITCHES = [
+  ['optMrName', 'show_name', true],
+  ['optMrPower', 'show_power', true],
+  ['optMrSkip', 'show_skip', true],
+  ['optMrPrevious', 'show_previous', true],
+  ['optMrPlayPause', 'show_play_pause', true],
+  ['optMrNext', 'show_next', true],
+  ['optMrBrowse', 'show_browse', true],
+  ['optMrSources', 'show_sources', true],
+  ['optMrKeypad', 'show_keypad', true],
+  ['optMrNavOneRow', 'nav_one_row', false],
+  ['optMrDpad', 'show_dpad', true],
+  ['optMrVolume', 'show_volume', true],
+  ['optMrChannels', 'show_channels', true],
+  ['optMrTracks', 'show_tracks', true],
+  ['optMrQueue', 'show_queue', true],
+  ['optMrIo', 'show_io', true],
+  ['optMrQuality', 'show_quality', true],
+  ['optMrSynopsis', 'show_synopsis', true],
+  ['optMrAutoPlayer', 'auto_player', false],
+  ['optMrSearch', 'music_search', false]
+];
+
+/**
+ * Whether [player] is an Eversolo added in Astrion (as the app tells it: its manufacturer, else
+ * its name). Its screen ignores the arrow keys, so its card has no D-pad unless asked (1.5.8).
+ */
+function mrIsEversolo(player, name) {
+  if (!/^media_player\.zidoo_/.test(player || '')) return false;
+  const e = (typeof haStates !== 'undefined' && haStates && haStates[player]) || null;
+  const a = (e && e.attributes) || {};
+  return a.manufacturer ? a.manufacturer === 'Eversolo' : /eversolo/i.test(player + ' ' + (name || ''));
+}
+
+/** A switch's default for this player: the table's, but no D-pad on an Eversolo. */
+function mrSwitchDefault(key, player, name) {
+  if (key === 'show_dpad' && mrIsEversolo(player, name)) return false;
+  return MEDIA_REMOTE_SWITCHES.find(s => s[1] === key)[2];
+}
+
+/** A new player chosen: the D-pad switch follows its default (none on an Eversolo). */
+function mrPlayerChanged() {
+  const player = document.getElementById('optMrPlayer').value.trim();
+  document.getElementById('optMrDpad').checked = mrSwitchDefault('show_dpad', player, document.getElementById('optName').value);
+}
+
+/** The remote's blocks under the header, in their default order (MediaRemoteCard.DEFAULT_ORDER). */
+const MEDIA_REMOTE_ORDER = ['playing', 'device', 'nav', 'apps', 'pad'];
+
+/** `order` as given, the blocks it leaves out after it in the default order. */
+function mediaRemoteOrder(o) {
+  const asked = (Array.isArray(o.order) ? o.order : []).filter((b, i, a) => MEDIA_REMOTE_ORDER.includes(b) && a.indexOf(b) === i);
+  return asked.concat(MEDIA_REMOTE_ORDER.filter(b => !asked.includes(b)));
+}
+
+function renderMediaRemoteOrder() {
+  const list = document.getElementById('mrOrderList');
+  if (!list) return;
+  const order = window._mrOrder || MEDIA_REMOTE_ORDER.slice();
+  list.innerHTML = order.map((b, i) => `
+    <div class="list-item" style="padding:6px 10px"><span style="flex:1">${I18N.t('web_card_mr_block_' + b)}</span>
+      <span class="remove" style="color:#00E5FF" onclick="moveMediaRemoteBlock(${i}, -1)">↑</span>
+      <span class="remove" style="color:#00E5FF" onclick="moveMediaRemoteBlock(${i}, 1)">↓</span></div>`).join('');
+}
+
+function moveMediaRemoteBlock(i, delta) {
+  const order = window._mrOrder;
+  const j = i + delta;
+  if (!order || j < 0 || j >= order.length) return;
+  [order[i], order[j]] = [order[j], order[i]];
+  renderMediaRemoteOrder();
+}
+
+/** Live entity ids of a domain (empty when the builder doesn't run on the remote). */
+function mediaRemoteEntities(domain) {
+  if (typeof haStates === 'undefined' || !haStates) return [];
+  return Object.keys(haStates).filter(id => id.startsWith(domain + '.')).sort();
+}
+
+function mediaRemoteFormHtml() {
+  const list = (id, domain) =>
+    `<datalist id="${id}">${mediaRemoteEntities(domain).map(e => `<option value="${cxEsc(e)}"></option>`).join('')}</datalist>`;
+  // Ticked as a new card's, so the sections count only what differs from it.
+  const check = (id, key) => {
+    const def = MEDIA_REMOTE_SWITCHES.find(s => s[0] === id)[2];
+    return `<label class="inline-check"><input type="checkbox" id="${id}"${def ? ' checked' : ''}> ${I18N.t('web_card_mr_' + key)}</label>`;
+  };
+  return `
+    <label>${I18N.t('web_card_name_optional_friendly')}</label><input type="text" id="optName" placeholder="${I18N.t('web_card_mr_name_ph')}">
+    <label>${I18N.t('web_card_mr_player')}</label>
+    <input type="text" id="optMrPlayer" list="mrPlayers" placeholder="media_player.zidoo_zidoo" onchange="onTvEntityChange(); mrPlayerChanged()">
+    ${list('mrPlayers', 'media_player')}
+    <div class="hint">${I18N.t('web_card_mr_player_hint')}</div>
+    <label>${I18N.t('web_card_mr_remote')}</label>
+    <input type="text" id="optMrRemote" list="mrRemotes" placeholder="remote.zidoo_zidoo" onchange="onTvEntityChange()">
+    ${list('mrRemotes', 'remote')}
+    <div class="hint">${I18N.t('web_card_mr_remote_hint')}</div>
+    <label>${I18N.t('web_card_mr_volume_entity')}</label>
+    <input type="text" id="optMrVolumeEntity" list="mrRemotes" placeholder="remote.denon_ampli">
+    <div class="hint">${I18N.t('web_card_mr_volume_entity_hint')}</div>
+    <label>${I18N.t('web_card_mr_now_playing_entity')}</label>
+    <input type="text" id="optMrNowPlaying" list="mrPlayers" placeholder="media_player.plex_…">
+    <div class="hint">${I18N.t('web_card_mr_now_playing_entity_hint')}</div>
+    <label>${I18N.t('web_card_mr_kind')}</label>
+    <select id="optMrKind">
+      <option value="auto">${I18N.t('web_card_mr_kind_auto')}</option>
+      <option value="android">${I18N.t('web_card_mr_kind_android')}</option>
+      <option value="apple_tv">${I18N.t('web_card_mr_kind_apple_tv')}</option>
+    </select>
+    <div class="hint">${I18N.t('web_card_mr_hint')}</div>
+    ${MEDIA_REMOTE_SWITCHES.map(s => check(s[0], s[1])).join('\n    ')}
+    ${tvAppsSectionHtml(true)}
+    <label>${I18N.t('web_card_mr_apps_rows')}</label>
+    <select id="optMrAppsRows">
+      <option value="0">${I18N.t('web_card_mr_apps_rows_all')}</option>
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+    </select>
+    <div class="hint">${I18N.t('web_card_mr_apps_rows_hint')}</div>
+    <label>${I18N.t('web_card_mr_search_player')}</label>
+    <input type="text" id="optMrSearchPlayer" list="mrPlayers" placeholder="media_player.music_assistant">
+    <div class="hint">${I18N.t('web_card_mr_search_hint')}</div>
+    <label>${I18N.t('web_card_mr_details_page')}</label>
+    <input type="text" id="optMrDetailsPage" list="mrPages" placeholder="${I18N.t('web_card_mr_details_page_ph')}">
+    <datalist id="mrPages">${((typeof dashboardData !== 'undefined' && dashboardData && dashboardData.pages) || []).map(p => `<option value="${cxEsc(p.name)}"></option>`).join('')}</datalist>
+    <div class="hint">${I18N.t('web_card_mr_details_page_hint')}</div>
+    <label>${I18N.t('web_card_mr_size')}</label>
+    <select id="optMrSize">
+      <option value="full">${I18N.t('web_card_mr_size_full')}</option>
+      <option value="two_thirds">${I18N.t('web_card_mr_size_two_thirds')}</option>
+      <option value="half">${I18N.t('web_card_mr_size_half')}</option>
+    </select>
+    <label>${I18N.t('web_card_mr_key_shape')}</label>
+    <select id="optMrKeyShape">
+      <option value="round">${I18N.t('web_card_mr_key_round')}</option>
+      <option value="rect">${I18N.t('web_card_mr_key_rect')}</option>
+    </select>
+    <label>${I18N.t('web_card_mr_cover')}</label>
+    <select id="optMrCover">
+      <option value="square">${I18N.t('web_card_mr_cover_square')}</option>
+      <option value="wide">${I18N.t('web_card_mr_cover_wide')}</option>
+    </select>
+    <div class="hint">${I18N.t('web_card_mr_player_view_hint')}</div>
+    <label>${I18N.t('web_card_mr_order')}</label>
+    <div id="mrOrderList"></div>
+  `;
+}
+
+function fillMediaRemoteForm(o) {
+  document.getElementById('optName').value = o.name || '';
+  document.getElementById('optMrPlayer').value = o.player_entity || '';
+  document.getElementById('optMrRemote').value = o.remote_entity || '';
+  document.getElementById('optMrVolumeEntity').value = o.volume_entity || '';
+  document.getElementById('optMrNowPlaying').value = o.now_playing_entity || '';
+  document.getElementById('optMrKind').value = ['android', 'apple_tv'].includes(o.kind) ? o.kind : 'auto';
+  MEDIA_REMOTE_SWITCHES.forEach(([id, key]) => {
+    const def = mrSwitchDefault(key, o.player_entity, o.name);
+    document.getElementById(id).checked = o[key] === undefined ? def : o[key] !== false;
+  });
+  // The apps: same editor as the TV remote card's (style, show, list, icons, the device's own apps).
+  document.getElementById('optTvShowApps').checked = o.show_apps !== false;
+  fillMediaApps(o);
+  document.getElementById('optMrAppsRows').value = [1, 2, 3].includes(Number(o.apps_rows)) ? String(o.apps_rows) : '0';
+  document.getElementById('optMrSearchPlayer').value = o.search_player || '';
+  document.getElementById('optMrDetailsPage').value = o.details_page || '';
+  document.getElementById('optMrSize').value = ['two_thirds', 'half'].includes(o.size) ? o.size : 'full';
+  document.getElementById('optMrKeyShape').value = o.key_shape === 'rect' ? 'rect' : 'round';
+  document.getElementById('optMrCover').value = o.cover_ratio === 'wide' ? 'wide' : 'square';
+  window._mrOrder = mediaRemoteOrder(o);
+  renderMediaRemoteOrder();
+  // What the form doesn't show is kept as it is.
+  const known = ['name', 'player_entity', 'remote_entity', 'volume_entity', 'now_playing_entity', 'kind', 'apps', 'apps_style', 'show_apps', 'apps_rows',
+    'search_player', 'details_page', 'size', 'key_shape', 'cover_ratio', 'order'];
+  window._mediaRemoteExtra = Object.fromEntries(Object.entries(o).filter(([k]) =>
+    !known.includes(k) && !MEDIA_REMOTE_SWITCHES.some(s => s[1] === k)));
+}
+
+/** Writes the form into [out]; false (with a message) when no player is chosen. */
+function collectMediaRemoteForm(out) {
+  const player = document.getElementById('optMrPlayer').value.trim();
+  if (!player) {
+    alert(I18N.t('web_card_mr_alert_player'));
+    return false;
+  }
+  Object.assign(out, window._mediaRemoteExtra || {});
+  const name = document.getElementById('optName').value.trim();
+  if (name) out.name = name;
+  out.player_entity = player;
+  const remote = document.getElementById('optMrRemote').value.trim();
+  if (remote) out.remote_entity = remote; else delete out.remote_entity;
+  const volume = document.getElementById('optMrVolumeEntity').value.trim();
+  if (volume) out.volume_entity = volume; else delete out.volume_entity;
+  const nowPlaying = document.getElementById('optMrNowPlaying').value.trim();
+  if (nowPlaying && nowPlaying !== player) out.now_playing_entity = nowPlaying; else delete out.now_playing_entity;
+  const kind = document.getElementById('optMrKind').value;
+  if (kind !== 'auto') out.kind = kind; else delete out.kind;
+  const mrName = document.getElementById('optName').value;
+  MEDIA_REMOTE_SWITCHES.forEach(([id, key]) => {
+    const def = mrSwitchDefault(key, player, mrName);
+    const on = document.getElementById(id).checked;
+    if (on !== def) out[key] = on; else delete out[key];
+  });
+  collectMediaApps(out);
+  if (document.getElementById('optTvShowApps').checked) delete out.show_apps; else out.show_apps = false;
+  const rows = Number(document.getElementById('optMrAppsRows').value);
+  if (rows > 0) out.apps_rows = rows; else delete out.apps_rows;
+  const searchPlayer = document.getElementById('optMrSearchPlayer').value.trim();
+  if (searchPlayer) out.search_player = searchPlayer; else delete out.search_player;
+  const detailsPage = document.getElementById('optMrDetailsPage').value.trim();
+  if (detailsPage) out.details_page = detailsPage; else delete out.details_page;
+  const size = document.getElementById('optMrSize').value;
+  if (size !== 'full') out.size = size; else delete out.size;
+  if (document.getElementById('optMrKeyShape').value === 'rect') out.key_shape = 'rect'; else delete out.key_shape;
+  if (document.getElementById('optMrCover').value === 'wide') out.cover_ratio = 'wide'; else delete out.cover_ratio;
+  const order = window._mrOrder || MEDIA_REMOTE_ORDER;
+  if (order.join() !== MEDIA_REMOTE_ORDER.join()) out.order = order.slice(); else delete out.order;
+  window._mediaRemoteExtra = null;
+  return true;
+}
+
+/** The builder's preview: the card's blocks, top to bottom, as the remote lays them out. */
+function mediaRemotePreviewHtml(card, idx) {
+  // Same blocks, in the same order, as MediaRemoteCard.kt: power, what plays, transport, the
+  // player's own buttons, Apps · Home · Menu, the app rows, then the pad with its side keys.
+  const o = card.options || {};
+  const e = (typeof haStates !== 'undefined' && haStates && haStates[o.player_entity]) || null;
+  const a = (e && e.attributes) || {};
+  const on = key => (o[key] === undefined ? mrSwitchDefault(key, o.player_entity, o.name) : o[key] !== false);
+  const player = o.player_entity || '';
+  const zidoo = /^media_player\.zidoo_/.test(player);
+  const eversolo = zidoo && (a.manufacturer ? a.manufacturer === 'Eversolo' : /eversolo/i.test(player + ' ' + (o.name || '')));
+  const title = a.media_title || 'Tous les matins du monde';
+  const sub = a.media_artist || a.media_series_title || 'Kaamelott';
+  const C = { key: '#2a383d', text: '#E6EEF2', muted: '#9FB6BD', accent: '#00E5FF', surface: '#1f2b30' };
+  const key = (s, glyph, opts = {}) => `<span style="width:${s}px;height:${s}px;border-radius:${o.key_shape === 'rect' ? '28%' : '50%'};background:${opts.accent ? C.accent : C.key};color:${opts.accent ? '#0b1418' : opts.tint || C.text};display:inline-flex;align-items:center;justify-content:center;font-size:${Math.round(s * 0.42)}px;flex:none">${glyph || ''}</span>`;
+  const slot = inner => `<span style="width:30px;display:inline-flex;justify-content:center">${inner}</span>`;
+  // Each block's HTML, laid out in `order` under the header, as MediaRemoteCard.orderOf does.
+  const groups = {};
+  let block = 'header';
+  const parts = { push: html => (groups[block] = groups[block] || []).push(html) };
+  const label = o.name || a.friendly_name || player.split('.')[1] || 'Media';
+  if (on('show_name') || on('show_power')) {
+    parts.push(`<div style="display:flex;align-items:center;gap:8px"><b style="flex:1;color:${C.text};font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${on('show_name') ? cxEsc(label) : ''}</b>${on('show_power') ? key(30, '⏻', { tint: C.accent }) : ''}</div>`);
+  }
+  // What plays (shown in the preview as if something did).
+  block = 'playing';
+  parts.push(`<div style="display:flex;align-items:center;gap:10px">
+      <span style="width:46px;height:46px;border-radius:8px;background:${C.key};flex:none"></span>
+      <div style="min-width:0"><div style="color:${C.accent};font-size:9px;font-weight:600">PLAYING</div>
+        <div style="color:${C.text};font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(title)}</div>
+        <div style="color:${C.muted};font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(sub)}</div></div></div>`);
+  parts.push(`<div style="height:3px;border-radius:2px;background:#2f4248"><div style="width:32%;height:3px;border-radius:2px;background:${C.accent}"></div></div>`);
+  const skip = on('show_skip');
+  parts.push(`<div style="display:flex;justify-content:space-evenly;align-items:center">${skip ? key(26, '↺') : ''}${on('show_previous') ? key(26, '⏮') : ''}${on('show_play_pause') ? key(36, '❚❚', { accent: true }) : ''}${on('show_next') ? key(26, '⏭') : ''}${skip ? key(26, '↻') : ''}</div>`);
+  // The library and the player's own buttons (a Zidoo / Eversolo only).
+  block = 'device';
+  const chips = [];
+  if (on('show_browse')) chips.push(I18N.t('web_card_mr_chip_library'));
+  if (on('music_search')) chips.push(I18N.t('web_card_mr_chip_search'));
+  if (zidoo && on('show_queue')) chips.push(I18N.t('web_card_mr_chip_queue'));
+  if (eversolo && on('show_io')) chips.push(I18N.t('web_card_mr_chip_input'), I18N.t('web_card_mr_chip_output'));
+  if (chips.length) {
+    parts.push(`<div style="display:flex;gap:6px">${chips.slice(0, 4).map(c =>
+      `<span style="flex:1;min-height:30px;border-radius:8px;background:${C.key};color:${C.text};font-size:10px;font-weight:600;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.1;padding:2px">${cxEsc(c)}</span>`).join('')}</div>`);
+  }
+  if (zidoo && on('show_quality')) parts.push(`<div style="text-align:center;color:#748790;font-size:9px">FLAC · 44.1 kHz · 16 bit</div>`);
+  // Apps · Home · Menu, over the pad's side keys.
+  block = 'nav';
+  parts.push(on('nav_one_row')
+    ? `<div style="display:flex;justify-content:space-between;align-items:center">${key(30, '↩')}${on('show_sources') ? key(30, '▦') : ''}${key(30, '⌂')}${on('show_keypad') ? key(30, '#') : ''}${key(30, zidoo ? '⚙' : '☰')}</div>`
+    : `<div style="display:flex;justify-content:space-between;align-items:center">${slot(on('show_sources') ? key(30, '▦') : '')}${key(30, '⌂')}${slot(key(30, zidoo ? '⚙' : '☰'))}</div>`);
+  // The app rows: the card's apps, else the player's own (left to the remote).
+  block = 'apps';
+  if (o.show_apps !== false) {
+    const apps = Array.isArray(o.apps) ? o.apps : [];
+    const icons = o.apps_style === 'icons';
+    const perRow = icons ? 5 : 2;
+    const rows = Number(o.apps_rows) > 0 ? Number(o.apps_rows) : Infinity;
+    const shown = apps.slice(0, rows === Infinity ? apps.length : rows * perRow);
+    if (shown.length) {
+      for (let r = 0; r < shown.length; r += perRow) {
+        const row = shown.slice(r, r + perRow);
+        parts.push(icons
+          ? `<div style="display:flex;justify-content:center;gap:6px">${row.map(app => `<span style="width:40px;text-align:center"><span style="display:block;width:30px;height:30px;margin:0 auto;border-radius:8px;background:${C.key}"></span><span style="display:block;color:${C.muted};font-size:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${cxEsc(app.name || app.app || '')}</span></span>`).join('')}</div>`
+          : `<div style="display:flex;gap:6px">${row.map(app => `<span style="flex:1;height:24px;border-radius:8px;background:${C.key};color:${C.text};font-size:10px;display:flex;align-items:center;justify-content:center;white-space:nowrap;overflow:hidden">${cxEsc(app.name || app.app || '')}</span>`).join('')}${row.length < perRow ? '<span style="flex:1"></span>' : ''}</div>`);
+      }
+    } else if (zidoo) {
+      parts.push(`<div style="text-align:center;color:#748790;font-size:9px">${I18N.t('web_card_mr_preview_own_apps')}</div>`);
+    }
+  }
+  block = 'pad';
+  if (on('show_dpad')) {
+    const channels = on('show_channels') && !eversolo;
+    const side = (top, bottom) => `<div style="display:flex;flex-direction:column;justify-content:space-between;height:100%">${top}<div style="display:flex;flex-direction:column;gap:4px">${bottom}</div></div>`;
+    parts.push(`<div style="display:flex;justify-content:space-between;align-items:stretch;height:118px">
+        ${side(key(30, '←'), on('show_volume') ? key(30, '+') + key(30, '−') : '')}
+        <span style="align-self:center;width:100px;height:100px;border-radius:50%;background:${C.key};position:relative;display:inline-block">
+          <span style="position:absolute;top:4px;left:50%;transform:translateX(-50%);color:${C.text};font-size:12px">▲</span>
+          <span style="position:absolute;bottom:4px;left:50%;transform:translateX(-50%);color:${C.text};font-size:12px">▼</span>
+          <span style="position:absolute;left:6px;top:50%;transform:translateY(-50%);color:${C.text};font-size:12px">◀</span>
+          <span style="position:absolute;right:6px;top:50%;transform:translateY(-50%);color:${C.text};font-size:12px">▶</span>
+          <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:32px;height:32px;border-radius:50%;background:${C.surface};color:${C.text};font-size:9px;display:flex;align-items:center;justify-content:center">OK</span>
+        </span>
+        ${side(on('show_keypad') ? key(30, '#') : '<span style="width:30px"></span>', channels ? key(30, '▴') + key(30, '▾') : '')}
+      </div>`);
+    if (on('show_volume')) parts.push(`<div style="display:flex;justify-content:center">${key(30, '🔇')}</div>`);
+  } else {
+    // Without the D-pad (1.5.8): its side keys stay, as MediaRemoteCard.SideKeys lays them out.
+    const channels = on('show_channels') && !eversolo;
+    const vol = on('show_volume');
+    const middle = key(30, '←') + (on('show_keypad') ? key(30, '#') : '') + (vol && !channels ? key(30, '🔇') : '');
+    const row = items => `<div style="display:flex;justify-content:space-between;align-items:center">${items.join('')}</div>`;
+    const col = items => `<div style="display:flex;flex-direction:column;gap:4px">${items}</div>`;
+    parts.push(channels
+      ? row([col(vol ? key(30, '+') + key(30, '−') : ''),
+          col(`<div style="display:flex;gap:4px">${key(30, '←')}${on('show_keypad') ? key(30, '#') : ''}</div>${vol ? '<div style="display:flex;justify-content:center">' + key(30, '🔇') + '</div>' : ''}`),
+          col(key(30, '▴') + key(30, '▾'))])
+      : row([vol ? key(30, '−') : '', `<div style="display:flex;gap:6px">${middle}</div>`, vol ? key(30, '+') : '']));
+  }
+  return `
+    <div class="card">
+      <div class="card-title"><span>media_remote${o.name ? ' · ' + cxEsc(o.name) : ''}</span><span><span class="remove" style="color:#00E5FF" onclick="editCard(${idx})">✎</span> <span class="remove" onclick="removeCard(${idx})">✕</span></span></div>
+      <div style="display:flex;flex-direction:column;gap:8px">${['header'].concat(mediaRemoteOrder(o)).map(b => (groups[b] || []).join('\n')).join('\n')}</div>
+      <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', cxEsc(player || 'media_player.…'))}</div>
+    </div>`;
+}

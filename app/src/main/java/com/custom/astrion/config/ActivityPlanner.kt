@@ -173,8 +173,29 @@ class ActivityPlanner(
             return steps.isNotEmpty()
         }
 
+        /** Inputs to send again later (1.6.0, `inputAgainAfterMs`): when (plan time), the device, the input. */
+        private val again = mutableListOf<Triple<Long, ActivityDeviceConfig, String>>()
+
         /** Select an input: the profile's named sequence, or one command. */
         fun input(d: ActivityDeviceConfig, input: String) {
+            sendInput(d, input)
+            if (d.inputAgainAfterMs > 0) again += Triple(clockMs + d.inputAgainAfterMs, d, input)
+        }
+
+        /**
+         * The inputs asked again (1.6.0), once everything else is done, at their time: a TV that
+         * took the input while still switching from an app gets it again once settled, and no
+         * other device waits for it.
+         */
+        fun inputsAgain() {
+            again.sortedBy { it.first }.forEach { (at, d, input) ->
+                waitUntil(at)
+                sendInput(d, input)
+            }
+            again.clear()
+        }
+
+        private fun sendInput(d: ActivityDeviceConfig, input: String) {
             when (d.source) {
                 "ha" -> emit { gap -> PlannedAction.HaSource(d, input, gap) }
                 else -> {
@@ -221,6 +242,7 @@ class ActivityPlanner(
             val readyAt = planPowerOn(b, incoming, outgoingDevices)
             planInputs(b, incoming, outgoingDevices, readyAt)
         }
+        b.inputsAgain()
         return b.build()
     }
 

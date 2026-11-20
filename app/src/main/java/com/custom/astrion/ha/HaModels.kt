@@ -1,5 +1,6 @@
 package com.custom.astrion.ha
 
+import com.custom.astrion.config.JsonPlain
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -41,6 +42,13 @@ data class EntityState(
      * attribute should degrade to "we don't have this", not crash the card
      * rendering it. */
     fun attrString(key: String): String? = (attributes[key] as? JsonPrimitive)?.contentOrNull
+
+    /**
+     * What a media player plays, as a picture: its own (`entity_picture_local`, else
+     * `entity_picture`), else TMDB's poster (`astrion_poster`, 1.6.0).
+     */
+    val mediaPicture: String?
+        get() = attrString("entity_picture_local") ?: attrString("entity_picture") ?: attrString("astrion_poster")
 
     /** Attribute as Double, or null. Handles ints and numeric strings too. */
     fun attrDouble(key: String): Double? = (attributes[key] as? JsonPrimitive)?.let { prim ->
@@ -93,24 +101,17 @@ data class ServiceCall(
 ) {
     companion object {
         /**
-         * Build a ServiceCall from plain values (String / Number / Boolean),
-         * wrapping them as JSON primitives. Keeps card code readable:
+         * Build a ServiceCall from plain values (String / Number / Boolean, and lists and maps of
+         * them), as JSON. Keeps card code readable:
          *   ServiceCall.of("light", "turn_on", "light.kitchen", "brightness_pct" to 60)
+         * A nested object or list stays one (1.5.6, #142): a button's `"variables": {…}` for
+         * `script.turn_on` used to be sent as its text ("{text=a, …}"), which Home Assistant refused.
          */
         fun of(domain: String, service: String, entityId: String? = null, vararg data: Pair<String, Any?>): ServiceCall {
             val mapped =
                 buildMap {
                     for ((k, v) in data) {
-                        val el: JsonElement? =
-                            when (v) {
-                                null -> null
-                                is JsonElement -> v
-                                is Boolean -> JsonPrimitive(v)
-                                is Number -> JsonPrimitive(v)
-                                is String -> JsonPrimitive(v)
-                                else -> JsonPrimitive(v.toString())
-                            }
-                        if (el != null) put(k, el)
+                        if (v != null) put(k, JsonPlain.toJson(v))
                     }
                 }
             return ServiceCall(domain, service, entityId, mapped)

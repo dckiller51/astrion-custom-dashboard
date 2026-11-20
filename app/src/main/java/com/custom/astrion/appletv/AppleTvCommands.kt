@@ -181,10 +181,25 @@ internal object AppleTvCommands {
         }
     }
 
-    fun playMediaAction(data: Map<String, Any?>): ((CompanionClient) -> Unit)? {
+    /**
+     * `play_media`: a URL as it is; an app by its bundle id or, as the builder's shortcuts give it
+     * (1.5.6), by its name: resolved as [selectSourceAction] does — a card's app shortcut sent the
+     * name as a bundle id and nothing opened.
+     */
+    fun playMediaAction(data: Map<String, Any?>, knownApps: () -> Map<String, String>): ((CompanionClient) -> Unit)? {
         val type = (data["media_content_type"] as? String)?.lowercase()
         val id = (data["media_content_id"] as? String)?.takeIf { it.isNotBlank() } ?: return null
-        if (type != "app" && type != "url") return null
-        return { c -> c.launch(id) }
+        return when {
+            type == "url" -> { c -> c.launch(id) }
+            type == "app" -> selectSourceAction(mapOf("source" to id), knownApps)
+            // 1.6.0: a deep link sent as a film or a show ("video", as a card may send it) opens in its app.
+            isDeepLink(id) -> { c -> c.launch(id) }
+            else -> null
+        }
     }
+
+    /** `plex://…`, `https://…`: a link an app opens, not a bundle id (`com.plexapp.plex`). */
+    fun isDeepLink(id: String): Boolean = DEEP_LINK.containsMatchIn(id)
+
+    private val DEEP_LINK = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
 }

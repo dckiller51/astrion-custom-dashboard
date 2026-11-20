@@ -6,6 +6,14 @@
     <!-- Lets the helper open an app while it isn't on screen itself (Android 10+ blocks that
          otherwise). Granted once with ADB: appops set … SYSTEM_ALERT_WINDOW allow. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- "Stay reachable in standby" (1.1.0): the box sleeps with its screen off but keeps its
+         processor and Wi-Fi up, and wakes its screen when the remote asks. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Android 14+: without it, a wake lock's ACQUIRE_CAUSES_WAKEUP and setTurnScreenOn are ignored. -->
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON" />
 
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
@@ -40,6 +48,31 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Turns the screen on when the remote asks and the wake lock wasn't enough (1.1.0). -->
+        <activity
+            android:name=".WakeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name=".KeepAwakeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the TV box reachable on the local network in standby, so a remote can wake it" />
+        </service>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Notification access is what Android requires to read other apps' media sessions.
              The helper never reads notifications themselves. -->

@@ -32,7 +32,14 @@ data class ZidooPlayback(
     /** What it plays, as an audiophile reads it (1.5.0): "FLAC · 44.1 kHz · 16 bit · 913 kbps". */
     val quality: String? = null,
     /** False when the player says it can't seek (an AirPlay stream, 1.5.0). */
-    val canSeek: Boolean = true
+    val canSeek: Boolean = true,
+    /** The video player's subtitle and audio track, as it names them (1.5.1, the Zidoo card). */
+    val subtitle: String? = null,
+    val audio: String? = null,
+    /** The app an Eversolo hosts or the stream it gets: "Apple Music", "AirPlay" (1.5.1). */
+    val appName: String? = null,
+    /** An Eversolo's own player: repeat / shuffle as `getState`'s `loopModel` (1.5.8, [EversoloLoop]). */
+    val loop: Int? = null
 )
 
 /**
@@ -70,7 +77,11 @@ data class ZidooMovie(
     val episode: Int? = null,
     /** An episode's season and series on the poster wall (1.4.9): their artwork, the episode has none of its own. */
     val seasonId: Long? = null,
-    val seriesId: Long? = null
+    val seriesId: Long? = null,
+    /** The synopsis (the episode's, else the film's), its year and rating, from the poster wall (1.5.8). */
+    val overview: String? = null,
+    val year: Int? = null,
+    val rating: Double? = null
 ) {
     val isEpisode: Boolean get() = episode != null || seasonId != null
 
@@ -102,6 +113,8 @@ object ZidooParse {
 
     private fun JsonObject.bool(key: String) = (this[key] as? JsonPrimitive)?.booleanOrNull
 
+    private fun JsonObject.dbl(key: String) = (this[key] as? JsonPrimitive)?.contentOrNull?.toDoubleOrNull()
+
     /**
      * [value] for a query string, the way the player reads it (1.4.8): spaces as `%20` and `/`
      * left as is. Java's form encoding (`+` for a space, `%2F`) made the poster wall miss every
@@ -128,7 +141,9 @@ object ZidooParse {
             title = v.str("title"),
             path = v.str("path"),
             durationMs = v.long("duration"),
-            positionMs = v.long("currentPosition")
+            positionMs = v.long("currentPosition"),
+            subtitle = ZidooControls.currentTrack(o, "subtitle")?.second,
+            audio = ZidooControls.currentTrack(o, "audio")?.second ?: v.str("audioInfo")
         )
     }
 
@@ -187,7 +202,8 @@ object ZidooParse {
             musicId = m.long("id"),
             musicType = m.int("type"),
             artUrl = art,
-            quality = quality
+            quality = quality,
+            loop = (o.int("loopModel") ?: m.int("loopModel"))?.takeIf { it in EversoloLoop.ALL..EversoloLoop.OFF }
         )
     }
 
@@ -241,7 +257,8 @@ object ZidooParse {
                 track.long("audioSampleRate")?.takeIf { it > 0 }?.let(::khz),
                 track.long("audioBitsPerSample")?.takeIf { it > 0 }?.let { "$it bit" }
             ),
-            canSeek = info.bool("isCanSeek") != false
+            canSeek = info.bool("isCanSeek") != false,
+            appName = info.str("playTypeSubtitle")
         )
     }
 
@@ -297,11 +314,22 @@ object ZidooParse {
             season = season?.int("seasonNumber"),
             episode = episode?.obj("aggregation")?.int("episodeNumber"),
             seasonId = seasonObj?.long("id") ?: episode?.long("parentId"),
-            seriesId = seasonObj?.long("parentId")
+            seriesId = seasonObj?.long("parentId"),
+            // `movie.aggregation.overview` (1.5.8, Zavie: the synopsis in the player view).
+            overview = episode?.obj("aggregation")?.str("overview") ?: movie?.obj("aggregation")?.str("overview"),
+            year = yearOf(movie),
+            rating = (movie?.obj("aggregation")?.dbl("voteAverage") ?: movie?.dbl("voteAverage"))?.takeIf { it > 0.0 }
         )
     }
 
+    /** The film's year, else its release date's. */
+    private fun yearOf(movie: JsonObject?): Int? {
+        movie?.int("year")?.takeIf { it > 0 }?.let { return it }
+        return movie?.obj("aggregation")?.str("releaseDate")?.take(YEAR_DIGITS)?.toIntOrNull()
+    }
+
     private const val HTTP_OK = 200
+    private const val YEAR_DIGITS = 4
     private const val COVER_PX = "600"
     private val VIDEO_COVER = listOf(".m3u8", ".mp4", ".mov", ".webm")
     private val LOCAL_FILE = listOf("/storage/", "/sdcard/", "/data/", "/mnt/")

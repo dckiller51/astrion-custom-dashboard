@@ -27,6 +27,10 @@ let androidTvs = [];       // full [{localId, name, entityId, host, serviceName,
 let androidTvScanResults = []; // last /androidtv-scan result
 let androidTvPairing = null; // { sessionId, device: {host, serviceName, name} } while waiting for the code
 let zidoos = [];           // full [{localId, name, entityId, host, mac}] (1.4.6)
+let denons = [];           // [{localId, name, entityId, host, port, inputNames, hiddenInputs}] (1.5.4)
+let samsungs = [];         // [{localId, name, entityId, host, mac, paired}] (1.5.3)
+let skys = [];             // [{localId, name, entityId, host, kind: 'skyq' | 'skyhd'}] (1.5.3)
+let lgTvs = [];            // [{localId, name, entityId, host, mac, paired}] (1.5.2), no key: it stays on the remote
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
 let dashboardData = { irDevices: [], haDevices: [] }; // irDevices/haDevices editing lives here, mirroring the builder's own global of the same name
 
@@ -75,6 +79,10 @@ async function loadAll() {
     appleTvs = Array.isArray(data.appleTvs) ? data.appleTvs : [];
     androidTvs = Array.isArray(data.androidTvs) ? data.androidTvs : [];
     zidoos = Array.isArray(data.zidoos) ? data.zidoos : [];
+    lgTvs = Array.isArray(data.lgtvs) ? data.lgtvs : [];
+    skys = Array.isArray(data.skys) ? data.skys : [];
+    samsungs = Array.isArray(data.samsungs) ? data.samsungs : [];
+    denons = Array.isArray(data.denons) ? data.denons : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -104,7 +112,11 @@ async function reconcileAppleTvHaDevices() {
   let changed = false;
   const paired = appleTvs.map(tv => ({ id: 'appletv_' + tv.localId, tv }))
     .concat(androidTvs.map(tv => ({ id: 'androidtv_' + tv.localId, tv })))
-    .concat(zidoos.map(tv => ({ id: 'zidoo_' + tv.localId, tv })));
+    .concat(zidoos.map(tv => ({ id: 'zidoo_' + tv.localId, tv })))
+    .concat(lgTvs.map(tv => ({ id: 'lgtv_' + tv.localId, tv })))
+    .concat(skys.map(tv => ({ id: 'sky_' + tv.localId, tv })))
+    .concat(samsungs.map(tv => ({ id: 'samsung_' + tv.localId, tv })))
+    .concat(denons.map(tv => ({ id: 'denon_' + tv.localId, tv })));
   paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
@@ -229,6 +241,10 @@ function renderDevicesList() {
 
   renderAndroidTvs();
   renderZidoos();
+  renderLgTvs();
+  renderSkys();
+  renderSamsungs();
+  renderDenons();
   renderDirectCounts();
 
   const tileIrCount = document.getElementById('tileIrCount');
@@ -257,7 +273,7 @@ function renderDevicesList() {
 
 // The direct devices (1.4.9) live in one view, a tab per kind of device: the old views' ids
 // still open it, on their tab.
-const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewZidoo: 'players' };
+const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewSky: 'tv', viewSamsung: 'tv', viewZidoo: 'players', viewDenon: 'audio' };
 
 function showView(id) {
   if (DIRECT_TABS[id]) {
@@ -272,6 +288,8 @@ function showView(id) {
     el.style.display = el.id === id ? 'block' : 'none';
   });
   if (id !== 'viewHome') closeDeviceForms();
+  if (id === 'viewScreenshots' && typeof loadScreenshots === 'function') loadScreenshots();
+  if (id === 'viewUpdates' && typeof loadInstalledVersion === 'function') loadInstalledVersion();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -287,12 +305,15 @@ function showDirectTab(tab) {
 
 /** Counts on the home tile and the tabs. */
 function renderDirectCounts() {
-  const tv = appleTvs.length + androidTvs.length;
+  const tv = appleTvs.length + androidTvs.length + lgTvs.length + skys.length + samsungs.length;
   const players = zidoos.length;
+  const audio = denons.length;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
   set('directCountTv', tv);
   set('directCountPlayers', players);
-  set('tileDirectCount', tv + players ? countLabel(tv + players, 'web_dev_count_direct') : I18N.t('web_dev_direct_none'));
+  set('directCountAudio', audio);
+  const all = tv + players + audio;
+  set('tileDirectCount', all ? countLabel(all, 'web_dev_count_direct') : I18N.t('web_dev_direct_none'));
 }
 
 /** A small icon for a kind of device (tv, box, player, audio), as in the tabs. */
@@ -323,9 +344,10 @@ function deviceKindIcon(kind) {
 function haDeviceKind(dev) {
   const obj = (dev.entityId || '').split('.')[1] || '';
   if (dev.domain === 'media_player') {
-    if (/^appletv_/.test(obj)) return 'box';
-    if (/^androidtv_/.test(obj)) return 'tv';
+    if (/^appletv_/.test(obj) || /^sky_/.test(obj)) return 'box';
+    if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj) || /^samsung_/.test(obj)) return 'tv';
     if (/^zidoo_/.test(obj)) return zidooKind({ entityId: dev.entityId }) === 'audio' ? 'audio' : 'player';
+    if (/^denon_/.test(obj)) return 'audio';
     return 'media';
   }
   return { light: 'light', switch: 'switch', input_boolean: 'switch', cover: 'cover', climate: 'climate', fan: 'fan',
@@ -387,6 +409,10 @@ function closeDeviceForms() {
   setDisplay('androidTvForm', 'none');
   androidTvPairing = null;
   setDisplay('zidooForm', 'none');
+  setDisplay('lgTvForm', 'none');
+  setDisplay('skyForm', 'none');
+  setDisplay('samsungForm', 'none');
+  setDisplay('denonForm', 'none');
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -445,6 +471,30 @@ async function openDeviceForm(type) {
     document.getElementById('zidooName').value = '';
     document.getElementById('zidooForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('zidooHost').focus();
+  } else if (type === 'denon') {
+    document.getElementById('denonForm').style.display = '';
+    document.getElementById('denonHost').value = '';
+    document.getElementById('denonName').value = '';
+    document.getElementById('denonForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('denonHost').focus();
+  } else if (type === 'samsung') {
+    document.getElementById('samsungForm').style.display = '';
+    document.getElementById('samsungHost').value = '';
+    document.getElementById('samsungName').value = '';
+    document.getElementById('samsungForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('samsungHost').focus();
+  } else if (type === 'sky') {
+    document.getElementById('skyForm').style.display = '';
+    document.getElementById('skyHost').value = '';
+    document.getElementById('skyName').value = '';
+    document.getElementById('skyForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('skyHost').focus();
+  } else if (type === 'lgtv') {
+    document.getElementById('lgTvForm').style.display = '';
+    document.getElementById('lgTvHost').value = '';
+    document.getElementById('lgTvName').value = '';
+    document.getElementById('lgTvForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('lgTvHost').focus();
   } else if (type === 'ir') {
     document.getElementById('irForm').style.display = '';
     renderIrTargetOptions();
@@ -570,6 +620,7 @@ async function persistHaAndHubs() {
       body.append('adtv_mac[]', tv.mac || '');
       body.append('adtv_cert[]', tv.certSha256 || '');
       body.append('adtv_helper[]', tv.helperCode || '');
+      body.append('adtv_blewake[]', tv.bleWake || '');
     });
     body.set('zidoo_present', '1'); // same for the Zidoo list (1.4.6)
     zidoos.forEach(z => {
@@ -578,6 +629,39 @@ async function persistHaAndHubs() {
       body.append('zidoo_entityid[]', z.entityId || '');
       body.append('zidoo_host[]', z.host || '');
       body.append('zidoo_mac[]', z.mac || '');
+    });
+    body.set('lgtv_present', '1'); // same for the LG TVs (1.5.2); their keys stay on the remote
+    lgTvs.forEach(t => {
+      body.append('lgtv_localid[]', t.localId || '');
+      body.append('lgtv_name[]', t.name || '');
+      body.append('lgtv_entityid[]', t.entityId || '');
+      body.append('lgtv_host[]', t.host || '');
+      body.append('lgtv_mac[]', t.mac || '');
+    });
+    body.set('sky_present', '1'); // same for the Sky boxes (1.5.3)
+    skys.forEach(b => {
+      body.append('sky_localid[]', b.localId || '');
+      body.append('sky_name[]', b.name || '');
+      body.append('sky_entityid[]', b.entityId || '');
+      body.append('sky_host[]', b.host || '');
+      body.append('sky_kind[]', b.kind || 'skyq');
+    });
+    body.set('samsung_present', '1'); // same for the Samsung TVs (1.5.3); their tokens stay on the remote
+    samsungs.forEach(t => {
+      body.append('samsung_localid[]', t.localId || '');
+      body.append('samsung_name[]', t.name || '');
+      body.append('samsung_entityid[]', t.entityId || '');
+      body.append('samsung_host[]', t.host || '');
+      body.append('samsung_mac[]', t.mac || '');
+    });
+    body.set('denon_present', '1'); // same for the Denon / Marantz receivers (1.5.4)
+    denons.forEach(r => {
+      body.append('denon_localid[]', r.localId || '');
+      body.append('denon_name[]', r.name || '');
+      body.append('denon_entityid[]', r.entityId || '');
+      body.append('denon_host[]', r.host || '');
+      body.append('denon_port[]', String(r.port || 8080));
+      body.append('denon_inputs[]', JSON.stringify({ names: r.inputNames || {}, hidden: r.hiddenInputs || [], zones: r.zones || 1 }));
     });
     const res = await fetch('/save-connection', {
       method: 'POST',
@@ -1764,7 +1848,20 @@ async function loadIconsList() {
     bar.innerHTML = `<label class="inline-check" style="margin:0"><input type="checkbox" id="iconSelectAll" onchange="selectAllIcons(this.checked)"> ${I18N.t('web_dev_icons_select_all')}</label>` +
       `<button type="button" class="secondary" id="deleteIconsBtn" style="margin:0" disabled onclick="deleteSelectedIcons()">${I18N.t('web_dev_icons_delete_selected', 0)}</button>`;
     list.appendChild(bar);
+    let folder = null;
     names.forEach(name => {
+      // 1.5.2: a direct device's imported icons, under its folder's name.
+      const dir = name.includes('/') ? name.split('/')[0] : '';
+      if (dir !== folder) {
+        folder = dir;
+        if (dir) {
+          const head = document.createElement('h4');
+          head.className = 'subsection-title';
+          head.style.margin = '14px 0 4px';
+          head.textContent = '📁 ' + dir;
+          list.appendChild(head);
+        }
+      }
       const row = document.createElement('div');
       row.className = 'list-item';
       const label = document.createElement('label');
@@ -1776,11 +1873,11 @@ async function loadIconsList() {
       check.addEventListener('change', updateIconSelection);
       label.appendChild(check);
       const img = document.createElement('img');
-      img.src = `/icons/${encodeURIComponent(name)}`;
+      img.src = `/icons/${name.split('/').map(encodeURIComponent).join('/')}`;
       img.alt = '';
       img.loading = 'lazy';
       img.style.cssText = 'width:24px;height:24px;object-fit:contain';
-      label.append(img, document.createTextNode(name));
+      label.append(img, document.createTextNode(name.includes('/') ? name.split('/').slice(1).join('/') : name));
       const del = document.createElement('span');
       del.className = 'remove';
       del.title = I18N.t('web_dev_icon_delete_title');
@@ -1792,6 +1889,32 @@ async function loadIconsList() {
   } catch (e) {
     list.innerHTML = `<div class="hint">${I18N.t('web_dev_icons_load_failed')}</div>`;
     console.error('Failed to load /icons-list', e);
+  }
+}
+
+/** 1.5.2: each direct device's app icons into its own folder (POST /icons-import-direct). */
+async function importDirectIcons() {
+  const btn = document.getElementById('importDirectIconsBtn');
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = I18N.t('web_dev_icons_importing');
+  try {
+    const res = await fetch('/icons-import-direct', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'HTTP ' + res.status);
+    const devices = data.devices || [];
+    if (!devices.length) {
+      showToast(I18N.t('web_dev_icons_import_none'), 'error');
+    } else {
+      const lines = devices.map(d => d.missing ? I18N.t('web_dev_icons_import_line_missing', d.name, d.saved, d.missing) : I18N.t('web_dev_icons_import_line', d.name, d.saved));
+      showToast(lines.join(' · '));
+    }
+    loadIconsList();
+  } catch (e) {
+    showToast(I18N.t('web_dev_icons_import_failed', e.message), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
   }
 }
 
@@ -1864,7 +1987,7 @@ async function deleteIcon(name) {
     : '';
   if (!confirm(I18N.t('web_dev_confirm_delete_file', name) + warning)) return;
   try {
-    const res = await fetch(`/icons/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const res = await fetch(`/icons/${name.split('/').map(encodeURIComponent).join('/')}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     showToast(I18N.t('web_dev_icon_deleted'));
   } catch (e) {
@@ -1953,4 +2076,8 @@ I18N.ready.then(() => {
   loadIconsList();
   loadIrDatabaseFiles();
   loadAll();
+  // 1.5.5: a newer version is pointed out on the home page; /#updates opens the Updates view.
+  if (typeof loadUpdateNotice === 'function') loadUpdateNotice('updateNotice');
+  if (location.hash === '#updates') showView('viewUpdates');
 });
+window.addEventListener('hashchange', () => { if (location.hash === '#updates') showView('viewUpdates'); });

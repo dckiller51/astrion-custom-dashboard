@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,6 +39,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +52,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -62,6 +67,7 @@ import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRegistry
 import com.custom.astrion.cards.DeviceSettingsState
+import com.custom.astrion.cards.Visibility
 import com.custom.astrion.config.ActivityConfig
 import com.custom.astrion.config.ActivityRuntime
 import com.custom.astrion.config.AppConfig
@@ -72,6 +78,7 @@ import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.extender.ExtenderRegistry
 import com.custom.astrion.ha.ConnectionState
 import com.custom.astrion.ha.EntityMap
+import com.custom.astrion.ha.EntityState
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.HaLabels
 import com.custom.astrion.harmony.HarmonyHubRegistry
@@ -99,13 +106,14 @@ import kotlinx.serialization.json.put
  * Sized for the HA100 panel (480x800, portrait). Each page scrolls vertically
  * on its own; the pager stays light for the 1GB / MT6580 hardware.
  */
-/** [HaClient] plus the two [State] flows it drives — bundled together since
+/** [HaClient] plus the entity map and connection [State] it drives — bundled together since
  * all three are part of "the live connection to Home Assistant", and
  * bundling is what got [Dashboard]'s parameter count under detekt's
  * LongParameterList threshold. */
 data class DashboardConnection(
     val client: HaClient,
-    val entitiesState: State<EntityMap>,
+    /** The live map from [collectAsLiveEntityMap]: one instance, observed entity by entity. */
+    val entities: EntityMap,
     val connectionState: State<ConnectionState>
 )
 
@@ -141,7 +149,10 @@ data class DashboardNavigation(
      * so simply observing it again on every repeat press is enough to
      * restart the popup's own auto-dismiss timer — there's nothing for
      * MainActivity to reset in between. */
-    val volumeHotkeyTrigger: VolumeHotkeyTrigger? = null
+    val volumeHotkeyTrigger: VolumeHotkeyTrigger? = null,
+    /** The entity the bound VOLUME_UP/DOWN/MUTE hotkeys drive right now (global, or the page's own,
+     * so an Activity's volume device on its page): the popup stays up while it's muted (1.5.7). */
+    val volumeEntityId: String? = null
 )
 
 /** See [DashboardNavigation.volumeHotkeyTrigger]. [nonce] only exists so two
@@ -496,10 +507,14 @@ private fun rememberDashboardRuntimeState(config: AppConfig, harmonyRegistry: Ha
             pageCount = { pageCount }
         )
     val hiddenPageContent = HiddenPageSkipEffect(config.pages, pagerState, activeActivityIds)
+    // 1.6.0, for the log: the pager made anew (it starts again on the start page).
+    LaunchedEffect(pagerState) { Log.i("Dashboard", "pager made, on page #${pagerState.currentPage}") }
 
     val navigateToPage: (String) -> Unit = { pageName ->
         val idx = config.pages.indexOfFirst { it.name.equals(pageName, ignoreCase = true) }
         if (idx >= 0) {
+            // A tile, a card or an Activity's page (ActivityDispatcher): in the log, before the change.
+            Log.i("Dashboard", "navigate to \"$pageName\" (a tile, a card or an Activity starting)")
             scope.launch { pagerState.scrollToPage(idx) }
         }
     }
@@ -555,7 +570,7 @@ fun Dashboard(
     // bundles existed) doesn't need touching at all — only the signature
     // needed to shrink for detekt's LongParameterList threshold.
     val client = connection.client
-    val entitiesState = connection.entitiesState
+    val entities = connection.entities
     val connectionState = connection.connectionState
     val harmonyRegistry = registries.harmonyRegistry
     val extenderRegistry = registries.extenderRegistry
@@ -570,11 +585,11 @@ fun Dashboard(
     val onPopupHandled = navigation.onPopupHandled
     val onPageChanged = navigation.onPageChanged
     val volumeHotkeyTrigger = navigation.volumeHotkeyTrigger
+    val volumeEntityId = navigation.volumeEntityId
     val onActivityRuntimeReady = activityCallbacks.onActivityRuntimeReady
     val onStartActivityReady = activityCallbacks.onStartActivityReady
     val onStopActivityReady = activityCallbacks.onStopActivityReady
 
-    val entities by entitiesState
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         HaLabels.init(context)
@@ -682,7 +697,8 @@ fun Dashboard(
                             targetPage = target,
                             widthFraction = target.popupWidthFraction,
                             heightFraction = target.popupHeightFraction,
-                            position = target.popupPosition
+                            position = target.popupPosition,
+                            hideTitle = target.popupHideTitle
                         )
                 }
             }
@@ -741,7 +757,8 @@ fun Dashboard(
                                 targetPage = page,
                                 widthFraction = page.popupWidthFraction,
                                 heightFraction = page.popupHeightFraction,
-                                position = page.popupPosition
+                                position = page.popupPosition,
+                                hideTitle = page.popupHideTitle
                             )
                     },
                     onClosePopup = {
@@ -779,6 +796,7 @@ fun Dashboard(
                     linkedJump = linkedJump,
                     onLinkedJumpChange = { linkedJump = it },
                     volumeHotkeyTrigger = volumeHotkeyTrigger,
+                    volumeEntityId = volumeEntityId,
                     linkedPopupPage = linkedPopupPage,
                     hiddenPageContent = runtime.hiddenPageContent,
                     onLinkedPopupPageChange = { page, entityId ->
@@ -813,6 +831,7 @@ private data class DashboardContentInputs(
     val linkedJump: Pair<String, String>?,
     val onLinkedJumpChange: (Pair<String, String>?) -> Unit,
     val volumeHotkeyTrigger: VolumeHotkeyTrigger?,
+    val volumeEntityId: String?,
     val linkedPopupPage: LinkedPagePopupState?,
     /** Sets (or clears, when both args are null) the shared popup slot —
      * second arg is the entity responsible, null for a manual swipe-up
@@ -927,7 +946,10 @@ private fun DashboardEntityPageEffect(
     params: EntityPageEffectParams
 ) {
     var autoOpenedFor by remember { mutableStateOf<Set<String>>(emptySet()) }
-    LaunchedEffect(entities, pagerState.currentPage) {
+    // Keyed on the pages and their watched entities' states, not the map (the same instance for
+    // good): another entity's update neither restarts this nor recomposes it.
+    val watchedStates = pages.map { page -> page.openWhenEntity?.let { entities[it]?.state } }
+    LaunchedEffect(pages, watchedStates, pagerState.currentPage) {
         val currentName = pages.getOrNull(pagerState.currentPage)?.name
         pages.forEachIndexed { index, page ->
             val entityId = page.openWhenEntity ?: return@forEachIndexed
@@ -1050,51 +1072,57 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
                 Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .then(rememberPageReachLimit(config.pages, pagerState, activeActivityIds))
             ) { pageIndex ->
                 PageContent(config.pages[inputs.hiddenPageContent.contentIndex(pageIndex)], ctx)
             }
 
             val backTargetName = resolveBackTargetName(config.pages, shownPage, linkedJump)
 
-            PageIndicator(
-                pages = config.pages,
-                current = shownPage,
-                activeActivityIds = activeActivityIds,
-                backTargetName = backTargetName,
-                // Same instant scrollToPage as navigateToPage/hardware nav —
-                // a dot tap is a direct jump too, not a swipe gesture, so it
-                // shouldn't visibly scroll through pages in between.
-                onDotClick = { index -> scope.launch { pagerState.scrollToPage(index) } },
-                onNavigateToParent = { jumpToPageByName(config.pages, backTargetName, scope, pagerState) },
-                // Swipe UP now jumps to this page's own `linkedPage` (a
-                // per-card "more options" page, e.g. Apple TV's extra
-                // controls) instead of opening the Activities overlay —
-                // that moved to the top bar's swipe-down above. A page
-                // with no `linkedPage` set simply does nothing on swipe-up,
-                // same as a page with no `parent`/remembered source does
-                // nothing on BACK.
-                onSwipeUpToLinkedPage = {
-                    val current = config.pages.getOrNull(shownPage)
-                    if (current != null) {
-                        val linkedName = current.linkedPage
-                        val linkedPageConfig = linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
-                        if (current.linkedPageMode == "popup" && linkedPageConfig != null) {
-                            onLinkedPopupPageChange(
-                                LinkedPagePopupState(
-                                    targetPage = linkedPageConfig,
-                                    widthFraction = current.popupWidthFraction,
-                                    heightFraction = current.popupHeightFraction,
-                                    position = current.popupPosition
-                                ),
-                                null
-                            )
-                        } else {
-                            if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
-                            jumpToPageByName(config.pages, linkedName, scope, pagerState)
+            // `showPageIndicator: false`: no bar at all, so the pager above (weight 1f) takes its height.
+            if (config.showPageIndicator) {
+                PageIndicator(
+                    pages = config.pages,
+                    current = shownPage,
+                    activeActivityIds = activeActivityIds,
+                    backTargetName = backTargetName,
+                    // Same instant scrollToPage as navigateToPage/hardware nav —
+                    // a dot tap is a direct jump too, not a swipe gesture, so it
+                    // shouldn't visibly scroll through pages in between.
+                    onDotClick = { index -> scope.launch { pagerState.scrollToPage(index) } },
+                    onNavigateToParent = { jumpToPageByName(config.pages, backTargetName, scope, pagerState) },
+                    // Swipe UP now jumps to this page's own `linkedPage` (a
+                    // per-card "more options" page, e.g. Apple TV's extra
+                    // controls) instead of opening the Activities overlay —
+                    // that moved to the top bar's swipe-down above. A page
+                    // with no `linkedPage` set simply does nothing on swipe-up,
+                    // same as a page with no `parent`/remembered source does
+                    // nothing on BACK.
+                    onSwipeUpToLinkedPage = {
+                        val current = config.pages.getOrNull(shownPage)
+                        if (current != null) {
+                            val linkedName = current.linkedPage
+                            val linkedPageConfig =
+                                linkedName?.let { n -> config.pages.firstOrNull { it.name.equals(n, ignoreCase = true) } }
+                            if (current.linkedPageMode == "popup" && linkedPageConfig != null) {
+                                onLinkedPopupPageChange(
+                                    LinkedPagePopupState(
+                                        targetPage = linkedPageConfig,
+                                        widthFraction = current.popupWidthFraction,
+                                        heightFraction = current.popupHeightFraction,
+                                        position = current.popupPosition,
+                                        hideTitle = current.popupHideTitle
+                                    ),
+                                    null
+                                )
+                            } else {
+                                if (linkedName != null) onLinkedJumpChange(linkedName to current.name)
+                                jumpToPageByName(config.pages, linkedName, scope, pagerState)
+                            }
                         }
                     }
-                }
-            )
+                )
+            }
         }
 
         if (overlayState.showSettings) {
@@ -1111,7 +1139,11 @@ private fun DashboardContent(inputs: DashboardContentInputs) {
         linkedPopupPage?.let { popup ->
             LinkedPagePopup(state = popup, ctx = ctx, onClose = { onLinkedPopupPageChange(null, null) })
         }
-        VolumePopupHost(trigger = volumeHotkeyTrigger, ctx = ctx)
+        VolumePopupHost(
+            trigger = volumeHotkeyTrigger,
+            target = volumeTargetOf(config, activeActivityIds, inputs.volumeEntityId, ctx),
+            ctx = ctx
+        )
     }
 }
 
@@ -1313,7 +1345,9 @@ private data class LinkedPagePopupState(
     val targetPage: PageConfig,
     val widthFraction: Float,
     val heightFraction: Float,
-    val position: String
+    val position: String,
+    /** 1.5.7: the source page's [PageConfig.popupHideTitle]. */
+    val hideTitle: Boolean = false
 )
 
 /**
@@ -1348,45 +1382,76 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
             .tapClickable(onClick = onClose),
         contentAlignment = alignment
     ) {
+        // Height "auto" (1.6.0, heightFraction 0): as tall as the page's cards, up to almost the
+        // screen (MR RIZK sized his by hand to fit them).
+        val auto = state.heightFraction <= 0f
+        val maxAuto = (LocalConfiguration.current.screenHeightDp * POPUP_AUTO_MAX).dp
         Box(
             modifier =
             Modifier
                 .fillMaxWidth(state.widthFraction)
-                .fillMaxHeight(state.heightFraction)
+                .then(if (auto) Modifier.heightIn(max = maxAuto) else Modifier.fillMaxHeight(state.heightFraction))
                 .padding(16.dp)
                 .clip(RoundedCornerShape(18.dp))
                 .background(LocalTheme.current.cardSurface)
                 // Swallows taps so they don't reach the backdrop behind it.
                 .tapClickable(onClick = {})
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        state.targetPage.name,
-                        color = LocalTheme.current.primaryText,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        "✕",
-                        color = LocalTheme.current.mutedText,
-                        fontSize = 15.sp,
-                        modifier =
-                        Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .tapClickable { onClose() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+            if (state.hideTitle) {
+                // Without its title (1.5.7, popupHideTitle) the page starts at the top and the ✕
+                // floats in its corner (1.5.8): no row kept just for it (MR RIZK).
+                Box(if (auto) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
+                    PageContent(state.targetPage, ctx, wrapHeight = auto)
+                    PopupClose(onClose, Modifier.align(Alignment.TopEnd))
                 }
-                PageContent(state.targetPage, ctx)
+            } else {
+                Column(modifier = if (auto) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            state.targetPage.name,
+                            color = LocalTheme.current.primaryText,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        PopupClose(onClose)
+                    }
+                    PageContent(state.targetPage, ctx, wrapHeight = auto)
+                }
             }
         }
     }
 }
+
+/**
+ * The popup's ✕: a small mark, in a 44 dp tap area (1.6.0: the small chip alone took a precise
+ * tap, MR RIZK).
+ */
+@Composable
+private fun PopupClose(onClose: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.size(POPUP_CLOSE_TAP.dp).clip(RoundedCornerShape(12.dp)).tapClickable { onClose() },
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            "✕",
+            color = LocalTheme.current.mutedText,
+            fontSize = 15.sp,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(LocalTheme.current.cardSurface.copy(alpha = 0.85f))
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+        )
+    }
+}
+
+private const val POPUP_CLOSE_TAP = 44
+
+/** A popup with its height on "auto" stops at this share of the screen (then its page scrolls). */
+private const val POPUP_AUTO_MAX = 0.92f
 
 /**
  * Temporary volume readout popped up by a VOLUME_UP/VOLUME_DOWN/MUTE hotkey
@@ -1404,19 +1469,31 @@ private fun LinkedPagePopup(state: LinkedPagePopupState, ctx: CardContext, onClo
  * attribute this could read a real dB value from.
  */
 @Composable
-private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, ctx: CardContext) {
-    var visible by remember { mutableStateOf<VolumeHotkeyTrigger?>(null) }
+private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, target: String?, ctx: CardContext) {
+    var visible by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(trigger) {
         if (trigger == null) return@LaunchedEffect
-        visible = trigger
-        delay(2200)
-        // Nothing else can have changed `visible` out from under us: a
-        // newer trigger would have cancelled/relaunched this very
-        // coroutine (LaunchedEffect(trigger)) before this delay finished.
+        visible = trigger.entityId
+        delay(VOLUME_POPUP_MS)
         visible = null
     }
-    val shown = visible ?: return
-    val e = ctx.entities[shown.entityId] ?: return
+    // 1.5.7: the popup stays up while the volume target is muted, whoever muted it (a hotkey,
+    // Home Assistant, another remote…): no sound and nothing on screen to say why was confusing.
+    // Unmuted elsewhere, it shows the volume a moment, then goes. A target without a readable
+    // mute state (IR, Harmony) never has `is_volume_muted`: unchanged.
+    val targetMuted = volumeEntityOf(target, ctx)?.attrBoolean("is_volume_muted") == true
+    var wasMuted by remember(target) { mutableStateOf(targetMuted) }
+    LaunchedEffect(target, targetMuted) {
+        val unmuted = wasMuted && !targetMuted
+        wasMuted = targetMuted
+        if (unmuted) {
+            visible = target
+            delay(VOLUME_POPUP_MS)
+            visible = null
+        }
+    }
+    val shownId = if (targetMuted) target else visible
+    val e = volumeEntityOf(shownId, ctx) ?: return
     val level = e.attrDouble("volume_level")?.toFloat()?.coerceIn(0f, 1f)
     val muted = e.attrBoolean("is_volume_muted") == true
 
@@ -1469,21 +1546,52 @@ private fun VolumePopupHost(trigger: VolumeHotkeyTrigger?, ctx: CardContext) {
     }
 }
 
-@Composable
-private fun PageContent(page: PageConfig, ctx: CardContext) {
-    val pinned = page.cards.filter { it.options["pin"] == "bottom" }
-    val scrolling = page.cards.filter { it.options["pin"] != "bottom" }
+private const val VOLUME_POPUP_MS = 2200L
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier =
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            items(scrolling, key = { it.hashCode() }) { RenderCard(it, ctx) }
+/**
+ * The entity holding [id]'s volume and mute (1.5.8): itself, or for a `remote.x` hotkey target
+ * (a Denon receiver's keys…) its `media_player.x`, which has them. Xavier's popup showed a bar,
+ * never *Muted*, his Mute key aiming at the receiver's remote entity.
+ */
+private fun volumeEntityOf(id: String?, ctx: CardContext): EntityState? {
+    id ?: return null
+    val e = ctx.entities[id]
+    if (e?.attrBoolean("is_volume_muted") != null || !id.startsWith("remote.")) return e
+    return ctx.entities["media_player." + id.substringAfter('.')] ?: e
+}
+
+/**
+ * The entity whose mute state keeps the volume popup up (1.5.7): the volume device of an active
+ * Activity when it's an entity here (an IR amp isn't), else the one the bound volume hotkeys drive
+ * ([hotkeyEntityId]).
+ */
+private fun volumeTargetOf(config: AppConfig, active: Set<String>, hotkeyEntityId: String?, ctx: CardContext): String? =
+    config.activities.firstNotNullOfOrNull { a -> a.volumeDeviceId?.takeIf { a.id in active && ctx.entities[it] != null } }
+        ?: hotkeyEntityId
+
+@Composable
+private fun PageContent(page: PageConfig, ctx: CardContext, wrapHeight: Boolean = false) {
+    // A card whose `visibility` rules don't hold right now leaves the page (see Visibility).
+    val cards = page.cards.filter { Visibility.isVisible(it.options["visibility"], ctx.entities) }
+    val pinned = cards.filter { it.options["pin"] == "bottom" }
+    val scrolling = cards.filter { it.options["pin"] != "bottom" }
+
+    val bounds = remember { PageBounds() }
+    // wrapHeight (1.6.0, a popup with its height on "auto"): as tall as the cards, up to the room given.
+    Column(modifier = if (wrapHeight) Modifier.fillMaxWidth() else Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalPageBounds provides bounds) {
+            LazyColumn(
+                modifier =
+                Modifier
+                    .weight(1f, fill = !wrapHeight)
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+                    // 1.5.8: how far down the cards may go (PageBounds), inside the padding.
+                    .onGloballyPositioned { bounds.bottomPx = it.boundsInWindow().bottom },
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(scrolling, key = { it.hashCode() }) { RenderCard(it, ctx) }
+            }
         }
         if (pinned.isNotEmpty()) {
             Column(
@@ -1494,7 +1602,7 @@ private fun PageContent(page: PageConfig, ctx: CardContext) {
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                pinned.forEach { RenderCard(it, ctx) }
+                pinned.forEach { key(it.hashCode()) { RenderCard(it, ctx) } }
             }
         }
     }
@@ -1642,6 +1750,9 @@ private fun PageIndicator(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 5.dp, horizontal = 10.dp)
+            // 1.6.0: always as tall as the "‹ back" chevron's 44 dp tap area, so the dots and the
+            // page name don't move up or down between a page with a parent and one without (MR RIZK).
+            .defaultMinSize(minHeight = 44.dp)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
                     onDragStart = { dragAccumulated = 0f },

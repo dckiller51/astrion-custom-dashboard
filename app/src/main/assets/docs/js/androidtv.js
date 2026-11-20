@@ -30,9 +30,11 @@ function renderAndroidTvs() {
         const status = androidTvStatus(tv);
         const helper = androidTvHelperStatus(tv);
         return deviceCardHtml({
-          kind: 'tv', name: atvEsc(tv.name), details: `<code>${atvEsc(tv.entityId)}</code>${tv.host ? ' · ' + atvEsc(tv.host) : ''}`,
+          kind: 'tv', name: atvEsc(tv.name), details: `<code>${atvEsc(tv.entityId)}</code>${tv.host ? ' · ' + atvEsc(tv.host) : ''}${tv.mac ? ' · MAC ' + atvEsc(tv.mac) : ''}${tv.bleWake ? ' · ' + I18N.t('web_dev_adtv_blewake_short', atvEsc(tv.bleWake)) : ''}`,
           state: status, tone: deviceStateTone(tv.entityId), extra: helper ? `<span class="device-badge">${helper}</span>` : '',
           actions: `<span class="remove" style="color:#00E5FF" onclick="linkAndroidTvHelper('${atvEsc(tv.localId)}')">${I18N.t(tv.helperCode ? 'web_dev_adtv_helper_edit' : 'web_dev_adtv_helper_add')}</span> ` +
+            `<span class="remove" style="color:#00E5FF" onclick="setAndroidTvMac('${atvEsc(tv.localId)}')">${I18N.t('web_dev_adtv_wol')}</span> ` +
+            `<span class="remove" style="color:#00E5FF" onclick="setAndroidTvBleWake('${atvEsc(tv.localId)}')">${I18N.t('web_dev_adtv_blewake')}</span> ` +
             `<span class="remove" style="color:#00E5FF" onclick="renameAndroidTv('${atvEsc(tv.localId)}')">✎</span> <span class="remove" onclick="removeAndroidTv('${atvEsc(tv.localId)}')">✕</span>`
         });
       }).join('')
@@ -96,6 +98,42 @@ async function linkAndroidTvHelper(localId) {
   tv.helperCode = code;
   await persistHaAndHubs();
   showToast(I18N.t('web_dev_adtv_helper_linked', tv.name));
+}
+
+/**
+ * The MAC address Wake-on-LAN is sent to (1.5.7): read from the TV's certificate when pairing,
+ * which some boxes leave out or give another interface's. A box in deep sleep (Xiaomi Mi Box S)
+ * is only woken by Wake-on-LAN on its Wi-Fi MAC; the helper then turns its screen on.
+ */
+async function setAndroidTvMac(localId) {
+  const tv = androidTvs.find(t => t.localId === localId);
+  if (!tv) return;
+  const typed = prompt(I18N.t('web_dev_adtv_wol_prompt', tv.name), tv.mac || '');
+  if (typed === null) return;
+  const mac = typed.trim().toLowerCase().replace(/-/g, ':');
+  if (mac && !/^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(mac)) { showToast(I18N.t('web_dev_adtv_wol_bad'), 'error'); return; }
+  tv.mac = mac;
+  await persistHaAndHubs();
+  renderDevicesList();
+  showToast(I18N.t('web_dev_adtv_wol_saved', tv.name));
+}
+
+/**
+ * The ESP32 that wakes the TV over Bluetooth (1.6.0): Xiaomi TVs and boxes turn their Wi-Fi off
+ * in deep standby, but their Bluetooth still listens for their remote. An ESP32 flashed with
+ * esphome-xiaomi-ble-wake sends the remote's wake signal; Power then asks it first.
+ */
+async function setAndroidTvBleWake(localId) {
+  const tv = androidTvs.find(t => t.localId === localId);
+  if (!tv) return;
+  const typed = prompt(I18N.t('web_dev_adtv_blewake_prompt', tv.name), tv.bleWake || '');
+  if (typed === null) return;
+  const host = typed.trim().replace(/^http:\/\//, '').replace(/\/+$/, '');
+  if (host && !/^[A-Za-z0-9.:-]{1,253}$/.test(host)) { showToast(I18N.t('web_dev_adtv_blewake_bad'), 'error'); return; }
+  tv.bleWake = host;
+  await persistHaAndHubs();
+  renderDevicesList();
+  showToast(I18N.t(host ? 'web_dev_adtv_blewake_saved' : 'web_dev_adtv_blewake_removed', tv.name));
 }
 
 function upsertAndroidTvHaDevice(tv) {
@@ -224,7 +262,8 @@ async function finishAndroidTvPairing() {
       serviceName: device.serviceName || (existing ? existing.serviceName : ''),
       mac: data.mac || '',
       certSha256: data.certSha256,
-      helperCode: existing ? existing.helperCode || '' : ''
+      helperCode: existing ? existing.helperCode || '' : '',
+      bleWake: existing ? existing.bleWake || '' : ''
     };
     androidTvs = existing ? androidTvs.map(t => (t.localId === data.localId ? entry : t)) : androidTvs.concat(entry);
     androidTvPairing = null;

@@ -49,7 +49,14 @@ data class AppConfig(
     val keepOnDevices: Set<String> = emptySet(),
     /** `swipePages: false` (1.4.9): no swiping left / right between pages; they change with
      * buttons, tiles, hotkeys and the page dots only. */
-    val swipePages: Boolean = true
+    val swipePages: Boolean = true,
+    /** `showPageIndicator: false`: no bar under the pages (dots, page name, "‹ back"), and the pages
+     * get its height. For a remote that changes pages with keys and tiles only; the bar's swipe up to a
+     * page's `linkedPage` goes with it. */
+    val showPageIndicator: Boolean = true,
+    /** The Home Assistant entities this dashboard uses — the only ones the remote receives
+     * (1.5.2, see [DashboardEntities]). Null = every entity, as before. */
+    val haEntities: Set<String>? = null
 )
 
 /**
@@ -88,7 +95,9 @@ data class PowerConfig(
     /** How long it must be charging before it counts as docked; lifting it off counts at once. */
     val dockDebounceSeconds: Int = 5,
     /** System screen timeout to enforce (needs WRITE_SETTINGS, granted once over adb); null = leave alone. */
-    val screenTimeoutSeconds: Int? = null
+    val screenTimeoutSeconds: Int? = null,
+    /** `ha_entities: "all"` (1.5.2): receive every Home Assistant entity, not only the dashboard's own. */
+    val allEntities: Boolean = false
 )
 
 /**
@@ -217,12 +226,15 @@ data class PageConfig(
      * a full page, undermining the point of using popup mode at all. */
     val popupWidthFraction: Float = 0.7f,
     /** Popup height as a fraction of the screen height (0–1). See
-     * [popupWidthFraction]. Defaults to 0.5. */
+     * [popupWidthFraction]. Defaults to 0.5. 0: "auto" (1.6.0), as tall as
+     * the page's cards, up to almost the screen. */
     val popupHeightFraction: Float = 0.5f,
     /** Where the popup is anchored on screen: "center" (default), "top",
      * "bottom", "left", or "right". Only consulted when [linkedPageMode] is
      * `"popup"`. Unrecognized value falls back to "center". */
     val popupPosition: String = "center",
+    /** 1.5.7: the popup without its title row (the page's name), only a small ✕ in its corner. */
+    val popupHideTitle: Boolean = false,
     /** Optional Activity id — an [ActivityRuntime.TrackedActivity.id], which
      * covers BOTH a composed [ActivityConfig.id] (same id space as a
      * scene_grid item's `"activity"` field) AND any `"track": true`
@@ -605,7 +617,10 @@ data class ActivityDeviceConfig(
      * *next* device's — e.g. TV on, wait 2s, then the receiver. Ignored on
      * the last device and on stop (power-off runs with no delays between
      * devices — nothing downstream needs to wait for it). */
-    val delayAfterMs: Int = 0
+    val delayAfterMs: Int = 0,
+    /** Send the input again this long after it was sent (1.6.0), at the end of the start: a TV
+     * that misses it while still switching (leaving an app, a box powering on). 0: never. */
+    val inputAgainAfterMs: Int = 0
 )
 
 /**

@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.custom.astrion.R
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.ha.ServiceCall
@@ -81,11 +82,11 @@ internal object QuickPickers {
      * or `disney.png` for "Disney+".
      */
     fun uploadedIcons(): Map<String, String> = runCatching {
-        File(Environment.getExternalStorageDirectory(), "astrion/icons")
-            .listFiles()
-            .orEmpty()
-            .filter { it.isFile && it.extension.lowercase() in IMAGE_EXTENSIONS }
-            .associate { iconKey(it.nameWithoutExtension) to it.absolutePath }
+        val root = File(Environment.getExternalStorageDirectory(), "astrion/icons")
+        fun icons(dir: File) = dir.listFiles().orEmpty().filter { it.isFile && it.extension.lowercase() in IMAGE_EXTENSIONS }
+        // 1.5.2: a direct device's imported icons are in its folder; one uploaded at the top wins.
+        val nested = root.listFiles().orEmpty().filter { it.isDirectory }.flatMap { icons(it) }
+        (nested + icons(root)).associate { iconKey(it.nameWithoutExtension) to it.absolutePath }
     }.getOrDefault(emptyMap())
 
     private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "webp")
@@ -111,6 +112,11 @@ internal fun SourcePickerDialog(
     val sources = QuickPickers.ordered(QuickPickers.sourcesOf(ctx, entityId), preferred)
     val current = ctx.entities[entityId]?.attrString("source")
     val uploaded = remember { QuickPickers.uploadedIcons() }
+    // Icons the player gives itself (an LG TV's apps and inputs, 1.5.2), after the card's and the uploaded ones.
+    val own =
+        (ctx.entities[entityId]?.attr("astrion_source_icons") as? kotlinx.serialization.json.JsonObject)
+            ?.mapValues { (it.value as? kotlinx.serialization.json.JsonPrimitive)?.content }
+            .orEmpty()
     PickerFrame(theme, stringResource(R.string.picker_sources), onClose) {
         if (sources.isEmpty()) {
             Text(
@@ -137,7 +143,7 @@ internal fun SourcePickerDialog(
                         .padding(4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    val icon = icons[source] ?: uploaded[QuickPickers.iconKey(source)]
+                    val icon = icons[source] ?: uploaded[QuickPickers.iconKey(source)] ?: own[source]
                     AtvAppTile(ctx, AtvApp(source, source, icon, null), index, TILE.dp, TILE_LABEL.dp) {
                         onPick(source)
                         onClose()
@@ -242,8 +248,9 @@ private fun KeypadKey(label: String, theme: ThemeColors, onClick: () -> Unit) {
 
 /** The pop-up's frame: a title, a close button, then [content]. */
 @Composable
-private fun PickerFrame(theme: ThemeColors, title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
+internal fun PickerFrame(theme: ThemeColors, title: String, onClose: () -> Unit, content: @Composable () -> Unit) {
     Dialog(onDismissRequest = onClose) {
+        ScreenCapture.TrackForScreenshots()
         // The remote's buttons keep working while the pop-up is open (1.4.9).
         ForwardHotkeys()
         Column(

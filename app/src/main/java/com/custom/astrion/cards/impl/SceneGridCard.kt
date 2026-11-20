@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
+import com.custom.astrion.cards.Visibility
 import com.custom.astrion.cards.sendIrAction
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.tapCombinedClickable
@@ -90,6 +91,8 @@ private val emptyActiveByRoomFlow = MutableStateFlow<Map<String, String?>>(empty
  * - "track"+"room": marks a tile with any of the single-action fields above
  *   as a trackable Activity — see ActivityRuntime. Not needed alongside
  *   "activity": a composed Activity is always implicitly tracked.
+ * - "visibility": [ ... ]: shows the tile only while those Home Assistant
+ *   rules hold (see Visibility); the tiles after it move up to close the gap.
  *
  * Config shape:
  * ```json
@@ -301,6 +304,8 @@ class SceneGridCard : CardRenderer {
             )
         }
 
+        // Tiles whose `visibility` rules don't hold are left out, so the others close the gap.
+        val shown = scenes.filter { Visibility.isVisible(it["visibility"], ctx.entities) }
         val layout = TileLayout(iconFill, tileHeight, iconPosition, config.int("font_size").takeIf { it > 0 }, iconStyle)
         if (row) {
             Row(
@@ -309,7 +314,7 @@ class SceneGridCard : CardRenderer {
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                scenes.forEach { scene ->
+                shown.forEach { scene ->
                     if (isGridSpacer(scene)) {
                         Spacer(Modifier.width(104.dp))
                     } else {
@@ -323,7 +328,7 @@ class SceneGridCard : CardRenderer {
                 }
             }
         } else {
-            GridRows(scenes, columns, config.bool("center_last_row")) { scene ->
+            GridRows(shown, columns, config.bool("center_last_row")) { scene ->
                 SceneButton(
                     state = stateFor(scene),
                     layout = layout,

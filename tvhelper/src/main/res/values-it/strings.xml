@@ -11,4 +11,10 @@
     <string name="adb_title">Per consentirli, esegui una volta da un computer (prima adb connect &lt;questa TV&gt;:5555):</string>
     <string name="open_settings">Apri l\'accesso alle notifiche</string>
     <string name="settings_unavailable">Questa TV non ha questa schermata: usa il comando ADB</string>
+    <string name="keep_awake_on">Raggiungibile in standby: attivo</string>
+    <string name="keep_awake_off">Raggiungibile in standby: disattivo</string>
+    <string name="keep_awake_enable">Resta raggiungibile in standby</string>
+    <string name="keep_awake_disable">Non restare più raggiungibile in standby</string>
+    <string name="keep_awake_hint">Per i box che il telecomando non riesce a riattivare (Xiaomi Mi Box S…): lo schermo si spegne comunque, ma il box mantiene la rete così il telecomando può riaccenderlo. Consuma un po\' di più in standby.</string>
+    <string name="keep_awake_notification">Astrion: raggiungibile in standby</string>
 </resources>

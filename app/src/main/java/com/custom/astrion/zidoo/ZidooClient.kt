@@ -111,6 +111,9 @@ class ZidooClient(private val host: () -> String) {
     /** A saga's films, a series' seasons, or (through [ZidooLibrary.fileOf]) a film's video file. */
     fun collection(id: Long): JsonObject? = get("ZidooPoster/getCollection?id=$id", slow = true)
 
+    /** A film's synopsis, from its `getDetail` (1.5.8): when the poster wall's list didn't give it. */
+    fun overview(id: Long): String? = ZidooLibrary.overview(get("ZidooPoster/v2/getDetail?id=$id", slow = true))
+
     fun season(id: Long): ZidooLibraryList? = ZidooLibrary.season(get("ZidooPoster/v2/getDetail?id=$id", slow = true))
 
     // ---- An Eversolo's music library (1.5.0), see ZidooMusicLibrary ----
@@ -196,6 +199,47 @@ class ZidooClient(private val host: () -> String) {
     /** Plays a video file of the poster wall (its `aggregationId`, not the film's id: that one answers 804). */
     fun playVideo(fileId: Long): Boolean = ZidooParse.ok(get("ZidooPoster/PlayVideo?id=$fileId&type=-1"))
 
+    // The Zidoo / Eversolo card's own calls (1.5.1), see ZidooControls.
+
+    fun subtitles(): List<ZidooTrack> = ZidooControls.tracks(get(ZidooControls.SUBTITLES_PATH))
+
+    fun setSubtitle(index: Int): Boolean = ZidooParse.ok(get(ZidooControls.setSubtitlePath(index)))
+
+    fun audioTracks(): List<ZidooTrack> = ZidooControls.tracks(get(ZidooControls.AUDIO_TRACKS_PATH))
+
+    fun setAudio(index: Int): Boolean = ZidooParse.ok(get(ZidooControls.setAudioPath(index)))
+
+    /** The video player's current subtitle and audio track indexes (`getPlayStatus`). */
+    fun currentTracks(): Pair<Int?, Int?> {
+        val o = get("ZidooVideoPlay/getPlayStatus")
+        return ZidooControls.currentTrack(o, "subtitle")?.first to ZidooControls.currentTrack(o, "audio")?.first
+    }
+
+    fun chapter(next: Boolean): Boolean = ZidooParse.ok(get(ZidooControls.chapterPath(next)))
+
+    fun playQueue(): List<ZidooQueueItem> = ZidooControls.queue(getAny(ZidooControls.QUEUE_PATH, slow = true))
+
+    fun playQueueItem(item: ZidooQueueItem, index: Int): Boolean = get(ZidooControls.playQueuePath(item, index)) != null
+
+    /**
+     * Moves [by] tracks through the queue (1.5.6): next or previous that many times, for an app
+     * whose queue can't be picked from (Apple's Apple Music). Going back starts from the track's
+     * beginning, or the first "previous" would only restart it.
+     */
+    fun skipTracks(by: Int) {
+        if (by < 0) get("MusicControl/v2/seekTo?time=0")
+        repeat(kotlin.math.abs(by)) { i ->
+            if (i > 0 || by < 0) Thread.sleep(SKIP_GAP_MS)
+            get(if (by > 0) "MusicControl/v2/playNext" else "MusicControl/v2/playLast")
+        }
+    }
+
+    fun queueArtUrl(item: ZidooQueueItem): String? = item.artUrl ?: if (item.local) musicArtUrl(item.id, item.type) else null
+
+    fun outputs(): ZidooOutputs = ZidooControls.outputs(get(ZidooControls.OUTPUTS_PATH, slow = true))
+
+    fun setOutput(tag: String): Boolean = ZidooParse.ok(get(ZidooControls.setOutputPath(tag)))
+
     /**
      * Whether [url] answers with an image (1.4.9): an episode often has no backdrop of its own, so
      * the registry tries the series', then the season's, and keeps the first one that is there.
@@ -217,6 +261,7 @@ class ZidooClient(private val host: () -> String) {
 
     companion object {
         const val PORT = 9529
+        private const val SKIP_GAP_MS = 400L
         private const val TIMEOUT_S = 3L
         private const val SLOW_TIMEOUT_S = 12L
         private const val MUSIC_LIST_MAX = 500

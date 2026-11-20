@@ -80,4 +80,12 @@ class ZidooLibraryTest {
         assertNull(ZidooLibrary.season(ZidooParse.parse("""{"status":803}""")))
         assertEquals(emptyList<ZidooLibraryItem>(), ZidooLibrary.page(ZidooParse.parse("""{"start":0,"count":20,"total":0,"array":[]}""")))
     }
+
+    @Test
+    fun `a film's synopsis comes from its getDetail`() {
+        val detail = ZidooParse.parse("""{"aggregation":{"id":13595,"name":"Gemini Man","aggregation":{"overview":"Henry Brogan…"}}}""")
+        assertEquals("Henry Brogan…", ZidooLibrary.overview(detail))
+        assertEquals("Outer", ZidooLibrary.overview(ZidooParse.parse("""{"aggregation":{"overview":"Outer"}}""")))
+        assertNull(ZidooLibrary.overview(ZidooParse.parse("""{"status":200}""")))
+    }
 }

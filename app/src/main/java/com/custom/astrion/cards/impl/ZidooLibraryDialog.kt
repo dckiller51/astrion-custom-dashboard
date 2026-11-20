@@ -67,6 +67,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.custom.astrion.R
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
 import com.custom.astrion.zidoo.MusicAlbum
@@ -159,6 +160,7 @@ internal fun ZidooLibraryDialog(zidoo: ZidooClient, theme: ThemeColors, onClose:
     }
 
     Dialog(onDismissRequest = back, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
+        ScreenCapture.TrackForScreenshots()
         Column(
             modifier =
             Modifier
@@ -528,6 +530,7 @@ private fun FilmPane(zidoo: ZidooClient, film: ZidooLibraryItem, theme: ThemeCol
         }
         Text(film.name, color = theme.primaryText, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
         Text(metaLine(film), color = theme.mutedText, fontSize = 13.sp)
+        FilmOverview(zidoo, film, theme)
         val position = film.positionMs
         val duration = film.durationMs
         when {
@@ -542,6 +545,31 @@ private fun FilmPane(zidoo: ZidooClient, film: ZidooLibraryItem, theme: ThemeCol
         PlayButton(theme, onPlay)
     }
 }
+
+/**
+ * The film's synopsis (1.5.8, Zavie: shown in the player view, not here): the list's, else asked
+ * of the player. Five lines; a tap shows it all.
+ */
+@Composable
+private fun FilmOverview(zidoo: ZidooClient, film: ZidooLibraryItem, theme: ThemeColors) {
+    var text by remember(film.id) { mutableStateOf(film.overview) }
+    LaunchedEffect(film.id) {
+        if (text == null) text = withContext(Dispatchers.IO) { zidoo.overview(film.id) }
+    }
+    var open by remember(film.id) { mutableStateOf(false) }
+    text?.let {
+        Text(
+            it,
+            color = theme.mutedText,
+            fontSize = 13.sp,
+            maxLines = if (open) Int.MAX_VALUE else OVERVIEW_LINES,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().tapClickable { open = !open }
+        )
+    }
+}
+
+private const val OVERVIEW_LINES = 5
 
 @Composable
 private fun PlayButton(theme: ThemeColors, onPlay: () -> Unit) {
@@ -710,6 +738,7 @@ internal fun ZidooMusicDialog(zidoo: ZidooClient, theme: ThemeColors, onClose: (
     }
 
     Dialog(onDismissRequest = back, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = false)) {
+        ScreenCapture.TrackForScreenshots()
         Column(
             modifier =
             Modifier

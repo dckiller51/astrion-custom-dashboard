@@ -13,7 +13,7 @@
 // climate, grids, Plex, Xbox…), its list of buttons / scenes / rooms in a "Content" section, and
 // on every form the tick boxes that follow each other share a row instead of one line each.
 
-const CARD_SECTION_ORDER = ['essential', 'items', 'display', 'controls', 'apps', 'library', 'advanced'];
+const CARD_SECTION_ORDER = ['essential', 'items', 'display', 'controls', 'apps', 'library', 'advanced', 'visibility'];
 
 /** Open when the form is drawn: the essentials and the list of what the card holds. */
 const CARD_SECTION_OPEN = ['essential', 'items'];
@@ -67,10 +67,28 @@ const CARD_SECTIONS = {
     essential: ['optName', 'optEntityId'],
     display: ['optCameraMode', 'optCameraInterval', 'optCameraAspect', 'optCameraFit']
   },
+  zidoo: {
+    essential: ['optName', 'optZidooEntity'],
+    display: ['optZidooQuality'],
+    controls: ['optZidooSources', 'optZidooKeypad', 'optZidooTracks', 'optZidooQueue', 'optZidooIo', 'optZidooSkip', 'optZidooRepeat', 'optZidooVolume'],
+    apps: ['optZidooApps', 'zidooAppsField']
+  },
+  media_remote: {
+    essential: ['optName', 'optMrPlayer', 'optMrRemote', 'optMrVolumeEntity', 'optMrKind'],
+    display: ['optMrNowPlaying', 'optMrName', 'optMrPower', 'optMrSkip', 'optMrPrevious', 'optMrPlayPause', 'optMrNext', 'optMrQuality', 'optMrAutoPlayer', 'optMrSynopsis', 'optMrDetailsPage', 'optMrSize', 'optMrKeyShape', 'optMrCover', 'mrOrderList'],
+    controls: ['optMrNavOneRow', 'optMrDpad', 'optMrVolume', 'optMrChannels', 'optMrKeypad'],
+    apps: ['optMrSources', 'optMrBrowse', 'optTvAppsStyle', 'optTvShowApps', 'tvAppPackages', 'tvAppsList'],
+    library: ['optMrTracks', 'optMrQueue', 'optMrIo', 'optMrSearch', 'optMrSearchPlayer']
+  },
   plex: {
     essential: ['optPlexHost', 'optPlexToken'],
     controls: ['optPlexMediaEntity', 'optPlexSource', 'optPlexPlayEntity', 'optPlexPlayContentType'],
     display: ['optPlexShowOnDeck', 'optPlexItemsPerRow', 'optPlexShowSearch']
+  },
+  playstation: {
+    essential: ['psnAccountBox'],
+    display: ['psnProfileBox', 'psnGameBox'],
+    items: ['psnTrophiesBox']
   },
   xbox: {
     essential: ['xboxSource', 'xboxAccountBox'],
@@ -195,9 +213,10 @@ function applyCardSections(type) {
     return;
   }
   // A short form (a light, a cover…) opens every section but Advanced: folding three lines helps nobody.
-  const small = container.children.length <= SMALL_FORM;
+  const small = container.children.length - (document.getElementById('optVisBox') ? 1 : 0) <= SMALL_FORM;
   const sectionOf = {};
   Object.entries(map).forEach(([sec, ids]) => ids.forEach(id => { sectionOf[id] = sec; }));
+  sectionOf.optVisBox = 'visibility'; // "Show only when", on every form (cards.js)
   const groups = {};
   let current = 'essential';
   let pending = [];
@@ -219,7 +238,7 @@ function applyCardSections(type) {
   if (dialog) dialog.classList.add('form-wide');
   const present = CARD_SECTION_ORDER.filter(sec => groups[sec] && groups[sec].length);
   const opened = small
-    ? present.filter(sec => sec !== 'advanced')
+    ? present.filter(sec => sec !== 'advanced' && sec !== 'visibility')
     : present.some(sec => CARD_SECTION_OPEN.includes(sec)) ? CARD_SECTION_OPEN : present.slice(0, 1);
   present.forEach(sec => {
     const details = document.createElement('details');

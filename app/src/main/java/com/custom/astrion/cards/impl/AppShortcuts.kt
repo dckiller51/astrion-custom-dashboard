@@ -75,16 +75,17 @@ internal class AppShortcuts(
 
     /** The shortcuts: labelled icons ([iconsStyle], up to [ICONS_PER_ROW] a row) or text buttons, two a row. */
     @Composable
-    fun Rows(iconsStyle: Boolean, cardPadding: Int) {
+    fun Rows(iconsStyle: Boolean, cardPadding: Int, maxRows: Int = 0) {
+        val rowsOf = { size: Int -> apps.chunked(size).let { if (maxRows > 0) it.take(maxRows) else it } }
         if (iconsStyle) {
             val width = cardInnerWidthDp(cardPadding).dp
-            apps.chunked(ICONS_PER_ROW).forEach { row ->
+            rowsOf(ICONS_PER_ROW).forEach { row ->
                 AtvAppsRow(ctx, row.map(::tileOf), ICON_TILE.dp, labels = true, rowWidth = width) { tile ->
                     row.firstOrNull { tileOf(it) == tile }?.let(::launch)
                 }
             }
         } else {
-            apps.chunked(2).forEach { pair ->
+            rowsOf(2).forEach { pair ->
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     pair.forEach { app ->
                         AppButton(app["name"] as? String ?: "App", Modifier.weight(1f), ctx.theme) { launch(app) }

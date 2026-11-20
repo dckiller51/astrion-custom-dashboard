@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.custom.astrion.ScreenCapture
 import com.custom.astrion.cards.CardConfig
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
@@ -157,7 +158,7 @@ class CameraCard : CardRenderer {
                     if (frame == null) error = true
                     return
                 }
-                val bmp = ctx.client.fetchBitmap(pic)
+                val bmp = ctx.client.fetchBitmap(pic, targetPx)
                 if (bmp != null) {
                     frame = bmp
                     error = false
@@ -298,6 +299,7 @@ class CameraCard : CardRenderer {
                 androidx.compose.ui.window
                     .DialogProperties(usePlatformDefaultWidth = false)
             ) {
+                ScreenCapture.TrackForScreenshots()
                 BoxWithConstraints(
                     modifier =
                     Modifier

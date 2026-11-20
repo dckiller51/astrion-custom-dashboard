@@ -81,6 +81,7 @@ import kotlinx.serialization.json.put
 object DashboardLoader {
     private const val TAG = "DashboardLoader"
     private const val MAX_DOCK_DEBOUNCE_S = 60
+    private const val MAX_INPUT_AGAIN_MS = 60_000
 
     val configFile: File
         get() = File(Environment.getExternalStorageDirectory(), "astrion/dashboard.json")
@@ -116,7 +117,7 @@ object DashboardLoader {
         is JsonArray ->
             AppConfig(
                 pages = listOf(PageConfig("Main", root.map { parseCard(it.jsonObject) }))
-            )
+            ).let { it.copy(haEntities = DashboardEntities.of(root, it)) }
         is JsonObject -> {
             val pagesArr = root["pages"]?.jsonArray ?: error("missing \"pages\" array")
             val pages =
@@ -132,7 +133,13 @@ object DashboardLoader {
                     val linkedPageModeRaw = obj["linkedPageMode"]?.jsonPrimitive?.content
                     val linkedPageMode = if (linkedPageModeRaw == "popup") "popup" else "page"
                     val popupWidthFraction = obj["popupWidth"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.7f
-                    val popupHeightFraction = obj["popupHeight"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.5f
+                    // "auto" (1.6.0): as tall as its cards, kept as 0.
+                    val popupHeightFraction =
+                        if (obj["popupHeight"]?.jsonPrimitive?.content == "auto") {
+                            0f
+                        } else {
+                            obj["popupHeight"]?.jsonPrimitive?.floatOrNull?.coerceIn(0.1f, 1f) ?: 0.5f
+                        }
                     val popupPositionRaw = obj["popupPosition"]?.jsonPrimitive?.content
                     val popupPosition = if (popupPositionRaw in setOf("top", "bottom", "left", "right")) popupPositionRaw!! else "center"
                     val hiddenUnlessActivity = obj["hiddenUnlessActivity"]?.jsonPrimitive?.content?.takeIf { it.isNotBlank() }
@@ -154,6 +161,7 @@ object DashboardLoader {
                         popupWidthFraction = popupWidthFraction,
                         popupHeightFraction = popupHeightFraction,
                         popupPosition = popupPosition,
+                        popupHideTitle = obj["popupHideTitle"]?.jsonPrimitive?.booleanOrNull == true,
                         hiddenUnlessActivity = hiddenUnlessActivity,
                         hideMode = hideMode,
                         openWhenEntity = openWhenEntity,
@@ -189,8 +197,9 @@ object DashboardLoader {
                 power,
                 weather,
                 keepOn,
-                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true
-            )
+                swipePages = (root["swipePages"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                showPageIndicator = (root["showPageIndicator"] as? JsonPrimitive)?.booleanOrNull ?: true
+            ).let { it.copy(haEntities = DashboardEntities.of(root, it)) }
         }
         else -> error("top level must be an object or array")
     }
@@ -365,6 +374,7 @@ object DashboardLoader {
         val powerOnFirst = obj["powerOnFirst"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
         val powerOffOnExit = obj["powerOffOnExit"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true
         val delayAfterMs = obj["delayAfterMs"]?.jsonPrimitive?.intOrNull ?: 0
+        val inputAgainAfterMs = obj["inputAgainAfterMs"]?.jsonPrimitive?.intOrNull?.coerceIn(0, MAX_INPUT_AGAIN_MS) ?: 0
         return ActivityDeviceConfig(
             deviceId,
             source,
@@ -374,7 +384,8 @@ object DashboardLoader {
             inputCommand,
             powerOnFirst,
             powerOffOnExit,
-            delayAfterMs
+            delayAfterMs,
+            inputAgainAfterMs
         )
     }
 
@@ -425,7 +436,8 @@ object DashboardLoader {
                 ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.content?.takeIf { c -> c.isNotBlank() } }
                 .orEmpty(),
             dockDebounceSeconds = int("dock_debounce_seconds")?.coerceIn(0, MAX_DOCK_DEBOUNCE_S) ?: defaults.dockDebounceSeconds,
-            screenTimeoutSeconds = int("screen_timeout_seconds")?.takeIf { it > 0 }
+            screenTimeoutSeconds = int("screen_timeout_seconds")?.takeIf { it > 0 },
+            allEntities = (obj["ha_entities"] as? JsonPrimitive)?.contentOrNull == "all"
         )
     }
 
@@ -523,8 +535,16 @@ object DashboardLoader {
                             // one property regardless of which mechanism opens it as one.
                             if (page.linkedPageMode == "popup" || page.openMode == "popup") {
                                 put("popupWidth", page.popupWidthFraction)
-                                put("popupHeight", page.popupHeightFraction)
+                                if (page.popupHeightFraction <= 0f) {
+                                    put(
+                                        "popupHeight",
+                                        "auto"
+                                    )
+                                } else {
+                                    put("popupHeight", page.popupHeightFraction)
+                                }
                                 if (page.popupPosition != "center") put("popupPosition", page.popupPosition)
+                                if (page.popupHideTitle) put("popupHideTitle", true)
                             }
                             put(
                                 "cards",
@@ -626,6 +646,7 @@ object DashboardLoader {
                                                     if (!d.powerOnFirst) put("powerOnFirst", false)
                                                     if (!d.powerOffOnExit) put("powerOffOnExit", false)
                                                     if (d.delayAfterMs != 0) put("delayAfterMs", d.delayAfterMs)
+                                                    if (d.inputAgainAfterMs != 0) put("inputAgainAfterMs", d.inputAgainAfterMs)
                                                 }
                                             )
                                         }

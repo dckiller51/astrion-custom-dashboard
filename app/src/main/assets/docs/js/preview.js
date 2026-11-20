@@ -225,9 +225,17 @@ function onSwipePagesChange(on) {
   updateJsonOutput();
 }
 
+/** The "page bar" box: dashboard.json's showPageIndicator, true when absent. */
+function onShowPageIndicatorChange(on) {
+  if (on) delete dashboardData.showPageIndicator; else dashboardData.showPageIndicator = false;
+  updateJsonOutput();
+}
+
 function renderTabs() {
   const swipe = document.getElementById('swipePagesToggle');
   if (swipe) swipe.checked = dashboardData.swipePages !== false;
+  const bar = document.getElementById('showPageIndicatorToggle');
+  if (bar) bar.checked = dashboardData.showPageIndicator !== false;
   const tree = document.getElementById('pageTree');
   if (!tree) return;
   tree.innerHTML = '';
@@ -300,7 +308,8 @@ function pageTreeRow(index, depth, hasKids, collapsed) {
   };
   if (index === dashboardData.startPage) badge('🏠', 'web_tree_start_page');
   if (page.popupWidth != null || (typeof popupOpenersOf === 'function' && popupOpenersOf(page.name) > 0)) badge('⧉', 'web_tree_popup');
-  if (page.hiddenUnlessActivity) badge('🎬', 'web_tree_activity_only');
+  if (page.hiddenUnlessActivity === '__never__') badge('🙈', 'web_tree_never_shown');
+  else if (page.hiddenUnlessActivity) badge('🎬', 'web_tree_activity_only');
 
   const button = (text, titleKey, onClick, extraClass) => {
     const b = document.createElement('span');
@@ -469,6 +478,7 @@ function renderPreview() {
     const extraPreview = {
       tv_remote: typeof tvRemotePreviewHtml === 'function' ? tvRemotePreviewHtml : null,
       xbox: typeof xboxPreviewHtml === 'function' ? xboxPreviewHtml : null,
+      playstation: typeof playstationPreviewHtml === 'function' ? playstationPreviewHtml : null,
       row: typeof rowPreviewHtml === 'function' ? rowPreviewHtml : null,
       speaker_group: typeof speakerGroupPreviewHtml === 'function' ? speakerGroupPreviewHtml : null,
       picture_elements: typeof pictureElementsPreviewHtml === 'function' ? pictureElementsPreviewHtml : null
@@ -613,9 +623,11 @@ function renderPreview() {
     } else if (card.type === 'climate') {
       const o = card.options || {};
       const mock = liveMock(o.entity_id, CLIMATE_MOCK);
-      const hvacModes = (o.hvac_modes && o.hvac_modes.length ? o.hvac_modes : (mock.hvac_modes || [])).filter(m => m !== 'off');
-      const fanModes = (o.fan_modes && o.fan_modes.length ? o.fan_modes : (mock.fan_modes || []));
-      const swingModes = (o.swing_modes && o.swing_modes.length ? o.swing_modes : (mock.swing_modes || []));
+      // show_* opt-outs mirror ClimateCard.kt ("off" becomes a chip when the power button is hidden).
+      const showPower = o.show_power !== false;
+      const hvacModes = o.show_hvac_modes === false ? [] : (o.hvac_modes && o.hvac_modes.length ? o.hvac_modes : (mock.hvac_modes || [])).filter(m => m !== 'off' || !showPower);
+      const fanModes = o.show_fan_modes === false ? [] : (o.fan_modes && o.fan_modes.length ? o.fan_modes : (mock.fan_modes || []));
+      const swingModes = o.show_swing_modes === false ? [] : (o.swing_modes && o.swing_modes.length ? o.swing_modes : (mock.swing_modes || []));
       const hvacStyle = o.hvac_mode_style === 'label' ? 'label' : 'icons';
       const fanStyle = o.fan_mode_style === 'icons' ? 'icons' : 'label';
       const swingStyle = o.swing_mode_style === 'icons' ? 'icons' : 'label';
@@ -638,7 +650,7 @@ function renderPreview() {
           <div class="preview-climate">
             <div class="cc-header">
               <span class="cc-name">${o.name || haFriendlyName(o.entity_id) || I18N.t('web_preview_climate_name')}</span>
-              <div class="cc-power ${mock.state === 'off' ? 'is-off' : ''}">${mdiSvg(MDI.power)}</div>
+              ${showPower ? `<div class="cc-power ${mock.state === 'off' ? 'is-off' : ''}">${mdiSvg(MDI.power)}</div>` : ''}
             </div>
             <div class="cc-temp-row">
               <div class="cc-stepper">−</div>
@@ -868,7 +880,8 @@ function renderPreview() {
         </div>`;
       const colorSwatchesHtml = `
         <div class="pl-color-row">
-          ${['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#FFFFFF']
+          ${(Array.isArray(o.colors) && o.colors.length ? o.colors.slice(0, 8)
+            : ['#F44336', '#FF9800', '#FFEB3B', '#4CAF50', '#00BCD4', '#2196F3', '#9C27B0', '#FFFFFF'])
             .map(c => `<div class="pl-swatch" style="background:${c}"></div>`).join('')}
         </div>`;
       const cycleBtnHtml = enabledControls.length > 1 ? `<div class="pc-cycle-btn" title="${I18N.t('web_preview_cycles_through', enabledControls.join(', '))}">${mdiSvg(MDI.chevronRight)}</div>` : '';
@@ -1018,6 +1031,8 @@ function renderPreview() {
       const autoHeight = iconSize && !tileHeight && !iconFill
         ? (isScene ? Math.max(74, iconSize + 46) : Math.max(68, iconSize + 36)) : 0;
 
+      // A button / tile with "Show only when" rules is outlined, not hidden.
+      const visAttr = (item) => (Array.isArray(item.visibility) && item.visibility.length ? ` data-vis title="${I18N.t('web_card_vis_badge')}"` : '');
       const tileHtml = (item) => {
         const label = item.name || '?';
         const src = iconUrl(item.icon);
@@ -1034,7 +1049,7 @@ function renderPreview() {
                     ? `<img class="st-icon" src="${src}" alt=""${iconImgStyle} onerror="onSceneIconError(this)">`
                     : `<div class="st-icon-spacer"></div>`)
                 : '');
-          return `<div class="preview-scene-tile ${tileClass}" style="background:${bg}; color:${textColor};${heightStyle}">
+          return `<div class="preview-scene-tile ${tileClass}"${visAttr(item)} style="background:${bg}; color:${textColor};${heightStyle}">
             ${iconCell}
             ${showLabels ? `<div class="st-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
@@ -1049,7 +1064,7 @@ function renderPreview() {
             parseHexColorCss(item.color) ? `background:${parseHexColorCss(item.color)}` : '',
             parseHexColorCss(item.text_color) ? `color:${parseHexColorCss(item.text_color)}` : ''
           ].filter(Boolean).join(';');
-          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${btnStyle ? ` style="${btnStyle}"` : ''}>
+          return `<div class="preview-button-tile ${hasIcon ? 'has-icon' : 'no-icon'}"${visAttr(item)}${btnStyle ? ` style="${btnStyle}"` : ''}>
             ${iconCell}
             ${label && (showLabels || !hasIcon) ? `<div class="bt-label"${fontStyle}>${label}</div>` : ''}
           </div>`;
@@ -1105,6 +1120,16 @@ function renderPreview() {
           </div>
           <div class="hint" style="margin-top:6px">${I18N.t('web_preview_entity', o.entity_id || 'camera.entity')} · ${canFetch ? I18N.t('web_preview_camera_live_frame') : I18N.t('web_preview_camera_placeholder')} · ${I18N.t('web_preview_on_remote', mode === 'stream' ? I18N.t('web_preview_camera_stream') : I18N.t('web_preview_camera_snapshot'))}</div>
         </div>`;
+    } else if (card.type === 'zidoo') {
+      cardEl.innerHTML = zidooCardPreviewHtml(card, idx);
+    } else if (card.type === 'media_remote') {
+      cardEl.innerHTML = mediaRemotePreviewHtml(card, idx);
+    } else if (card.type === 'tv_guide') {
+      cardEl.innerHTML = tvGuidePreviewHtml(card, idx);
+    } else if (card.type === 'info') {
+      cardEl.className = 'card';
+      cardEl.innerHTML = infoPreviewHtml(card, idx);
+      infoResolvePreview(cardEl);
     } else if (card.type === 'plex') {
       const o = card.options || {};
       const rows = [];
@@ -1211,6 +1236,12 @@ function enhanceCardControls(contentContainer) {
         copySpan.onclick = () => openCardCopyDialog(idx);
 
         iconsSpan.prepend(copySpan, downSpan, upSpan);
+
+        // A card with "Show only when" rules (visibility) is marked, not hidden.
+        const vis = ((dashboardData.pages[currentActivePage].cards[idx] || {}).options || {}).visibility;
+        if (Array.isArray(vis) && vis.length) {
+          titleBar.firstElementChild.insertAdjacentHTML('beforeend', ` <span title="${I18N.t('web_card_vis_badge')}">👁</span>`);
+        }
       }
     }
 

@@ -150,6 +150,35 @@
     <string name="zidoo_library_watched">Visto</string>
     <string name="zidoo_library_stopped_at">Fermato a %1$s su %2$s</string>
     <string name="zidoo_library_sorting">Ordinamento dal più recente…</string>
+    <string name="zidoo_card_nothing">Nessuna riproduzione</string>
+    <string name="zidoo_card_apps">App</string>
+    <string name="zidoo_card_back10">Indietro di 10 s</string>
+    <string name="zidoo_card_forward10">Avanti di 10 s</string>
+    <string name="zidoo_card_repeat">Ripeti</string>
+    <string name="zidoo_card_subtitles">Sottotitoli</string>
+    <string name="zidoo_card_audio">Audio</string>
+    <string name="zidoo_card_chapters">Capitoli</string>
+    <string name="zidoo_card_queue">Coda</string>
+    <string name="zidoo_card_input">Ingresso</string>
+    <string name="zidoo_card_output">Uscita</string>
+    <string name="zidoo_card_season">Stagione %1$d</string>
+    <string name="zidoo_card_episode">Episodio %1$d</string>
+    <string name="zidoo_in_internal">Lettore interno</string>
+    <string name="zidoo_in_bluetooth">Bluetooth</string>
+    <string name="zidoo_in_usb">USB-C</string>
+    <string name="zidoo_in_coaxial">Coassiale</string>
+    <string name="zidoo_in_optical">Ottico</string>
+    <string name="zidoo_card_tracks">Tracce</string>
+    <string name="zidoo_card_chapter_previous">Capitolo precedente</string>
+    <string name="zidoo_card_chapter_next">Capitolo successivo</string>
+    <string name="zidoo_card_loading">Richiesta al lettore…</string>
+    <string name="zidoo_card_no_tracks">Il lettore non fornisce tracce per questo.</string>
+    <string name="zidoo_card_queue_count">%1$d brani</string>
+    <string name="zidoo_card_queue_empty">La coda è vuota.</string>
+    <string name="zidoo_card_queue_read_only">La coda di questa app è solo mostrata: non accetta un brano scelto da qui.</string>
+    <string name="zidoo_card_queue_skips">La coda di questa app non si sceglie direttamente: un tocco salta i brani uno alla volta fino a questo.</string>
+    <string name="zidoo_card_io">Ingresso e uscita</string>
+    <string name="zidoo_card_output_confirm">Tocca ancora %1$s per cambiare: un\'uscita sbagliata toglie l\'audio.</string>
     <string name="zidoo_music_title">Musica</string>
     <string name="zidoo_music_albums">Album</string>
     <string name="zidoo_music_artists">Artisti</string>
@@ -187,6 +216,13 @@
     <string name="media_browser_add_to_queue">Aggiungi alla coda</string>
     <string name="plex_error_no_items">Nessun elemento restituito da Plex</string>
     <string name="plex_error_generic">Errore Plex</string>
+    <string name="plex_mrmc_no_file">Niente da riprodurre qui: scegli un film o un episodio</string>
+    <string name="plex_mrmc_no_answer">MrMC non ha risposto su %1$s: controlla che sia installato e che il controllo remoto via HTTP sia attivo</string>
+    <string name="plex_mrmc_refused">MrMC non è riuscito ad aprire il film</string>
+    <string name="tv_guide_empty">Nessun canale: configura la guida TV nella pagina web (Dispositivi › Guida TV)</string>
+    <string name="tv_guide_nothing">Niente nella guida</string>
+    <string name="tv_guide_next">Dopo: %1$s</string>
+    <string name="tv_guide_watch">Guarda</string>
     <string name="plex_library">Libreria</string>
     <string name="plex_this_season">Questa stagione</string>
     <string name="plex_play">Riproduci</string>
@@ -233,6 +269,14 @@
     <string name="light_state_on">Acceso</string>
     <string name="light_state_off">Spento</string>
     <string name="light_brightness_pct">%1$d%%</string>
+    <string name="light_panel_color">Colore</string>
+    <string name="light_panel_white">Bianco</string>
+    <string name="light_panel_effect">Effetti</string>
+    <string name="light_preset_candle">Candela</string>
+    <string name="light_preset_warm">Caldo</string>
+    <string name="light_preset_neutral">Neutro</string>
+    <string name="light_preset_cool">Freddo</string>
+    <string name="light_color_wheel">Ruota dei colori</string>
 
     <!-- MediaPlayerCard / MediaPlayerDetailDialog -->
     <string name="media_state_playing">In riproduzione</string>
@@ -286,4 +330,19 @@
     <string name="picker_sources_button">Sorgenti</string>
     <string name="picker_no_sources">Questo lettore non fornisce un elenco di sorgenti o app.</string>
     <string name="picker_keypad">Tastierino numerico</string>
+    <!-- PlayStation card (1.5.8) -->
+    <string name="psn_online">Online</string>
+    <string name="psn_online_app">Online sull\'app PS</string>
+    <string name="psn_away">Assente</string>
+    <string name="psn_offline">Offline</string>
+    <string name="psn_playing">In gioco</string>
+    <string name="psn_no_game">Nessun gioco</string>
+    <string name="psn_no_game_hint">App e dischi non vengono mostrati, solo i giochi.</string>
+    <string name="psn_console_off">Console spenta</string>
+    <string name="psn_level">Livello %1$s</string>
+    <string name="psn_next_level">%1$d%% al livello successivo</string>
+    <string name="psn_platinum">Platino</string>
+    <string name="psn_gold">Oro</string>
+    <string name="psn_silver">Argento</string>
+    <string name="psn_bronze">Bronzo</string>
 </resources>

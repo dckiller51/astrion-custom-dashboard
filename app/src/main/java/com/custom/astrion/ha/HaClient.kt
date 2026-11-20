@@ -1,9 +1,10 @@
 package com.custom.astrion.ha
 
-import android.graphics.BitmapFactory
+import android.content.res.Resources
 import android.util.Log
+import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
+import com.custom.astrion.ui.decodeByteArraySampled
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -30,6 +31,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -52,14 +54,16 @@ import okhttp3.WebSocketListener
  *   1. Server sends        { type: "auth_required" }
  *   2. We send             { type: "auth", access_token: "<long-lived token>" }
  *   3. Server sends        { type: "auth_ok" }  (or "auth_invalid")
- *   4. We call             get_states  to seed the entity cache
- *   5. We                  subscribe_events (state_changed) for live updates
+ *   4. We call             subscribe_entities  with the dashboard's own entities ([setEntityFilter]):
+ *                          their current states first, then only their changes, as compact diffs
+ *   5. Without a filter    get_states  to seed the entity cache, then
+ *                          subscribe_events (state_changed) for live updates — every entity
  *   6. Heartbeat           OkHttp's own WebSocket ping, every 30 s (one heartbeat, not two)
  *
- * While the screen is off the remote can go "quiet" ([setQuiet]): the state_changed subscription
- * is dropped (only a short list of entities stays live, through a state trigger), so a chatty
- * Home Assistant stops waking the Wi-Fi radio and the CPU all night. Waking up re-reads every
- * state and subscribes again. Reconnects follow the network: no retry loop while Wi-Fi is down,
+ * While the screen is off the remote can go "quiet" ([setQuiet]): the state subscription is
+ * dropped (only a short list of entities stays live, through a state trigger), so a chatty
+ * Home Assistant stops waking the Wi-Fi radio and the CPU all night. Waking up re-reads the
+ * states and subscribes again. Reconnects follow the network: no retry loop while Wi-Fi is down,
  * an immediate one when it comes back ([onNetworkAvailable]), or on demand ([reconnectNow]).
  *
  * Because it's the stock protocol, this app needs nothing from Sanytron's
@@ -96,6 +100,10 @@ class HaClient(
         // exactly these large folders, while Home Assistant's own frontend
         // (with no client-side timeout of its own) just waited it out.
         private val MEDIA_BROWSE_TIMEOUT = 25.seconds
+
+        // 1/32 of the app's heap for [artCache]; ARGB_8888.
+        private const val ART_CACHE_SHARE = 32
+        private const val BYTES_PER_PIXEL = 4
     }
 
     private val json =
@@ -119,6 +127,13 @@ class HaClient(
             .Builder()
             .callTimeout(10, TimeUnit.SECONDS)
             .build()
+
+    // Now-playing art (fetchBitmap's `cache`), by path: the media player card, its pop-up and the
+    // dock clock show the same picture, and a card scrolled back into view asks for it again.
+    private val artCache =
+        object : LruCache<String, ImageBitmap>((Runtime.getRuntime().maxMemory() / ART_CACHE_SHARE).toInt()) {
+            override fun sizeOf(key: String, value: ImageBitmap) = value.width * value.height * BYTES_PER_PIXEL
+        }
 
     // Client for long-lived streaming GETs (MJPEG camera_proxy_stream): no call
     // or read timeout so the never-ending multipart response isn't torn down,
@@ -146,6 +161,21 @@ class HaClient(
 
     @Volatile private var triggerSubscriptionId: Int? = null
 
+    // ---- entity filter (1.5.2) ----------------------------------------------------
+    // The dashboard's entities ([setEntityFilter]); null = every entity (get_states + state_changed).
+    @Volatile private var entityFilter: Set<String>? = null
+
+    // Home Assistant refused subscribe_entities (too old): every entity, the old way, from then on.
+    @Volatile private var entityFilterRefused = false
+
+    @Volatile private var entitiesSubscriptionId: Int? = null
+
+    // The next event of [entitiesSubscriptionId] is its first: every filtered entity's current state.
+    @Volatile private var entitiesSeedPending = false
+
+    // While filtered: every other entity as of the last [refreshStates], for the builder's pickers.
+    @Volatile private var otherStates: EntityMap = emptyMap()
+
     /** Whether the device has a usable network right now — set by the activity (ConnectivityManager). */
     @Volatile var networkAvailable: () -> Boolean = { true }
 
@@ -157,6 +187,9 @@ class HaClient(
 
     private val _connection = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connection: StateFlow<ConnectionState> = _connection.asStateFlow()
+
+    /** Templates rendered by Home Assistant (1.5.6, info card). */
+    val templates = HaTemplates({ send(it) }, { idCounter.getAndIncrement() }, { _connection.value == ConnectionState.CONNECTED })
 
     private val _entities = MutableStateFlow<EntityMap>(emptyMap())
 
@@ -203,9 +236,33 @@ class HaClient(
     @Volatile
     var localForecastHandler: ((entityId: String) -> JsonArray?)? = null
 
+    /**
+     * Optional extra for every entity as it's published (1.6.0: TMDB's synopsis, year, rating and
+     * poster on a media player, see [com.custom.astrion.tmdb.TmdbRegistry]): returns the entity
+     * as is when it has nothing to add. Called often: it must answer from what it already knows.
+     */
+    @Volatile
+    var entityEnricher: ((EntityState) -> EntityState)? = null
+
+    /** Publishes [entities] again: [entityEnricher] has something new. */
+    fun republish() {
+        _entities.value = mergedEntities()
+    }
+
     /** Adds or replaces a locally-driven entity and republishes [entities]. */
     fun setLocalEntity(state: EntityState) {
         localEntityStore[state.entityId] = state
+        _entities.value = mergedEntities()
+    }
+
+    /**
+     * Several locally-driven entities at once, and [remove] gone, republished once (1.6.0: the TV
+     * guide's channels every minute, rather than one republish per channel).
+     */
+    fun setLocalEntities(states: Collection<EntityState>, remove: Collection<String> = emptyList()) {
+        if (states.isEmpty() && remove.isEmpty()) return
+        states.forEach { localEntityStore[it.entityId] = it }
+        remove.forEach { localEntityStore.remove(it) }
         _entities.value = mergedEntities()
     }
 
@@ -214,8 +271,12 @@ class HaClient(
         if (localEntityStore.remove(entityId) != null) _entities.value = mergedEntities()
     }
 
-    private fun mergedEntities(): EntityMap =
-        if (localEntityStore.isEmpty()) HashMap(entityStore) else HashMap(entityStore).apply { putAll(localEntityStore) }
+    private fun mergedEntities(): EntityMap {
+        val merged = if (localEntityStore.isEmpty()) HashMap(entityStore) else HashMap(entityStore).apply { putAll(localEntityStore) }
+        val enrich = entityEnricher ?: return merged
+        for (entry in merged.entries) entry.setValue(enrich(entry.value))
+        return merged
+    }
 
     @Volatile private var entitiesDirty = false
 
@@ -236,8 +297,8 @@ class HaClient(
 
     /**
      * Screen off → [quiet] = true: stop receiving every state change; only [keep] stays live (via a
-     * state trigger). Screen on → false: re-read all states (catching up on whatever changed) and
-     * subscribe to everything again. Safe to call repeatedly and while disconnected — the mode is
+     * state trigger). Screen on → false: re-read the states (catching up on whatever changed) and
+     * subscribe again. Safe to call repeatedly and while disconnected — the mode is
      * applied on the next connection too.
      */
     fun setQuiet(quiet: Boolean, keep: Set<String> = emptySet()) {
@@ -245,17 +306,34 @@ class HaClient(
         this.quiet = quiet
         quietEntities = keep
         if (_connection.value != ConnectionState.CONNECTED) return
-        Log.i(TAG, if (quiet) "Quiet: keeping ${keep.size} entities live" else "Awake: resubscribing to everything")
+        Log.i(TAG, if (quiet) "Quiet: keeping ${keep.size} entities live" else "Awake: resubscribing")
         if (quiet) {
-            unsubscribe(stateSubscriptionId)
-            stateSubscriptionId = null
+            dropStateSubscription()
             subscribeQuietEntities()
         } else {
             unsubscribe(triggerSubscriptionId)
             triggerSubscriptionId = null
-            requestStates()
-            subscribeStateChanges()
+            subscribeStates()
         }
+    }
+
+    /**
+     * Receive only [entityIds] (1.5.2): the entities the dashboard uses (see
+     * [com.custom.astrion.config.DashboardEntities]), instead of every state change in Home
+     * Assistant — on a big house most of what arrives is for entities no card shows, and each one
+     * repaints the page. Null (or empty) = every entity, as before. A new list re-subscribes at
+     * once; otherwise it's applied on the next connection or wake-up.
+     */
+    fun setEntityFilter(entityIds: Set<String>?) {
+        // An empty entity_ids means every entity to Home Assistant.
+        val ids = entityIds?.takeIf { it.isNotEmpty() }
+        if (entityFilter == ids) return
+        entityFilter = ids
+        otherStates = emptyMap()
+        if (_connection.value != ConnectionState.CONNECTED || quiet) return
+        Log.i(TAG, "Entity filter: ${ids?.size?.let { "$it entities" } ?: "every entity"}")
+        dropStateSubscription()
+        subscribeStates()
     }
 
     /** Wi-Fi came back: reconnect now instead of waiting for a retry that never comes while offline. */
@@ -356,24 +434,46 @@ class HaClient(
      * external hosts reject requests carrying an unexpected Authorization
      * header, and there's no reason to hand an HA credential to a
      * third-party server that never asked for it either way.
+     *
+     * Decoded no larger than needed (1.5.2): its longer edge brought down towards [targetPx] —
+     * by default the screen's longer edge — so a 1080p camera snapshot or a 3000 px cover isn't
+     * decoded at full size. [cache] keeps it (now-playing art): only for a path whose picture
+     * never changes, never a camera's.
      */
-    suspend fun fetchBitmap(path: String): ImageBitmap? = withContext(Dispatchers.IO) {
-        try {
-            val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
-            val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
-            val reqBuilder = Request.Builder().url(url)
-            if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
-            val req = reqBuilder.build()
-            imageHttp.newCall(req).execute().use { resp ->
-                if (!resp.isSuccessful) return@withContext null
-                val bytes = resp.body?.bytes() ?: return@withContext null
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+    suspend fun fetchBitmap(path: String, targetPx: Int = screenLongEdgePx(), cache: Boolean = false): ImageBitmap? =
+        withContext(Dispatchers.IO) {
+            if (cache) artCache.get(path)?.let { return@withContext it }
+            try {
+                val url = if (path.startsWith("http")) path else baseUrl.trimEnd('/') + path
+                val isHaTarget = !path.startsWith("http") || path.startsWith(baseUrl.trimEnd('/'))
+                val reqBuilder = Request.Builder().url(url)
+                if (isHaTarget) reqBuilder.header("Authorization", "Bearer $token")
+                val req = reqBuilder.build()
+                imageHttp.newCall(req).execute().use { resp ->
+                    if (!resp.isSuccessful) return@withContext null
+                    val bytes = resp.body?.bytes() ?: return@withContext null
+                    decodeByteArraySampled(bytes, targetPx)?.also { if (cache) artCache.put(path, it) }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "fetchBitmap failed for $path", e)
+                null
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "fetchBitmap failed for $path", e)
-            null
+        }
+
+    /**
+     * A Home Assistant player's picture asked again a little later (see [MediaArt]): [show] gets
+     * each answer. Returns at once for any other picture; cancelled with its caller.
+     */
+    suspend fun settleArt(path: String?, targetPx: Int = screenLongEdgePx(), cache: Boolean = false, show: (ImageBitmap) -> Unit) {
+        if (path == null || !MediaArt.settles(path)) return
+        for (ms in MediaArt.AGAIN_MS) {
+            delay(ms)
+            if (cache) artCache.remove(path)
+            fetchBitmap(path, targetPx, cache)?.let(show)
         }
     }
+
+    private fun screenLongEdgePx(): Int = Resources.getSystem().displayMetrics.let { maxOf(it.widthPixels, it.heightPixels) }
 
     /**
      * Fetch a URL/HA-relative path as raw bytes, with the bearer token attached.
@@ -573,9 +673,21 @@ class HaClient(
                             // id; otherwise treat it as the get_states seed.
                             val id = obj["id"]?.jsonPrimitive?.intOrNull
                             val waiter = id?.let { pending.remove(it) }
-                            if (waiter != null) waiter.complete(obj) else onResult(obj)
+                            when {
+                                waiter != null -> waiter.complete(obj)
+                                templates.onMessage(id, obj) -> Unit
+                                id != null && id == entitiesSubscriptionId -> onEntitiesSubscribed(obj)
+                                else -> onResult(obj)
+                            }
                         }
-                        "event" -> onEvent(obj)
+                        "event" -> {
+                            val id = obj["id"]?.jsonPrimitive?.intOrNull
+                            when {
+                                id != null && id == entitiesSubscriptionId -> onEntitiesEvent(obj)
+                                templates.onMessage(id, obj) -> Unit
+                                else -> onEvent(obj)
+                            }
+                        }
                         "pong" -> { /* heartbeat ok */ }
                     }
                 } catch (e: Exception) {
@@ -609,11 +721,43 @@ class HaClient(
         Log.i(TAG, "Authenticated")
         _connection.value = ConnectionState.CONNECTED
         stateSubscriptionId = null
+        entitiesSubscriptionId = null
         triggerSubscriptionId = null
-        // Always seed every state (the screen may come on any moment); then subscribe to
-        // everything, or — still quiet — only to the few entities kept live.
-        requestStates()
-        if (quiet) subscribeQuietEntities() else subscribeStateChanges()
+        // Always seed the states (the screen may come on any moment); then subscribe to them, or
+        // — still quiet — only to the few entities kept live. Filtered, the seed is the
+        // subscription's first event, and the subscription is dropped again after it while quiet.
+        if (quiet && activeFilter() == null) requestStates() else subscribeStates()
+        if (quiet) subscribeQuietEntities()
+        templates.resubscribe()
+    }
+
+    private fun activeFilter(): Set<String>? = if (entityFilterRefused) null else entityFilter
+
+    /** The dashboard's entities when filtered, else every state and every change. */
+    private fun subscribeStates() {
+        val ids = activeFilter()
+        if (ids == null) {
+            requestStates()
+            subscribeStateChanges()
+            return
+        }
+        val id = idCounter.getAndIncrement()
+        entitiesSubscriptionId = id
+        entitiesSeedPending = true
+        val msg =
+            buildJsonObject {
+                put("id", id)
+                put("type", "subscribe_entities")
+                put("entity_ids", JsonArray(ids.map { JsonPrimitive(it) }))
+            }
+        send(msg)
+    }
+
+    private fun dropStateSubscription() {
+        unsubscribe(stateSubscriptionId)
+        stateSubscriptionId = null
+        unsubscribe(entitiesSubscriptionId)
+        entitiesSubscriptionId = null
     }
 
     /**
@@ -710,33 +854,130 @@ class HaClient(
     private fun seedStates(result: JsonArray) {
         val seen = HashSet<String>()
         for (e in result.filterIsInstance<JsonObject>()) {
-            val entityId = e["entity_id"]?.jsonPrimitive?.content ?: continue
-            seen += entityId
-            entityStore[entityId] =
-                EntityState(
-                    entityId = entityId,
-                    state = e["state"]?.jsonPrimitive?.content ?: "unknown",
-                    attributes = e["attributes"]?.jsonObject ?: JsonObject(emptyMap()),
-                    lastChanged = e["last_changed"]?.jsonPrimitive?.content,
-                    lastUpdated = e["last_updated"]?.jsonPrimitive?.content
-                )
+            val state = fullState(e) ?: continue
+            seen += state.entityId
+            entityStore[state.entityId] = state
         }
         entityStore.keys.retainAll(seen)
         // Seed is important — publish immediately so the first frame has data.
         _entities.value = mergedEntities()
     }
 
+    /** A state as get_states and state_changed send it. */
+    private fun fullState(e: JsonObject): EntityState? {
+        val entityId = e["entity_id"]?.jsonPrimitive?.content ?: return null
+        return EntityState(
+            entityId = entityId,
+            state = e["state"]?.jsonPrimitive?.content ?: "unknown",
+            attributes = e["attributes"]?.jsonObject ?: JsonObject(emptyMap()),
+            lastChanged = e["last_changed"]?.jsonPrimitive?.content,
+            lastUpdated = e["last_updated"]?.jsonPrimitive?.content
+        )
+    }
+
+    /** subscribe_entities refused (a Home Assistant too old for it): every entity, the old way, from then on. */
+    private fun onEntitiesSubscribed(obj: JsonObject) {
+        if (obj["success"]?.jsonPrimitive?.content != "false") return
+        Log.w(TAG, "subscribe_entities refused: ${obj["error"]} — receiving every entity instead")
+        entityFilterRefused = true
+        entitiesSubscriptionId = null
+        if (!quiet) subscribeStates() else requestStates()
+    }
+
+    /**
+     * A subscribe_entities event: `a` = added entities (full, compressed states: the first event
+     * holds every filtered entity), `c` = changes (`+` what changed, `-` the attributes removed),
+     * `r` = removed entity ids.
+     */
+    private fun onEntitiesEvent(obj: JsonObject) {
+        val event = obj["event"] as? JsonObject ?: return
+        val seed = entitiesSeedPending
+        entitiesSeedPending = false
+        val added = event["a"] as? JsonObject
+        if (seed) entityStore.keys.retainAll(added?.keys.orEmpty())
+        added?.forEach { (entityId, s) -> (s as? JsonObject)?.let { entityStore[entityId] = compressedState(entityId, it) } }
+        (event["c"] as? JsonObject)?.forEach { (entityId, d) ->
+            val old = entityStore[entityId] ?: return@forEach
+            (d as? JsonObject)?.let { entityStore[entityId] = applyDiff(old, it) }
+        }
+        (event["r"] as? JsonArray)?.forEach { id -> (id as? JsonPrimitive)?.contentOrNull?.let { entityStore.remove(it) } }
+        if (!seed) {
+            markDirty()
+            return
+        }
+        // Seed is important — publish immediately so the first frame has data.
+        _entities.value = mergedEntities()
+        // Quiet (screen off): the seed was all we wanted; the trigger keeps the few live ones.
+        if (quiet) {
+            unsubscribe(entitiesSubscriptionId)
+            entitiesSubscriptionId = null
+        }
+    }
+
+    // Compressed states: s = state, a = attributes, lc / lu = last changed / updated (Unix seconds;
+    // lu only when it differs from lc).
+    private fun compressedState(entityId: String, c: JsonObject): EntityState {
+        val lastChanged = c.time("lc")
+        return EntityState(
+            entityId = entityId,
+            state = (c["s"] as? JsonPrimitive)?.contentOrNull ?: "unknown",
+            attributes = c["a"] as? JsonObject ?: JsonObject(emptyMap()),
+            lastChanged = lastChanged,
+            lastUpdated = c.time("lu") ?: lastChanged
+        )
+    }
+
+    private fun applyDiff(old: EntityState, diff: JsonObject): EntityState {
+        val plus = diff["+"] as? JsonObject
+        val addedAttributes = plus?.get("a") as? JsonObject
+        val removedAttributes = (diff["-"] as? JsonObject)?.get("a") as? JsonArray
+        val attributes =
+            if (addedAttributes == null && removedAttributes == null) {
+                old.attributes
+            } else {
+                JsonObject(
+                    LinkedHashMap(old.attributes).apply {
+                        addedAttributes?.let { putAll(it) }
+                        removedAttributes?.forEach { key -> (key as? JsonPrimitive)?.contentOrNull?.let { remove(it) } }
+                    }
+                )
+            }
+        // A new last_changed is a new last_updated too.
+        val lastChanged = plus?.time("lc")
+        return old.copy(
+            state = (plus?.get("s") as? JsonPrimitive)?.contentOrNull ?: old.state,
+            attributes = attributes,
+            lastChanged = lastChanged ?: old.lastChanged,
+            lastUpdated = lastChanged ?: plus?.time("lu") ?: old.lastUpdated
+        )
+    }
+
+    private fun JsonObject.time(key: String): String? =
+        (get(key) as? JsonPrimitive)?.doubleOrNull?.let { HaTime.isoInstant((it * 1000).toLong()) }
+
     /**
      * Re-reads every state from Home Assistant now (1.4.0), even while quiet (screen off, when only
      * a few entities stay live): the builder asks for it on opening, so entities renamed or added
-     * in Home Assistant since show up. False when Home Assistant didn't answer.
+     * in Home Assistant since show up. Filtered ([setEntityFilter]), the dashboard's entities stay
+     * as they are and the others are only kept for [allEntities]. False when Home Assistant didn't
+     * answer.
      */
     suspend fun refreshStates(): Boolean {
         if (_connection.value != ConnectionState.CONNECTED) return false
         val reply = request("get_states") ?: return false
         val result = reply["result"] as? JsonArray ?: return false
-        seedStates(result)
+        if (activeFilter() == null) {
+            seedStates(result)
+        } else {
+            otherStates = result.filterIsInstance<JsonObject>().mapNotNull { fullState(it) }.associateBy { it.entityId }
+        }
         return true
+    }
+
+    /** [entities], plus — while filtered — every other entity as of the last [refreshStates]: what the builder's pickers list. */
+    fun allEntities(): EntityMap {
+        val others = otherStates
+        return if (others.isEmpty()) entities.value else HashMap(others).apply { putAll(entities.value) }
     }
 
     /** state_changed events carry event.data.new_state; quiet-mode trigger events carry
@@ -754,15 +995,8 @@ class HaClient(
             (event["data"] as? JsonObject)?.get("new_state") as? JsonObject
                 ?: ((event["variables"] as? JsonObject)?.get("trigger") as? JsonObject)?.get("to_state") as? JsonObject
                 ?: return
-        val entityId = newState["entity_id"]?.jsonPrimitive?.content ?: return
-        entityStore[entityId] =
-            EntityState(
-                entityId = entityId,
-                state = newState["state"]?.jsonPrimitive?.content ?: "unknown",
-                attributes = newState["attributes"]?.jsonObject ?: JsonObject(emptyMap()),
-                lastChanged = newState["last_changed"]?.jsonPrimitive?.content,
-                lastUpdated = newState["last_updated"]?.jsonPrimitive?.content
-            )
+        val state = fullState(newState) ?: return
+        entityStore[state.entityId] = state
         markDirty()
     }
 

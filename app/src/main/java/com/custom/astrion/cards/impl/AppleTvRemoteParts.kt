@@ -55,13 +55,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.custom.astrion.cards.CardContext
 import com.custom.astrion.ha.EntityState
+import com.custom.astrion.tmdb.TmdbMatch
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.decodeIconSampled
 import com.custom.astrion.ui.tapClickable
 import com.custom.astrion.ui.tapCombinedClickable
 import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /*
@@ -100,6 +103,9 @@ private val APP_FALLBACK_COLORS =
         Color(0xFF5B3FA8)
     )
 
+/** The tile colour an app without its own gets, by its place among the card's apps. */
+internal fun appFallbackColor(index: Int): Color = APP_FALLBACK_COLORS[Math.floorMod(index, APP_FALLBACK_COLORS.size)]
+
 private fun initialsOf(label: String): String {
     val words = label.split(' ', '+', '-', '.').filter { it.isNotBlank() }
     return when {
@@ -116,20 +122,31 @@ private fun initialsOf(label: String): String {
 @Composable
 internal fun rememberImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
     val image by produceState<ImageBitmap?>(initialValue = null, path, targetPx) {
-        value =
-            when {
-                path == null -> null
-                path.startsWith("http") || path.startsWith("/api/") -> runCatching { ctx.client.fetchBitmap(path) }.getOrNull()
-                else -> withContext(Dispatchers.IO) { decodeIconSampled(path, targetPx) }
-            }
+        value = loadImage(ctx, path, targetPx)
+        // A Home Assistant player's picture may settle late (1.6.0, Zavie): asked again.
+        ctx.client.settleArt(path) { value = it }
     }
+    return image
+}
+
+/** [rememberImage]'s loading: the picture at [path], or null when there is none or it can't be read. */
+internal suspend fun loadImage(ctx: CardContext, path: String?, targetPx: Int): ImageBitmap? {
+    val image =
+        when {
+            path == null -> null
+            path.startsWith("http") || path.startsWith("/api/") -> runCatching { ctx.client.fetchBitmap(path) }.getOrNull()
+            else -> withContext(Dispatchers.IO) { decodeIconSampled(path, targetPx) }
+        }
+    // runCatching swallows a cancellation: a load given up for a newer picture (a TMDB poster from
+    // the internet, overtaken by the Apple TV's own artwork) must not put "no picture" over it (1.6.0).
+    currentCoroutineContext().ensureActive()
     return image
 }
 
 /** The current item's cover art, or a TV glyph on an inset tile while there is none. */
 @Composable
 internal fun AtvArtwork(ctx: CardContext, entity: EntityState?, size: Dp, corner: Dp) {
-    val path = entity?.attrString("entity_picture_local") ?: entity?.attrString("entity_picture")
+    val path = entity?.mediaPicture
     val px = with(LocalDensity.current) { size.toPx() }.toInt()
     val art = rememberImage(ctx, path, px)
     Box(
@@ -161,11 +178,15 @@ internal data class AtvNowPlaying(val title: String, val subtitle: String?, val 
             val subtitle =
                 when {
                     series != null -> listOfNotNull(series, episodeTag).joinToString(" · ")
-                    else -> e.attrString("media_artist")?.takeIf { it.isNotBlank() }
+                    // An Apple TV or CANAL+ episode says "Saison 2, ép. 5" as its artist (1.6.0, Zavie).
+                    else -> e.attrString("media_artist")?.takeIf { it.isNotBlank() }?.let(::artistLine)
                 }
             val title = mediaTitle ?: app ?: e.friendlyName.ifBlank { e.entityId }
             return AtvNowPlaying(title, if (mediaTitle != null) subtitle else null, if (mediaTitle != null) app else null)
         }
+
+        /** The artist, or "S2 · E5" for an episode's "Saison 2, ép. 5". */
+        private fun artistLine(artist: String): String = TmdbMatch.episodeOf(artist)?.let { (s, ep) -> "S$s · E$ep" } ?: artist
     }
 }
 
@@ -391,7 +412,11 @@ internal fun AtvAppTile(ctx: CardContext, app: AtvApp, index: Int, size: Dp, lab
             contentAlignment = Alignment.Center
         ) {
             if (icon != null) {
-                Image(icon, contentDescription = app.label, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                // Cropped to the tile only when nearly square; a wide or tall icon (a player's own,
+                // 1.5.6) is shown whole rather than cut.
+                val ratio = icon.width.toFloat() / icon.height.coerceAtLeast(1)
+                val scale = if (ratio in SQUARE_ENOUGH) ContentScale.Crop else ContentScale.Fit
+                Image(icon, contentDescription = app.label, contentScale = scale, modifier = Modifier.fillMaxSize())
             } else {
                 Text(initialsOf(app.label), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
@@ -437,3 +462,6 @@ internal fun cardInnerWidthDp(cardPadding: Int): Int = LocalConfiguration.curren
 /** Remembers a local play/pause guess for a target that reports no state of its own (Harmony). */
 @Composable
 internal fun rememberLocalPlaying(key: Any?) = remember(key) { mutableStateOf(true) }
+
+/** An icon this close to square fills its tile; any other is fitted whole. */
+private val SQUARE_ENOUGH = 0.85f..1.18f
