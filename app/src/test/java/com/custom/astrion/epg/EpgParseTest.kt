@@ -1,36 +1,87 @@
 package com.custom.astrion.epg
 
-import java.io.StringReader
-import javax.xml.stream.XMLInputFactory
-import javax.xml.stream.XMLStreamConstants
-import javax.xml.stream.XMLStreamReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The JDK's StAX reader as [XmlTokens], as Android's XmlPullParser is on the remote. */
-private class StaxTokens(xml: String) : XmlTokens {
-    private val r: XMLStreamReader =
-        XMLInputFactory.newInstance().apply { setProperty(XMLInputFactory.SUPPORT_DTD, false) }.createXMLStreamReader(StringReader(xml))
-    private var done = false
+/**
+ * A small XML reader as [XmlTokens], as Android's XmlPullParser is on the remote: the unit tests'
+ * Android classpath has neither XmlPullParser's implementation nor the JDK's StAX. Enough for
+ * these samples: declarations, comments and doctypes skipped, attributes in either quotes,
+ * empty elements, the usual entities.
+ */
+private class TestTokens(private val xml: String) : XmlTokens {
+    private var i = 0
+    private var pendingEnd: String? = null
+    private var attrs: Map<String, String> = emptyMap()
+    override var name: String = ""
+        private set
+    override var text: String = ""
+        private set
+
+    override fun attr(name: String): String? = attrs[name]
 
     override fun next(): XmlTokens.Token {
-        while (!done && r.hasNext()) {
-            when (r.next()) {
-                XMLStreamConstants.START_ELEMENT -> return XmlTokens.Token.START
-                XMLStreamConstants.END_ELEMENT -> return XmlTokens.Token.END
-                XMLStreamConstants.CHARACTERS, XMLStreamConstants.CDATA -> return XmlTokens.Token.TEXT
+        pendingEnd?.let {
+            pendingEnd = null
+            name = it
+            return XmlTokens.Token.END
+        }
+        while (i < xml.length) {
+            when {
+                xml[i] != '<' -> return textRun()
+                xml.startsWith("<!--", i) -> i = xml.indexOf("-->", i) + "-->".length
+                xml.startsWith("<?", i) || xml.startsWith("<!", i) -> i = xml.indexOf('>', i) + 1
+                xml.startsWith("</", i) -> return endTag()
+                else -> return startTag()
             }
         }
-        done = true
         return XmlTokens.Token.DONE
     }
 
-    override val name: String get() = r.localName
-    override fun attr(name: String): String? = r.getAttributeValue(null, name)
-    override val text: String get() = r.text
+    private fun textRun(): XmlTokens.Token {
+        val stop = xml.indexOf('<', i).let { if (it < 0) xml.length else it }
+        text = unescape(xml.substring(i, stop))
+        i = stop
+        return XmlTokens.Token.TEXT
+    }
+
+    private fun endTag(): XmlTokens.Token {
+        val stop = xml.indexOf('>', i)
+        name = xml.substring(i + 2, stop).trim()
+        i = stop + 1
+        return XmlTokens.Token.END
+    }
+
+    private fun startTag(): XmlTokens.Token {
+        val stop = xml.indexOf('>', i)
+        var body = xml.substring(i + 1, stop)
+        i = stop + 1
+        val empty = body.endsWith("/")
+        if (empty) body = body.dropLast(1)
+        name = body.trim().substringBefore(' ').substringBefore('\n')
+        attrs = ATTR.findAll(body).associate { m -> m.groupValues[1] to unescape(m.groupValues[2].ifEmpty { m.groupValues[3] }) }
+        if (empty) pendingEnd = name
+        return XmlTokens.Token.START
+    }
+
+    private fun unescape(s: String): String = ENTITY.replace(s) { m ->
+        val e = m.groupValues[1]
+        when {
+            e.startsWith("#x") -> e.drop(2).toInt(HEX).toChar().toString()
+            e.startsWith("#") -> e.drop(1).toInt().toChar().toString()
+            else -> NAMED[e] ?: m.value
+        }
+    }
+
+    private companion object {
+        const val HEX = 16
+        val ATTR = Regex("([\\w:-]+)\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)')")
+        val ENTITY = Regex("&(#x[0-9a-fA-F]+|#\\d+|\\w+);")
+        val NAMED = mapOf("amp" to "&", "lt" to "<", "gt" to ">", "quot" to "\"", "apos" to "'")
+    }
 }
 
 class EpgParseTest {
@@ -67,7 +118,7 @@ class EpgParseTest {
     private fun guide(keep: (String) -> Boolean = { it != "TF1.fr" }): EpgGuide {
         val channels = mutableListOf<EpgChannel>()
         val shows = mutableListOf<EpgShow>()
-        EpgParse.read(StaxTokens(xml), keep, t1300 - 3 * 3_600_000L, t1300 + 36 * 3_600_000L, "fr", channels::add, shows::add)
+        EpgParse.read(TestTokens(xml), keep, t1300 - 3 * 3_600_000L, t1300 + 36 * 3_600_000L, "fr", channels::add, shows::add)
         return EpgGuide(channels.filter { keep(it.id) }, shows, channels, t1300)
     }
 
@@ -161,5 +212,12 @@ class EpgParseTest {
         assertEquals(g.available, back.available)
         assertEquals(g.now("France2.fr", t1300), back.now("France2.fr", t1300))
         assertTrue(EpgGuide.fromJson("nope") == null)
+    }
+
+    @Test
+    fun aWebPageIsNoGuide() {
+        val page = "<!DOCTYPE html><html><head><title>XML TV Fr</title></head><body>Guide</body></html>"
+        val e = runCatching { EpgParse.read(TestTokens(page), { true }, 0L, Long.MAX_VALUE, null, {}, {}) }.exceptionOrNull()
+        assertTrue(e is NotXmltv && e.root == "html")
     }
 }
