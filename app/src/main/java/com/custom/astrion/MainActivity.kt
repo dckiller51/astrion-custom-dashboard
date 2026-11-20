@@ -61,6 +61,8 @@ import com.custom.astrion.ha.EntityMap
 import com.custom.astrion.ha.HaClient
 import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.harmony.HarmonyHubRegistry
+import com.custom.astrion.hue.HueRegistry
+import com.custom.astrion.hue.installHue
 import com.custom.astrion.input.DialogKeys
 import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
@@ -456,6 +458,7 @@ class MainActivity : ComponentActivity() {
     private var epgRegistry: EpgRegistry? = null // the TV guide, when a source is set (1.6.0)
     private lateinit var samsungRegistry: SamsungRegistry // Samsung TVs, direct (1.5.3)
     private lateinit var denonRegistry: DenonRegistry // Denon / Marantz receivers, direct (1.5.4)
+    private lateinit var hueRegistry: HueRegistry // Philips Hue bridges, direct (1.6.1)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -574,6 +577,7 @@ class MainActivity : ComponentActivity() {
                 if (::skyRegistry.isInitialized) skyRegistry.setQuiet(quiet)
                 if (::samsungRegistry.isInitialized) samsungRegistry.setQuiet(quiet)
                 if (::denonRegistry.isInitialized) denonRegistry.setQuiet(quiet)
+                if (::hueRegistry.isInitialized) hueRegistry.setQuiet(quiet)
             }
         )
     }
@@ -734,6 +738,9 @@ class MainActivity : ComponentActivity() {
         // After the Samsung one, chained the same way (1.5.4).
         denonRegistry = installDenon(this, client, log = { Log.i("Denon", it) })
         configServer.denonRegistry = denonRegistry
+        // After the Denon one, chained the same way (1.6.1).
+        hueRegistry = installHue(this, client, log = { Log.i("Hue", it) })
+        configServer.hueRegistry = hueRegistry
         localWeather.attach(client)
         // What media players play (1.6.0), from the Plex server and/or TMDB, for every card;
         // started again when their settings change.
@@ -780,6 +787,7 @@ class MainActivity : ComponentActivity() {
         harmonyRegistry.disconnectAll()
         tmdbRegistry?.stop()
         epgRegistry?.stop()
+        hueRegistry.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()
@@ -1773,6 +1781,7 @@ class MainActivity : ComponentActivity() {
         harmonyRegistry.disconnectAll()
         tmdbRegistry?.stop()
         epgRegistry?.stop()
+        hueRegistry.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
         skyRegistry.stop()

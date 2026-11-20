@@ -273,6 +273,10 @@ class ConfigServer(
     var denonRegistry: com.custom.astrion.denon.DenonRegistry? = null
     private val denonRoutes = DenonRoutes(context)
 
+    /** Philips Hue bridges (1.6.1): paired with the bridge's button. */
+    var hueRegistry: com.custom.astrion.hue.HueRegistry? = null
+    private val hueRoutes = HueRoutes(context) { hueRegistry }
+
     /** TMDB's or the Plex server's settings changed (1.6.0): the activity starts what's-playing lookups again on them. */
     @Volatile
     var onTmdbChanged: () -> Unit = {}
@@ -350,6 +354,7 @@ class ConfigServer(
             ?: skyRoutes.serve(uri, session)
             ?: samsungRoutes.serve(uri, session)
             ?: denonRoutes.serve(uri, session)
+            ?: hueRoutes.serve(uri, session)
             ?: tmdbRoutes.serve(uri, session)
             ?: plexRoutes.serve(uri, session)
             ?: epgRoutes.serve(uri, session)
@@ -484,12 +489,14 @@ class ConfigServer(
         }
         val content =
             runCatching {
-                denonRoutes.reconcileHaDevices(
-                    samsungRoutes.reconcileHaDevices(
-                        skyRoutes.reconcileHaDevices(
-                            lgTvRoutes.reconcileHaDevices(
-                                zidooRoutes.reconcileHaDevices(
-                                    androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))
+                hueRoutes.reconcileHaDevices(
+                    denonRoutes.reconcileHaDevices(
+                        samsungRoutes.reconcileHaDevices(
+                            skyRoutes.reconcileHaDevices(
+                                lgTvRoutes.reconcileHaDevices(
+                                    zidooRoutes.reconcileHaDevices(
+                                        androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))
+                                    )
                                 )
                             )
                         )
@@ -677,6 +684,7 @@ class ConfigServer(
                 put("skys", skyRoutes.configJson())
                 put("samsungs", samsungRoutes.configJson())
                 put("denons", denonRoutes.configJson())
+                put("hues", hueRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1273,6 +1281,7 @@ class ConfigServer(
         skyRoutes.saveRows(params)
         samsungRoutes.saveRows(params)
         denonRoutes.saveRows(params)
+        hueRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }

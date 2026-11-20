@@ -17,8 +17,8 @@ android {
         applicationId = "com.custom.astrion"
         minSdk = 26
         targetSdk = 34
-        versionCode = 69
-        versionName = "1.6.0"
+        versionCode = 70
+        versionName = "1.6.1"
     }
 
     signingConfigs {
