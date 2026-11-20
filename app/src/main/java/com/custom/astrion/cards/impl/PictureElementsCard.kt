@@ -29,6 +29,7 @@ import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -61,6 +62,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -71,6 +73,9 @@ import kotlinx.coroutines.withContext
  * Element `icon`: `"power"`, a PNG path (`/sdcard/astrion/icons/xxx.png`,
  * 1.2.9+), or nothing (a bulb). `on_color` (1.2.9+, `#RRGGBB`/`#AARRGGBB`)
  * replaces the amber background while the entity is on.
+ *
+ * `frames: ["/sdcard/.../a.png", ...]` + `frame_ms` (default 150) loop those PNGs as an
+ * animation over `image`; it pauses while the screen is off.
  */
 class PictureElementsCard : CardRenderer {
     override val type = "picture_elements"
@@ -91,12 +96,33 @@ class PictureElementsCard : CardRenderer {
         val targetPx = with(LocalDensity.current) {
             LocalConfiguration.current.screenWidthDp.dp.toPx()
         }.toInt()
-        val bitmap by produceState<ImageBitmap?>(initialValue = null, imagePath, targetPx) {
+        val still by produceState<ImageBitmap?>(initialValue = null, imagePath, targetPx) {
             value =
                 withContext(Dispatchers.IO) {
                     decodeIconSampled(imagePath, targetPx)
                 }
         }
+
+        // `frames` + `frame_ms`: a looping animation made of PNG frames, drawn in place of
+        // `image` (which stays as the still shown while they load). The loop only runs
+        // while the screen is on.
+        val framePaths = (config.options["frames"] as? List<*>)?.mapNotNull { it as? String }.orEmpty()
+        val frameMs = ((config.options["frame_ms"] as? Number)?.toLong() ?: 150L).coerceAtLeast(40L)
+        val frames by produceState(initialValue = emptyList<ImageBitmap>(), framePaths, targetPx) {
+            // A path may repeat (e.g. a long quiet stretch between effects): decode each once.
+            value = withContext(Dispatchers.IO) {
+                val cache = framePaths.distinct().associateWith { decodeIconSampled(it, targetPx) }
+                framePaths.mapNotNull { cache[it] }
+            }
+        }
+        var frameIndex by remember { mutableStateOf(0) }
+        LaunchedEffect(frames, frameMs, ctx.screenOn) {
+            while (frames.size > 1 && ctx.screenOn) {
+                delay(frameMs)
+                frameIndex = (frameIndex + 1) % frames.size
+            }
+        }
+        val bitmap = frames.getOrNull(frameIndex % frames.size.coerceAtLeast(1)) ?: still
 
         val aspect =
             bitmap?.let { it.width.toFloat() / it.height.toFloat() }
@@ -112,7 +138,7 @@ class PictureElementsCard : CardRenderer {
         ) {
             if (bitmap != null) {
                 Image(
-                    bitmap = bitmap!!,
+                    bitmap = bitmap,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

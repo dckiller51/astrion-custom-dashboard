@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Animated pictures** (`picture_elements`): `"frames": ["/sdcard/astrion/icons/a.png", …]` with `"frame_ms"` (default 150, at least 40) loops those PNGs over the card's `image`, which stays as the still shown while they load. A path can repeat (a long quiet stretch between two effects) and is loaded only once. The loop stops while the screen is off. The web builder keeps both keys as they are.
+
 ## [1.5.9-beta] - 2026-11-17
 
 ### Added
