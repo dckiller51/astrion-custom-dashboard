@@ -162,6 +162,9 @@ function normalizeDashboardData(parsed) {
     power: parsed.power && typeof parsed.power === 'object' ? parsed.power : undefined,
     weather: parsed.weather && typeof parsed.weather === 'object' ? parsed.weather : undefined,
     keepOnDevices: Array.isArray(parsed.keepOnDevices) && parsed.keepOnDevices.length ? parsed.keepOnDevices : undefined,
+    // Only written when turned off (both default to true), so they round-trip like the ones above.
+    swipePages: parsed.swipePages === false ? false : undefined,
+    showPageIndicator: parsed.showPageIndicator === false ? false : undefined,
   };
   if (data.pages.length === 0) {
     data.pages.push({ name: "Home", cards: [], hotkeys: [], longHotkeys: [] });

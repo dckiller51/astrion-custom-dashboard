@@ -50,6 +50,10 @@ data class AppConfig(
     /** `swipePages: false` (1.4.9): no swiping left / right between pages; they change with
      * buttons, tiles, hotkeys and the page dots only. */
     val swipePages: Boolean = true,
+    /** `showPageIndicator: false`: no bar under the pages (dots, page name, "‹ back"), and the pages
+     * get its height. For a remote that changes pages with keys and tiles only; the bar's swipe up to a
+     * page's `linkedPage` goes with it. */
+    val showPageIndicator: Boolean = true,
     /** The Home Assistant entities this dashboard uses — the only ones the remote receives
      * (1.5.2, see [DashboardEntities]). Null = every entity, as before. */
     val haEntities: Set<String>? = null

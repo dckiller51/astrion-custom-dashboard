@@ -1593,6 +1593,8 @@
   "web_ui_states_comma_hint": "Several states: separate them with commas, e.g. on, off, idle.",
   "web_tree_swipe_pages": "Swipe left / right to change page",
   "web_tree_swipe_pages_hint": "Unticked, pages change only with buttons and tiles, hotkeys and the page dots: no more landing on another page by accident.",
+  "web_tree_show_page_indicator": "Show the page bar (dots and page name)",
+  "web_tree_show_page_indicator_hint": "Unticked, the bar under the pages is gone and the pages get its height: pages then change only with buttons and tiles, hotkeys and linked pages.",
   "web_card_copy_title": "Copy to other pages",
   "web_card_copy_hint": "The same card is added to each page you tick, e.g. a row of page buttons at the top of every page.",
   "web_card_copy_all": "All",

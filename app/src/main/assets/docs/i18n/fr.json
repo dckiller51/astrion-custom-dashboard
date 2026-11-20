@@ -1593,6 +1593,8 @@
   "web_ui_states_comma_hint": "Plusieurs états : séparez-les par des virgules, par ex. on, off, idle.",
   "web_tree_swipe_pages": "Glisser à gauche / droite pour changer de page",
   "web_tree_swipe_pages_hint": "Décoché, on change de page seulement avec les boutons et tuiles, les raccourcis et les points de page : fini les arrivées involontaires sur une autre page.",
+  "web_tree_show_page_indicator": "Afficher la barre de pages (points et nom de page)",
+  "web_tree_show_page_indicator_hint": "Décoché, la barre sous les pages disparaît et les pages récupèrent sa hauteur : on change alors de page seulement avec les boutons et tuiles, les raccourcis et les pages liées.",
   "web_card_copy_title": "Copier vers d'autres pages",
   "web_card_copy_hint": "La même carte est ajoutée à chaque page cochée, par ex. une barre de boutons de pages en haut de chaque page.",
   "web_card_copy_all": "Toutes",

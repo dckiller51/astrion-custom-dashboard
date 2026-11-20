@@ -1593,6 +1593,8 @@
   "web_ui_states_comma_hint": "Più stati: separali con virgole, ad es. on, off, idle.",
   "web_tree_swipe_pages": "Scorri a sinistra / destra per cambiare pagina",
   "web_tree_swipe_pages_hint": "Deselezionato, si cambia pagina solo con pulsanti e riquadri, scorciatoie e i punti delle pagine: niente più arrivi involontari su un'altra pagina.",
+  "web_tree_show_page_indicator": "Mostra la barra delle pagine (punti e nome della pagina)",
+  "web_tree_show_page_indicator_hint": "Deselezionato, la barra sotto le pagine scompare e le pagine ne guadagnano l'altezza: si cambia pagina solo con pulsanti e riquadri, scorciatoie e pagine collegate.",
   "web_card_copy_title": "Copia in altre pagine",
   "web_card_copy_hint": "La stessa scheda viene aggiunta a ogni pagina selezionata, ad es. una barra di pulsanti pagina in cima a ogni pagina.",
   "web_card_copy_all": "Tutte",
