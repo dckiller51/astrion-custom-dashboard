@@ -30,6 +30,8 @@ let zidoos = [];           // full [{localId, name, entityId, host, mac}] (1.4.6
 let denons = [];           // [{localId, name, entityId, host, port, inputNames, hiddenInputs}] (1.5.4)
 let samsungs = [];         // [{localId, name, entityId, host, mac, paired}] (1.5.3)
 let skys = [];             // [{localId, name, entityId, host, kind: 'skyq' | 'skyhd'}] (1.5.3)
+let playnites = [];        // [{localId, name, entityId, host, mac, hasCode}] (1.6.3); a new one also carries its code until saved
+let spotifies = [];        // [{localId, name, account, paired, reachable, entityId}] (1.6.2), no token: it stays on the remote
 let hues = [];             // [{localId, name, host, paired, reachable, lights, groups, scenes}] (1.6.1), no key: it stays on the remote
 let lgTvs = [];            // [{localId, name, entityId, host, mac, paired}] (1.5.2), no key: it stays on the remote
 let fullDashboard = null;  // raw dashboard.json, round-tripped untouched except irDevices
@@ -85,6 +87,8 @@ async function loadAll() {
     samsungs = Array.isArray(data.samsungs) ? data.samsungs : [];
     denons = Array.isArray(data.denons) ? data.denons : [];
     hues = Array.isArray(data.hues) ? data.hues : [];
+    spotifies = Array.isArray(data.spotifies) ? data.spotifies : [];
+    playnites = Array.isArray(data.playnites) ? data.playnites : [];
     showRemoteIdentity(data.remote);
   } catch (e) {
     showToast(I18N.t('web_device_unreachable'), 'error');
@@ -118,7 +122,8 @@ async function reconcileAppleTvHaDevices() {
     .concat(lgTvs.map(tv => ({ id: 'lgtv_' + tv.localId, tv })))
     .concat(skys.map(tv => ({ id: 'sky_' + tv.localId, tv })))
     .concat(samsungs.map(tv => ({ id: 'samsung_' + tv.localId, tv })))
-    .concat(denons.map(tv => ({ id: 'denon_' + tv.localId, tv })));
+    .concat(denons.map(tv => ({ id: 'denon_' + tv.localId, tv })))
+    .concat(playnites.map(tv => ({ id: 'playnite_' + tv.localId, tv })));
   paired.forEach(({ id, tv }) => {
     const existing = dashboardData.haDevices.find(d => d.id === id);
     if (!existing) {
@@ -248,6 +253,8 @@ function renderDevicesList() {
   renderSamsungs();
   renderDenons();
   renderHues();
+  renderSpotifies();
+  renderPlaynites();
   renderDirectCounts();
 
   const tileIrCount = document.getElementById('tileIrCount');
@@ -276,7 +283,7 @@ function renderDevicesList() {
 
 // The direct devices (1.4.9) live in one view, a tab per kind of device: the old views' ids
 // still open it, on their tab.
-const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewSky: 'tv', viewSamsung: 'tv', viewZidoo: 'players', viewDenon: 'audio', viewHue: 'light' };
+const DIRECT_TABS = { viewAppleTv: 'tv', viewAndroidTv: 'tv', viewLgTv: 'tv', viewSky: 'tv', viewSamsung: 'tv', viewZidoo: 'players', viewPlaynite: 'players', viewDenon: 'audio', viewSpotify: 'audio', viewHue: 'light' };
 
 function showView(id) {
   if (DIRECT_TABS[id]) {
@@ -309,8 +316,8 @@ function showDirectTab(tab) {
 /** Counts on the home tile and the tabs. */
 function renderDirectCounts() {
   const tv = appleTvs.length + androidTvs.length + lgTvs.length + skys.length + samsungs.length;
-  const players = zidoos.length;
-  const audio = denons.length;
+  const players = zidoos.length + playnites.length;
+  const audio = denons.length + spotifies.length;
   const light = hues.length;
   const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
   set('directCountTv', tv);
@@ -351,6 +358,7 @@ function haDeviceKind(dev) {
   if (dev.domain === 'media_player') {
     if (/^appletv_/.test(obj) || /^sky_/.test(obj)) return 'box';
     if (/^androidtv_/.test(obj) || /^lgtv_/.test(obj) || /^samsung_/.test(obj)) return 'tv';
+    if (/^playnite_/.test(obj)) return 'player';
     if (/^zidoo_/.test(obj)) return zidooKind({ entityId: dev.entityId }) === 'audio' ? 'audio' : 'player';
     if (/^denon_/.test(obj)) return 'audio';
     return 'media';
@@ -419,6 +427,8 @@ function closeDeviceForms() {
   setDisplay('samsungForm', 'none');
   setDisplay('denonForm', 'none');
   setDisplay('hueForm', 'none');
+  setDisplay('spotifyForm', 'none');
+  setDisplay('playniteForm', 'none');
   setDisplay('irForm', 'none');
   editingHarmonyHubId = null;
   editingExtenderId = null;
@@ -477,6 +487,10 @@ async function openDeviceForm(type) {
     document.getElementById('zidooName').value = '';
     document.getElementById('zidooForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
     document.getElementById('zidooHost').focus();
+  } else if (type === 'playnite') {
+    openPlayniteForm();
+  } else if (type === 'spotify') {
+    openSpotifyForm();
   } else if (type === 'hue') {
     openHueForm();
   } else if (type === 'denon') {
@@ -670,6 +684,20 @@ async function persistHaAndHubs() {
       body.append('denon_host[]', r.host || '');
       body.append('denon_port[]', String(r.port || 8080));
       body.append('denon_inputs[]', JSON.stringify({ names: r.inputNames || {}, hidden: r.hiddenInputs || [], zones: r.zones || 1 }));
+    });
+    body.set('playnite_present', '1'); // the PCs running Playnite (1.6.3); a code is sent once, then stays on the remote
+    playnites.forEach(p => {
+      body.append('playnite_localid[]', p.localId || '');
+      body.append('playnite_name[]', p.name || '');
+      body.append('playnite_entityid[]', p.entityId || '');
+      body.append('playnite_host[]', p.host || '');
+      body.append('playnite_code[]', p.code || '');
+      body.append('playnite_mac[]', p.mac || '');
+    });
+    body.set('spotify_present', '1'); // the Spotify accounts (1.6.2); their tokens stay on the remote
+    spotifies.forEach(a => {
+      body.append('spotify_localid[]', a.localId || '');
+      body.append('spotify_name[]', a.name || '');
     });
     body.set('hue_present', '1'); // same for the Hue bridges (1.6.1); their keys stay on the remote
     hues.forEach(b => {

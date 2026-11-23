@@ -68,10 +68,14 @@ import com.custom.astrion.input.HardwareKey
 import com.custom.astrion.input.HardwareKeyRouter
 import com.custom.astrion.lgtv.LgTvRegistry
 import com.custom.astrion.lgtv.installLgTv
+import com.custom.astrion.playnite.PlayniteRegistry
+import com.custom.astrion.playnite.installPlaynite
 import com.custom.astrion.samsung.SamsungRegistry
 import com.custom.astrion.samsung.installSamsung
 import com.custom.astrion.sky.SkyRegistry
 import com.custom.astrion.sky.installSky
+import com.custom.astrion.spotify.SpotifyRegistry
+import com.custom.astrion.spotify.installSpotify
 import com.custom.astrion.tmdb.TmdbRegistry
 import com.custom.astrion.tmdb.installTmdb
 import com.custom.astrion.ui.ChargingScreen
@@ -459,6 +463,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var samsungRegistry: SamsungRegistry // Samsung TVs, direct (1.5.3)
     private lateinit var denonRegistry: DenonRegistry // Denon / Marantz receivers, direct (1.5.4)
     private lateinit var hueRegistry: HueRegistry // Philips Hue bridges, direct (1.6.1)
+    private lateinit var spotifyRegistry: SpotifyRegistry // Spotify accounts, direct (1.6.2)
+    private lateinit var playniteRegistry: PlayniteRegistry // PCs running Playnite, direct (1.6.3)
 
     /** Local IR blaster — used by hotkeys with irDevice+irCommand (see
      * runHotkey()) and shared with the composed-Activity switch executor in
@@ -578,6 +584,8 @@ class MainActivity : ComponentActivity() {
                 if (::samsungRegistry.isInitialized) samsungRegistry.setQuiet(quiet)
                 if (::denonRegistry.isInitialized) denonRegistry.setQuiet(quiet)
                 if (::hueRegistry.isInitialized) hueRegistry.setQuiet(quiet)
+                if (::spotifyRegistry.isInitialized) spotifyRegistry.setQuiet(quiet)
+                if (::playniteRegistry.isInitialized) playniteRegistry.setQuiet(quiet)
             }
         )
     }
@@ -741,6 +749,12 @@ class MainActivity : ComponentActivity() {
         // After the Denon one, chained the same way (1.6.1).
         hueRegistry = installHue(this, client, log = { Log.i("Hue", it) })
         configServer.hueRegistry = hueRegistry
+        // After Hue, chained the same way (1.6.2).
+        spotifyRegistry = installSpotify(this, client, log = { Log.i("Spotify", it) })
+        configServer.spotifyRegistry = spotifyRegistry
+        // After the Spotify one, chained the same way (1.6.3).
+        playniteRegistry = installPlaynite(this, client, log = { Log.i("Playnite", it) })
+        configServer.playniteRegistry = playniteRegistry
         localWeather.attach(client)
         // What media players play (1.6.0), from the Plex server and/or TMDB, for every card;
         // started again when their settings change.
@@ -787,6 +801,8 @@ class MainActivity : ComponentActivity() {
         harmonyRegistry.disconnectAll()
         tmdbRegistry?.stop()
         epgRegistry?.stop()
+        playniteRegistry.stop()
+        spotifyRegistry.stop()
         hueRegistry.stop()
         denonRegistry.stop()
         samsungRegistry.stop()
@@ -1781,6 +1797,8 @@ class MainActivity : ComponentActivity() {
         harmonyRegistry.disconnectAll()
         tmdbRegistry?.stop()
         epgRegistry?.stop()
+        playniteRegistry.stop()
+        spotifyRegistry.stop()
         hueRegistry.stop()
         denonRegistry.stop()
         samsungRegistry.stop()

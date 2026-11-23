@@ -1,7 +1,6 @@
 package com.custom.astrion.cards.impl
 
 import android.content.Context
-import android.util.Log
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -47,7 +46,6 @@ import com.custom.astrion.cards.CardContext
 import com.custom.astrion.cards.CardRenderer
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.ha.HaClient
-import com.custom.astrion.ha.ServiceCall
 import com.custom.astrion.ui.ThemeColors
 import com.custom.astrion.ui.tapClickable
 
@@ -102,9 +100,6 @@ import com.custom.astrion.ui.tapClickable
  *       "show_search": true                                // optional (1.3.8), the 🔍 next to "Plex"
  *   } }
  */
-private const val TAG = "PlexCard"
-private const val MRMC_PORT = 8080
-private const val MAX_PORT = 65535
 
 class PlexCard : CardRenderer {
     override val type = "plex"
@@ -113,18 +108,13 @@ class PlexCard : CardRenderer {
         val host: String,
         val token: String,
         val mediaEntity: String,
-        val source: String,
-        val playEntity: String?,
-        val playContentType: String,
         val showOnDeck: Boolean,
         val showMovies: Boolean,
         val showShows: Boolean,
         val itemsPerRow: Int,
         val showSearch: Boolean,
-        /** `play_with: "mrmc"` (1.6.0): MrMC on the Apple TV plays the film, see [MrmcPlayer]. */
-        val mrmc: MrmcTarget?,
-        /** `play_with: "rivulet"` (1.6.0): Rivulet on the Apple TV plays the item, see [PlexRivulet]. */
-        val rivulet: Boolean
+        /** Where an item plays (1.6.2: shared with the media remote card), see [PlexPlayback]. */
+        val target: PlexPlayTarget
     )
 
     private class PlexUiState {
@@ -156,34 +146,13 @@ class PlexCard : CardRenderer {
             host = host,
             token = token,
             mediaEntity = mediaEntity,
-            source = config.string("source") ?: "Plex",
-            // Optional: a real Plex-client entity (HA Plex integration, requires the
-            // TV's Plex app registered as a companion client) → true item playback.
-            playEntity = config.string("play_entity"),
-            // "video" is right for a Plex-integration client entity; HA's native Apple TV
-            // integration instead needs "url" to route through its deep-link/launch_app path
-            // (see home-assistant.io/integrations/apple_tv/#launching-apps) — anything else it
-            // treats as a real media stream and rejects with "Streaming ... is not supported".
-            playContentType = config.string("play_content_type") ?: "video",
             showOnDeck = config.bool("show_on_deck", default = true),
             showMovies = config.bool("show_recently_added_movies", default = true),
             showShows = config.bool("show_recently_added_shows", default = true),
             itemsPerRow = config.int("items_per_row", default = 12).coerceIn(1, 30),
             showSearch = config.bool("show_search", default = true),
-            mrmc = mrmcOf(config, mediaEntity),
-            rivulet = config.string("play_with") == "rivulet"
-        )
-    }
-
-    /** MrMC's settings, when the card plays with it: `play_with: "mrmc"` and the Apple TV's address. */
-    private fun mrmcOf(config: CardConfig, mediaEntity: String): MrmcTarget? {
-        if (config.string("play_with") != "mrmc") return null
-        val host = config.string("mrmc_host")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        return MrmcTarget(
-            host = host,
-            port = config.int("mrmc_port", default = MRMC_PORT).coerceIn(1, MAX_PORT),
-            mediaEntity = mediaEntity,
-            app = config.string("mrmc_app")?.takeIf { it.isNotBlank() } ?: "MrMC"
+            // `play_entity`, `play_content_type`, `source`, `play_with` ("mrmc", "rivulet"), `mrmc_*`.
+            target = PlexPlayback.targetOf(config, mediaEntity)
         )
     }
 
@@ -210,49 +179,6 @@ class PlexCard : CardRenderer {
         return state
     }
 
-    private fun openSource(client: HaClient, cfg: PlexConfig) {
-        // Reliable fallback: open Plex on the TV so you can pick it.
-        client.callService(ServiceCall.of("media_player", "select_source", cfg.mediaEntity, "source" to cfg.source))
-    }
-
-    private fun play(client: HaClient, cfg: PlexConfig, machineId: String?, ratingKey: String) {
-        // machineId comes from the same /identity call rows already depend on; if it's still
-        // null here the Plex server didn't answer it (or answered oddly) — rather than silently
-        // doing nothing, fall back to just opening the app like the no-play_entity case does below.
-        // An Apple TV added in Astrion only opens the app too (1.6.0): Plex on tvOS ignores the
-        // item in its links (plex://preplay and plex://play alike) and no longer shows up as a
-        // player the server could drive.
-        if (cfg.playEntity != null && machineId != null) {
-            // Real playback via the HA Plex integration's client entity, or HA's native Apple TV
-            // integration when play_content_type is "url". Note the Plex path only works if that
-            // client is already connected (e.g. the TV's Plex app is open) — HA's Plex integration
-            // can't wake/launch a client that isn't already active.
-            val link = "plex://preplay/?metadataKey=$ratingKey&server=$machineId"
-            Log.i(TAG, "play on ${cfg.playEntity}: $link")
-            client.callService(
-                ServiceCall.of(
-                    "media_player",
-                    "play_media",
-                    cfg.playEntity,
-                    "media_content_type" to cfg.playContentType,
-                    "media_content_id" to link
-                )
-            )
-        } else {
-            Log.i(TAG, "open the Plex app on ${cfg.mediaEntity} (${if (machineId == null) "no server id" else "no play_entity"})")
-            openSource(client, cfg)
-        }
-    }
-
-    /** Rivulet on the Apple TV (`media_entity`) opens its own link: the item starts where it was left. */
-    private fun playWithRivulet(client: HaClient, cfg: PlexConfig, ratingKey: String) {
-        val link = PlexRivulet.link(ratingKey) ?: return openSource(client, cfg)
-        Log.i(TAG, "play with Rivulet on ${cfg.mediaEntity}: $link")
-        client.callService(
-            ServiceCall.of("media_player", "play_media", cfg.mediaEntity, "media_content_type" to "url", "media_content_id" to link)
-        )
-    }
-
     private fun openLibrary(client: HaClient, cfg: PlexConfig, state: PlexUiState, item: PlexApi.PlexItem) {
         val key = item.sectionKey
         if (key != null) {
@@ -261,7 +187,7 @@ class PlexCard : CardRenderer {
         } else {
             // No section info from the server for this item — fall back to just
             // opening the app rather than doing nothing.
-            openSource(client, cfg)
+            PlexPlayback.openApp(client, cfg.target)
         }
     }
 
@@ -331,15 +257,7 @@ class PlexCard : CardRenderer {
 
         val context = LocalContext.current
         PlexDialogs(cfg, state, ctx.theme) { key ->
-            val mrmc = cfg.mrmc
-            when {
-                mrmc != null -> {
-                    Log.i(TAG, "play $key with MrMC on ${mrmc.host}")
-                    MrmcPlayer.play(context, ctx.client, PlexServer(cfg.host, cfg.token), mrmc, key)
-                }
-                cfg.rivulet -> playWithRivulet(ctx.client, cfg, key)
-                else -> play(ctx.client, cfg, state.machineId, key)
-            }
+            PlexPlayback.play(context, ctx.client, PlexServer(cfg.host, cfg.token), cfg.target, state.machineId, key)
         }
     }
 

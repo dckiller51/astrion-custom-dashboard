@@ -45,10 +45,15 @@ data class EntityState(
 
     /**
      * What a media player plays, as a picture: its own (`entity_picture_local`, else
-     * `entity_picture`), else TMDB's poster (`astrion_poster`, 1.6.0).
+     * `entity_picture`), else TMDB's poster (`astrion_poster`, 1.6.0). The Plex server's poster
+     * comes first (1.6.2): it is the item's own, read from the server, where an Apple TV's
+     * picture through Home Assistant could still be the last film's (Zavie's tests).
      */
     val mediaPicture: String?
-        get() = attrString("entity_picture_local") ?: attrString("entity_picture") ?: attrString("astrion_poster")
+        get() {
+            val plexPoster = attrString("astrion_poster")?.takeIf { attrString("astrion_meta_source") == "plex" }
+            return plexPoster ?: attrString("entity_picture_local") ?: attrString("entity_picture") ?: attrString("astrion_poster")
+        }
 
     /** Attribute as Double, or null. Handles ints and numeric strings too. */
     fun attrDouble(key: String): Double? = (attributes[key] as? JsonPrimitive)?.let { prim ->

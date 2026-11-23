@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astrion Custom</string>
+    <string name="code_label">Code om op de afstandsbediening te typen (webpagina › Android TV › Helper):</string>
+    <string name="code_hint">Hiermee kan de Astrion-afstandsbediening tonen wat er speelt (titel, hoes, voortgang) en elke app op deze tv openen.</string>
+    <string name="media_ok">✓ Lezen wat er speelt: toegestaan</string>
+    <string name="media_missing">✗ Lezen wat er speelt: nog niet toegestaan (toegang tot meldingen)</string>
+    <string name="apps_ok">✓ Apps openen: toegestaan</string>
+    <string name="apps_missing">✗ Apps openen: nog niet toegestaan (weergeven over andere apps)</string>
+    <string name="address">Deze tv: %1$s, poort %2$d</string>
+    <string name="adb_title">Voer om ze toe te staan één keer uit vanaf een computer (eerst adb connect &lt;deze tv&gt;:5555):</string>
+    <string name="open_settings">Instellingen voor toegang tot meldingen openen</string>
+    <string name="settings_unavailable">Deze tv heeft zo\'n instellingenscherm niet: gebruik de ADB-opdracht</string>
+    <string name="keep_awake_on">Bereikbaar blijven in stand-by: aan</string>
+    <string name="keep_awake_off">Bereikbaar blijven in stand-by: uit</string>
+    <string name="keep_awake_enable">Bereikbaar blijven in stand-by</string>
+    <string name="keep_awake_disable">Niet meer bereikbaar blijven in stand-by</string>
+    <string name="keep_awake_hint">Voor boxen die de afstandsbediening niet kan wekken (Xiaomi Mi Box S…): het scherm gaat nog steeds uit, maar de box houdt zijn netwerk actief zodat de afstandsbediening hem weer kan aanzetten. Verbruikt iets meer stroom in stand-by.</string>
+    <string name="keep_awake_notification">Astrion: bereikbaar in stand-by</string>
+</resources>

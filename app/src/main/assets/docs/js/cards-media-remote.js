@@ -83,6 +83,41 @@ function moveMediaRemoteBlock(i, delta) {
 }
 
 /** Live entity ids of a domain (empty when the builder doesn't run on the remote). */
+/** The Plex and Guide fields (1.6.2): [field id, option, default value]. */
+const MR_PLEX_GUIDE_FIELDS = [
+  ['optMrSearchIn', 'search_in', 'music'],
+  ['optMrLibrary', 'library', 'device'],
+  ['optMrPlexPlayWith', 'plex_play_with', 'plex'],
+  ['optMrPlexPlayEntity', 'plex_play_entity', ''],
+  ['optMrPlexPlayType', 'plex_play_content_type', 'video'],
+  ['optMrPlexSource', 'plex_source', ''],
+  ['optMrPlexMrmcHost', 'plex_mrmc_host', ''],
+  ['optMrPlexMrmcPort', 'plex_mrmc_port', ''],
+  ['optMrPlexMrmcApp', 'plex_mrmc_app', ''],
+  ['optMrGuide', 'guide', 'none'],
+  ['optMrGuideCommand', 'guide_command', ''],
+  ['optMrGuidePage', 'guide_page', '']
+];
+
+/** Shows where Plex plays only when the Library or Search opens Plex, and the fields of the way it plays. */
+function mrPlexToggle() {
+  const val = id => (document.getElementById(id) || {}).value;
+  const plex = val('optMrLibrary') === 'plex' || val('optMrSearchIn') === 'plex';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  const how = val('optMrPlexPlayWith');
+  show('mrPlexBox', plex);
+  show('mrPlexAppBox', how === 'plex');
+  show('mrPlexRivuletBox', how === 'rivulet');
+  show('mrPlexMrmcBox', how === 'mrmc');
+}
+
+function mrGuideToggle() {
+  const g = (document.getElementById('optMrGuide') || {}).value;
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  show('mrGuideKeyBox', g === 'key');
+  show('mrGuidePageBox', g === 'page');
+}
+
 function mediaRemoteEntities(domain) {
   if (typeof haStates === 'undefined' || !haStates) return [];
   return Object.keys(haStates).filter(id => id.startsWith(domain + '.')).sort();
@@ -132,6 +167,61 @@ function mediaRemoteFormHtml() {
     <label>${I18N.t('web_card_mr_search_player')}</label>
     <input type="text" id="optMrSearchPlayer" list="mrPlayers" placeholder="media_player.music_assistant">
     <div class="hint">${I18N.t('web_card_mr_search_hint')}</div>
+    <label>${I18N.t('web_card_mr_search_in')}</label>
+    <select id="optMrSearchIn" onchange="mrPlexToggle()">
+      <option value="music">${I18N.t('web_card_mr_search_in_music')}</option>
+      <option value="plex">Plex</option>
+    </select>
+    <label>${I18N.t('web_card_mr_library')}</label>
+    <select id="optMrLibrary" onchange="mrPlexToggle()">
+      <option value="device">${I18N.t('web_card_mr_library_device')}</option>
+      <option value="plex">Plex</option>
+    </select>
+    <div id="mrPlexBox" class="section-box" style="margin-top:8px">
+      <div class="hint">${I18N.t('web_card_mr_plex_hint')}</div>
+      <label>${I18N.t('web_card_plex_play_with')}</label>
+      <select id="optMrPlexPlayWith" onchange="mrPlexToggle()">
+        <option value="plex">${I18N.t('web_card_plex_play_with_plex')}</option>
+        <option value="rivulet">${I18N.t('web_card_plex_play_with_rivulet')}</option>
+        <option value="mrmc">${I18N.t('web_card_plex_play_with_mrmc')}</option>
+      </select>
+      <div id="mrPlexAppBox">
+        <label>${I18N.t('web_card_plex_play_entity')}</label>
+        <input type="text" id="optMrPlexPlayEntity" list="mrPlayers" placeholder="media_player.plex_…">
+        <label>${I18N.t('web_card_plex_play_type')}</label>
+        <select id="optMrPlexPlayType">
+          <option value="video">${I18N.t('web_card_plex_type_video')}</option>
+          <option value="url">${I18N.t('web_card_plex_type_url')}</option>
+        </select>
+        <label>${I18N.t('web_card_plex_source')}</label>
+        <input type="text" id="optMrPlexSource" placeholder="Plex">
+        <div class="hint">${I18N.t('web_card_plex_client_hint')}</div>
+      </div>
+      <div id="mrPlexRivuletBox" class="hint">${I18N.t('web_card_plex_rivulet_hint')}</div>
+      <div id="mrPlexMrmcBox">
+        <label>${I18N.t('web_card_plex_mrmc_host')}</label>
+        <input type="text" id="optMrPlexMrmcHost" placeholder="192.168.1.40">
+        <label>${I18N.t('web_card_plex_mrmc_port')}</label>
+        <input type="number" id="optMrPlexMrmcPort" placeholder="8080" min="1" max="65535">
+        <label>${I18N.t('web_card_plex_mrmc_app')}</label>
+        <input type="text" id="optMrPlexMrmcApp" placeholder="MrMC">
+        <div class="hint">${I18N.t('web_card_plex_mrmc_hint')}</div>
+      </div>
+    </div>
+    <label>${I18N.t('web_card_mr_guide')}</label>
+    <select id="optMrGuide" onchange="mrGuideToggle()">
+      <option value="none">${I18N.t('web_card_mr_guide_none')}</option>
+      <option value="key">${I18N.t('web_card_mr_guide_key')}</option>
+      <option value="page">${I18N.t('web_card_mr_guide_page')}</option>
+    </select>
+    <div id="mrGuideKeyBox">
+      <input type="text" id="optMrGuideCommand" placeholder="${I18N.t('web_card_mr_guide_command_ph')}">
+      <div class="hint">${I18N.t('web_card_mr_guide_key_hint')}</div>
+    </div>
+    <div id="mrGuidePageBox">
+      <input type="text" id="optMrGuidePage" list="mrPages" placeholder="${I18N.t('web_card_mr_details_page_ph')}">
+      <div class="hint">${I18N.t('web_card_mr_guide_page_hint')}</div>
+    </div>
     <label>${I18N.t('web_card_mr_details_page')}</label>
     <input type="text" id="optMrDetailsPage" list="mrPages" placeholder="${I18N.t('web_card_mr_details_page_ph')}">
     <datalist id="mrPages">${((typeof dashboardData !== 'undefined' && dashboardData && dashboardData.pages) || []).map(p => `<option value="${cxEsc(p.name)}"></option>`).join('')}</datalist>
@@ -175,6 +265,20 @@ function fillMediaRemoteForm(o) {
   document.getElementById('optMrAppsRows').value = [1, 2, 3].includes(Number(o.apps_rows)) ? String(o.apps_rows) : '0';
   document.getElementById('optMrSearchPlayer').value = o.search_player || '';
   document.getElementById('optMrDetailsPage').value = o.details_page || '';
+  document.getElementById('optMrSearchIn').value = o.search_in === 'plex' ? 'plex' : 'music';
+  document.getElementById('optMrLibrary').value = o.library === 'plex' ? 'plex' : 'device';
+  document.getElementById('optMrPlexPlayWith').value = ['rivulet', 'mrmc'].includes(o.plex_play_with) ? o.plex_play_with : 'plex';
+  document.getElementById('optMrPlexPlayEntity').value = o.plex_play_entity || '';
+  document.getElementById('optMrPlexPlayType').value = o.plex_play_content_type === 'url' ? 'url' : 'video';
+  document.getElementById('optMrPlexSource').value = o.plex_source || '';
+  document.getElementById('optMrPlexMrmcHost').value = o.plex_mrmc_host || '';
+  document.getElementById('optMrPlexMrmcPort').value = o.plex_mrmc_port || '';
+  document.getElementById('optMrPlexMrmcApp').value = o.plex_mrmc_app || '';
+  document.getElementById('optMrGuide').value = ['key', 'page'].includes(o.guide) ? o.guide : 'none';
+  document.getElementById('optMrGuideCommand').value = o.guide_command || '';
+  document.getElementById('optMrGuidePage').value = o.guide_page || '';
+  mrPlexToggle();
+  mrGuideToggle();
   document.getElementById('optMrSize').value = ['two_thirds', 'half'].includes(o.size) ? o.size : 'full';
   document.getElementById('optMrKeyShape').value = o.key_shape === 'rect' ? 'rect' : 'round';
   document.getElementById('optMrCover').value = o.cover_ratio === 'wide' ? 'wide' : 'square';
@@ -182,7 +286,7 @@ function fillMediaRemoteForm(o) {
   renderMediaRemoteOrder();
   // What the form doesn't show is kept as it is.
   const known = ['name', 'player_entity', 'remote_entity', 'volume_entity', 'now_playing_entity', 'kind', 'apps', 'apps_style', 'show_apps', 'apps_rows',
-    'search_player', 'details_page', 'size', 'key_shape', 'cover_ratio', 'order'];
+    'search_player', 'details_page', 'size', 'key_shape', 'cover_ratio', 'order', ...MR_PLEX_GUIDE_FIELDS.map(f => f[1])];
   window._mediaRemoteExtra = Object.fromEntries(Object.entries(o).filter(([k]) =>
     !known.includes(k) && !MEDIA_REMOTE_SWITCHES.some(s => s[1] === k)));
 }
@@ -220,6 +324,18 @@ function collectMediaRemoteForm(out) {
   if (searchPlayer) out.search_player = searchPlayer; else delete out.search_player;
   const detailsPage = document.getElementById('optMrDetailsPage').value.trim();
   if (detailsPage) out.details_page = detailsPage; else delete out.details_page;
+  // Search in Plex, the Library from Plex and where Plex plays, the Guide button (1.6.2): only what differs from the default.
+  MR_PLEX_GUIDE_FIELDS.forEach(([id, key, def]) => {
+    const v = String(document.getElementById(id).value || '').trim();
+    if (v && v !== def) out[key] = key === 'plex_mrmc_port' ? Number(v) : v; else delete out[key];
+  });
+  if (out.guide !== 'key') delete out.guide_command;
+  if (out.guide !== 'page') delete out.guide_page;
+  if (out.plex_play_with !== 'mrmc') ['plex_mrmc_host', 'plex_mrmc_port', 'plex_mrmc_app'].forEach(k => delete out[k]);
+  if (out.plex_play_with) ['plex_play_entity', 'plex_play_content_type', 'plex_source'].forEach(k => delete out[k]);
+  if (out.library !== 'plex' && out.search_in !== 'plex') {
+    ['plex_play_with', 'plex_play_entity', 'plex_play_content_type', 'plex_source', 'plex_mrmc_host', 'plex_mrmc_port', 'plex_mrmc_app'].forEach(k => delete out[k]);
+  }
   const size = document.getElementById('optMrSize').value;
   if (size !== 'full') out.size = size; else delete out.size;
   if (document.getElementById('optMrKeyShape').value === 'rect') out.key_shape = 'rect'; else delete out.key_shape;
@@ -269,6 +385,7 @@ function mediaRemotePreviewHtml(card, idx) {
   const chips = [];
   if (on('show_browse')) chips.push(I18N.t('web_card_mr_chip_library'));
   if (on('music_search')) chips.push(I18N.t('web_card_mr_chip_search'));
+  if (o.guide === 'key' || o.guide === 'page') chips.push(I18N.t('web_card_mr_chip_guide'));
   if (zidoo && on('show_queue')) chips.push(I18N.t('web_card_mr_chip_queue'));
   if (eversolo && on('show_io')) chips.push(I18N.t('web_card_mr_chip_input'), I18N.t('web_card_mr_chip_output'));
   if (chips.length) {

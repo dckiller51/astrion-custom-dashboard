@@ -66,4 +66,14 @@ class PlexNowPlayingTest {
         assertEquals(MediaInfoSource.PLEX, MediaInfoSource.of("plex"))
         assertEquals(MediaInfoSource.AUTO, MediaInfoSource.of("other"))
     }
+
+    @Test
+    fun `an episode titled the Plex app's way finds its session`() {
+        val got = PlexSession("Lord Snow", "Game of Thrones", null, "Jon arrive au Mur.", 2011, 8.6, "/library/metadata/1/thumb", tv = true)
+        val q = TmdbMatch.clean("Game of Thrones - S1 · E3 - Lord Snow")!!
+        // Not the only session, nor said to be Plex: matched on its series alone.
+        val other = got.copy(title = "Dune", series = null, tv = false)
+        assertEquals(got, PlexNowPlaying.match(listOf(other, got), q, plexPlayer = false))
+        assertEquals("Jon arrive au Mur.", PlexNowPlaying.infoOf(got) { it }.overview)
+    }
 }

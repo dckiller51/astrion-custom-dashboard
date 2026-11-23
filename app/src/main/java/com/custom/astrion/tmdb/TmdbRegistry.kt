@@ -40,6 +40,9 @@ class TmdbRegistry(
             override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TmdbInfo?>?) = size > CACHE
         }
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
+
+    /** When a lookup found nothing (1.6.2): asked again after [MISS_AGAIN_MS], a Plex server listing what plays late. */
+    private val missedAt = ConcurrentHashMap<String, Long>()
     private val executor = Executors.newSingleThreadExecutor { r -> Thread(r, "Tmdb").apply { isDaemon = true } }
 
     @Volatile private var ha: HaClient? = null
@@ -75,7 +78,11 @@ class TmdbRegistry(
         if (local && !plexPlayer) return e
         val key = q.key + if (local) "|local" else ""
         synchronized(cache) {
-            if (cache.containsKey(key)) return cache[key]?.let { with(e, it) } ?: e
+            if (cache.containsKey(key)) {
+                cache[key]?.let { return with(e, it) }
+                if (System.currentTimeMillis() - (missedAt[key] ?: 0L) < MISS_AGAIN_MS) return e
+                cache.remove(key)
+            }
         }
         ask(q, key, plexPlayer, !local)
         return e
@@ -111,13 +118,14 @@ class TmdbRegistry(
     /** The player says it plays Plex (its app, or Home Assistant's Plex player itself). */
     private fun plexPlays(e: EntityState): Boolean {
         if (plex == null) return false
-        return "plex" in e.attrString("app_name")?.lowercase().orEmpty() || "plex" in e.entityId
+        return TmdbMatch.isPlexClient(e.attrString("app_name"), e.entityId)
     }
 
     private fun lookup(q: TmdbQuery, key: String, plexPlayer: Boolean, tmdbToo: Boolean) {
         try {
             val info = plexInfo(q, plexPlayer, tmdbToo) ?: if (tmdbToo) tmdbInfo(q) else null
             synchronized(cache) { cache[key] = info }
+            if (info == null) missedAt[key] = System.currentTimeMillis() else missedAt.remove(key)
             val found = info?.let { "${it.title} (${it.year ?: "?"}), from ${it.source}" } ?: "nothing found"
             log("\"${q.title}\": $found")
             ha?.republish()
@@ -176,6 +184,7 @@ class TmdbRegistry(
         private const val CACHE = 128
         private const val LOAD = 0.75f
         private const val PLEX_AGAIN_MS = 3_000L
+        private const val MISS_AGAIN_MS = 60_000L
         private val ACTIVE = setOf("playing", "paused", "buffering")
     }
 }
@@ -260,7 +269,7 @@ class PlexSessionsClient(private val host: String, private val token: String) {
 fun tmdbLanguageOf(context: Context): String {
     RemoteSettings.tmdbLanguage(context).takeIf { it.isNotBlank() }?.let { return it }
     return when (val app = AppLanguage.get(context).ifBlank { Locale.getDefault().language }) {
-        "fr", "de", "it", "es" -> "$app-${app.uppercase()}"
+        "fr", "de", "it", "es", "nl" -> "$app-${app.uppercase()}"
         else -> "en-US"
     }
 }

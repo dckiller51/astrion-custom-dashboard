@@ -229,6 +229,14 @@ class HaClient(
     var localBrowseMediaHandler: ((entityId: String, contentId: String?, contentType: String?) -> JsonObject?)? = null
 
     /**
+     * A websocket request answered on the remote (1.6.2): Spotify's `media_player/search_media`,
+     * with no Home Assistant involved. Returns the whole reply (`{"success": true, "result": …}`),
+     * or null when the request isn't its own. Run off the main thread.
+     */
+    @Volatile
+    var localRequestHandler: ((type: String, fields: JsonObject) -> JsonObject?)? = null
+
+    /**
      * Optional interceptor for [getForecast]: the forecast of a locally-published weather entity
      * (the built-in weather, see [com.custom.astrion.weather.LocalWeather]), or null to ask Home
      * Assistant as usual.
@@ -570,7 +578,8 @@ class HaClient(
      * Pass a null contentId/type to browse the root.
      */
     suspend fun browseMedia(entityId: String, contentId: String? = null, contentType: String? = null): JsonObject? {
-        localBrowseMediaHandler?.invoke(entityId, contentId, contentType)?.let { return it }
+        // Off the main thread: a local handler may ask the network (Spotify, 1.6.2).
+        localBrowseMediaHandler?.let { h -> withContext(Dispatchers.IO) { h(entityId, contentId, contentType) } }?.let { return it }
         val id = idCounter.getAndIncrement()
         val deferred = CompletableDeferred<JsonObject>()
         pending[id] = deferred
@@ -625,6 +634,7 @@ class HaClient(
      * `error`), or null when it didn't answer within [timeout] (1.3.9: the media search).
      */
     suspend fun request(type: String, fields: JsonObject = JsonObject(emptyMap()), timeout: Duration = RESPONSE_TIMEOUT): JsonObject? {
+        localRequestHandler?.let { h -> withContext(Dispatchers.IO) { h(type, fields) } }?.let { return it }
         val id = idCounter.getAndIncrement()
         val deferred = CompletableDeferred<JsonObject>()
         pending[id] = deferred

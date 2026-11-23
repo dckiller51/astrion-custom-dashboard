@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  1.6.2: Home Assistant over HTTPS with your own certificate. Android 7+ only trusts the
+  certificates it ships with, unless an app says otherwise: this also trusts the CAs installed
+  on the remote (Settings › Security › Install a certificate), e.g. mkcert's root CA.
+  Plain HTTP stays allowed: most Home Assistants, and every device on the LAN, use it.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -106,6 +106,7 @@ import org.json.JSONObject
  *  POST /sky-check      a Sky box's kind (Sky Q / Sky+ HD) and model (host), see SkyRoutes (1.5.3)
  *  POST /samsung-pair   allows the remote on a Samsung TV (host): its prompt, then {model, mac}, see SamsungRoutes (1.5.3)
  *  POST /denon-check    a Denon / Marantz receiver's model and port (host), see DenonRoutes (1.5.4)
+ *  POST /playnite-check a PC's Playnite (host, code): its name and MAC, see PlayniteRoutes (1.6.3)
  *  GET/POST /tmdb, POST /tmdb-test   TMDB's token and language, a test search, see TmdbRoutes (1.6.0)
  *  GET/POST /plex, POST /plex-test   the Plex server for every Plex card, a test, see PlexRoutes (1.6.0)
  *  GET  /plex-art?path=/library/…    a Plex picture, the token added here (what's playing's poster)
@@ -277,6 +278,14 @@ class ConfigServer(
     var hueRegistry: com.custom.astrion.hue.HueRegistry? = null
     private val hueRoutes = HueRoutes(context) { hueRegistry }
 
+    /** Spotify accounts (1.6.2): signed in with the user's own Spotify app. */
+    var spotifyRegistry: com.custom.astrion.spotify.SpotifyRegistry? = null
+    private val spotifyRoutes = SpotifyRoutes(context) { spotifyRegistry }
+
+    /** PCs running Playnite with the Astrion extension (1.6.3): added by IP and code. */
+    var playniteRegistry: com.custom.astrion.playnite.PlayniteRegistry? = null
+    private val playniteRoutes = PlayniteRoutes(context)
+
     /** TMDB's or the Plex server's settings changed (1.6.0): the activity starts what's-playing lookups again on them. */
     @Volatile
     var onTmdbChanged: () -> Unit = {}
@@ -355,6 +364,8 @@ class ConfigServer(
             ?: samsungRoutes.serve(uri, session)
             ?: denonRoutes.serve(uri, session)
             ?: hueRoutes.serve(uri, session)
+            ?: spotifyRoutes.serve(uri, session)
+            ?: playniteRoutes.serve(uri, session)
             ?: tmdbRoutes.serve(uri, session)
             ?: plexRoutes.serve(uri, session)
             ?: epgRoutes.serve(uri, session)
@@ -489,19 +500,18 @@ class ConfigServer(
         }
         val content =
             runCatching {
-                hueRoutes.reconcileHaDevices(
-                    denonRoutes.reconcileHaDevices(
-                        samsungRoutes.reconcileHaDevices(
-                            skyRoutes.reconcileHaDevices(
-                                lgTvRoutes.reconcileHaDevices(
-                                    zidooRoutes.reconcileHaDevices(
-                                        androidTvRoutes.reconcileHaDevices(reconcileAppleTvHaDevices(file.readText()))
-                                    )
-                                )
-                            )
-                        )
-                    )
-                )
+                // Each direct device's catalog entries, one after the other.
+                listOf<(String) -> String>(
+                    androidTvRoutes::reconcileHaDevices,
+                    zidooRoutes::reconcileHaDevices,
+                    lgTvRoutes::reconcileHaDevices,
+                    skyRoutes::reconcileHaDevices,
+                    samsungRoutes::reconcileHaDevices,
+                    denonRoutes::reconcileHaDevices,
+                    hueRoutes::reconcileHaDevices,
+                    spotifyRoutes::reconcileHaDevices,
+                    playniteRoutes::reconcileHaDevices
+                ).fold(reconcileAppleTvHaDevices(file.readText())) { text, reconcile -> reconcile(text) }
             }
                 .getOrElse { file.readText() }
         return newFixedLengthResponse(Response.Status.OK, "application/json", content)
@@ -685,6 +695,8 @@ class ConfigServer(
                 put("samsungs", samsungRoutes.configJson())
                 put("denons", denonRoutes.configJson())
                 put("hues", hueRoutes.configJson())
+                put("spotifies", spotifyRoutes.configJson())
+                put("playnites", playniteRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1282,6 +1294,8 @@ class ConfigServer(
         samsungRoutes.saveRows(params)
         denonRoutes.saveRows(params)
         hueRoutes.saveRows(params)
+        spotifyRoutes.saveRows(params)
+        playniteRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }
