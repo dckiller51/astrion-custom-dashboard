@@ -142,6 +142,7 @@
     <string name="zidoo_library_recent">Récents</string>
     <string name="zidoo_library_favorites">Favoris</string>
     <string name="zidoo_library_search">Recherche</string>
+    <string name="media_guide">Guide</string>
     <string name="zidoo_library_search_hint">Un film, une série…</string>
     <string name="zidoo_library_play">Lecture</string>
     <string name="zidoo_library_starting">Lancement sur le lecteur…</string>

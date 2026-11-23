@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,6 +63,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -117,7 +119,10 @@ import kotlin.math.abs
  *     "now_playing_entity": "media_player.plex_tv",  // 1.5.8: what plays, from this player while it plays
  *     "show_synopsis": true,               // 1.5.8: player view, a film's year, rating and synopsis (Zidoo)
  *     "show_dpad": true, "show_volume": true, "show_channels": true,
- *     "show_tracks": true, "show_queue": true, "show_io": true, "show_quality": true
+ *     "show_tracks": true, "show_queue": true, "show_io": true, "show_quality": true,
+ *     "guide": "key",                      // 1.6.2: a Guide button: "key" (the player's guide key, or
+ *     "guide_command": "…"),               //   guide_command) or "page" (guide_page, as a popup)
+ *     "library": "plex", "search_in": "plex", "plex_play_with": "rivulet"  // 1.6.2, see RemotePlex
  * } }
  * ```
  *
@@ -135,7 +140,7 @@ class MediaRemoteCard : CardRenderer {
         // 1.5.7: the player view (big cover) in the card itself, instead of the remote.
         var playerView by remember { mutableStateOf(false) }
         var detailsOpen by remember { mutableStateOf(false) }
-        val r = Parts(ctx, config, playerId, remoteId, popup, deviceDialog) { playerView = true }
+        val r = Parts(ctx, config, playerId, remoteId, popup, deviceDialog, rememberPlex(config, playerId)) { playerView = true }
         // `now_playing_entity` (1.5.8): what plays, from another player while it plays (Plex on the
         // TV, say); the keys and the apps stay the player's (Zavie).
         val player = nowPlayingOf(config, ctx, playerId)
@@ -190,6 +195,15 @@ class MediaRemoteCard : CardRenderer {
         }
         r.Dialogs()
         if (detailsOpen && active) Details(ctx, config, player!!, remoteId) { detailsOpen = false }
+    }
+
+    /** The remote's Plex server, when the card's Library or Search opens it (1.6.2). */
+    @Composable
+    private fun rememberPlex(config: CardConfig, playerId: String): RemotePlex? {
+        val context = LocalContext.current
+        return remember(config, playerId) {
+            if (RemotePlex.libraryIsPlex(config) || RemotePlex.searchIsPlex(config)) RemotePlex.of(config, context, playerId) else null
+        }
     }
 
     /** A first guess at the D-pad's (or the cover's) size, from the other blocks' heights; FillState corrects it. */
@@ -307,6 +321,7 @@ class MediaRemoteCard : CardRenderer {
         const val MAX_COVER = 420
         const val MIN_COVER = 100
         const val SMALL_CHIPS = 4
+        const val MAX_DEVICE_CHIPS = 3 // the player's own buttons, less one for Search and one for Guide
         const val MAX_EXTRA = 600f
         const val PAGE_BOTTOM_CHROME = 42 // the page dots under the card
         const val WIDE = 16f / 9f
@@ -335,7 +350,7 @@ class MediaRemoteCard : CardRenderer {
         }
     }
 
-    private enum class Popup { SOURCES, KEYPAD, BROWSE, SEARCH, DEVICE }
+    private enum class Popup { SOURCES, KEYPAD, BROWSE, SEARCH, DEVICE, PLEX_LIBRARY, PLEX_SEARCH }
 
     /**
      * The key names a player's own channel understands. Android TV, Samsung, Zidoo/Eversolo take
@@ -351,14 +366,14 @@ class MediaRemoteCard : CardRenderer {
                 "center" to "DPAD_CENTER", "back" to "BACK", "home" to "HOME", "menu" to "MENU", "power" to "POWER",
                 "volume_up" to "VOLUME_UP", "volume_down" to "VOLUME_DOWN", "mute" to "MUTE",
                 "channel_up" to "CHANNEL_UP", "channel_down" to "CHANNEL_DOWN",
-                "rewind" to "MEDIA_REWIND", "fast_forward" to "MEDIA_FAST_FORWARD"
+                "rewind" to "MEDIA_REWIND", "fast_forward" to "MEDIA_FAST_FORWARD", "guide" to "GUIDE"
             )
             val APPLE = mapOf(
                 "up" to "Up", "down" to "Down", "left" to "Left", "right" to "Right", "center" to "Select",
                 "back" to "Menu", "home" to "Home",
                 "volume_up" to "VolumeUp", "volume_down" to "VolumeDown",
                 "channel_up" to "ChannelUp", "channel_down" to "ChannelDown",
-                "rewind" to "SeekBackward", "fast_forward" to "SeekForward"
+                "rewind" to "SeekBackward", "fast_forward" to "SeekForward", "guide" to "Guide"
             ) // no menu / mute / power key on the Apple TV remote channel
         }
     }
@@ -370,6 +385,8 @@ class MediaRemoteCard : CardRenderer {
         val remoteId: String,
         val popupState: MutableState<Popup?>,
         val deviceState: MutableState<ZidooDialog?>,
+        /** The remote's Plex server, when the Library or Search button opens it (1.6.2, see [RemotePlex]). */
+        val plex: RemotePlex?,
         val openPlayer: () -> Unit
     ) {
         val theme: ThemeColors = ctx.theme
@@ -678,11 +695,31 @@ class MediaRemoteCard : CardRenderer {
             }
         }
 
-        fun hasDeviceButtons(e: EntityState?): Boolean =
-            (e != null && deviceChips(e).isNotEmpty()) || (config.bool("show_browse", true) && hasLibrary(playerId, remoteId)) || searches()
+        fun hasDeviceButtons(e: EntityState?): Boolean = (e != null && deviceChips(e).isNotEmpty()) || browses() || searches() || guide()
 
-        /** `music_search` (1.5.7, as the media player card): Home Assistant's media search, on `search_player`. */
-        private fun searches() = config.bool("music_search", false)
+        /** `music_search` (1.5.7, as the media player card): Home Assistant's media search, on `search_player`; or Plex's (1.6.2). */
+        private fun searches() = config.bool("music_search", false) && (!RemotePlex.searchIsPlex(config) || plex != null)
+
+        /** The Library button: the player's own library, or the remote's Plex (`library: "plex"`, 1.6.2). */
+        private fun browses() =
+            config.bool("show_browse", true) && if (RemotePlex.libraryIsPlex(config)) plex != null else hasLibrary(playerId, remoteId)
+
+        /** `guide` (1.6.2): "key" sends the player's guide key (or `guide_command`), "page" opens `guide_page` as a popup. */
+        private fun guide() = when (config.string("guide")) {
+            "key" -> guideCommand() != null
+            "page" -> !config.string("guide_page").isNullOrBlank()
+            else -> false
+        }
+
+        private fun guideCommand() = config.string("guide_command")?.takeIf { it.isNotBlank() } ?: keys.of("guide")
+
+        private fun openGuide() {
+            if (config.string("guide") == "page") {
+                config.string("guide_page")?.takeIf { it.isNotBlank() }?.let(ctx.openPagePopup)
+            } else {
+                guideCommand()?.let { ctx.client.callService(ServiceCall.of("remote", "send_command", remoteId, "command" to it)) }
+            }
+        }
         private val searchPlayer get() = config.string("search_player") ?: playerId
 
         private fun deviceChips(e: EntityState): List<Triple<Int, String?, ZidooDialog>> {
@@ -711,21 +748,13 @@ class MediaRemoteCard : CardRenderer {
         @Composable
         fun DeviceButtons(e: EntityState?, active: Boolean) {
             val chips = if (e != null) deviceChips(e) else emptyList()
-            val browse = config.bool("show_browse", true) && hasLibrary(playerId, remoteId)
-            if (chips.isEmpty() && !browse && !searches()) return
-            val shown = chips.take(if (searches()) 2 else 3)
+            val common = listOf(browses(), searches(), guide()).count { it }
+            if (chips.isEmpty() && common == 0) return
+            val shown = chips.take((MAX_DEVICE_CHIPS + (if (browses()) 1 else 0) - common).coerceAtLeast(0))
             // Four chips (a Zidoo: library, subtitles, audio, chapters): smaller text, so no word is cut in two (1.5.7).
-            val small = listOf(browse, searches()).count { it } + shown.size >= SMALL_CHIPS
+            val small = common + shown.size >= SMALL_CHIPS
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (small) 6.dp else 8.dp)) {
-                if (browse) Chip(stringResource(R.string.zidoo_library_title), null, Modifier.weight(1f), small) { popup = Popup.BROWSE }
-                if (searches()) {
-                    Chip(
-                        stringResource(R.string.zidoo_library_search),
-                        null,
-                        Modifier.weight(1f),
-                        small
-                    ) { popup = Popup.SEARCH }
-                }
+                CommonChips(small)
                 shown.forEach { (label, value, dialog) ->
                     Chip(stringResource(label), value, Modifier.weight(1f), small) {
                         deviceDialog = dialog
@@ -734,6 +763,22 @@ class MediaRemoteCard : CardRenderer {
                 }
             }
             if (active && e != null && config.bool("show_quality", true)) MediaQualityLine(e, theme)
+        }
+
+        /** Library, Search and Guide (1.6.2: from Plex, or the guide), as the card sets them. */
+        @Composable
+        private fun RowScope.CommonChips(small: Boolean) {
+            if (browses()) {
+                Chip(stringResource(R.string.zidoo_library_title), null, Modifier.weight(1f), small) {
+                    popup = if (RemotePlex.libraryIsPlex(config)) Popup.PLEX_LIBRARY else Popup.BROWSE
+                }
+            }
+            if (searches()) {
+                Chip(stringResource(R.string.zidoo_library_search), null, Modifier.weight(1f), small) {
+                    popup = if (RemotePlex.searchIsPlex(config)) Popup.PLEX_SEARCH else Popup.SEARCH
+                }
+            }
+            if (guide()) Chip(stringResource(R.string.media_guide), null, Modifier.weight(1f), small) { openGuide() }
         }
 
         @Composable
@@ -995,6 +1040,8 @@ class MediaRemoteCard : CardRenderer {
                 )
                 Popup.BROWSE -> BrowseDialog(playerId, ctx.client, theme, also = remoteId, onClose = close)
                 Popup.SEARCH -> MusicSearchDialog(ctx.client, searchPlayer, theme, close)
+                Popup.PLEX_LIBRARY -> plex?.let { RemotePlexDialogs(ctx, it, RemotePlexView.LIBRARY, close) }
+                Popup.PLEX_SEARCH -> plex?.let { RemotePlexDialogs(ctx, it, RemotePlexView.SEARCH, close) }
                 Popup.DEVICE -> deviceDialog?.let { ZidooCardDialog(ctx, config, playerId, ctx.entities[playerId], it, close) }
                 Popup.KEYPAD -> KeypadTarget.from(config, remoteId, keys.of("center") ?: "DPAD_CENTER")?.let { target ->
                     KeypadDialog(theme, target.hasOk, onKey = { target.send(ctx, it) }, onClose = close)

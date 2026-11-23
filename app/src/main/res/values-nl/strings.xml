@@ -1,0 +1,350 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dutch: first draft (machine-assisted), to be reviewed by a native speaker. -->
+<resources>
+    <!-- General / App Info -->
+    <string name="app_name">Astrion Custom</string>
+    <string name="close">Sluiten</string>
+    <string name="active_activities">Actieve activiteiten</string>
+    <string name="no_active_activities">Momenteel geen actieve activiteiten</string>
+    <string name="stop_activity">Stoppen</string>
+    <string name="activity_help">Help</string>
+    <string name="activity_help_hint">Tik op een apparaat om de status te corrigeren en tik daarna op Herstellen. Er wordt pas iets verzonden wanneer je op Herstellen hebt geklikt.</string>
+    <string name="device_state_on">Aan</string>
+    <string name="device_state_off">Uit</string>
+    <string name="device_state_unknown">Onbekend</string>
+    <string name="activity_fix">Herstellen</string>
+    <string name="activity_help_input">Invoer: %1$s</string>
+    <string name="connected">Verbonden</string>
+    <string name="disconnected">Verbinding verbroken</string>
+
+    <!-- Native App Settings UI -->
+    <string name="settings_title">Instellingen</string>
+    <string name="wifi_network">Wifi-netwerk</string>
+    <string name="android_system">Android-systeem</string>
+    <string name="wake_on_motion">Wekken bij beweging</string>
+    <string name="config_server_toggle">Lokale configuratieserver</string>
+    <string name="config_server_toggle_hint">Schakelt ook de /builder/, het uploaden van pictogrammen en het uploaden/downloaden van dashboard.json uit. Schakel dit hier weer in om de configuratie aan te passen.</string>
+    <string name="wifi_keep_awake">Wifi actief houden</string>
+    <string name="wifi_keep_awake_hint">Staat standaard uit. Voorkomt dat Home Assistant dit apparaat soms niet kan bereiken (services, pushmeldingen) wanneer het scherm uit is. Kost batterijvermogen, omdat de wifi-radio niet meer in de energiebesparingsstand gaat.</string>
+    <string name="config_server_off_hint">Lokale configuratieserver is uitgeschakeld</string>
+    <string name="tap_feedback">Aanraak feedback</string>
+    <string name="tap_feedback_hint">Kort tikgeluid wanneer je op een scène, knop of stip tikt. Komt overeen met de eigen Android-menu\'s van het apparaat.</string>
+    <string name="brightness">Helderheid</string>
+    <string name="allow_brightness_write">Helderheid bedienen toestaan (tik)</string>
+    <string name="settings_update_available">Update beschikbaar: v%1$s</string>
+    <string name="settings_beta_update_available">Bèta beschikbaar: %1$s</string>
+    <string name="settings_local_config">Lokale configuratie: %1$s</string>
+    <string name="web_config_qr_hint">Scan de code met je telefoon om de webpagina van de afstandsbediening en de configuratie-editor te openen, zonder het adres te typen. Kies op je telefoon voor \'Toevoegen aan startscherm\' om een Astrion-pictogram te plaatsen.</string>
+    <string name="web_password_on">Voor de webpagina is een wachtwoord vereist</string>
+    <string name="web_password_off">Geen wachtwoord: iedereen op je netwerk kan de webpagina van deze afstandsbediening openen</string>
+    <string name="web_password_new">Wachtwoord instellen (minimaal 4 tekens)</string>
+    <string name="web_password_change">Nieuw wachtwoord</string>
+    <string name="web_password_remove">Wachtwoord verwijderen</string>
+    <string name="web_password_hint">De browser vraagt om dit wachtwoord voor de webpagina, de configuratie-editor en de back-ups (elke gebruikersnaam is toegestaan). Ook de Home Assistant-integratie heeft dit wachtwoord nodig; stel het ook daar in bij de instellingen. Wachtwoord vergeten? Verwijder het hier en stel een nieuw wachtwoord in.</string>
+    <string name="web_password_too_short">Minimaal %1$d tekens</string>
+    <string name="web_password_saved">Wachtwoord voor webpagina opgeslagen</string>
+    <string name="web_password_removed">Wachtwoord voor webpagina verwijderd</string>
+
+    <!-- Settings: groups, screen timeout, About (1.2.5) -->
+    <string name="settings_display">Scherm</string>
+    <string name="settings_connections">Verbindingen</string>
+    <string name="settings_web_config">Webconfiguratie</string>
+    <string name="settings_sound_touch">Geluid en aanraken</string>
+    <string name="settings_about">Over</string>
+    <string name="settings_display_summary">Slaapstand %1$s · Laadstation: %2$s</string>
+    <string name="state_on">Aan</string>
+    <string name="state_off">Uit</string>
+    <string name="screen_timeout">Scherm-time-out</string>
+    <string name="screen_timeout_system">Systeem (%1$s)</string>
+    <string name="screen_timeout_hint">Hoe lang het scherm aanblijft wanneer je het niet aanraakt. Wordt opgeslagen in dashboard.json van deze afstandsbediening. Met \'Systeem\' blijft de Android-instelling ongewijzigd.</string>
+    <string name="allow_write_settings">Toestaan dat de app systeeminstellingen wijzigt (tik)</string>
+    <string name="reconnect_now">Nu opnieuw verbinden</string>
+    <string name="ip_address">IP-adres</string>
+    <string name="about_version">Versie</string>
+    <string name="about_channel">Kanaal</string>
+    <string name="channel_beta">Bèta</string>
+    <string name="channel_stable">Stabiel</string>
+    <string name="about_update">Update</string>
+    <string name="update_checking">Controleren…</string>
+    <string name="update_up_to_date">Up-to-date</string>
+    <string name="update_check_failed">Controleren mislukt</string>
+    <string name="update_available_short">Beschikbaar</string>
+    <string name="update_downloading">Update downloaden… %1$d%%</string>
+    <string name="update_download_failed">De update kon niet worden gedownload of geopend. Controleer de wifi-verbinding en probeer het opnieuw.</string>
+    <string name="about_device">Apparaat</string>
+    <string name="about_battery">Batterij</string>
+    <string name="about_package">Pakket</string>
+    <string name="about_project">Project</string>
+    <string name="remote_name">Naam van deze afstandsbediening</string>
+    <string name="remote_name_hint">Wordt weergegeven in Home Assistant en meegestuurd met elke gebeurtenis, zodat automatiseringen weten welke afstandsbediening is gebruikt.</string>
+    <string name="about_remote_id">ID van afstandsbediening</string>
+    <string name="save_short">OK</string>
+    <string name="settings_language">Taal</string>
+    <string name="language_system">Systeem</string>
+    <string name="language_hint">De app wordt opnieuw gestart om de taal toe te passen.</string>
+    <string name="test_ring">\'Afstandsbediening zoeken\' testen</string>
+    <string name="test_ring_hint">Laat hetzelfde geluid horen als via Home Assistant. Raak het scherm aan of druk op een knop om het geluid te stoppen.</string>
+    <string name="reload_dashboard">Dashboard opnieuw laden</string>
+    <string name="dashboard_reloaded">Dashboard opnieuw geladen</string>
+    <string name="restart_app">App opnieuw starten</string>
+    <string name="about_logs">Logboeken</string>
+    <string name="logs_server_off">Schakel Webconfiguratie in</string>
+    <string name="save_log">Logboek opslaan op de afstandsbediening</string>
+    <string name="log_saved">Opgeslagen: %1$s</string>
+    <string name="log_save_failed">Het logboek kon niet worden opgeslagen (opslag geweigerd).</string>
+
+    <!-- Web Config: Header & General -->
+    <string name="web_config_saved_reconnecting">Instellingen opgeslagen — opnieuw verbinden</string>
+
+    <!-- Web Config: Dashboard & Builder -->
+    <string name="web_config_dashboard_updated">dashboard.json bijgewerkt</string>
+
+    <!-- Web Config: Icons -->
+    <string name="web_config_icon_uploaded">Pictogram geüpload</string>
+
+    <!-- Web Config: IR Database -->
+    <string name="web_config_ir_database_uploaded">IR-databasebestand geüpload</string>
+
+    <!-- Charging screen -->
+    <string name="charging_screen_charging">Wordt opgeladen</string>
+    <string name="charging_screen_full">Volledig opgeladen</string>
+
+    <!-- Web Config: OTA / Updates -->
+    <string name="web_config_update_found">Update beschikbaar: v%1$s</string>
+    <string name="web_config_update_none">Je hebt al de laatste versie</string>
+    <string name="web_config_update_installing">Installatieprogramma gestart, bevestig de installatie op het scherm</string>
+    <string name="web_config_update_needs_permission">Sta \'Onbekende apps installeren\' toe voor deze app op het scherm dat zojuist is geopend. Tik daarna opnieuw op Downloaden en installeren.</string>
+    <string name="web_config_update_failed">Controleren op updates mislukt: %1$s</string>
+
+    <!-- Connection status -->
+    <string name="connection_connecting">Verbinden…</string>
+    <string name="connection_auth_failed">Verificatie mislukt; controleer het token</string>
+    <string name="connection_error_retrying">Verbindingsfout; opnieuw proberen</string>
+
+    <!-- Unknown card -->
+    <string name="unknown_card_type">Onbekend kaarttype: \"%1$s\"</string>
+
+    <!-- Media (player, Plex, browser) -->
+    <string name="media_loading">Laden…</string>
+    <string name="media_loading_more">Meer laden…</string>
+    <string name="media_no_items">Geen items</string>
+    <string name="media_nothing_here">Hier is niets te zien</string>
+    <string name="media_default_title">Media</string>
+    <string name="media_apps_title">Apps</string>
+    <string name="media_load_timeout">Media laden mislukt (time-out)</string>
+    <string name="media_load_failed">Media laden mislukt</string>
+    <string name="media_browse">Bladeren</string>
+    <string name="media_live">Live</string>
+    <!-- Zidoo library pop-up (1.5.0) -->
+    <string name="zidoo_library_title">Bibliotheek</string>
+    <string name="zidoo_library_all">Alles</string>
+    <string name="zidoo_library_in_progress">Bezig</string>
+    <string name="zidoo_library_series">Series</string>
+    <string name="zidoo_library_recent">Recent</string>
+    <string name="zidoo_library_favorites">Favorieten</string>
+    <string name="zidoo_library_search">Zoeken</string>
+    <string name="media_guide">Gids</string>
+    <string name="zidoo_library_search_hint">Een film, een serie…</string>
+    <string name="zidoo_library_play">Afspelen</string>
+    <string name="zidoo_library_starting">Wordt gestart op de speler…</string>
+    <string name="zidoo_library_play_failed">De speler is niet gestart.</string>
+    <string name="zidoo_library_unreachable">De speler reageert niet.</string>
+    <string name="zidoo_library_watched">Bekeken</string>
+    <string name="zidoo_library_stopped_at">Gestopt bij %1$s van %2$s</string>
+    <string name="zidoo_library_sorting">Sorteren op laatst bekeken…</string>
+    <string name="zidoo_card_nothing">Speelt niets af</string>
+    <string name="zidoo_card_apps">Apps</string>
+    <string name="zidoo_card_back10">10 sec. terug</string>
+    <string name="zidoo_card_forward10">10 sec. vooruit</string>
+    <string name="zidoo_card_repeat">Herhalen</string>
+    <string name="zidoo_card_subtitles">Ondertiteling</string>
+    <string name="zidoo_card_audio">Audio</string>
+    <string name="zidoo_card_chapters">Hoofdstukken</string>
+    <string name="zidoo_card_queue">Afspeelwachtrij</string>
+    <string name="zidoo_card_input">Ingang</string>
+    <string name="zidoo_card_output">Uitgang</string>
+    <string name="zidoo_card_season">Seizoen %1$d</string>
+    <string name="zidoo_card_episode">Aflevering %1$d</string>
+    <string name="zidoo_in_internal">Interne speler</string>
+    <string name="zidoo_in_bluetooth">Bluetooth</string>
+    <string name="zidoo_in_usb">USB-C</string>
+    <string name="zidoo_in_coaxial">Coaxiaal</string>
+    <string name="zidoo_in_optical">Optisch</string>
+    <string name="zidoo_card_tracks">Nummers</string>
+    <string name="zidoo_card_chapter_previous">Vorig hoofdstuk</string>
+    <string name="zidoo_card_chapter_next">Volgend hoofdstuk</string>
+    <string name="zidoo_card_loading">Speler opvragen…</string>
+    <string name="zidoo_card_no_tracks">De speler geeft hiervoor geen nummers op.</string>
+    <string name="zidoo_card_queue_count">%1$d nummers</string>
+    <string name="zidoo_card_queue_empty">De afspeelwachtrij is leeg.</string>
+    <string name="zidoo_card_queue_read_only">De afspeelwachtrij van deze app kan alleen worden weergegeven. Je kunt hier geen nummer uit kiezen.</string>
+    <string name="zidoo_card_queue_skips">Je kunt niet rechtstreeks een nummer uit de afspeelwachtrij van deze app kiezen. Tikken slaat telkens één nummer over.</string>
+    <string name="zidoo_card_io">In- en uitgangen</string>
+    <string name="zidoo_card_output_confirm">Tik nogmaals op %1$s om om te schakelen. Bij een verkeerde uitgang valt het geluid weg.</string>
+    <string name="zidoo_music_title">Muziek</string>
+    <string name="zidoo_music_albums">Albums</string>
+    <string name="zidoo_music_artists">Artiesten</string>
+    <string name="zidoo_music_playlists">Afspeellijsten</string>
+    <string name="zidoo_music_search_hint">Een album, een artiest…</string>
+    <string name="zidoo_music_artist">Artiest</string>
+    <string name="music_search">Muziek zoeken</string>
+    <string name="music_search_button">Muziek zoeken</string>
+    <string name="music_search_hint">Titel, artiest, album…</string>
+    <string name="music_search_type">Voer minimaal 2 letters in.</string>
+    <string name="music_search_none">Niets gevonden voor \'%1$s\'.</string>
+    <string name="music_search_failed">De speler reageert niet.</string>
+    <string name="music_search_unsupported">Deze speler ondersteunt zoeken niet. Home Assistant biedt deze functie onder andere voor Lyrion Music Server en Music Assistant. Kies in de kaart een andere speler om mee te zoeken.</string>
+    <string name="music_all">Alles</string>
+    <string name="music_artists">Artiesten</string>
+    <string name="music_albums">Albums</string>
+    <string name="music_tracks">Nummers</string>
+    <string name="music_playlists">Afspeellijsten</string>
+    <string name="music_playing">Wordt afgespeeld: %1$s</string>
+    <string name="music_queued">Toegevoegd aan de afspeelwachtrij: %1$s</string>
+    <string name="music_add_to_queue">Toevoegen aan afspeelwachtrij</string>
+    <string name="music_queue">Afspeelwachtrij</string>
+    <string name="music_queue_position">Nummer %1$d van %2$d</string>
+    <string name="music_queue_count">Nummers in afspeelwachtrij: %1$d</string>
+    <string name="music_queue_more">En nog %1$d hierna.</string>
+    <string name="music_queue_more_ma">En nog %1$d: Music Assistant deelt alleen het huidige en het volgende nummer.</string>
+    <string name="music_queue_empty">De afspeelwachtrij is leeg.</string>
+    <string name="music_queue_unsupported">Deze speler deelt zijn afspeelwachtrij niet.</string>
+    <string name="music_queue_clear">Afspeelwachtrij wissen</string>
+    <string name="music_queue_clear_confirm">Tik nogmaals om te wissen</string>
+    <string name="music_queue_remove">Verwijderen uit afspeelwachtrij</string>
+    <string name="music_queue_refresh">Vernieuwen</string>
+    <string name="media_power_toggle">Aan/uit schakelen</string>
+    <string name="media_browser_play">Afspelen</string>
+    <string name="media_browser_add_to_queue">Toevoegen aan wachtrij</string>
+    <string name="plex_error_no_items">Plex heeft geen items teruggegeven</string>
+    <string name="plex_error_generic">Plex-fout</string>
+    <string name="plex_mrmc_no_file">Er is hier niets om af te spelen. Kies een film of aflevering.</string>
+    <string name="plex_mrmc_no_answer">MrMC reageert niet op %1$s. Controleer of het is geïnstalleerd en of bediening op afstand via HTTP is ingeschakeld.</string>
+    <string name="plex_mrmc_refused">MrMC kon de film niet openen</string>
+    <string name="tv_guide_empty">Geen zenders: stel de tv-gids in op de webpagina (Apparaten › Tv-gids)</string>
+    <string name="tv_guide_nothing">Niets in de tv-gids</string>
+    <string name="tv_guide_next">Volgende: %1$s</string>
+    <string name="tv_guide_watch">Kijken</string>
+    <string name="plex_library">Bibliotheek</string>
+    <string name="plex_this_season">Dit seizoen</string>
+    <string name="plex_play">Afspelen</string>
+    <string name="plex_episode">A%1$s · %2$s</string>
+    <string name="plex_search">Zoeken</string>
+    <string name="plex_search_hint">Films, series, afleveringen…</string>
+    <string name="plex_search_type">Typ minimaal 2 letters van een titel.</string>
+    <string name="plex_search_none">Niets gevonden voor \'%1$s\'.</string>
+    <string name="plex_search_failed">Kan geen verbinding maken met de Plex-server.</string>
+    <string name="plex_movies">Films</string>
+    <string name="plex_shows">Series</string>
+    <string name="plex_seasons">Seizoenen</string>
+    <string name="plex_episodes">Afleveringen</string>
+
+    <!-- Select cards -->
+    <string name="select_no_options">Geen opties</string>
+    <string name="select_choose">Kiezen…</string>
+    <string name="source_no_sources">Geen bronnen (apparaat uit?)</string>
+    <string name="source_choose">Bron selecteren…</string>
+
+    <!-- ClimateCard -->
+    <string name="climate_current_temp">Nu %1$s°</string>
+    <string name="climate_hvac_caption">Modus</string>
+    <string name="climate_fan_caption">Ventilator</string>
+    <string name="climate_swing_caption">Zwenken</string>
+
+    <!-- FanCard -->
+    <string name="fan_preset_caption">Voorinstelling</string>
+    <string name="fan_oscillate_caption">Oscilleren</string>
+    <string name="astrion_state_on">Aan</string>
+    <string name="astrion_state_off">Uit</string>
+
+    <!-- VacuumCard -->
+    <string name="vacuum_fan_speed_caption">Schoonmaakmodus</string>
+    <string name="vacuum_default_name">Stofzuiger</string>
+    <string name="vacuum_map_label">Kaart van de stofzuiger</string>
+
+    <!-- CoverCard -->
+    <string name="cover_open">Open</string>
+    <string name="cover_closed">Gesloten</string>
+    <string name="cover_position_open">%1$d%% open</string>
+
+    <!-- LightCard -->
+    <string name="light_state_on">Aan</string>
+    <string name="light_state_off">Uit</string>
+    <string name="light_brightness_pct">%1$d%%</string>
+    <string name="light_panel_color">Kleur</string>
+    <string name="light_panel_white">Wit</string>
+    <string name="light_panel_effect">Effecten</string>
+    <string name="light_preset_candle">Kaarslicht</string>
+    <string name="light_preset_warm">Warm</string>
+    <string name="light_preset_neutral">Neutraal</string>
+    <string name="light_preset_cool">Koel</string>
+    <string name="light_color_wheel">Kleurenwiel</string>
+
+    <!-- MediaPlayerCard / MediaPlayerDetailDialog -->
+    <string name="media_state_playing">Speelt af</string>
+    <string name="media_state_paused">Gepauzeerd</string>
+    <string name="media_state_idle">Inactief</string>
+    <string name="media_state_buffering">Bufferen</string>
+    <string name="media_state_on">Aan</string>
+    <string name="media_state_off">Uit</string>
+    <string name="volume_muted">Gedempt</string>
+
+    <!-- Dock screen & find-my-remote overlay -->
+    <string name="dock_screen">Scherm van laadstation</string>
+    <string name="dock_screen_hint">Wat de afstandsbediening op het laadstation weergeeft. Wordt opgeslagen in dashboard.json van de afstandsbediening (hetzelfde als \'Scherm van laadstation\' in de configuratie-editor). Tik om te wijzigen.</string>
+    <string name="dock_mode_charging">Opladen</string>
+    <string name="dock_mode_clock">Klok</string>
+    <string name="dock_mode_dashboard">Dashboard</string>
+    <string name="ring_found_title">Gevonden!</string>
+    <string name="ring_found_hint">Tik ergens op het scherm of druk op een knop om te stoppen</string>
+    <!-- 1.2.9 -->
+    <string name="speaker_group_title">Luidsprekers</string>
+    <string name="speaker_muted">Gedempt</string>
+    <string name="speaker_group">Groeperen</string>
+    <string name="speaker_ungroup">Groep opheffen</string>
+    <string name="setup_banner_title">Stel deze afstandsbediening in via een browser</string>
+    <string name="connection_web_page_hint">Webpagina van afstandsbediening: %1$s</string>
+    <string name="xbox_online">Online</string>
+    <string name="xbox_offline">Offline</string>
+    <string name="xbox_console_off">Xbox uit</string>
+    <string name="xbox_no_game">Geen game actief</string>
+    <string name="xbox_no_game_hint">De game verschijnt hier zodra je begint met spelen.</string>
+    <string name="xbox_ratio">verhouding %1$s</string>
+    <string name="xbox_achievements">Prestaties</string>
+    <string name="xbox_gamerscore">Gamerscore</string>
+    <string name="xbox_ta_score">TA-score</string>
+    <string name="xbox_last_sync">Laatste synchronisatie</string>
+    <string name="xbox_sync_problem">Synchronisatieprobleem</string>
+    <string name="xbox_attr_platform">Platform</string>
+    <string name="xbox_attr_publisher">Uitgever</string>
+    <string name="xbox_attr_developer">Ontwikkelaar</string>
+    <string name="xbox_attr_genres">Genres</string>
+    <string name="xbox_attr_release_date">Releasedatum</string>
+    <string name="xbox_attr_min_age">Minimumleeftijd</string>
+    <string name="xbox_attr_completion">Voltooiing</string>
+    <string name="xbox_attr_ratio">Verhouding</string>
+    <string name="xbox_attr_hours">Speeltijd</string>
+    <string name="xbox_attr_description">Beschrijving</string>
+    <string name="xbox_attr_game_url">Game op TrueAchievements</string>
+    <string name="xbox_attr_walkthrough_url">Achievementgids</string>
+    <string name="xbox_attr_location">Locatie</string>
+    <string name="picker_sources">Bronnen en apps</string>
+    <string name="picker_sources_button">Bronnen</string>
+    <string name="picker_no_sources">Deze speler geeft geen lijst met bronnen of apps.</string>
+    <string name="picker_keypad">Cijfertoetsen</string>
+    <!-- PlayStation card (1.5.8) -->
+    <string name="psn_online">Online</string>
+    <string name="psn_online_app">Online via de PS App</string>
+    <string name="psn_away">Afwezig</string>
+    <string name="psn_offline">Offline</string>
+    <string name="psn_playing">Speelt</string>
+    <string name="psn_no_game">Geen game</string>
+    <string name="psn_no_game_hint">Apps en discs worden niet weergegeven, alleen games.</string>
+    <string name="psn_console_off">Console uit</string>
+    <string name="psn_level">Niveau %1$s</string>
+    <string name="psn_next_level">Nog %1$d%% tot het volgende niveau</string>
+    <string name="psn_platinum">Platina</string>
+    <string name="psn_gold">Goud</string>
+    <string name="psn_silver">Zilver</string>
+    <string name="psn_bronze">Brons</string>
+</resources>

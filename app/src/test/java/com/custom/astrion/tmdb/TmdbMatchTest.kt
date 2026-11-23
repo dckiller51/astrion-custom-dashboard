@@ -39,6 +39,68 @@ class TmdbMatchTest {
     }
 
     @Test
+    fun `Plex's own episode title on an Apple TV is its series`() {
+        val q = query("media_title" to "Game of Thrones - S1 · E3 - Lord Snow", "app_name" to "Plex")!!
+        assertEquals("Game of Thrones", q.title)
+        assertTrue(q.tv)
+        assertEquals("Kaamelott", TmdbMatch.clean("Kaamelott - S4 · E99 - Le Désordre Et La Nuit 1ère et 2ème parties")!!.title)
+        assertEquals("Lost", TmdbMatch.clean("Lost S01E03")!!.title)
+        assertEquals("Lost", TmdbMatch.clean("Lost - S1E3")!!.title)
+        // A film named so stays whole.
+        assertEquals("Se7en", TmdbMatch.clean("Se7en")!!.title)
+    }
+
+    @Test
+    fun `Rivulet on an Apple TV added in Astrion, an album Saison 1, is an episode`() {
+        val q =
+            query(
+                "media_content_type" to "music",
+                "media_title" to "La route royale",
+                "media_artist" to "Game of Thrones",
+                "media_album_name" to "Saison 1",
+                "app_name" to "Rivulet"
+            )!!
+        assertEquals("Game of Thrones", q.title)
+        assertTrue(q.tv)
+        assertTrue(TmdbMatch.isPlexClient("Rivulet", "media_player.appletv_salon"))
+        assertTrue(TmdbMatch.isLocalPlayer("Rivulet", "media_player.appletv_salon"))
+        // A real album stays a song.
+        assertNull(
+            query(
+                "media_content_type" to "music",
+                "media_title" to "Time After Time",
+                "media_artist" to "Cyndi Lauper",
+                "media_album_name" to "She's So Unusual"
+            )
+        )
+        // Kaamelott's seasons are books: from a Plex player, any album is a season.
+        val book =
+            query(
+                "media_content_type" to "music",
+                "media_title" to "Heat",
+                "media_artist" to "Kaamelott",
+                "media_album_name" to "Livre I",
+                "app_name" to "Rivulet"
+            )!!
+        assertEquals("Kaamelott", book.title)
+        assertTrue(book.tv)
+        assertEquals(1, TmdbMatch.seasonOfAlbum("Saison 1"))
+        assertEquals(3, TmdbMatch.seasonOfAlbum("Season 3"))
+        assertNull(TmdbMatch.seasonOfAlbum("1989"))
+    }
+
+    @Test
+    fun `each episode of a series is its own lookup`() {
+        val one = query("media_title" to "Kaamelott - S4 · E74 - L’Ultimatum", "app_name" to "Plex")!!
+        val two = query("media_title" to "Kaamelott - S4 · E75 - Le Sort Commun", "app_name" to "Plex")!!
+        assertEquals(one.title, two.title)
+        assertTrue(one.key != two.key)
+        // A film keeps one entry, whatever else changes.
+        val film = query("media_title" to "Dune", "app_name" to "Plex")!!
+        assertEquals("any|dune|", film.key)
+    }
+
+    @Test
     fun `season and episode from an Apple TV or CANAL+ artist`() {
         assertEquals(2 to 5, TmdbMatch.episodeOf("Saison 2, ép. 5"))
         assertEquals(3 to 12, TmdbMatch.episodeOf("Saison 3, ép. 12"))

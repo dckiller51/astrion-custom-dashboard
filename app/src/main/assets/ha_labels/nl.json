@@ -1,0 +1,78 @@
+{
+  "hvac_mode": {
+    "off": "Uit",
+    "auto": "Auto",
+    "heat_cool": "Auto",
+    "cool": "Koelen",
+    "heat": "Verwarmen",
+    "dry": "Drogen",
+    "fan_only": "Ventilator"
+  },
+  "fan_mode": {
+    "auto": "Auto",
+    "silent": "Stil",
+    "quiet": "Stil",
+    "low": "Laag",
+    "medium": "Middel",
+    "high": "Hoog",
+    "turbo": "Turbo"
+  },
+  "swing_mode": {
+    "off": "Uit",
+    "stop": "Uit",
+    "on": "Aan",
+    "swing": "Aan",
+    "vertical": "Verticaal",
+    "horizontal": "Horizontaal",
+    "both": "Beide"
+  },
+  "cover_state": {
+    "open": "Open",
+    "opening": "Gaat open",
+    "closed": "Gesloten",
+    "closing": "Gaat dicht",
+    "stopped": "Gestopt",
+    "unknown": "Onbekend"
+  },
+  "vacuum_state": {
+    "cleaning": "Schoonmaken",
+    "docked": "In het dock",
+    "returning": "Terug naar het dock",
+    "idle": "Inactief",
+    "paused": "Gepauzeerd",
+    "error": "Fout"
+  },
+  "vacuum_fan_speed": {
+    "min": "Min",
+    "quiet": "Stil",
+    "silent": "Stil",
+    "medium": "Middel",
+    "standard": "Standaard",
+    "balanced": "Gebalanceerd",
+    "high": "Hoog",
+    "strong": "Sterk",
+    "turbo": "Turbo",
+    "max": "Max",
+    "gentle": "Zacht",
+    "mop": "Dweilen",
+    "off": "Uit"
+  },
+  "weather_condition": {
+    "sunny": "Zonnig",
+    "clear": "Helder",
+    "clear-night": "Heldere nacht",
+    "partlycloudy": "Half bewolkt",
+    "cloudy": "Bewolkt",
+    "fog": "Mist",
+    "windy": "Winderig",
+    "windy-variant": "Winderig",
+    "rainy": "Regenachtig",
+    "pouring": "Zware regen",
+    "lightning": "Onweer",
+    "lightning-rainy": "Onweer met regen",
+    "snowy": "Sneeuw",
+    "snowy-rainy": "Sneeuw en regen",
+    "hail": "Hagel",
+    "exceptional": "Uitzonderlijk"
+  }
+}

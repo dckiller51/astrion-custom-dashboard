@@ -127,6 +127,21 @@ data class SkyConfig(
 )
 
 /**
+ * One PC running Playnite with the Astrion extension, added on the web page (1.6.3): reached at
+ * [host]:[port] with the [code] shown in Playnite; [mac] (given by the extension) wakes it.
+ * Published as [entityId] (`media_player.playnite_…`).
+ */
+data class PlayniteConfig(
+    val localId: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val port: Int = 8095,
+    val code: String = "",
+    val mac: String = ""
+)
+
+/**
  * One Denon / Marantz AV receiver added on the web page (1.5.4), by IP; no pairing. [port] is the
  * one its web API answered on (8080 on AVR-X models from 2016, else 80). Published as [entityId]
  * (`media_player.denon_…`) plus the matching `remote.denon_…`.
@@ -176,6 +191,19 @@ data class LgTvConfig(
     val mac: String = "",
     val clientKey: String = "",
     val pin: String = ""
+)
+
+/**
+ * One Spotify account added on the web page (1.6.2), signed in once with the user's own app on
+ * Spotify's developer dashboard ([clientId]). [localId] is the Spotify user id; [refreshToken]
+ * never leaves the remote. [account]: the name Spotify gives the user, for the web page.
+ */
+data class SpotifyConfig(
+    val localId: String,
+    val name: String,
+    val clientId: String,
+    val refreshToken: String = "",
+    val account: String = ""
 )
 
 /**
@@ -233,9 +261,11 @@ object RemoteSettings {
     private const val KEY_ZIDOOS = "zidoos" // JSON array, see ZidooConfig
     private const val KEY_LGTVS = "lgtvs" // JSON array, see LgTvConfig
     private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
+    private const val KEY_PLAYNITES = "playnites" // JSON array, see PlayniteConfig
     private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
     private const val KEY_DENONS = "denons" // JSON array, see DenonConfig
     private const val KEY_HUES = "hues" // JSON array, see HueConfig (1.6.1)
+    private const val KEY_SPOTIFY = "spotify" // JSON array, see SpotifyConfig (1.6.2)
     private const val KEY_TMDB_TOKEN = "tmdb_token" // 1.6.0, see tmdb/TmdbRegistry
     private const val KEY_TMDB_LANGUAGE = "tmdb_language"
     private const val KEY_PLEX_HOST = "plex_host" // 1.6.0: the Plex server, for every Plex card
@@ -591,6 +621,37 @@ object RemoteSettings {
         prefs(context).edit(commit = true) { putString(KEY_LGTVS, array.toString()) }
     }
 
+    /** All Spotify accounts, in the order they were added (1.6.2). */
+    fun spotifies(context: Context): List<SpotifyConfig> {
+        val raw = prefs(context).getString(KEY_SPOTIFY, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                SpotifyConfig(localId, str("name").ifBlank { "Spotify" }, str("clientId"), str("refreshToken"), str("account"))
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSpotifies(context: Context, accounts: List<SpotifyConfig>) {
+        val array =
+            buildJsonArray {
+                accounts.forEach { a ->
+                    addJsonObject {
+                        put("localId", a.localId)
+                        put("name", a.name)
+                        put("clientId", a.clientId)
+                        put("refreshToken", a.refreshToken)
+                        put("account", a.account)
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_SPOTIFY, array.toString()) }
+    }
+
     /** All Hue bridges, in the order they were added (1.6.1). */
     fun hues(context: Context): List<HueConfig> {
         val raw = prefs(context).getString(KEY_HUES, null) ?: return emptyList()
@@ -750,6 +811,48 @@ object RemoteSettings {
                 }
             }
         prefs(context).edit(commit = true) { putString(KEY_SKYS, array.toString()) }
+    }
+
+    /** All PCs running Playnite, in the order they were added (1.6.3). */
+    fun playnites(context: Context): List<PlayniteConfig> {
+        val raw = prefs(context).getString(KEY_PLAYNITES, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val localId = str("localId").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                PlayniteConfig(
+                    localId,
+                    str("name").ifBlank { "PC" },
+                    entityId,
+                    str("host"),
+                    str("port").toIntOrNull() ?: 8095,
+                    str("code"),
+                    str("mac")
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun savePlaynites(context: Context, pcs: List<PlayniteConfig>) {
+        val array =
+            buildJsonArray {
+                pcs.forEach { p ->
+                    addJsonObject {
+                        put("localId", p.localId)
+                        put("name", p.name)
+                        put("entityId", p.entityId)
+                        put("host", p.host)
+                        put("port", p.port.toString())
+                        put("code", p.code)
+                        put("mac", p.mac)
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_PLAYNITES, array.toString()) }
     }
 
     fun saveZidoos(context: Context, zidoos: List<ZidooConfig>) {
