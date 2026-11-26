@@ -330,6 +330,19 @@
     <string name="picker_sources">Fuentes y apps</string>
     <string name="picker_sources_button">Fuentes</string>
     <string name="picker_no_sources">Este reproductor no da ninguna lista de fuentes o apps.</string>
+    <string name="picker_sort_recent">Recientes</string>
+    <string name="picker_sort_az">A–Z</string>
+    <string name="game_sheet_launch">Iniciar</string>
+    <string name="game_sheet_wake_launch">Encender e iniciar</string>
+    <string name="game_sheet_back">Atrás</string>
+    <string name="game_sheet_no_description">Sin descripción.</string>
+    <string name="game_sheet_playtime">Jugado %1$s</string>
+    <string name="game_sheet_hours">%1$d h</string>
+    <string name="game_sheet_minutes">%1$d min</string>
+    <string name="game_sheet_never_played">Nunca jugado</string>
+    <string name="game_sheet_last_played">Última partida el %1$s</string>
+    <string name="game_sheet_critic">Crítica %1$d</string>
+    <string name="game_sheet_community">Jugadores %1$d</string>
     <string name="picker_keypad">Teclado numérico</string>
     <!-- PlayStation card (1.5.8) -->
     <string name="psn_online">En línea</string>

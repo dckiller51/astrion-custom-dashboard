@@ -12,7 +12,10 @@ class PageReachTest {
     @Test
     fun reachSkipsHiddenPagesAtBothEnds() {
         assertEquals(1..3, PageReach.of(listOf(true, false, true, false, true, true)))
-        assertEquals(0..2, PageReach.of(listOf(false, false, false)))
+        // No page hidden at either end: nothing to hold (a row on the first page scrolls back freely).
+        assertNull(PageReach.of(listOf(false, false, false)))
+        assertNull(PageReach.of(listOf(false, true, false)))
+        assertEquals(0..1, PageReach.of(listOf(false, false, true)))
         assertNull(PageReach.of(listOf(true, true)))
     }
 

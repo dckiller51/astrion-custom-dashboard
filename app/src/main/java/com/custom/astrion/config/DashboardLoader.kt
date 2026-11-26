@@ -489,7 +489,8 @@ object DashboardLoader {
             accentSecondary = s("accentSecondary", ThemeConfig().accentSecondary),
             amber = s("amber", ThemeConfig().amber),
             danger = s("danger", ThemeConfig().danger),
-            success = s("success", ThemeConfig().success)
+            success = s("success", ThemeConfig().success),
+            iconShape = if (s("iconShape", "rounded") == "circle") "circle" else "rounded"
         )
     }
 

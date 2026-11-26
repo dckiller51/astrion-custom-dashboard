@@ -107,6 +107,7 @@ import org.json.JSONObject
  *  POST /samsung-pair   allows the remote on a Samsung TV (host): its prompt, then {model, mac}, see SamsungRoutes (1.5.3)
  *  POST /denon-check    a Denon / Marantz receiver's model and port (host), see DenonRoutes (1.5.4)
  *  POST /playnite-check a PC's Playnite (host, code): its name and MAC, see PlayniteRoutes (1.6.3)
+ *  POST /sonos-discover the household's Sonos speakers ([host], else SSDP), see SonosRoutes (1.6.3)
  *  GET/POST /tmdb, POST /tmdb-test   TMDB's token and language, a test search, see TmdbRoutes (1.6.0)
  *  GET/POST /plex, POST /plex-test   the Plex server for every Plex card, a test, see PlexRoutes (1.6.0)
  *  GET  /plex-art?path=/library/…    a Plex picture, the token added here (what's playing's poster)
@@ -286,6 +287,9 @@ class ConfigServer(
     var playniteRegistry: com.custom.astrion.playnite.PlayniteRegistry? = null
     private val playniteRoutes = PlayniteRoutes(context)
 
+    /** Sonos speakers (1.6.3): found on the network or by one's IP. */
+    private val sonosRoutes = SonosRoutes(context)
+
     /** TMDB's or the Plex server's settings changed (1.6.0): the activity starts what's-playing lookups again on them. */
     @Volatile
     var onTmdbChanged: () -> Unit = {}
@@ -366,6 +370,7 @@ class ConfigServer(
             ?: hueRoutes.serve(uri, session)
             ?: spotifyRoutes.serve(uri, session)
             ?: playniteRoutes.serve(uri, session)
+            ?: sonosRoutes.serve(uri, session)
             ?: tmdbRoutes.serve(uri, session)
             ?: plexRoutes.serve(uri, session)
             ?: epgRoutes.serve(uri, session)
@@ -510,7 +515,8 @@ class ConfigServer(
                     denonRoutes::reconcileHaDevices,
                     hueRoutes::reconcileHaDevices,
                     spotifyRoutes::reconcileHaDevices,
-                    playniteRoutes::reconcileHaDevices
+                    playniteRoutes::reconcileHaDevices,
+                    sonosRoutes::reconcileHaDevices
                 ).fold(reconcileAppleTvHaDevices(file.readText())) { text, reconcile -> reconcile(text) }
             }
                 .getOrElse { file.readText() }
@@ -697,6 +703,7 @@ class ConfigServer(
                 put("hues", hueRoutes.configJson())
                 put("spotifies", spotifyRoutes.configJson())
                 put("playnites", playniteRoutes.configJson())
+                put("sonos", sonosRoutes.configJson())
                 put("remote", JSONObject(RemoteIdentity.json(context).toString()))
                 put(
                     "extenders",
@@ -1296,6 +1303,7 @@ class ConfigServer(
         hueRoutes.saveRows(params)
         spotifyRoutes.saveRows(params)
         playniteRoutes.saveRows(params)
+        sonosRoutes.saveRows(params)
         Handler(Looper.getMainLooper()).postDelayed({ onConnectionSaved() }, 500L)
         return redirectHome(context.getString(R.string.web_config_saved_reconnecting))
     }

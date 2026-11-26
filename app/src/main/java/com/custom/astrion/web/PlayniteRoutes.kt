@@ -2,10 +2,13 @@ package com.custom.astrion.web
 
 import android.content.Context
 import com.custom.astrion.config.DashboardLoader
+import com.custom.astrion.config.PLAYNITE_OFF_SHUTDOWN
+import com.custom.astrion.config.PLAYNITE_OFF_SLEEP
 import com.custom.astrion.config.PlayniteConfig
 import com.custom.astrion.config.RemoteSettings
 import com.custom.astrion.playnite.PlayniteClient
 import com.custom.astrion.playnite.PlayniteProtocol
+import com.custom.astrion.playnite.PlayniteUnlockClient
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.IHTTPSession
 import fi.iki.elonen.NanoHTTPD.Method
@@ -18,6 +21,8 @@ import org.json.JSONObject
  *
  *  POST /playnite-check   host, code → {name, plugin, mac} when the Astrion Custom Dashboard extension answers
  *                         there and takes the code
+ *  POST /playnite-unlock-check  host, code → {name, pin, usb} when an Astrion PC Unlock (the ESP
+ *                         that types the Windows PIN) answers there and takes the code
  *
  * PCs are saved with the rest of the connection settings (POST /save-connection, `playnite_*[]`
  * rows, see [saveRows]) and listed in GET /devices-config (`playnites`, see [configJson]); the code
@@ -25,6 +30,8 @@ import org.json.JSONObject
  */
 class PlayniteRoutes(private val context: Context) {
     fun serve(uri: String, session: IHTTPSession): Response? = when (uri) {
+        "/playnite-unlock-check" ->
+            if (session.method == Method.POST) checkUnlock(session) else error(Response.Status.METHOD_NOT_ALLOWED, "method not allowed")
         "/playnite-check" -> if (session.method == Method.POST) {
             check(
                 session
@@ -68,6 +75,24 @@ class PlayniteRoutes(private val context: Context) {
         }
     }
 
+    /** An unlock ESP (Astrion PC Unlock) at host, with its code: its name, and whether a PIN is saved on it. */
+    private fun checkUnlock(session: IHTTPSession): Response {
+        session.parseBody(HashMap())
+        fun param(name: String) = session.parameters[name]?.firstOrNull()?.trim().orEmpty()
+        val host = param("host")
+        val code = param("code")
+        if (!HOST.matches(host)) return error(Response.Status.BAD_REQUEST, "invalid address")
+        if (!CODE.matches(code)) return error(Response.Status.BAD_REQUEST, "the code is the 6 digits on the ESP's page")
+        return try {
+            val info = PlayniteUnlockClient(host, code).check()
+            json(Response.Status.OK, JSONObject().put("name", info.name).put("pin", info.pin).put("usb", info.usb))
+        } catch (_: PlayniteUnlockClient.CodeRefused) {
+            error(Response.Status.BAD_REQUEST, "the ESP refused this code: see its page (press its button first)")
+        } catch (e: Exception) {
+            error(Response.Status.SERVICE_UNAVAILABLE, HostNames.unresolved(host) ?: "no Astrion PC Unlock answers at $host (${e.message})")
+        }
+    }
+
     /** The PCs for GET /devices-config, without their code. */
     fun configJson(): JSONArray = JSONArray().apply {
         RemoteSettings.playnites(context).forEach { p ->
@@ -78,6 +103,10 @@ class PlayniteRoutes(private val context: Context) {
                     .put("entityId", p.entityId)
                     .put("host", p.host)
                     .put("mac", p.mac)
+                    .put("off", p.off)
+                    .put("unlockHost", p.unlockHost)
+                    .put("hasUnlockCode", p.unlockCode.isNotBlank())
+                    .put("fullscreen", p.fullscreen)
                     .put("hasCode", p.code.isNotBlank())
             )
         }
@@ -97,6 +126,10 @@ class PlayniteRoutes(private val context: Context) {
         val hosts = col("host")
         val codes = col("code")
         val macs = col("mac")
+        val offs = col("off")
+        val unlockHosts = col("unlockhost")
+        val unlockCodes = col("unlockcode")
+        val fullscreens = col("fullscreen")
         val used = HashSet<String>()
         val pcs =
             localIds.indices.mapNotNull { i ->
@@ -109,6 +142,7 @@ class PlayniteRoutes(private val context: Context) {
                 while (!used.add(entityId)) entityId = "media_player.playnite_${slug}_${suffix++}"
                 val localId = localIds[i].trim().takeIf { LOCAL_ID.matches(it) } ?: slug
                 val old = before[localId]
+                val unlockHost = unlockHosts.getOrNull(i).orEmpty().trim().takeIf { HOST.matches(it) }.orEmpty()
                 PlayniteConfig(
                     localId = localId,
                     name = name,
@@ -117,10 +151,28 @@ class PlayniteRoutes(private val context: Context) {
                     port = old?.port ?: PlayniteProtocol.DEFAULT_PORT,
                     code = codes.getOrNull(i).orEmpty().trim().takeIf { CODE.matches(it) } ?: old?.code.orEmpty(),
                     // Blank: removed on the page; else a MAC address, or the one saved before.
-                    mac = macOf(macs.getOrNull(i)) ?: old?.mac.orEmpty()
+                    mac = macOf(macs.getOrNull(i)) ?: old?.mac.orEmpty(),
+                    off = offOf(offs.getOrNull(i), old),
+                    // Blank: no unlock ESP. A code just checked, else the one saved before.
+                    unlockHost = unlockHost,
+                    unlockCode = unlockCodeOf(unlockHost, unlockCodes.getOrNull(i), old),
+                    fullscreen = fullscreens.getOrNull(i)?.let { it == "1" } ?: (old?.fullscreen == true)
                 )
             }
         RemoteSettings.savePlaynites(context, pcs)
+    }
+
+    /** A row's "Off": sleep or shutdown, else the one saved before. */
+    private fun offOf(raw: String?, old: PlayniteConfig?): String = when (raw) {
+        PLAYNITE_OFF_SHUTDOWN -> PLAYNITE_OFF_SHUTDOWN
+        PLAYNITE_OFF_SLEEP -> PLAYNITE_OFF_SLEEP
+        else -> old?.off ?: PLAYNITE_OFF_SLEEP
+    }
+
+    /** A row's unlock code: none without an address; a code just checked, else the one saved before. */
+    private fun unlockCodeOf(host: String, raw: String?, old: PlayniteConfig?): String = when {
+        host.isEmpty() -> ""
+        else -> raw.orEmpty().trim().takeIf { CODE.matches(it) } ?: old?.unlockCode.orEmpty()
     }
 
     /** A row's MAC address: "" when blank, null when not one (then the one saved before stays). */

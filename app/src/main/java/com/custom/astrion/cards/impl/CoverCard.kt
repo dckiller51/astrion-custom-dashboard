@@ -322,7 +322,7 @@ private fun CoverIcon(icon: ImageVector, theme: ThemeColors, size: Dp = 42.dp) {
         modifier =
         Modifier
             .size(size)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(theme.iconShape)
             .background(theme.controlBackground),
         contentAlignment = Alignment.Center
     ) {

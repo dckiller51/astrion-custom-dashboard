@@ -79,8 +79,24 @@ function renderThemeForm() {
         </div>`;
     });
   });
+  // 1.6.3: the icon badges of lights, switches and covers, rounded squares or circles.
+  const shape = (dashboardData.theme || {}).iconShape === 'circle' ? 'circle' : 'rounded';
+  html += `<div class="theme-group-label">${I18N.t('web_theme_icon_shape')}</div>
+    <select id="themeIconShape" onchange="onThemeIconShape(this.value)">
+      <option value="rounded"${shape === 'rounded' ? ' selected' : ''}>${I18N.t('web_theme_icon_shape_rounded')}</option>
+      <option value="circle"${shape === 'circle' ? ' selected' : ''}>${I18N.t('web_theme_icon_shape_circle')}</option>
+    </select>`;
   html += `<div class="btn-row" style="margin-top:10px"><button class="secondary" onclick="resetTheme()">${I18N.t('web_theme_reset_all')}</button></div>`;
   box.innerHTML = html;
+}
+
+/** "rounded" (the default, left out of dashboard.json) or "circle". */
+function onThemeIconShape(value) {
+  dashboardData.theme = dashboardData.theme || {};
+  if (value === 'circle') dashboardData.theme.iconShape = 'circle';
+  else delete dashboardData.theme.iconShape;
+  applyThemeToPreview();
+  updateJsonOutput();
 }
 
 // Swatch -> value (always #RRGGBB). `live` = during drag (input event): update
@@ -159,6 +175,7 @@ function applyThemeToPreview() {
     Object.keys(vals).forEach(key => {
       el.style.setProperty('--' + cssVarFor(key), vals[key]);
     });
+    el.style.setProperty('--icon-radius', (dashboardData.theme || {}).iconShape === 'circle' ? '50%' : '12px');
   });
 }
 

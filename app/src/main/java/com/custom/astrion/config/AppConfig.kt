@@ -642,5 +642,7 @@ data class ThemeConfig(
     val accentSecondary: String = "#4C6EF5",
     val amber: String = "#FFC24B",
     val danger: String = "#E06767",
-    val success: String = "#4CAF50"
+    val success: String = "#4CAF50",
+    /** The icon badges of lights, switches and covers (1.6.3): "rounded" (rounded square) or "circle". */
+    val iconShape: String = "rounded"
 )

@@ -28,18 +28,36 @@ data class DeviceState(val on: Boolean? = null, val input: String? = null)
  * restarted empty and made a toggle-only device switch *off* on the next
  * Activity start. Observable ([states]) for the Activity "Help" screen.
  */
-class DeviceStateStore(initial: Map<String, DeviceState> = emptyMap(), private val persist: (String) -> Unit = {}) {
+class DeviceStateStore(
+    initial: Map<String, DeviceState> = emptyMap(),
+    private val clock: () -> Long = System::currentTimeMillis,
+    // Last, so AstrionApp's trailing lambda stays the persister.
+    private val persist: (String) -> Unit = {}
+) {
     private val _states = MutableStateFlow(initial)
+
+    /** When each device's power was last set (1.6.3), kept in memory only: see [poweredRecently]. */
+    private val poweredAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
     val states: StateFlow<Map<String, DeviceState>> = _states.asStateFlow()
 
     operator fun get(deviceId: String): DeviceState = _states.value[deviceId] ?: DeviceState()
 
-    fun setPower(deviceId: String, on: Boolean) = edit(deviceId) { it.copy(on = on) }
+    fun setPower(deviceId: String, on: Boolean) {
+        poweredAt[deviceId] = clock()
+        edit(deviceId) { it.copy(on = on) }
+    }
+
+    /**
+     * Its power was set within [RECENT_MS] (an Activity, or Help's Fix): Home Assistant may not
+     * have caught up yet — a Sony Bravia still reports "off" several seconds after turn_on.
+     */
+    fun poweredRecently(deviceId: String): Boolean = poweredAt[deviceId]?.let { clock() - it < RECENT_MS } == true
 
     fun setInput(deviceId: String, input: String?) = edit(deviceId) { it.copy(input = input) }
 
     /** Forget everything known about one device ("Help": I don't know). */
     fun reset(deviceId: String) {
+        poweredAt.remove(deviceId)
         _states.update { it - deviceId }
         persist(serialize(_states.value))
     }
@@ -50,6 +68,9 @@ class DeviceStateStore(initial: Map<String, DeviceState> = emptyMap(), private v
     }
 
     companion object {
+        /** How long Astrion's own power command outweighs what Home Assistant reports. */
+        const val RECENT_MS = 60_000L
+
         /** The app-wide store — replaced once at startup by AstrionApp with
          * a persisted one; this in-memory default only ever serves previews
          * and tests. */

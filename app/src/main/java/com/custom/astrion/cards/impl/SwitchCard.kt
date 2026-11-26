@@ -80,7 +80,7 @@ class SwitchCard : CardRenderer {
                 modifier =
                 Modifier
                     .size(42.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(ctx.theme.iconShape)
                     .background(ctx.theme.controlBackground),
                 contentAlignment = Alignment.Center
             ) {

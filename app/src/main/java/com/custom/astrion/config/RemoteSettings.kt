@@ -138,7 +138,32 @@ data class PlayniteConfig(
     val host: String,
     val port: Int = 8095,
     val code: String = "",
-    val mac: String = ""
+    val mac: String = "",
+    /** What "turn off" does (1.6.3): `sleep` (the default) or `shutdown`. */
+    val off: String = PLAYNITE_OFF_SLEEP,
+    /** The PC's unlock ESP (Astrion PC Unlock, 1.6.3): its address and code; blank: none. */
+    val unlockHost: String = "",
+    val unlockCode: String = "",
+    /** Playnite switched to fullscreen when the remote starts it or a game (1.6.3). */
+    val fullscreen: Boolean = false
+)
+
+const val PLAYNITE_OFF_SLEEP = "sleep"
+const val PLAYNITE_OFF_SHUTDOWN = "shutdown"
+
+/**
+ * One Sonos speaker added on the web page (1.6.3), driven directly (port 1400): [uuid] is its
+ * RINCON_… id, [host] its last known address (followed when it changes); [lineIn] and [tv] say
+ * which inputs it has. Published as [entityId] (`media_player.sonos_…`).
+ */
+data class SonosConfig(
+    val uuid: String,
+    val name: String,
+    val entityId: String,
+    val host: String,
+    val model: String = "",
+    val lineIn: Boolean = false,
+    val tv: Boolean = false
 )
 
 /**
@@ -262,6 +287,7 @@ object RemoteSettings {
     private const val KEY_LGTVS = "lgtvs" // JSON array, see LgTvConfig
     private const val KEY_SKYS = "skys" // JSON array, see SkyConfig
     private const val KEY_PLAYNITES = "playnites" // JSON array, see PlayniteConfig
+    private const val KEY_SONOS = "sonos" // JSON array, see SonosConfig (1.6.3)
     private const val KEY_SAMSUNGS = "samsungs" // JSON array, see SamsungConfig
     private const val KEY_DENONS = "denons" // JSON array, see DenonConfig
     private const val KEY_HUES = "hues" // JSON array, see HueConfig (1.6.1)
@@ -829,7 +855,11 @@ object RemoteSettings {
                     str("host"),
                     str("port").toIntOrNull() ?: 8095,
                     str("code"),
-                    str("mac")
+                    str("mac"),
+                    if (str("off") == PLAYNITE_OFF_SHUTDOWN) PLAYNITE_OFF_SHUTDOWN else PLAYNITE_OFF_SLEEP,
+                    str("unlockHost"),
+                    str("unlockCode"),
+                    str("fullscreen") == "true"
                 )
             }
         } catch (_: Exception) {
@@ -849,10 +879,56 @@ object RemoteSettings {
                         put("port", p.port.toString())
                         put("code", p.code)
                         put("mac", p.mac)
+                        put("off", p.off)
+                        put("unlockHost", p.unlockHost)
+                        put("unlockCode", p.unlockCode)
+                        put("fullscreen", p.fullscreen.toString())
                     }
                 }
             }
         prefs(context).edit(commit = true) { putString(KEY_PLAYNITES, array.toString()) }
+    }
+
+    /** All Sonos speakers added, in order (1.6.3). */
+    fun sonos(context: Context): List<SonosConfig> {
+        val raw = prefs(context).getString(KEY_SONOS, null) ?: return emptyList()
+        return try {
+            json.parseToJsonElement(raw).jsonArray.mapNotNull { el ->
+                val obj = el.jsonObject
+                fun str(key: String) = obj[key]?.jsonPrimitive?.content.orEmpty()
+                val uuid = str("uuid").ifBlank { return@mapNotNull null }
+                val entityId = str("entityId").ifBlank { return@mapNotNull null }
+                SonosConfig(
+                    uuid,
+                    str("name").ifBlank { "Sonos" },
+                    entityId,
+                    str("host"),
+                    str("model"),
+                    str("lineIn") == "true",
+                    str("tv") == "true"
+                )
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
+
+    fun saveSonos(context: Context, speakers: List<SonosConfig>) {
+        val array =
+            buildJsonArray {
+                speakers.forEach { s ->
+                    addJsonObject {
+                        put("uuid", s.uuid)
+                        put("name", s.name)
+                        put("entityId", s.entityId)
+                        put("host", s.host)
+                        put("model", s.model)
+                        put("lineIn", s.lineIn.toString())
+                        put("tv", s.tv.toString())
+                    }
+                }
+            }
+        prefs(context).edit(commit = true) { putString(KEY_SONOS, array.toString()) }
     }
 
     fun saveZidoos(context: Context, zidoos: List<ZidooConfig>) {

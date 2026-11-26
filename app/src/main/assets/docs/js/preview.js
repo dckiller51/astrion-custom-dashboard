@@ -456,10 +456,42 @@ function updateRemoteFrameScale() {
   updateRemoteFrameScale();
 })();
 
+/**
+ * 1.6.3: the page bar under the pages, as PageIndicator draws it — taking its room like on the
+ * remote: the dots of the pages sharing this one's parent (5 at most; a page shown only with its
+ * Activity, or never, has none here), "‹ parent" on the left, the page's name on the right.
+ * Hidden with "showPageIndicator": false. A dot opens its page.
+ */
+function renderPreviewPageBar() {
+  const bar = document.getElementById('previewPageBar');
+  if (!bar) return;
+  const pages = dashboardData.pages || [];
+  const page = pages[currentActivePage];
+  if (!page || dashboardData.showPageIndicator === false) {
+    bar.style.display = 'none';
+    return;
+  }
+  bar.style.display = '';
+  const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const siblings = pages.map((p, i) => ({ p, i }))
+    .filter(({ p, i }) => (p.parent || '') === (page.parent || '') && (i === currentActivePage || !p.hiddenUnlessActivity));
+  const pos = Math.max(0, siblings.findIndex(s => s.i === currentActivePage));
+  const MAX = 5;
+  let start = 0;
+  if (siblings.length > MAX) start = Math.min(Math.max(pos - Math.floor(MAX / 2), 0), siblings.length - MAX);
+  const shown = siblings.slice(start, start + MAX);
+  const dots = (start > 0 ? '<span class="pb-more">…</span>' : '')
+    + shown.map(s => `<span class="pb-dot${s.i === currentActivePage ? ' on' : ''}" title="${esc(s.p.name)}" onclick="event.stopPropagation(); onPageChange(${s.i})"></span>`).join('')
+    + (start + MAX < siblings.length ? '<span class="pb-more">…</span>' : '');
+  bar.innerHTML = `<span class="pb-back">${page.parent ? `<b>‹</b>${esc(page.parent)}` : ''}</span>`
+    + `<span class="pb-dots">${dots}</span><span class="pb-name">${esc(page.name)}</span>`;
+}
+
 function renderPreview() {
   const contentContainer = document.getElementById('content');
   contentContainer.innerHTML = '';
   const page = dashboardData.pages[currentActivePage];
+  renderPreviewPageBar();
   if (!page) return;
 
   updateStatusBarClock();
@@ -472,7 +504,24 @@ function renderPreview() {
     return;
   }
 
+  // 1.6.3: pinned cards ("pin": "bottom") go last, on their band at the bottom, as on the remote.
+  const pinned = [];
   page.cards.forEach((card, idx) => {
+    const cardEl = buildPreviewCard(card, idx);
+    if ((card.options || {}).pin === 'bottom') {
+      cardEl.classList.add('preview-pinned');
+      pinned.push(cardEl);
+    } else {
+      contentContainer.appendChild(cardEl);
+    }
+  });
+  pinned.forEach(el => contentContainer.appendChild(el));
+
+  enhanceCardControls(contentContainer);
+}
+
+/** One card's preview element; [idx] is its place on the page (its ✎ / ✕ buttons), -1 inside a row. */
+function buildPreviewCard(card, idx) {
     const cardEl = document.createElement('div');
 
     const extraPreview = {
@@ -1074,7 +1123,7 @@ function renderPreview() {
       let gridHtml;
       if (isRow) {
         const tiles = items.map(i => `<div style="flex:0 0 104px; width:104px;">${i.spacer ? '' : tileHtml(i)}</div>`).join('');
-        gridHtml = `<div style="display:flex; gap:10px; overflow-x:auto; padding-bottom:2px;">${tiles}</div>`;
+        gridHtml = `<div class="preview-hscroll" style="display:flex; gap:10px; overflow-x:auto; padding-bottom:2px;">${tiles}</div>`;
       } else {
         // Same rows as GridRows (GridLayout.kt): spacer cells, and the last row centred with center_last_row.
         const center = card.options?.center_last_row === true;
@@ -1192,10 +1241,7 @@ function renderPreview() {
         <div><strong>${card.options?.name || haFriendlyName(card.options?.entity_id) || card.options?.entity_id || card.type}</strong><br>
         <small style="color:#888">${card.options?.entity_id || card.options?.remote_entity || ''}</small></div>`;
     }
-    contentContainer.appendChild(cardEl);
-  });
-
-  enhanceCardControls(contentContainer);
+    return cardEl;
 }
 
 // ---- HA-style card controls: reorder (drag or arrows) ----------------------

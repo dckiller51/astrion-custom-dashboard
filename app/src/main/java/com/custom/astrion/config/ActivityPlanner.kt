@@ -82,8 +82,19 @@ class ActivityPlanner(
     /** Devices never switched off when another Activity takes the room (AppConfig.keepOnDevices). */
     private val keepOn: Set<String> = emptySet()
 ) {
-    /** Home Assistant's live state for an HA device; null for other sources or when unknown. */
-    private fun live(d: ActivityDeviceConfig): LiveHaState? = if (d.source == "ha") haState(d.deviceId) else null
+    /**
+     * Home Assistant's live state for an HA device; null for other sources or when unknown. Right
+     * after an Activity switched it (1.6.3), what Astrion just did wins: Home Assistant can lag
+     * behind (a Bravia reports "off" for several seconds after turn_on, so an Off pressed then
+     * skipped the TV).
+     */
+    private fun live(d: ActivityDeviceConfig): LiveHaState? {
+        if (d.source != "ha") return null
+        val reported = haState(d.deviceId)
+        val mine = states[d.deviceId].on
+        if (mine == null || !states.poweredRecently(d.deviceId)) return reported
+        return (reported ?: LiveHaState(on = null)).copy(on = mine)
+    }
 
     private inner class Builder(val profileOf: (ActivityDeviceConfig) -> IrDeviceProfile?) {
         val actions = mutableListOf<PlannedAction>()

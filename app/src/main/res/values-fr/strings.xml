@@ -330,6 +330,19 @@
     <string name="picker_sources">Sources et applis</string>
     <string name="picker_sources_button">Sources</string>
     <string name="picker_no_sources">Ce lecteur ne donne aucune liste de sources ou d\'applis.</string>
+    <string name="picker_sort_recent">Récents</string>
+    <string name="picker_sort_az">A–Z</string>
+    <string name="game_sheet_launch">Lancer</string>
+    <string name="game_sheet_wake_launch">Allumer et lancer</string>
+    <string name="game_sheet_back">Retour</string>
+    <string name="game_sheet_no_description">Pas de description.</string>
+    <string name="game_sheet_playtime">Joué %1$s</string>
+    <string name="game_sheet_hours">%1$d h</string>
+    <string name="game_sheet_minutes">%1$d min</string>
+    <string name="game_sheet_never_played">Jamais joué</string>
+    <string name="game_sheet_last_played">Dernière partie le %1$s</string>
+    <string name="game_sheet_critic">Presse %1$d</string>
+    <string name="game_sheet_community">Joueurs %1$d</string>
     <string name="picker_keypad">Pavé numérique</string>
     <!-- PlayStation card (1.5.8) -->
     <string name="psn_online">En ligne</string>

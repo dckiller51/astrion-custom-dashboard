@@ -726,6 +726,39 @@
                 </div>
             </div>
         </div>
+<div id="viewSonos" class="direct-block" style="margin-top:28px">
+            <h3 class="direct-block-title"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="3"></rect><circle cx="12" cy="13" r="3.5"></circle><circle cx="12" cy="7" r="1"></circle></svg><span data-i18n="web_dev_sonos">Sonos</span></h3>
+            <details class="direct-about"><summary data-i18n="web_dev_direct_about">How it works</summary>
+            <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_sonos_hint">
+                Control your Sonos speakers directly on your network, without Home Assistant or a Sonos account: each speaker becomes a
+                <code>media_player.sonos_…</code> entity with what plays and its cover, play/pause, next, seek, volume, mute, shuffle and repeat,
+                its TV or line-in and your Sonos favourites as sources, and grouping for the speaker group card. The remote reads the speakers
+                every 2 seconds while they play; a portable speaker that sleeps (Roam, Move) shows as unavailable until it wakes.
+            </div>
+            </details>
+            <div id="sonosList" style="margin-bottom:14px"></div>
+            <div class="btn-row">
+                <button type="button" onclick="openDeviceForm('sonos')" data-i18n="web_dev_add_sonos">+ Add Sonos speakers</button>
+            </div>
+
+            <div id="sonosForm" class="section-box" style="display:none;margin-top:14px">
+                <h3 class="subsection-title" style="margin-top:0" data-i18n="web_dev_add_a_sonos">Add Sonos speakers</h3>
+                <div class="hint" style="margin-bottom:10px" data-i18n-html="web_dev_sonos_form_hint">
+                    The remote looks for your speakers on the network. If none shows up, type one speaker's IP address
+                    (Sonos app › <i>Settings › System › About my system</i>): the others are found through it.
+                </div>
+                <label data-i18n="web_dev_sonos_ip">IP address of one speaker (optional)</label>
+                <input type="text" id="sonosHost" placeholder="192.168.1.40" autocomplete="off">
+                <div class="btn-row" style="margin:10px 0">
+                    <button id="sonosFindBtn" type="button" onclick="findSonos()" data-i18n="web_dev_sonos_find_btn">Find speakers</button>
+                    <button type="button" class="secondary" onclick="closeDeviceForms()" data-i18n="web_cancel">Cancel</button>
+                </div>
+                <div id="sonosFound"></div>
+                <div class="btn-row" id="sonosAddRow" style="display:none;margin-top:10px">
+                    <button id="sonosAddBtn" type="button" onclick="addSonos()" data-i18n="web_dev_sonos_add_btn">Add the speakers ticked</button>
+                </div>
+            </div>
+        </div>
             </div>
             <div class="direct-pane" data-pane="light">
 <div id="viewHue" class="direct-block">
@@ -944,6 +977,7 @@
 <script src="js/hue.js"></script>
 <script src="js/spotify.js"></script>
 <script src="js/playnite.js"></script>
+<script src="js/sonos.js"></script>
 <script src="js/sky.js"></script>
 <script src="js/samsung.js"></script>
 <script src="js/denon.js"></script>

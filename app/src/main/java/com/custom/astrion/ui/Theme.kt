@@ -1,8 +1,12 @@
 package com.custom.astrion.ui
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.dp
 import com.custom.astrion.config.ThemeConfig
 
 /**
@@ -29,8 +33,12 @@ data class ThemeColors(
     val accentSecondary: Color,
     val amber: Color,
     val danger: Color,
-    val success: Color
+    val success: Color,
+    /** Icon badges drawn as circles rather than rounded squares (theme "iconShape": "circle", 1.6.3). */
+    val roundIcons: Boolean = false
 ) {
+    /** The shape of a card's icon badge (lights, switches, covers). */
+    val iconShape: Shape get() = if (roundIcons) CircleShape else ICON_ROUNDED
     companion object {
         /** The app's original hardcoded palette — used when no theme is
          * configured (empty `theme` block) and as the CompositionLocal default. */
@@ -72,7 +80,8 @@ fun ThemeConfig.toColors(): ThemeColors {
         accentSecondary = parseHexColor(accentSecondary, parseHexColor(d.accentSecondary, Color.White)),
         amber = parseHexColor(amber, parseHexColor(d.amber, Color.White)),
         danger = parseHexColor(danger, parseHexColor(d.danger, Color.White)),
-        success = parseHexColor(success, parseHexColor(d.success, Color.White))
+        success = parseHexColor(success, parseHexColor(d.success, Color.White)),
+        roundIcons = iconShape == "circle"
     )
 }
 
@@ -89,3 +98,5 @@ val LocalTheme = staticCompositionLocalOf { ThemeColors.Default }
 fun ProvideTheme(theme: ThemeColors, content: @Composable () -> Unit) {
     androidx.compose.runtime.CompositionLocalProvider(LocalTheme provides theme) { content() }
 }
+
+private val ICON_ROUNDED = RoundedCornerShape(12.dp)

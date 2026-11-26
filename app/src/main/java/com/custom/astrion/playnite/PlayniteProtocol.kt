@@ -9,7 +9,17 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.longOrNull
 
 /** One PC added on the web page (1.6.3): `media_player.playnite_…`, reached at [host]:[port]. */
-data class PlayniteSpec(val localId: String, val entityId: String, val name: String, val host: String, val port: Int)
+data class PlayniteSpec(
+    val localId: String,
+    val entityId: String,
+    val name: String,
+    val host: String,
+    val port: Int,
+    /** What "turn off" does (1.6.3): "sleep" or "shutdown". */
+    val off: String = "sleep",
+    /** Playnite switched to fullscreen when the remote starts it or a game (1.6.3, extension 0.1.3+). */
+    val fullscreen: Boolean = false
+)
 
 /** One game of the library, as the Astrion Custom Dashboard extension for Playnite gives it. */
 data class PlayniteGame(val id: String, val name: String, val cover: Boolean, val playtime: Long = 0, val lastPlayed: Long = 0)
@@ -22,7 +32,11 @@ data class PlayniteState(
     val reachable: Boolean = false,
     val codeRefused: Boolean = false,
     val running: PlayniteGame? = null,
-    val games: List<PlayniteGame> = emptyList()
+    val games: List<PlayniteGame> = emptyList(),
+    /** Windows is locked, the sign-in screen showing (extension 0.1.2+). */
+    val locked: Boolean = false,
+    /** Playnite's window: "desktop", "fullscreen", or "" when the extension doesn't say (before 0.1.3). */
+    val mode: String = ""
 )
 
 /** What a service call asks of the PC. */
@@ -30,6 +44,12 @@ sealed class PlayniteAction {
     data class Start(val game: PlayniteGame) : PlayniteAction()
 
     object Wake : PlayniteAction()
+
+    /** The PC is on but locked: its unlock ESP types the PIN (1.6.3, Astrion PC Unlock). */
+    object Unlock : PlayniteAction()
+
+    /** The PC is on and unlocked: Playnite switched to fullscreen, its console-like view (1.6.3). */
+    object Fullscreen : PlayniteAction()
 
     /** A game picked while the PC is off: wake it, wait for Playnite, then start the game. */
     data class WakeAndStart(val game: PlayniteGame) : PlayniteAction()
@@ -45,6 +65,9 @@ sealed class PlayniteAction {
 object PlayniteProtocol {
     const val DEFAULT_PORT = 8095
     const val CODE_HEADER = "X-Astrion-Code"
+
+    /** `astrion_source_view`: the sources pop-up shows the sources as covers (1.6.3). */
+    const val COVERS_VIEW = "covers"
 
     /** The most played-recently games offered as sources; the rest are in the library. */
     const val MAX_SOURCES = 100
@@ -87,6 +110,13 @@ object PlayniteProtocol {
     /** GET /state: the game running, or null (none, or not readable). */
     fun running(text: String): PlayniteGame? = game(obj(text)?.get("running") as? JsonObject)
 
+    /** GET /state or /info: Playnite's mode, "desktop" or "fullscreen" (extension 0.1.3+; "" before). */
+    fun mode(text: String): String =
+        (obj(text)?.get("mode") as? JsonPrimitive)?.contentOrNull?.takeIf { it == "desktop" || it == "fullscreen" }.orEmpty()
+
+    /** GET /state: Windows is locked (extension 0.1.2+; false before). */
+    fun locked(text: String): Boolean = (obj(text)?.get("locked") as? JsonPrimitive)?.booleanOrNull == true
+
     /** GET /games: installed and not hidden, played most recently first. */
     fun games(text: String): List<PlayniteGame>? = (obj(text)?.get("games") as? JsonArray)?.mapNotNull { game(it as? JsonObject) }
 
@@ -119,10 +149,19 @@ object PlayniteProtocol {
     }
 
     /** The PC's `media_player` attributes. */
-    fun media(spec: PlayniteSpec, s: PlayniteState): Map<String, Any?> {
+    fun media(spec: PlayniteSpec, s: PlayniteState, covers: Map<String, String> = emptyMap()): Map<String, Any?> {
         val a = linkedMapOf<String, Any?>("friendly_name" to spec.name, "supported_features" to FEATURES, "app_name" to "Playnite")
         // Off, the games last seen stay offered: picking one wakes the PC and starts it.
-        if (s.games.isNotEmpty()) a["source_list"] = sources(s).map { it.name }
+        if (s.games.isNotEmpty()) {
+            val shown = sources(s)
+            a["source_list"] = shown.map { it.name }
+            // The sources pop-up shows them as covers (1.6.3), kept on the remote ([covers], by game id).
+            a["astrion_source_view"] = COVERS_VIEW
+            // A tap on a cover opens the game's sheet (PlayniteSheet.REQUEST), with its Launch button.
+            a["astrion_source_details"] = true
+            val icons = shown.mapNotNull { g -> covers[g.id]?.let { g.name to it } }.toMap()
+            if (icons.isNotEmpty()) a["astrion_source_icons"] = icons
+        }
         s.running?.let { g ->
             a["source"] = g.name
             a["media_title"] = g.name
@@ -130,6 +169,7 @@ object PlayniteProtocol {
             coverUrl(spec, g)?.let { a["entity_picture"] = it }
         }
         if (s.codeRefused) a["astrion_code_refused"] = true
+        if (s.reachable && s.locked) a["astrion_locked"] = true
         return a
     }
 
@@ -143,16 +183,33 @@ object PlayniteProtocol {
     }
 
     /**
-     * A `media_player` service: select_source starts a game; turn_on wakes the PC (Wake-on-LAN);
-     * turn_off shuts it down. Null when not supported, or nothing to do.
+     * A `media_player` service: select_source starts a game; turn_on wakes the PC (Wake-on-LAN),
+     * or unlocks it when it's on but locked and [canUnlock] (an unlock ESP), or switches Playnite
+     * to fullscreen when it's on, unlocked, in desktop mode and [fullscreen]; turn_off puts it to
+     * sleep or shuts it down ([off]). Null when not supported, or nothing to do.
      */
-    fun service(service: String, data: Map<String, Any?>, s: PlayniteState): PlayniteAction? = when (service) {
+    fun service(
+        service: String,
+        data: Map<String, Any?>,
+        s: PlayniteState,
+        off: String = "sleep",
+        canUnlock: Boolean = false,
+        fullscreen: Boolean = false
+    ): PlayniteAction? = when (service) {
         "select_source" ->
             (data["source"] as? String)?.let { gameNamed(s, it) }?.let {
                 if (s.reachable) PlayniteAction.Start(it) else PlayniteAction.WakeAndStart(it)
             }
-        "turn_on" -> if (s.reachable) null else PlayniteAction.Wake
-        "turn_off" -> if (s.reachable) PlayniteAction.Power("shutdown") else null
+        "turn_on" -> turnOn(s, canUnlock, fullscreen)
+        // Sleep by default (1.6.3): an Activity's "Off" puts the PC to sleep; "shutdown" when chosen on the web page.
+        "turn_off" -> if (s.reachable) PlayniteAction.Power(if (off == "shutdown") "shutdown" else "sleep") else null
+        else -> null
+    }
+
+    private fun turnOn(s: PlayniteState, canUnlock: Boolean, fullscreen: Boolean): PlayniteAction? = when {
+        !s.reachable -> PlayniteAction.Wake
+        s.locked && canUnlock -> PlayniteAction.Unlock
+        !s.locked && fullscreen && s.mode == "desktop" -> PlayniteAction.Fullscreen
         else -> null
     }
 }

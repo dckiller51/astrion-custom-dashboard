@@ -27,7 +27,7 @@
     <string name="wifi_keep_awake">Wifi actief houden</string>
     <string name="wifi_keep_awake_hint">Staat standaard uit. Voorkomt dat Home Assistant dit apparaat soms niet kan bereiken (services, pushmeldingen) wanneer het scherm uit is. Kost batterijvermogen, omdat de wifi-radio niet meer in de energiebesparingsstand gaat.</string>
     <string name="config_server_off_hint">Lokale configuratieserver is uitgeschakeld</string>
-    <string name="tap_feedback">Aanraak feedback</string>
+    <string name="tap_feedback">Aanrakingsfeedback</string>
     <string name="tap_feedback_hint">Kort tikgeluid wanneer je op een scène, knop of stip tikt. Komt overeen met de eigen Android-menu\'s van het apparaat.</string>
     <string name="brightness">Helderheid</string>
     <string name="allow_brightness_write">Helderheid bedienen toestaan (tik)</string>
@@ -331,6 +331,19 @@
     <string name="picker_sources">Bronnen en apps</string>
     <string name="picker_sources_button">Bronnen</string>
     <string name="picker_no_sources">Deze speler geeft geen lijst met bronnen of apps.</string>
+    <string name="picker_sort_recent">Recent</string>
+    <string name="picker_sort_az">A–Z</string>
+    <string name="game_sheet_launch">Starten</string>
+    <string name="game_sheet_wake_launch">Aanzetten en starten</string>
+    <string name="game_sheet_back">Terug</string>
+    <string name="game_sheet_no_description">Geen beschrijving.</string>
+    <string name="game_sheet_playtime">%1$s gespeeld</string>
+    <string name="game_sheet_hours">%1$d u</string>
+    <string name="game_sheet_minutes">%1$d min</string>
+    <string name="game_sheet_never_played">Nooit gespeeld</string>
+    <string name="game_sheet_last_played">Laatst gespeeld op %1$s</string>
+    <string name="game_sheet_critic">Critici %1$d</string>
+    <string name="game_sheet_community">Spelers %1$d</string>
     <string name="picker_keypad">Cijfertoetsen</string>
     <!-- PlayStation card (1.5.8) -->
     <string name="psn_online">Online</string>
