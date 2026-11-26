@@ -62,6 +62,7 @@ const SECTION_WIKI_PAGES = {
   web_dev_add_a_hue: 'Philips-Hue',
   web_dev_add_a_spotify: 'Spotify',
   web_dev_add_a_playnite: 'Playnite',
+  web_dev_add_a_sonos: 'Sonos',
   web_dev_backup_and_restore: 'Web-Page',
   web_dev_ir_database: 'IR-Devices',
   web_updates_heading: 'Updates-and-Beta',

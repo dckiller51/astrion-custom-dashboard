@@ -164,6 +164,34 @@ class ActivityPlannerTest {
         assertTrue(plan.describe().isEmpty())
     }
 
+    /** Zavie's log (1.6.2): Off pressed 15 s after the start, the Bravia still reported "off" by Home Assistant. */
+    @Test
+    fun `stopping right after the start switches off an HA device Home Assistant still reports off`() {
+        var now = 1_000_000L
+        val store = DeviceStateStore(clock = { now })
+        store.setPower("media_player.tv", true)
+        now += 15_000
+        val lagging = mapOf("media_player.tv" to LiveHaState(on = false))
+        val p = ActivityPlanner(profileOf = { null }, states = store, haState = { lagging[it] })
+        assertEquals(listOf("turn_off media_player.tv"), p.planStop(activity("a", ha("media_player.tv"))).describe())
+        // A minute later, Home Assistant is believed again (switched off with its own remote).
+        now += DeviceStateStore.RECENT_MS
+        assertTrue(p.planStop(activity("a", ha("media_player.tv"))).describe().isEmpty())
+    }
+
+    @Test
+    fun `starting right after a stop turns an HA device on even if Home Assistant still reports it on`() {
+        var now = 1_000_000L
+        val store = DeviceStateStore(clock = { now })
+        store.setPower("media_player.tv", false)
+        now += 10_000
+        val lagging = mapOf("media_player.tv" to LiveHaState(on = true, source = "HDMI 1"))
+        val plan = ActivityPlanner(profileOf = {
+            null
+        }, states = store, haState = { lagging[it] }).start(activity("a", ha("media_player.tv", "HDMI 1")))
+        assertTrue(plan.describe().contains("turn_on media_player.tv"))
+    }
+
     // ---- IR devices -----------------------------------------------------------------------------
 
     @Test

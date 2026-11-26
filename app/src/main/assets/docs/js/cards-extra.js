@@ -905,6 +905,16 @@ function returnToRowForm() {
 function rowPreviewHtml(o) {
   const kids = Array.isArray(o.cards) ? o.cards : [];
   if (!kids.length) return `<div class="hint">${I18N.t('web_card_row_none')}</div>`;
+  // 1.6.3: each child drawn as the page draws it (its own preview, without its edit buttons).
+  if (typeof buildPreviewCard === 'function') {
+    const cells = kids.map(c => {
+      const el = buildPreviewCard(c, -1);
+      el.querySelectorAll('.card-title').forEach(t => t.remove());
+      el.querySelectorAll('.hint').forEach(h => h.remove());
+      return `<div class="preview-row-cell" style="flex:1;min-width:0">${el.outerHTML}</div>`;
+    }).join('');
+    return `<div class="preview-row" style="display:flex;gap:8px;align-items:flex-start">${cells}</div>`;
+  }
   return `<div style="display:flex;gap:8px">${kids.map(c => `
     <div style="flex:1;min-width:0;background:#1B2027;border-radius:12px;padding:10px;text-align:center">
       <div style="font-size:10px;color:#748790">${cxEsc(c.type)}</div>

@@ -3,6 +3,30 @@
 All notable changes to this project are documented here.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.6.3-beta] - 2026-11-26
+
+### Added
+
+- **Sonos, without Home Assistant (beta)** (*Devices › Direct devices › Audio › + Add Sonos speakers*): the remote finds your speakers on the network (or through one speaker's IP address, when the search is blocked) and each one ticked becomes `media_player.sonos_<room>`, driven directly on port 1400, with no Sonos account. What plays (title, artist, album, cover, progress; a radio's station and current song), play/pause, stop, next, previous, seek, shuffle, repeat, each speaker's own volume and mute, and as sources the **TV** (soundbars), the **line-in** and your **Sonos favourites** (radios, playlists, albums; also in *Browse*). `group_members` is shaped like Home Assistant's, so the **speaker group card** groups and ungroups them as it does through Home Assistant; a grouped speaker shows what its group plays. Read every 2 s while music plays, every 5 s otherwise, nothing while the remote sleeps; a portable speaker asleep (Roam, Move) shows unavailable and comes back by itself. A speaker that changes address is followed. Asked for by a member of the community, who tests it with Era 100s and a Roam 2.
+- **Playnite: the games as covers**: on a PC with Playnite, the **Sources** pop-up (media player, media remote, TV remote cards) shows the games as their covers, three per row, the most recently played first or **A–Z**; the game running is outlined. The covers are copied to the remote, made small, a few at a time while the PC is on, so they show at once and while the PC is off; a game with no cover shows its name on a coloured tile.
+- **Playnite: a sheet per game**, as for films: a tap on a cover opens the game's sheet, with its background image, cover, year, studio, genres, critics' and players' scores, play time, last session and description (from Playnite's library, so in the language its metadata came in), and **Launch**, or **Turn on and launch** while the PC is off. A sheet opened once is kept on the remote, for when the PC is off. Needs the extension **0.1.2**.
+- **Playnite: Windows unlocked from the couch**, with an **[Astrion PC Unlock](https://github.com/dckiller51/astrion-custom-dashboard-pc-unlock)**: an ESP32-S3 (the M5Stack AtomS3U plugs straight in) on the PC as a USB keyboard, that types the Windows PIN kept on it. Set its address and code on the PC (*🔓 Unlock ESP*): picking a game while the PC sleeps wakes it (Wake-on-LAN, and through USB), unlocks Windows once Playnite says it's locked, then starts the game; *Turn on* unlocks a PC that is on but locked. The PIN never leaves the ESP: the remote only sends its code. Needs the extension **0.1.3** (it tells when Windows is locked, also right after a sleep).
+- **Playnite: fullscreen from the remote** (Zavie's request): a choice per PC on the web page (*🎮 Playnite from the remote: fullscreen · change*). On, Playnite switches to fullscreen when the remote wakes the PC, starts a game, unlocks Windows, or on *Turn on* while the PC is on (an Activity "PC", a button): a way to open Playnite fullscreen without starting a game. A PC you turn on yourself stays as Playnite starts (desktop, minimized…). Needs the extension **0.1.3**.
+- **Round icons**: the theme's new `iconShape` (`"circle"`) draws the icon badges of lights, switches and covers as circles instead of rounded squares; also under *Theme & Colors* in the builder.
+
+### Changed
+
+- **Playnite is no longer a preview**: confirmed on the testers' PCs.
+- **Playnite: turning the PC off puts it to sleep** by default (an Activity's Off, the power button); **shut down** instead is a choice per PC on the web page (*Turn off: sleep · change*). It used to always shut Windows down.
+
+### Fixed
+
+- **Playnite: Windows not unlocked after a wake from sleep** (Zavie): the PC woke, but Playnite answered before the lock screen was up, so the game was started on a locked PC and the PIN never typed. With an unlock ESP, the remote now waits for a second answer before trusting "unlocked", and the extension **0.1.3** sees the lock screen itself (rather than waiting for Windows' lock event, sometimes late after a sleep).
+- **Dutch**: the TV Helper's name on the TV ("Astrion TV Helper") and *Aanrakingsfeedback* (touch feedback). Thanks to our Dutch reviewer.
+- **A scrollable row on the first page wouldn't scroll back** (a `scene_grid` with `"layout": "row"`…): since 1.6.0, the limit that keeps a swipe off hidden pages also took the row's own scroll at the first and last page. It now only holds the pager's own swipe, and only when there are hidden pages at that end.
+- **The builder's preview closer to the remote**: the cards in a `row` are drawn as themselves (not as a name on a grey box), pinned cards (`"pin": "bottom"`) sit on their band at the bottom, the forecast is inside the clock & weather card, a scrollable row of tiles has no scroll bar, and the page bar (dots, page name, "‹ back") takes its room under the pages unless `showPageIndicator` is off.
+- **Activities: "Off" right after a start skipped a Home Assistant device.** Some integrations report the new state seconds late (a Sony Bravia stays "off" for a while after turn_on): an Off pressed then believed the TV already off and left it on. For a minute after an Activity switches a device, Astrion now trusts what it just did over what Home Assistant still reports, both ways (an Activity started right after an Off turns the device back on).
+
 ## [1.6.2-beta] - 2026-11-23
 
 ### Added

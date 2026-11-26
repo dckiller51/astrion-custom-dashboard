@@ -37,7 +37,27 @@ class PlayniteClient(private val host: String, private val port: Int, private va
     /** The game running (null: none). Throws when Playnite doesn't answer, [CodeRefused] when the code is wrong. */
     fun running(): PlayniteGame? = PlayniteProtocol.running(get("/state"))
 
+    /** Switches Playnite to "fullscreen" or "desktop" (extension 0.1.3+): it restarts in that mode. */
+    fun switchMode(mode: String) {
+        post("/mode/$mode")
+    }
+
+    /** GET /state as it is: the game running and whether Windows is locked (see [PlayniteProtocol]). */
+    fun stateText(): String = get("/state")
+
     fun games(): List<PlayniteGame>? = PlayniteProtocol.games(get("/games"))
+
+    /** A game's cover as Playnite has it (no code needed); null when it has none or it's too big. */
+    fun cover(gameId: String): ByteArray? = http.newCall(Request.Builder().url(url("/cover/$gameId")).build()).execute().use { resp ->
+        val body = resp.body ?: return null
+        if (!resp.isSuccessful || body.contentLength() > MAX_COVER_BYTES) return null
+        body.bytes().takeIf { it.size <= MAX_COVER_BYTES }
+    }
+
+    /** A game's sheet (extension 0.1.2+); null when it doesn't know it, or the extension is older. */
+    fun details(gameId: String): PlayniteDetails? = runCatching { PlayniteSheet.details(get("/game/$gameId")) }
+        .onFailure { if (it is CodeRefused) throw it }
+        .getOrNull()
 
     fun start(gameId: String) {
         post("/start/$gameId")
@@ -50,6 +70,7 @@ class PlayniteClient(private val host: String, private val port: Int, private va
 
     companion object {
         private const val UNAUTHORIZED = 401
+        private const val MAX_COVER_BYTES = 8L * 1024 * 1024
 
         private val http: OkHttpClient by lazy {
             OkHttpClient

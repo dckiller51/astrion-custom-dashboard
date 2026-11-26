@@ -142,14 +142,23 @@ internal fun rememberPageReachLimit(pages: List<PageConfig>, pagerState: PagerSt
     val reach = remember(pages, activeActivityIds) { PageReach.of(pages.map { isFullyHidden(it, activeActivityIds) }) }
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val currentReach by rememberUpdatedState(reach)
+    // 1.6.3: only the pager's own swipe is held. A scrollable row inside a page (scene_grid
+    // "layout": "row"…) sends its scroll through here too, and must keep all of it.
+    val dragged by pagerState.interactionSource.collectIsDraggedAsState()
+    val pagerDragged by rememberUpdatedState(dragged)
     val connection =
         remember(pagerState, rtl) {
             // A finger moving left (x < 0) goes to the next pages, the other way round in RTL.
             fun forward(x: Float) = if (rtl) x else -x
             fun position() = pagerState.currentPage + pagerState.currentPageOffsetFraction
             object : NestedScrollConnection {
+                /** The gesture under way is the pager's own swipe (its fling follows its drag). */
+                private var pagerGesture = false
+
                 override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    pagerGesture = pagerDragged
                     val r = currentReach ?: return Offset.Zero
+                    if (!pagerGesture) return Offset.Zero
                     val span = (pagerState.layoutInfo.pageSize + pagerState.layoutInfo.pageSpacing).toFloat()
                     val held = PageReach.held(position(), forward(available.x), span, r)
                     return Offset(if (rtl) held else -held, 0f)
@@ -157,6 +166,8 @@ internal fun rememberPageReachLimit(pages: List<PageConfig>, pagerState: PagerSt
 
                 override suspend fun onPreFling(available: Velocity): Velocity {
                     val r = currentReach ?: return Velocity.Zero
+                    if (!pagerGesture) return Velocity.Zero
+                    pagerGesture = false
                     return if (PageReach.blocksFling(position(), forward(available.x), r)) available else Velocity.Zero
                 }
             }

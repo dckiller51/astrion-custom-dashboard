@@ -127,6 +127,15 @@ internal fun SourcePickerDialog(
             )
             return@PickerFrame
         }
+        if (CoverPicker.wanted(ctx, entityId)) {
+            // A PC's games as covers (1.6.3): the player's own covers first.
+            val covers = sources.associateWith { own[it] ?: icons[it] ?: uploaded[QuickPickers.iconKey(it)] }
+            CoverGrid(ctx, entityId, sources, covers, current) {
+                onPick(it)
+                onClose()
+            }
+            return@PickerFrame
+        }
         LazyVerticalGrid(
             columns = GridCells.Fixed(GRID_COLUMNS),
             modifier = Modifier.heightIn(max = GRID_MAX_HEIGHT.dp),

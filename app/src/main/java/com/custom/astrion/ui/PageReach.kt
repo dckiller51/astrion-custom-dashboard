@@ -11,7 +11,11 @@ internal object PageReach {
     fun of(hidden: List<Boolean>): IntRange? {
         val first = hidden.indexOfFirst { !it }
         if (first < 0) return null
-        return first..hidden.indexOfLast { !it }
+        val last = hidden.indexOfLast { !it }
+        // 1.6.3: no hidden page at either end, nothing to limit — the pager's own ends do it. Held
+        // anyway, it also stopped a scrollable row on the first page from scrolling back.
+        if (first == 0 && last == hidden.lastIndex) return null
+        return first..last
     }
 
     /**

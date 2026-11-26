@@ -21,7 +21,13 @@ function renderPlaynites() {
           kind: 'player',
           name: atvEsc(p.name),
           details: `${a.media_title ? atvEsc(a.media_title) + ' · ' : ''}${atvEsc(p.host)} · <code>${atvEsc(p.entityId)}</code>`
-            + `<br><span class="hint">${I18N.t('web_dev_adtv_wol')}: ${p.mac ? atvEsc(p.mac) : '—'}</span>`,
+            + `<br><span class="hint">${I18N.t('web_dev_adtv_wol')}: ${p.mac ? atvEsc(p.mac) : '—'}`
+            + ` · ${I18N.t('web_dev_playnite_off', I18N.t(p.off === 'shutdown' ? 'web_dev_playnite_off_shutdown' : 'web_dev_playnite_off_sleep'))}`
+            + ` <a href="#" onclick="togglePlayniteOff('${atvEsc(p.localId)}');return false">${I18N.t('web_dev_playnite_off_change')}</a>`
+            + `<br>🎮 ${I18N.t('web_dev_playnite_fullscreen', I18N.t(p.fullscreen ? 'web_dev_playnite_fullscreen_on' : 'web_dev_playnite_fullscreen_off'))}`
+            + ` <a href="#" onclick="togglePlayniteFullscreen('${atvEsc(p.localId)}');return false">${I18N.t('web_dev_playnite_off_change')}</a>`
+            + `<br>🔓 ${I18N.t('web_dev_playnite_unlock')}: ${p.unlockHost ? atvEsc(p.unlockHost) : '—'}`
+            + ` <a href="#" onclick="editPlayniteUnlock('${atvEsc(p.localId)}');return false">${I18N.t('web_dev_playnite_off_change')}</a></span>`,
           badge: 'Playnite',
           state: playniteStatus(p), tone: deviceStateTone(p.entityId),
           actions: `<span class="remove" style="color:#00E5FF" title="${I18N.t('web_dev_adtv_wol')}" onclick="editPlayniteMac('${atvEsc(p.localId)}')">⏻</span> <span class="remove" style="color:#00E5FF" onclick="renamePlaynite('${atvEsc(p.localId)}')">✎</span> <span class="remove" onclick="removePlaynite('${atvEsc(p.localId)}')">✕</span>`
@@ -102,6 +108,7 @@ async function addPlaynite() {
       entityId: uniquePlayniteEntityId(name),
       host,
       mac: data.mac || '',
+      off: 'sleep',
       code,
       hasCode: true
     };
@@ -146,6 +153,74 @@ async function editPlayniteMac(localId) {
   p.mac = clean;
   await persistHaAndHubs();
   renderPlaynites();
+}
+
+/**
+ * Playnite in fullscreen when the remote starts it or a game (extension 0.1.3+): a PC turned on by
+ * hand stays in desktop mode, one turned on by the remote gets the console-like view.
+ */
+async function togglePlayniteFullscreen(localId) {
+  const p = playnites.find(x => x.localId === localId);
+  if (!p) return;
+  p.fullscreen = !p.fullscreen;
+  await persistHaAndHubs();
+  renderPlaynites();
+}
+
+/** What "turn off" does (an Activity's Off, the power button): sleep (the default) or shut down. */
+async function togglePlayniteOff(localId) {
+  const p = playnites.find(x => x.localId === localId);
+  if (!p) return;
+  p.off = p.off === 'shutdown' ? 'sleep' : 'shutdown';
+  await persistHaAndHubs();
+  renderPlaynites();
+}
+
+/**
+ * The PC's unlock ESP (Astrion PC Unlock): an ESP32-S3 plugged into the PC as a USB keyboard,
+ * that types the Windows PIN kept on it. Asks its address and code, checks them, saves them;
+ * a blank address removes it.
+ */
+async function editPlayniteUnlock(localId) {
+  const p = playnites.find(x => x.localId === localId);
+  if (!p) return;
+  const host = prompt(I18N.t('web_dev_playnite_unlock_host_prompt', p.name), p.unlockHost || '');
+  if (host === null) return;
+  const h = host.trim();
+  if (!h) {
+    p.unlockHost = '';
+    p.unlockCode = '';
+    await persistHaAndHubs();
+    renderPlaynites();
+    showToast(I18N.t('web_dev_playnite_unlock_removed'));
+    return;
+  }
+  if (!/^[A-Za-z0-9.:-]{1,253}$/.test(h)) {
+    showToast(I18N.t('web_dev_adtv_enter_ip'), 'error');
+    return;
+  }
+  const code = (prompt(I18N.t('web_dev_playnite_unlock_code_prompt')) || '').replace(/\s/g, '');
+  if (!/^[0-9]{6}$/.test(code)) {
+    showToast(I18N.t('web_dev_playnite_enter_code'), 'error');
+    return;
+  }
+  try {
+    const res = await fetch('/playnite-unlock-check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ host: h, code }).toString()
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+    p.unlockHost = h;
+    p.unlockCode = code;
+    await persistHaAndHubs();
+    renderPlaynites();
+    showToast(I18N.t('web_dev_playnite_unlock_ok', data.name || h));
+    if (!data.pin) showToast(I18N.t('web_dev_playnite_unlock_no_pin'), 'error');
+  } catch (e) {
+    showToast(I18N.t('web_dev_playnite_unlock_failed', e.message), 'error');
+  }
 }
 
 async function removePlaynite(localId) {

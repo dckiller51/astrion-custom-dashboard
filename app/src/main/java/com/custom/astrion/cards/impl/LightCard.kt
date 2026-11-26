@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -423,12 +424,12 @@ private fun LightTileLayout(
 // ---- shared pieces ---------------------------------------------------------
 
 @Composable
-private fun LightIcon(icon: ImageVector, bg: Color, tint: Color, size: Dp = 42.dp) {
+private fun LightIcon(icon: ImageVector, bg: Color, tint: Color, shape: Shape, size: Dp = 42.dp) {
     Box(
         modifier =
         Modifier
             .size(size)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(shape)
             .background(bg),
         contentAlignment = Alignment.Center
     ) {
@@ -643,7 +644,7 @@ private fun DefaultLayout(
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().then(modifier)) {
-            LightIcon(icon, iconBg, iconTint)
+            LightIcon(icon, iconBg, iconTint, theme.iconShape)
             Spacer(Modifier.width(12.dp))
             NameState(name, stateLabel, theme)
         }
@@ -675,7 +676,7 @@ private fun HorizontalLayout(
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.then(modifier)) { LightIcon(icon, iconBg, iconTint) }
+        Box(Modifier.then(modifier)) { LightIcon(icon, iconBg, iconTint, theme.iconShape) }
         Spacer(Modifier.width(12.dp))
         Box(Modifier.weight(1f).then(modifier)) { NameState(name, stateLabel, theme) }
         Box(Modifier.width(140.dp)) { controls(false) }
@@ -708,7 +709,7 @@ private fun VerticalLayout(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth().then(modifier)
         ) {
-            LightIcon(icon, iconBg, iconTint, size = 48.dp)
+            LightIcon(icon, iconBg, iconTint, theme.iconShape, size = 48.dp)
             Spacer(Modifier.height(8.dp))
             NameState(name, stateLabel, theme, horizontalAlignment = Alignment.CenterHorizontally, textAlign = TextAlign.Center)
         }

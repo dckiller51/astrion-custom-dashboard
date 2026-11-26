@@ -25,6 +25,8 @@ class PlayniteProtocolTest {
         val running = PlayniteProtocol.running(state)
         assertEquals(hades, running)
         assertNull(PlayniteProtocol.running("""{"running":null}"""))
+        assertTrue(PlayniteProtocol.locked("""{"running":null,"locked":true}"""))
+        assertFalse(PlayniteProtocol.locked("""{"running":null}"""))
 
         val list = """{"games":[{"id":"$hadesId","name":"Hades \"II\"","cover":true},{"id":"${celeste.id}","name":"Celeste"}]}"""
         val games = PlayniteProtocol.games(list)
@@ -50,6 +52,12 @@ class PlayniteProtocolTest {
         // Off: the games last seen stay offered; none known, none offered.
         assertEquals(listOf("Hades", "Celeste"), PlayniteProtocol.media(spec, on.copy(reachable = false))["source_list"])
         assertFalse(PlayniteProtocol.media(spec, PlayniteState()).containsKey("source_list"))
+        // The sources pop-up shows the games as covers, those kept on the remote.
+        val withCovers = PlayniteProtocol.media(spec, on, mapOf(hades.id to "/data/covers/hades.jpg"))
+        assertEquals("covers", withCovers["astrion_source_view"])
+        assertEquals(true, withCovers["astrion_source_details"])
+        assertEquals(mapOf("Hades" to "/data/covers/hades.jpg"), withCovers["astrion_source_icons"])
+        assertFalse(PlayniteProtocol.media(spec, on).containsKey("astrion_source_icons"))
     }
 
     @Test
@@ -80,8 +88,24 @@ class PlayniteProtocolTest {
         assertEquals(PlayniteAction.WakeAndStart(celeste), picked)
         assertEquals(PlayniteAction.Wake, PlayniteProtocol.service("turn_on", emptyMap(), off))
         assertNull(PlayniteProtocol.service("turn_on", emptyMap(), on))
-        assertEquals(PlayniteAction.Power("shutdown"), PlayniteProtocol.service("turn_off", emptyMap(), on))
+        // Off: sleep by default, shut down when chosen on the web page.
+        assertEquals(PlayniteAction.Power("sleep"), PlayniteProtocol.service("turn_off", emptyMap(), on))
+        assertEquals(PlayniteAction.Power("shutdown"), PlayniteProtocol.service("turn_off", emptyMap(), on, off = "shutdown"))
         assertNull(PlayniteProtocol.service("turn_off", emptyMap(), off))
         assertTrue(PlayniteProtocol.service("media_play", emptyMap(), on) == null)
+        // On but locked: turn_on unlocks Windows, only with an unlock ESP.
+        val locked = on.copy(locked = true)
+        assertEquals(PlayniteAction.Unlock, PlayniteProtocol.service("turn_on", emptyMap(), locked, canUnlock = true))
+        assertNull(PlayniteProtocol.service("turn_on", emptyMap(), locked))
+        assertEquals(true, PlayniteProtocol.media(spec, locked)["astrion_locked"])
+        // On, unlocked, in desktop mode: turn_on switches Playnite to fullscreen, only when set.
+        val desktop = on.copy(mode = "desktop")
+        assertEquals(PlayniteAction.Fullscreen, PlayniteProtocol.service("turn_on", emptyMap(), desktop, fullscreen = true))
+        assertNull(PlayniteProtocol.service("turn_on", emptyMap(), desktop))
+        assertNull(PlayniteProtocol.service("turn_on", emptyMap(), on.copy(mode = "fullscreen"), fullscreen = true))
+        // An older extension doesn't say its mode: nothing to switch.
+        assertNull(PlayniteProtocol.service("turn_on", emptyMap(), on, fullscreen = true))
+        assertEquals("fullscreen", PlayniteProtocol.mode("""{"running":null,"locked":false,"mode":"fullscreen"}"""))
+        assertEquals("", PlayniteProtocol.mode("""{"running":null}"""))
     }
 }

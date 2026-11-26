@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Astrion Custom</string>
+    <string name="app_name">Astrion TV Helper</string>
     <string name="code_label">Code om op de afstandsbediening te typen (webpagina › Android TV › Helper):</string>
     <string name="code_hint">Hiermee kan de Astrion-afstandsbediening tonen wat er speelt (titel, hoes, voortgang) en elke app op deze tv openen.</string>
     <string name="media_ok">✓ Lezen wat er speelt: toegestaan</string>
